@@ -1,0 +1,683 @@
+:root{--bg:#050506;--p:#0c0c0e;--p2:#121215;--ln:#222227;--tx:#ececec;--mu:#8a8a93;--dim:#6c6c75;--am:#ffb000;--gr:#39e58c;--rd:#ff4d5e;--bl:#6aa8ff;--or:#ff8a1f}
+body.navy{--bg:#070b18;--p:#0c1224;--p2:#111a30;--ln:#1e2942;--dim:#6a7595;--mu:#8a93ad;background-color:var(--bg);background-image:radial-gradient(1200px 500px at 15% -10%,#18235099 0,transparent 60%),linear-gradient(#ffffff04 1px,transparent 1px);background-size:auto,100% 34px}
+/* Team look (optimizer standard A20): the player list wears a much lighter tint and stripe than a lineup row (.crow.tm), so its rows read alike while scrolling and the team shows only as a small flare of colour at the left edge. */
+tr.team{background:linear-gradient(90deg,color-mix(in srgb,var(--t1) 3%,transparent) 0,transparent 120px)}
+tr.team td:first-child{box-shadow:inset 2px 0 color-mix(in srgb,var(--t1) 45%,transparent)}
+*{box-sizing:border-box}
+html{scrollbar-color:#3a3a42 transparent;scrollbar-gutter:stable}
+/* An open player card holds the page still; the gutter above keeps the page from moving when the bar goes. */
+html:has(body.noscroll){overflow:hidden}
+body{margin:0;background:var(--bg);color:var(--tx);font:13.5px/1.35 "JetBrains Mono",monospace;padding:0 clamp(20px,2.2vw,60px) 40px;background-image:linear-gradient(#ffffff04 1px,transparent 1px);background-size:100% 34px}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+.top{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:8px 0 8px;border-bottom:1px solid var(--ln);white-space:nowrap}
+@media (max-width:2100px){.top{gap:8px}.top .stamps span{padding:4px 7px}.top .themes button{padding:4px 7px}.top .brand small{display:none}}
+.brand{display:flex;align-items:baseline;gap:10px;font:700 19px "Space Grotesk",sans-serif;letter-spacing:-.3px}
+.brand .mk{width:12px;height:12px;background:var(--am);display:inline-block;box-shadow:0 0 16px var(--am)}
+.brand small{font:500 12px "JetBrains Mono",monospace;color:var(--mu)}
+.grow{flex:1}
+.stamps{display:flex;gap:0;border:1px solid var(--ln)}
+.stamps span{padding:4px 10px;color:var(--mu);font-size:11.5px;border-right:1px solid var(--ln)}
+.stamps span:last-child{border-right:0}
+.stamps b{color:var(--tx);margin-left:6px}
+.stamps .lock{background:#ffb0000f}.stamps .lock b{color:var(--am)}
+.stamps .miss{border-bottom:0}
+.notes{position:relative}
+.notes>button{background:#ffb00014;border:1px solid var(--am);color:var(--am);padding:4px 10px;font-weight:700;font-size:12px}
+.notes .list{position:absolute;right:0;top:calc(100% + 6px);z-index:5;width:max-content;max-width:min(560px,80vw);background:var(--p2);border:1px solid var(--am);padding:10px 14px;white-space:normal;font-size:12px;box-shadow:0 12px 40px #000c}
+.notes .list h4{margin:0 0 4px;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+.notes .list ul{margin:0 0 8px;padding-left:16px}.notes .list li{margin:2px 0}
+.themes{display:flex;border:1px solid var(--ln)}
+.themes button{border:0;background:none;padding:4px 10px;font-weight:700;font-size:11.5px;color:var(--mu)}
+.themes .on{background:var(--am);color:#000}
+.slate{background:var(--p2);border:1px solid var(--ln);padding:4px 10px;font-weight:700}
+.games{display:grid;grid-template-columns:repeat(auto-fill,236px);justify-content:start;gap:8px;margin:8px 0 8px}
+.games:empty{display:none}
+.game{padding:5px 10px 5px;border:1px solid var(--ln);background:var(--p);cursor:pointer;min-width:0}
+.game:hover{background:var(--p2)}
+.game.sel{background:linear-gradient(180deg,#1a1405,var(--p));box-shadow:inset 0 2px 0 var(--am)}
+.gh{display:flex;justify-content:flex-start;gap:16px;align-items:center;font-size:11.5px;color:var(--mu);margin-bottom:2px}
+.gh .tip{color:var(--am);font-weight:700}
+.side{display:grid;grid-template-columns:26px 38px 46px auto;justify-content:start;align-items:center;gap:8px;padding:1px 10px 1px 8px;margin-top:2px;box-shadow:inset 3px 0 var(--t1);background:linear-gradient(90deg,color-mix(in srgb,var(--t1) 11%,transparent),color-mix(in srgb,var(--t1) 3%,transparent))}
+.code{font-weight:800;font-size:14px}
+.spr{color:var(--dim);font-size:11px}
+.ip,.tot b{display:inline-block;padding:0 7px;font-weight:700;font-size:14px;color:var(--mu)}
+.tot b{font-size:13px}
+.ip.t-soft,.tot b.t-soft{color:color-mix(in srgb,var(--tc) 62%,var(--mu))}
+.ip.t-lit,.tot b.t-lit{color:var(--tc);text-shadow:0 0 8px color-mix(in srgb,var(--tc) 50%,transparent)}
+.ip.t-top,.tot b.t-top{color:color-mix(in srgb,var(--tc) 82%,#fff);font-weight:800;text-shadow:0 0 10px color-mix(in srgb,var(--tc) 65%,transparent);background:color-mix(in srgb,var(--tc) 8%,transparent)}
+.ip.t-solo,.tot b.t-solo{color:color-mix(in srgb,var(--tc) 60%,#fff);font-weight:800;text-shadow:0 0 14px var(--tc),0 0 4px var(--tc);background:color-mix(in srgb,var(--tc) 22%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tc) 55%,transparent)}
+.logo{display:block;object-fit:contain;filter:drop-shadow(0 0 1px #ffffff40)}
+.side .logo.lg{border-radius:50%;background:#ffffff26;box-shadow:0 0 0 1px #ffffff59} /* a light plate and ring, so a dark crest still reads on the dark tile */
+.logo.lg{width:22px;height:22px}
+.chipx{display:inline-grid;place-items:center;background:#ffffff14;color:var(--mu);font-weight:800;font-size:9px;border:1px solid var(--ln)}
+.chipx.lg{width:22px;height:22px}.chipx.md{width:22px;height:22px}.chipx.sm{width:22px;height:22px}.chipx.xs{width:16px;height:16px;font-size:7px}
+/* The table takes its content's width and the panel the rest, so table and panel end at the page's right edge with the banner above them. */
+.work{display:grid;grid-template-columns:minmax(0,max-content) minmax(460px,1fr);gap:16px;align-items:start}
+.tools{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.tabs{display:flex;border:1px solid var(--ln)}
+.tabs button{background:none;border:0;border-right:1px solid var(--ln);padding:4px 10px;font-weight:700;font-size:12px;color:var(--mu)}
+.tabs button:last-child{border-right:0}
+.tabs button.on{background:var(--am);color:#000}
+.search{background:var(--p);border:1px solid var(--ln);padding:4px 10px;width:150px}
+.search::placeholder{color:var(--dim)}
+.search:focus{outline:none;border-color:var(--am)}
+.cnt{margin-left:8px;min-width:84px;color:var(--dim);font-size:11.5px;white-space:nowrap}
+.tbl{border:1px solid var(--ln);background:var(--p)}
+table{border-collapse:collapse}
+/* The table fills its box when the tools row above is the wider; the spare width goes to the last column, so the name column keeps to its content (A1). */
+.tbl table{min-width:100%}#thead th:last-child,#tbody td:last-child{width:100%}
+th{font-size:10.5px;letter-spacing:0;text-transform:none;color:var(--mu);font-weight:700;text-align:right;padding:6px 12px;border-bottom:1px solid var(--ln);background:var(--p2);cursor:pointer;user-select:none;white-space:nowrap}
+thead tr{background:var(--p2)}th.pl{text-align:left}th.s{color:var(--am)}th.ctl{cursor:default}
+td{padding:2px 12px;border-bottom:1px solid #18181c;text-align:right;white-space:nowrap}
+tbody tr:hover td{background:#ffffff0d}
+tr.team:hover td{background:color-mix(in srgb,var(--t1) 7%,transparent)}
+/* Row buttons (optimizer standard C1): at least 24px square, resting in the look the NFL row buttons gave the thumbs pair (.bump-btn). */
+td.ctl,th.ctl{padding:0 2px;width:28px}
+td.ctl:first-child,th.ctl:first-child{padding-left:10px;width:36px}
+td.bmp,th.bmp{padding:0 4px 0 12px;cursor:default}
+.ctl button{width:24px;height:24px;border:1px solid #2a2a30;background:var(--p2);color:var(--mu);display:inline-grid;place-items:center;padding:0}
+.ctl button:hover{color:var(--tx);border-color:var(--am)}
+.ctl .lk.on{border-color:var(--gr);color:var(--gr);background:#39e58c18}
+.ctl .ex.on{border-color:var(--rd);color:var(--rd);background:#ff4d5e18}
+td.pl{text-align:left;padding-left:6px;padding-right:20px}
+.who{display:flex;align-items:center;gap:10px}
+.who .logo{width:22px;height:22px}
+.l1{display:flex;align-items:center;gap:7px;line-height:17px}
+.name{font:600 14px "Space Grotesk",sans-serif;background:none;border:0;padding:0;color:var(--tx);text-align:left;cursor:pointer}
+.l1 .name{line-height:16px}
+.pos{font-weight:700;font-size:10.5px;line-height:14px;color:var(--am);border:1px solid #ffb00055;padding:0 5px}
+.st{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;font-weight:800;font-size:10.5px;line-height:1;color:#000;flex-shrink:0}
+.l2{font-size:11px;line-height:13px;color:var(--dim);margin-top:0}
+td.num{min-width:58px}
+td.num,th.num{padding-left:7px;padding-right:7px}
+td.chg.up{color:var(--gr);font-weight:700}td.chg.dn{color:var(--rd);font-weight:700}td.chg.dim{color:var(--mu)}
+td.sal{color:var(--mu)}
+td.fig{color:var(--mu)}
+/* The LY/1g/2g marker hangs after the number (absolute), so the cell and its header keep room for it on the right. */
+td.fig,th.fig{padding-right:18px}
+td.fig .tg{position:absolute;margin-left:2px;font:700 9px "JetBrains Mono",monospace;color:var(--mu);transform:translateY(-4px)}
+td.fig .tg.ly{color:var(--am)}
+td.proj{font-weight:800;font-size:15px;color:var(--am)}
+/* DK/m TON: Proj's amber, tonight's family; DK/m SZN stays the muted td.fig. The arrow is against the season figure. */
+td.ton{font-weight:800;color:var(--am)}
+th.ton{color:var(--am)}
+.ton-arr{font-style:normal;font-size:9px;margin-right:4px;vertical-align:1px}
+.ton-arr.up{color:var(--gr)}.ton-arr.dn{color:var(--rd)}
+/* Changed since the last pull: the row's mark, its line and each figure's tag. */
+tr.team.moved td:first-child{box-shadow:inset 3px 0 var(--am)}
+tr.team.moved{background-image:linear-gradient(90deg,#ffb00014 0,transparent 55%)}
+.l2.why{color:var(--am)}.l2.why b{color:var(--tx);font-weight:600}
+/* Every row of Proj, Min and DK/m TON holds the slot, empty when unmoved, so the numbers share one right edge; the header steps in by the same width to sit over them. */
+.tagslot{display:inline-block;width:38px;text-align:left;vertical-align:middle}
+td.num:has(>.tagslot){padding-right:0}
+th[data-sort="projection"],th[data-sort="minutes"],th[data-sort="dk_tonight"]{padding-right:38px}
+.dtag{font:700 11px "Space Grotesk",sans-serif;font-variant-numeric:tabular-nums;margin-left:3px;padding:0 1px}
+/* A laptop's window: tighter figure cells, so table and panel still fit beside each other (the LY marker's room stays on the season figures). */
+@media (max-width:2199px){
+  #chips .chip{white-space:nowrap}
+  .tabs button{padding:4px 8px}
+  .search{width:145px}
+  .cnt{margin-left:0;min-width:0}
+  td.num{min-width:46px}
+  td.num,th.num{padding-left:4px}
+  td.num:not(.fig):not(:has(>.tagslot)),th.num:not(.fig){padding-right:4px}
+  th.num[data-sort="projection"],th.num[data-sort="minutes"],th.num[data-sort="dk_tonight"]{padding-right:38px} /* the header steps in over the delta slot here too (the rule above would give it 4px) */
+  td.fig,th.fig{padding-right:14px}
+  td.pl{padding-right:8px}
+}
+.dtag.up{background:#39e58c1f;color:var(--gr)}.dtag.dn{background:#ff4d5e1f;color:var(--rd)}
+.pullnote:not([hidden]){display:flex;align-items:center;gap:16px}
+.pullnote button{background:none;border:1px solid var(--am);color:var(--am);font-weight:700;font-size:11px;padding:2px 10px;white-space:nowrap}
+.pullnote .grow{flex:1}
+.updline{margin:-6px 0 8px;font-size:11px;color:var(--dim);text-align:right}
+.updline.stale{color:var(--rd)}
+/* A man on a frozen lineup card, or in a late swap slot, whom a new pull took off the slate or marked Out. */
+.crow.gonetag small{color:var(--rd)}
+.lu .crow.gonetag .sn small{display:block}
+/* A late swap row also holds the slot picker: its slot says the position and the figures read by their format, so the name keeps the room. */
+.lu .crow.lslot .sn1 .pos,.lu .crow.lslot .ss i,.lu .crow.lslot .sp i,.lu .crow.lslot .so i{display:none}
+.chip.movedchip{margin-left:6px;border-color:var(--am);color:var(--am)}.chip.movedchip b{color:var(--am)}
+.chip.movedchip:disabled{cursor:default}
+.chip.movedchip.on{background:var(--am);color:#000}.chip.movedchip.on b{color:#000}
+td.bar .b{display:inline-block;vertical-align:middle;width:48px;height:4px;background:#ffffff0d;margin-right:10px}
+td.bar .b i{display:block;height:100%}
+td.val .b i{background:var(--gr);box-shadow:0 0 8px #39e58c88}td.own .b i{background:var(--bl);box-shadow:0 0 8px #6aa8ff88}
+td.bar .v{display:inline-block;min-width:44px;vertical-align:middle}
+td.val .v{color:var(--gr)}
+.miss{color:var(--dim);text-decoration:underline dotted;text-underline-offset:3px}
+td.bar .b.off{visibility:hidden}
+td.val .b{display:none}td.own .b{width:28px} /* Adam 5:40 PM ET: no Value bar, a shorter Own bar */
+tr.locked:not(.team) td{background:#39e58c0c}tr.locked:not(.team) td.ctl{box-shadow:inset 3px 0 var(--gr)}tr.locked .name{color:var(--gr)}
+tr.team.locked{background:linear-gradient(#39e58c0a,#39e58c0a),linear-gradient(90deg,color-mix(in srgb,var(--t1) 3%,transparent) 0,transparent 120px)}
+tr.excl td{opacity:.3}tr.excl .name{text-decoration:line-through}
+.nores{padding:30px;text-align:center;color:var(--dim)}
+.outs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px;width:0;min-width:100%}
+.outs:empty{display:none}
+.oh2{font-weight:800;font-size:11px;letter-spacing:1.4px;color:var(--rd);margin-right:4px;background:none;border:1px solid #ff4d5e40;min-height:24px;padding:2px 8px}
+.o{display:flex;align-items:center;gap:7px;border:1px solid #ff4d5e40;padding:3px 10px 3px 5px;font-size:12px}
+.logo.xs{width:16px;height:16px}.oname{font:600 12.5px "Space Grotesk";background:none;border:0;padding:0;color:var(--tx);cursor:pointer}.oname:hover{color:var(--am);text-decoration:underline}.o em{font-style:normal;color:var(--dim)}.o i{font-style:normal;color:var(--rd)}
+/* Fixed cells: the player list in column 1, the optimizer in column 2, so the card can share the optimizer's cell and nothing shifts when it opens. */
+.pool{grid-column:1;grid-row:1}
+/* Standard A15: no inner scroll boxes, so the panel runs its own length down the page; it stretches to the table's length so its band can stick that far. */
+.opt{grid-column:2;grid-row:1;align-self:stretch;border:1px solid var(--ln);background:var(--p);box-shadow:inset 0 2px 0 var(--am)}
+.oh{display:flex;align-items:center;justify-content:space-between;padding:7px 14px;border-bottom:1px solid var(--ln)}
+.oh h3{margin:0;font:700 15px "Space Grotesk",sans-serif;letter-spacing:.5px}
+.oh h3:before{content:"▶ ";color:var(--am)}
+.seg{display:flex;border:1px solid var(--ln)}
+.seg button{border:0;background:none;padding:3px 14px;font-weight:800;font-size:12px;color:var(--mu)}
+.seg .on{background:var(--am);color:#000}
+.set{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--ln)}
+.set label{padding:5px 12px;font-size:11px;color:var(--mu);border-right:1px solid var(--ln)}
+.set label:last-child{border-right:0}
+.set input{display:block;width:100%;height:24px;margin-top:2px;background:var(--p2);border:1px solid var(--ln);padding:0 8px;font-size:14px;text-align:right}
+.set input:disabled{cursor:not-allowed;opacity:.55;text-align:left}
+.set input::placeholder{color:var(--dim);opacity:.8}
+/* The working lineup is the sticky band (standard A15): one column of slots and its totals (A19), compact, staying at the top of the optimizer's column the whole length of the table. Result cards are not in it and never stick. */
+.lu{padding:0 16px 6px;position:sticky;top:0;z-index:2;background:var(--p);border-bottom:1px solid var(--ln)}
+.lu .luh{padding:4px 0 2px}
+.lu .crow{min-height:0;padding:0 4px 0 8px}
+.lu .crow .sn small{display:none}
+.lu .crow .logo.sm,.lu .crow .chipx.sm{width:18px;height:18px}
+.lu .cap{margin-top:4px}.lu .capt{margin-top:3px}
+.lu .lslocks{margin-top:4px}
+/* The working lineup is the main thing in the optimizer panel (Player list only; .wk is not on late swap's band): larger rows in fixed columns, an open slot as a dashed seat, the totals read at a glance. */
+.lu.wk{padding:0 16px 14px}
+.lu.wk .luh{padding:14px 0 10px;font-size:14px}.lu.wk .luh>span:first-child{font-size:19px;font-weight:800;letter-spacing:.3px}
+.lu.wk .luh .luhr{font-size:13px;color:var(--mu)}
+.opt .lu.wk .clr{font-size:12.5px;min-height:30px;padding:3px 14px}
+/* One column template for the header row, every slot row and the totals, so each figure sits under its heading. Proportional widths: no column eats the room. */
+.lu.wk .wkh,.lu.wk .wkr,.lu.wk .cap .capt{--wkc:84px 46px minmax(0,min(312px,34%)) repeat(4,minmax(0,1fr)) 34px;--wkg:14px;--wkp:14px;display:grid;grid-template-columns:var(--wkc);column-gap:var(--wkg);align-items:center;padding-left:var(--wkp);padding-right:var(--wkp)}
+.lu.wk .wkh{height:28px;font-size:11.5px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--ln)}
+.lu.wk .wkh span{text-align:right}.lu.wk .wkh span:first-child{text-align:center}.lu.wk .wkh .wkhp{grid-column:2 / span 2;text-align:left}
+/* A row is the same height empty or filled (the open seat's dashed edge is an outline, which takes no room), so a pick moves nothing below it. */
+.lu.wk .wkr{box-sizing:border-box;height:60px;min-height:0;margin:0;border-bottom:1px solid var(--ln)}
+.lu.wk .wkr .sl{font-size:19px;font-weight:900;padding:11px 0;background:var(--am);color:#000;border:0;letter-spacing:.4px}
+.lu.wk .wkr.hand .sl{background:var(--am);box-shadow:none}
+.lu.wk .wkr.locked .sl{background:var(--gr)}
+.lu.wk .wkr .logo.sm,.lu.wk .wkr .chipx.sm{width:40px;height:40px}
+.lu.wk .wkr .sn{min-width:0}
+.lu.wk .wkr .sn1{gap:9px}
+.lu.wk .wkr .pn,.opt .lu.wk .wkr .pn{font:800 22px "Space Grotesk",sans-serif;letter-spacing:-.1px}
+.lu.wk .wkr .sn small{display:block;margin-top:2px;font-size:13px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lu.wk .wkr .pos{font-size:12px}
+.lu.wk .wkr .ss,.lu.wk .wkr .sp,.lu.wk .wkr .sv,.lu.wk .wkr .so{font:800 24px "Space Grotesk",sans-serif;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.lu.wk .wkr .ss{color:var(--tx)}.lu.wk .wkr .sv{color:var(--gr)}
+.lu.wk .miss{text-decoration:none}
+.lu.wk .wkr .inj2{display:none}
+.lu.wk .wkr .pn .ns{display:none}
+.lu.wk .wkr .lkb,.lu.wk .wkr .lkd{width:30px;height:30px;justify-self:end}
+.lu.wk .wkr .lkb{color:var(--tx);background:color-mix(in srgb,var(--tx) 8%,transparent);border:1px solid color-mix(in srgb,var(--tx) 45%,transparent)}
+.lu.wk .wkr .lkb:hover{border-color:var(--am);color:var(--am)}
+.lu.wk .wkr.tm{background-image:linear-gradient(90deg,color-mix(in srgb,var(--t1) 24%,transparent) 0,color-mix(in srgb,var(--t1) 10%,transparent) 42%,color-mix(in srgb,var(--t2) 7%,transparent) 100%);box-shadow:inset 6px 0 var(--t1)}
+.lu.wk .wkr.empty{outline:2px dashed color-mix(in srgb,var(--mu) 45%,transparent);outline-offset:-5px;background:color-mix(in srgb,var(--mu) 5%,transparent)}
+.lu.wk .wkr.empty .sn{grid-column:2 / -1}
+.lu.wk .wkr.empty .sn b{color:var(--mu);font:600 20px "Space Grotesk",sans-serif;overflow:visible;text-overflow:clip}
+.lu.wk .wkr.empty .sl{background:none;border:0;color:var(--mu);font-weight:800}
+/* The totals under the same columns: Salary used under Salary, Proj, Value and Own under theirs; Salary left and Per open slot at the left. */
+.lu.wk .cap{margin-top:14px}.lu.wk .capbar{height:8px}
+/* Every total is label over number at one size on one baseline; "of $50,000" hangs under Salary used without taking height. */
+.lu.wk .cap .capt{margin-top:0;padding-top:12px;padding-bottom:20px;align-items:end;font-size:11.5px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--mu)}
+.lu.wk .cap .capt span{position:relative;display:flex;flex-direction:column;align-items:flex-end;justify-self:end;width:max-content;grid-row:1;white-space:nowrap;gap:2px}
+.lu.wk .cap .capt b{font:800 28px "Space Grotesk",sans-serif;letter-spacing:0;text-transform:none;color:var(--tx);font-variant-numeric:tabular-nums}
+.lu.wk .cap .capt .of{position:absolute;right:0;top:100%;margin-top:3px;font:600 11.5px "Space Grotesk",sans-serif;letter-spacing:0;text-transform:none;color:var(--dim)}
+.lu.wk .cap .capt span:nth-child(1){grid-column:4}
+.lu.wk .cap .capt span:nth-child(2){grid-column:1 / span 2;align-items:flex-start;justify-self:start}
+.lu.wk .cap .capt span:nth-child(3){grid-column:5}.lu.wk .cap .capt span:nth-child(3) b{color:var(--am)}
+.lu.wk .cap .capt span:nth-child(4){grid-column:7}.lu.wk .cap .capt span:nth-child(4) b{color:var(--bl)}
+.lu.wk .cap .capt .tval{grid-column:6}.lu.wk .cap .capt .tval b{color:var(--gr)}
+.lu.wk .cap .capt .overcap b{color:var(--rd)}
+.lu.wk .cap .capt .perop{grid-column:3;justify-self:start;align-items:flex-start}
+.lu.wk .capt .none,.lu.wk .capt .none b{font-size:12.5px;font-weight:400;color:var(--dim)}
+/* A narrow optimizer panel (the 1920 laptop, about 530px): tighter columns, no position badge, and a long name (over 20 letters) shows its first name as an initial, so the last name and "Empty" always show. */
+.lu.wk{container-type:inline-size}
+@container (max-width:640px){
+  .lu.wk .wkh,.lu.wk .wkr,.lu.wk .cap .capt{--wkc:34px 22px minmax(0,1fr) 64px 42px 40px 56px 20px;--wkg:5px;--wkp:6px}
+  .lu.wk .wkr .inj1{display:none}.lu.wk .wkr .inj2{display:inline-flex;margin-right:5px;vertical-align:middle} /* the injury letter moves to the matchup line: the name keeps the room */
+  .lu.wk .wkh{height:22px;font-size:10px;letter-spacing:.6px}
+  .lu.wk .wkr{height:50px}
+  .lu.wk .wkr .sl{font-size:14px;padding:8px 0}
+  .lu.wk .wkr .logo.sm,.lu.wk .wkr .chipx.sm{width:22px;height:22px}
+  .lu.wk .wkr .pos{display:none}
+  .lu.wk .wkr .pn,.opt .lu.wk .wkr .pn{font-size:15px}
+  .lu.wk .wkr .pn .ns{display:inline}.lu.wk .wkr .pn .nf{display:none} /* a long name shows its first name as an initial here: the last name always stays whole */
+  .lu.wk .wkr .sn small{font-size:11.5px}
+  .lu.wk .wkr .ss,.lu.wk .wkr .sp,.lu.wk .wkr .sv,.lu.wk .wkr .so{font-size:16px}
+  .lu.wk .wkr .lkb,.lu.wk .wkr .lkd{width:20px;height:20px}
+  .lu.wk .wkr .sl{font-size:13px}
+  .lu.wk .wkr.empty .sn b{font-size:17px}
+  .lu.wk .cap .capt{font-size:10px;letter-spacing:.5px;padding-bottom:16px}
+  .lu.wk .wkh .wkhp{text-align:left}
+  .lu.wk .cap .capt b{font-size:15px;letter-spacing:-.4px}
+  .lu.wk .cap .capt .of{font-size:10px}
+  .lu.wk .cap .capt .perop{margin-left:26px}
+}
+/* The optimizer's controls below the sticky band stop under it, not under the table's bar (the page's scroll padding is the bar and header only). */
+.opt .act,.opt .act :is(button,input,select),.opt .act~* :is(button,input,select,a){scroll-margin-top:var(--luh,0px)}
+.chips{display:flex;gap:6px;margin-left:6px;padding-left:12px;border-left:1px solid var(--ln)}
+.chip{background:none;border:1px solid var(--ln);padding:4px 10px;font-weight:700;font-size:12px;color:var(--mu)}
+.chip b{color:var(--tx);margin-left:4px}
+.chip.zero{opacity:.45}
+.chip.locked.on{background:var(--gr);border-color:var(--gr);color:#000}
+.chip.excluded.on{background:var(--rd);border-color:var(--rd);color:#000}
+.chip.on b{color:#000}
+.lkd{background:none;border:1px solid var(--gr);width:24px;height:24px;padding:0;display:inline-grid;place-items:center}
+.lkd:hover{background:#39e58c22}
+.luh{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);padding:6px 0 3px}
+/* The one lineup row (card-row.js, optimizer standard A5, A19, A20): the working lineup, every result card and late swap mode. Slot, logo, name with injury letter over position and matchup, the control cell when it has one, then Sal, Proj, Own. A team's row carries the full gradient and stripe. */
+.crow{--ctl:24px;display:grid;grid-template-columns:40px 24px minmax(0,1fr) var(--ctl) 80px 62px 66px;align-items:center;gap:8px;padding:2px 4px 2px 8px;border-bottom:1px dashed #222227;min-height:32px}
+.crow.noctl{grid-template-columns:40px 24px minmax(0,1fr) 80px 62px 66px}
+.crow.tm{background-image:linear-gradient(90deg,color-mix(in srgb,var(--t1) 8%,transparent) 0,color-mix(in srgb,var(--t1) 3.5%,transparent) 32%,color-mix(in srgb,var(--t2) 2.5%,transparent) 100%);box-shadow:inset 3px 0 var(--t1)}
+.crow i{font-style:normal;font-weight:400;font-size:9.5px;color:var(--mu);margin-right:4px}
+.sl{font-weight:800;font-size:11px;text-align:center;padding:2px 0;border:1px solid #ffb00066;color:var(--am)}
+.logo.sm{width:22px;height:22px}
+.sn b{display:block;font:600 13.5px "Space Grotesk",sans-serif}.sn small{color:var(--mu);font-size:10.5px}
+.sn1{display:flex;align-items:center;gap:6px;min-width:0}.sn1 .pos{flex-shrink:0}
+.crow.empty .sn b{color:var(--dim);font-weight:500}
+.crow.locked .sl{background:var(--gr);border-color:var(--gr);color:#000}.lkd{color:var(--gr)}
+.so{text-align:right;font-size:12px;color:var(--bl);white-space:nowrap}
+.ss{text-align:right;font-size:12.5px;color:var(--mu);white-space:nowrap}.sp{text-align:right;font-weight:800;color:var(--am);white-space:nowrap}
+.cap{margin-top:10px}
+.capbar{height:4px;background:#ffffff0d}.capbar i{display:block;height:100%;background:var(--am);box-shadow:0 0 10px var(--am)}
+.capbar.over i{background:var(--rd);box-shadow:0 0 10px var(--rd)}
+.overcap,.overcap b{color:var(--rd)}
+.dropnote{margin:0 0 12px;padding:6px 12px;border:1px solid #ffb00055;background:#ffb00010;color:var(--am);font-size:12px}
+.capt{display:flex;justify-content:space-between;font-size:11.5px;color:var(--mu);margin-top:6px}.capt b{color:var(--tx)}
+.act{margin:10px 16px 6px}
+.act button{width:100%;padding:8px;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;gap:7px}
+.go{border:0;background:var(--am);color:#000}
+.go:disabled{background:#ffffff14;color:var(--dim);cursor:not-allowed}
+.actnote{margin:0 16px 12px;font-size:11.5px;color:var(--dim)}
+.none{color:var(--dim);font-size:12px}
+/* One sans family and one size on every player row and lineup row (standard D11); only the matchup's second line is smaller (A1), and the position and injury marks keep their own small boxes. */
+#tbody td,#tbody .name,#tbody td.proj,#tbody td.ton,#tbody td.fig,#tbody .v,#tbody .bump-fig,#tbody .limb,.crow,.crow .pn,.opt .crow .pn,.sn b,.so,.ss,.sp{font-family:"Space Grotesk",sans-serif;font-size:13.5px;font-variant-numeric:tabular-nums}
+#tbody .l2,.sn small{font-family:"Space Grotesk",sans-serif}
+#tbody .pos,#tbody .st,.crow .pos,.crow .st,.crow .sl,.crow i{font-family:"Space Grotesk",sans-serif}
+/* Optimizer settings, lineup switcher, actions and saved list (panel.js); every rule is scoped to the panel. */
+.opt input,.opt select{color:var(--tx);letter-spacing:0;text-transform:none}
+.opt input:focus,.opt select:focus{outline:none;border-color:var(--am)}
+.opt input.bad{border-color:var(--rd);color:var(--rd)}
+.opt .gpp,.opt .teams{display:flex;align-items:center;gap:8px;padding:4px 16px;border-bottom:1px solid var(--ln);font-size:11px;color:var(--dim);white-space:nowrap}
+.opt .gpp{text-transform:uppercase;letter-spacing:.8px}
+.opt .gpp input,.opt .teams input,.opt .ovf input{width:44px;background:var(--p2);border:1px solid var(--ln);padding:3px 6px;font-size:13px;text-align:right}
+.opt .teams{color:var(--mu);font-size:11.5px}
+.opt .tl{display:flex;align-items:center;gap:6px}
+.opt .vguide{color:var(--dim);font-size:11px;margin-left:4px}
+.opt .ovs{display:flex;flex-wrap:wrap;gap:6px}
+.opt .ovc{display:inline-flex;align-items:center;border:1px solid var(--am);color:var(--am);font-weight:700;font-size:11px;padding:1px 2px 1px 7px}
+.opt .ovc button{border:0;background:none;color:var(--mu);min-width:24px;min-height:24px;padding:0;font-size:12px}.opt .ovc button:hover{color:var(--rd)}
+.opt .ov{margin-left:auto;border:0;background:none;color:var(--am);font-size:11px;font-weight:700;padding:0}
+.opt .ov:disabled{color:var(--dim);cursor:default}
+.opt .ovf{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:7px 16px;border-bottom:1px solid var(--ln);font-size:11px;color:var(--dim);white-space:nowrap;background:var(--p2)}
+.opt .ovf select{background:var(--p);border:1px solid var(--ln);padding:3px 6px;font-weight:700}
+.opt .ovf button{background:none;border:1px solid var(--am);color:var(--am);padding:3px 10px;font-weight:700;font-size:11px}
+.opt .ovf button[data-op="ovcancel"]{border-color:var(--ln);color:var(--mu)}
+.opt .ovf button:hover{background:#ffb00014}
+.opt .ovmsg{color:var(--rd);white-space:normal}
+.opt .setmsg{padding:5px 16px;border-bottom:1px solid var(--ln);color:var(--rd);font-size:11.5px;white-space:normal}
+.opt .luh{align-items:center;padding-top:6px}.opt .luh>span:first-child{color:var(--tx);font-weight:700}
+.opt .unp{font-style:normal;font-size:9.5px;font-weight:800;color:var(--am);border:1px solid #ffb00066;padding:0 5px;margin-left:8px;letter-spacing:.6px}
+.opt .sw{display:flex;border:1px solid var(--ln)}
+.opt .sw button{border:0;background:none;min-width:24px;padding:0 6px;height:24px;font-size:11px;font-weight:800;color:var(--mu)}
+.opt .sw button.on{background:var(--am);color:#000}.opt .sw button:disabled{color:var(--dim);cursor:default}
+.opt .sn{min-width:0}.opt .sn b,.opt .sn small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.opt .lkb{background:var(--p2);border:1px solid #2a2a30;color:var(--mu);width:24px;height:24px;padding:0;display:inline-grid;place-items:center}
+.opt .lkb:hover{color:var(--gr);border-color:var(--gr)}
+.opt .crow.stale .sn b{color:var(--rd);font-weight:500}
+.opt .capt{white-space:nowrap}
+.opt .capt .none{white-space:normal}
+.opt .act{margin:8px 16px 6px}
+.opt .act .gorun{display:flex;flex-wrap:wrap;gap:8px}
+.opt .act .gorun .gomsg{flex:0 0 100%;font-size:11.5px;color:var(--am);white-space:normal}.opt .act .gorun .gomsg.err{color:var(--rd)}
+.opt .act .gorun .go{flex:1;width:auto;min-width:0}
+.opt .act .gorun .go:disabled{color:var(--tx)}
+.opt .act .gorun button.stop{flex:none;width:96px}
+.gorun button{text-transform:none;letter-spacing:0}
+.opt .act .two{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.opt .act button.ol{background:none;border:1px solid var(--am);color:var(--am);padding:6px;font-size:12px}
+.opt .act button.ol:disabled{border-color:var(--ln);color:var(--dim);cursor:not-allowed}
+.opt .actnote{white-space:normal;margin-bottom:6px;color:var(--am)}
+.opt .actnote.err{color:var(--rd)}
+.opt .actnote.wrap{white-space:normal}
+.opt .sk{border:0;background:none;padding:0;color:var(--mu);font-size:11.5px}
+.opt .skl{margin:0 16px 10px;padding:6px 10px;list-style:none;border:1px solid var(--ln);font-size:11px;color:var(--mu)}
+.opt .skl li{white-space:normal;padding:1px 0}
+.opt .sec{padding:5px 16px 3px;border-top:1px solid var(--ln);font-size:11px;color:var(--dim);font-weight:700}
+.opt .sec.sethd{border-top:0;color:var(--tx)}
+.opt .saved{padding:0 16px 12px}
+/* The saved cards (saved-panel.js, optimizer standard A5, A12): the result card's box and rows, with a tick for the DK file, the Cash or GPP mark and when it was saved. */
+.opt .sec.svh{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.opt .svh button{background:none;border:1px solid var(--am);color:var(--am);font-size:10.5px;font-weight:800;padding:2px 10px;min-height:24px}
+.opt .svh button:disabled{border-color:var(--ln);color:var(--dim);cursor:not-allowed}
+.opt .svt{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-weight:400}
+.opt .svt input{width:14px;height:14px;margin:0;accent-color:var(--am);cursor:pointer}
+.opt .svt .t{font-size:11.5px;color:var(--mu)}
+/* A saved card's letter, name and rename (standard D8). */
+.opt .svn{display:flex;align-items:center;gap:8px;padding:0 0 5px;font-size:12.5px;font-weight:700;color:var(--tx);position:relative}
+.opt .svl{font-weight:800;font-size:10.5px;min-width:20px;text-align:center;border:1px solid var(--ln);color:var(--mu);padding:1px 4px}
+.opt .svn button{background:none;border:1px solid var(--ln);color:var(--mu);font-size:10.5px;font-weight:700;min-height:24px;padding:0 8px;margin-left:auto}
+.opt .svn button:hover{color:var(--tx);border-color:var(--am)}
+.opt .svn input{flex:1;min-width:0;background:var(--p);border:1px solid var(--am);color:var(--tx);padding:2px 6px;font-size:12.5px}
+.opt .svn .ed-hint{position:static;flex:none}
+.opt .md{font-weight:800;font-size:10.5px;text-align:center;border:1px solid #ffb00066;color:var(--am);padding:1px 8px}.opt .md.cash{border-color:#39e58c66;color:var(--gr)}
+.opt .lch .unp{margin-right:auto}
+.opt .lch button.sm.x{border-color:#ff4d5e66;color:var(--rd)}
+/* Late swap mode (lateswap-panel.js, board.js): the header switch, the panel's frozen / pinned / open slots, the slot pickers.
+   Frozen (game started) is blue, pinned by hand is amber; the slot is the one .crow, with a wider control column.
+   Rules below are scoped to mode-only classes, so with the mode off the page is unchanged. */
+.lsw{display:flex;align-items:center;gap:6px;background:none;border:1px solid var(--ln);padding:4px 10px;font-weight:700;font-size:11.5px;color:var(--mu)}
+.lsw:hover{color:var(--tx);border-color:var(--mu)}
+.lsw.on{background:var(--bl);border-color:var(--bl);color:#000}
+.lslot{--ctl:50px}
+.lslot.frz .sl{background:var(--bl);border-color:var(--bl);color:#000}.lslot.frz .pn{color:var(--bl)}
+.lslot.pnd .sl{background:var(--am);border-color:var(--am);color:#000}
+.frzm{display:inline-grid;place-items:center;width:24px;height:24px;border:1px solid var(--bl);color:var(--bl)}
+.unpin{display:inline-flex;align-items:center;gap:3px;height:24px;padding:0 5px;background:none;border:1px solid var(--am);color:var(--am)}
+.crow .unpin i{font-weight:800;font-size:12px;color:inherit;margin:0}.unpin:hover{background:#ffb00022}
+.psel,.rpin{height:24px;background:var(--p2);border:1px solid var(--ln);font-size:10.5px;font-weight:700;padding:0 2px;color:var(--mu);vertical-align:middle}
+.psel{width:50px}
+/* In the mode the row's slot picker takes the lock button's 24px box, so the control cell keeps its width and nothing moves on toggle. */
+.rpin{appearance:none;-webkit-appearance:none;width:24px;padding:0;font-size:8.5px;text-align:center;text-align-last:center;cursor:pointer}
+.psel:disabled,.rpin:disabled{opacity:.5;cursor:not-allowed}
+.psel:focus-visible,.rpin:focus-visible{outline:1px solid var(--am);outline-offset:1px}
+td.ctl.ls button{vertical-align:middle}
+tr.started td{opacity:.32}tr.started td.pl{opacity:.55}
+tr.started td.ctl button{visibility:hidden}
+.opt .lslocks{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;font-size:11px;color:var(--mu)}
+.opt .lslocks .ovc{border-color:var(--gr);color:var(--gr)}
+.unpin:disabled{opacity:.5;cursor:not-allowed}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--p2);border:1px solid var(--am);color:var(--am);font-weight:700;font-size:12px;padding:8px 14px;z-index:16;white-space:normal;max-width:min(420px,90vw);pointer-events:none}
+.toast.err{background:var(--rd);border-color:var(--rd);color:#000}
+.fatal{padding:40px;color:var(--rd)}
+/* One scale for the whole page on a wide screen: header, games strip, table and optimizer grow together; every box keeps its natural width. */
+/* No page zoom: the type is set in real pixels so a very large monitor shows a dense page (the board's JS reads body zoom as 1). */
+/* The page fits a laptop width (standard A15): the panel's column gives way first (.work), then it goes over the table, where its band has no table beside it to stay with. */
+@media (max-width:1830px){.work{grid-template-columns:minmax(0,1fr)}.pool{grid-column:1;grid-row:2}.opt{grid-column:1;grid-row:1;align-self:start}.lu{position:static}}
+/* Player card (card.js): a modal over a dimmed page, at the optimizer column's left edge (card.js sets it). */
+.cardbg{position:fixed;inset:0;z-index:14;background:#0008}
+.cardbg[hidden]{display:none}
+.card{position:fixed;top:12px;left:12px;width:640px;z-index:15;background:var(--p);border:1px solid var(--ln);box-shadow:inset 0 2px 0 var(--am),-24px 0 40px #000b}
+.card[hidden]{display:none}
+.logo.xl{width:36px;height:36px}
+.chipx.xl{width:36px;height:36px}
+.cfig{flex:0 0 100%;display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 16px}
+.cfn{display:flex;gap:18px;font-size:12px;color:var(--mu);white-space:nowrap}.cfn b{color:var(--tx);font-size:14px;font-weight:800;margin-left:3px}.cfn span:nth-child(2) b{color:var(--am)}
+.cfs{font-size:10.5px;color:var(--mu)}
+.ch{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--ln);background:linear-gradient(90deg,color-mix(in srgb,var(--t1) 13%,transparent),color-mix(in srgb,var(--t1) 3%,transparent) 60%,transparent);box-shadow:inset 3px 0 var(--t1)}
+.ch>.logo,.ch>.chipx{flex-shrink:0}
+.ch .id{flex:1;min-width:0}.ch .l1{gap:9px;min-width:0}.ch .l1 .st{flex-shrink:0}
+/* A long name ends in an ellipsis inside .id, which stops 12px (the .ch gap) short of LOCK. */
+.nm2{font:700 18px "Space Grotesk",sans-serif;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ch .l2{display:flex;align-items:center;gap:10px;font-size:12px;margin-top:4px;color:var(--mu);white-space:nowrap}
+.ddtd b{color:var(--tx);font-weight:700}
+.acts{display:flex;gap:6px;flex-shrink:0}
+.acts button{display:flex;align-items:center;gap:6px;padding:5px 10px;font-weight:800;font-size:11.5px;background:none;border:1px solid}
+.a-lk{border-color:var(--gr)!important;color:var(--gr)}.a-lk:hover,.a-lk.on{background:#39e58c1f}
+.a-ex{border-color:var(--rd)!important;color:var(--rd)}.a-ex:hover,.a-ex.on{background:#ff4d5e1f}
+.close{flex-shrink:0;height:32px;padding:0 10px;display:flex;align-items:center;gap:8px;border:1px solid var(--ln);background:none;color:var(--mu);align-self:flex-start}
+.close kbd{font:700 9.5px "JetBrains Mono";letter-spacing:.8px;color:var(--dim)}
+.close:hover{color:var(--tx);border-color:var(--mu)}
+.sec{padding:8px 16px 3px;font-size:11px;color:var(--dim);font-weight:700}
+.avgrow{display:flex;align-items:center;gap:22px;margin:8px 16px 4px}
+.avg{display:flex;gap:22px}.avg span{display:flex;align-items:baseline;gap:7px}
+.avg small{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--dim)}.avg b{font-size:15px}
+.avg span:first-child b{color:var(--am);font-weight:800}
+.sparkbox{margin-left:auto}
+.spark{display:block;background:#ffffff06;border:1px solid var(--ln)}
+.log{margin:6px 16px 0;width:calc(100% - 32px)}
+.log th{padding:4px 7px;cursor:default;font-size:10.5px}.log th.l{text-align:left}.log th.s{color:var(--am)}
+.log td{padding:2px 7px;font-size:12.5px;border-bottom:1px solid #18181c}
+.log td.d{text-align:left;color:var(--mu)}.log td.o{text-align:left}.log td.r{text-align:left;font-size:11.5px}
+.log td.w{color:var(--gr)}.log td.l{color:var(--rd)}
+.log td.k{color:var(--am);font-weight:800}
+.log tbody tr:nth-child(even) td{background:#ffffff04}
+.cardmsg{margin:10px 16px 6px;padding:14px;border:1px dashed var(--ln);color:var(--mu);font-size:12.5px}
+.cardmsg.err{border-color:#ff4d5e55;color:var(--rd)}
+.src{padding:10px 16px 14px;font-size:10.5px;color:var(--dim)}
+/* Card usage section (card-usage.js, card-chart.js): "Efficiency and role" chart, past-seasons table, USG% log cells.
+   The card scrolls inside itself once the chart makes it taller than the screen, as the optimizer panel does. */
+.card{max-height:calc(100vh - 24px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#3a3a42 transparent}
+.card .ch{position:sticky;top:0;z-index:4;background-color:var(--p)}
+.log td.u{color:var(--mu)}
+.ue{margin:6px 16px 0;padding-top:12px;border-top:1px solid var(--ln)}
+.ue-hd{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.ue-hd b{font:700 15px "Space Grotesk",sans-serif}
+.ue-grow{flex:1}
+.ue-seg{display:flex;border:1px solid var(--ln)}
+.ue-seg button{padding:4px 12px;font-weight:700;font-size:11.5px;color:var(--mu);background:none;border:0;border-right:1px solid var(--ln)}
+.ue-seg button:last-child{border-right:0}
+.ue-seg button.on{background:var(--am);color:#000}
+.ue-seg.sm button{padding:3px 9px;font-size:10.5px}
+.ue-tools{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.ue-note{color:var(--mu);font-size:11px}
+.ue-lgd{display:flex;gap:16px;align-items:center;color:var(--mu);font-size:11px;margin-bottom:4px;white-space:nowrap}
+.ue-lgd span{display:flex;align-items:center}.ue-lgd svg{margin-right:5px}
+.ue-chart{position:relative}
+.ue-svg{display:block;overflow:visible;outline:none}
+.ue-svg text{font-family:"JetBrains Mono",Consolas,monospace}
+.ue-pt{fill:var(--tx);font-size:11.5px;font-weight:700}
+.ue-tk{fill:var(--mu);font-size:12px}
+.ue-xl{fill:var(--mu);font-size:12px}
+.ue-none{fill:var(--dim);font-size:11px}
+.ue-grid{stroke:#ffffff10;stroke-width:1}
+.ue-base{stroke:var(--ln);stroke-width:1}
+.ue-up{fill:var(--gr);opacity:.16}.ue-dn{fill:var(--rd);opacity:.2}
+.ue-lg{stroke:var(--mu);stroke-width:1.5;stroke-dasharray:5 4;fill:none}
+.ue-avg{stroke-width:1.25;opacity:.6}
+.ue-ln{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.ue-now{fill:var(--tx);font-size:12px;font-weight:800}
+.ue-rl{fill:var(--mu);font-size:11.5px}
+.ue-lead{fill:none;stroke:var(--dim);stroke-width:1}
+.ue-mv{stroke:var(--mu);opacity:.8;stroke-dasharray:2 3}
+.ue-mvt{fill:var(--tx);font-size:11.5px;font-weight:700}
+.ue-xh{stroke:var(--tx);opacity:.3;stroke-dasharray:2 3}
+.ue-tip{position:absolute;z-index:3;width:240px;background:var(--p2);border:1px solid #3a3a42;padding:7px 10px;font-size:11px;line-height:1.5;box-shadow:0 10px 30px #000c;pointer-events:none}
+.ue-tt{display:flex;justify-content:space-between;gap:8px;font:700 12px "Space Grotesk",sans-serif;margin-bottom:2px}
+.ue-tt em{font:normal 10.5px "JetBrains Mono",monospace;color:var(--mu)}
+.ue-tt span,.ue-tt em{white-space:nowrap}
+.ue-tv{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;margin-top:3px}
+.ue-tv i{display:inline-block;width:14px;height:2px}
+.ue-tv u{text-decoration:none;font-weight:400;font-size:10.5px;color:var(--mu)}
+.ue-tr{display:flex;justify-content:space-between;color:var(--mu);font-size:10.5px}
+.ue-tr b{color:var(--tx)}
+.ue-tn{color:var(--mu);font-size:10.5px;border-top:1px solid var(--ln);margin-top:4px;padding-top:3px}
+.ue-warn{color:var(--am);font-size:10.5px;margin-top:4px}
+.ue-src{color:var(--mu);font-size:10.5px;margin:8px 0 2px}
+.ue-tsrc{margin:6px 16px 12px}
+.ue-tbl td.ue-l{text-align:left}
+.ue-tbl tr.tot td{color:var(--mu);font-style:italic}
+/* One-column card (card.js): the season's games in their own scroll box (about 8 rows, header row sticky), then the
+   seasons table, then the chart. */
+.card td,.card th{font-variant-numeric:tabular-nums}
+.hint{float:right;text-transform:none;letter-spacing:0;font-weight:500;color:var(--dim);font-size:10.5px}
+.logscroll{margin:6px 16px 0;max-height:245px;overflow-y:auto;border-bottom:1px solid var(--ln);scrollbar-width:thin;scrollbar-color:#3a3a42 transparent}
+.logscroll .log{margin:0;width:100%}
+.logscroll th{position:sticky;top:0;z-index:2}
+.logscroll .log tbody tr:last-child td{border-bottom:0}
+.logwarn{margin:8px 16px 0}
+.ue-seasons{padding-top:18px}
+.sst td,.sst th{white-space:nowrap}
+.sst th.tm,.sst td.tm{padding-left:14px}
+.sst tr.now td{background:#ffb0000d!important}
+.sofar{font-style:normal;font-size:9.5px;color:var(--am);margin-left:7px;letter-spacing:.4px;text-transform:uppercase}
+
+/* Adam's overrides (5:20 PM ET 2026-10-29). The thumbs pair in its own column (optimizer standard A1), ported from NFLDFSRankings
+   public/style.css at 7e49266 (.bump-ctl, .bump-btn, .bump-fig, .bump-up, .bump-down) onto this board's tokens: a thumbs-down
+   and a thumbs-up button, 24px tall and at least 24px wide (C1) with 13px thumbs, one filled thumb per step (green up, red down),
+   one grey outline thumb when a side is off, several fanned so a button never passes 29px; the pair sits right-aligned in a
+   fixed 59px slot and the figure in a fixed 5-character slot, so a press never shifts the column. A bumped figure is tinted; a
+   typed number (Proj or Own) wears the amber outline marker with its base on hover. */
+.ctl .fav{font-size:13px;line-height:1}
+.ctl .fav.on{border-color:var(--am);color:var(--am);background:#ffb00018}
+.bump-ctl{display:inline-flex;justify-content:flex-end;width:59px;align-items:center;gap:1px;vertical-align:middle}
+.bump-btn{display:inline-flex;align-items:center;justify-content:center;height:24px;min-width:24px;padding:0 1px;border:1px solid #2a2a30;background:var(--p2);color:var(--mu);line-height:1;cursor:pointer}
+.bump-btn:hover:not(:disabled){color:var(--tx);border-color:var(--am)}
+.bump-btn:disabled{opacity:.4;cursor:default}
+.bump-btn.is-on:disabled{opacity:1}
+.bump-btn .thumb{width:13px;height:13px;flex:none;fill:none;stroke:currentColor;stroke-width:2;pointer-events:none}
+.bump-btn[data-action="bump-down"] .thumb{transform:rotate(180deg)}
+.bump-btn .thumb+.thumb{margin-left:calc(var(--fan,0px) - 13px)}
+.bump-btn.is-on .thumb{stroke:var(--p2);stroke-width:6.5;paint-order:stroke}
+.bump-btn.is-on[data-action="bump-up"] .thumb{fill:var(--gr)}
+.bump-btn.is-on[data-action="bump-down"] .thumb{fill:var(--rd)}
+.bump-fig{display:inline-block;min-width:5ch;padding:0 2px;text-align:right;font-variant-numeric:tabular-nums;vertical-align:middle;cursor:text}
+.bump-fig.bump-up{background:#39e58c1f;color:var(--gr)}
+.bump-fig.bump-down{background:#ff4d5e1f;color:var(--rd)}
+.bump-fig.bump-typed,td.own .v.ov-typed,.min-typed{outline:1px solid var(--am);outline-offset:-1px;background:#ffb00014;color:var(--am)}
+/* A typed number's box: room on the right inside it, pulled out by the same amount so its digits stay in line with the column. */
+.min-typed{display:inline-block;min-width:5ch;padding:0 4px;margin-right:-4px;text-align:right}
+.bump-fig.bump-typed{padding-right:6px;margin-right:-4px}
+td.own .v.ov-typed{padding-right:4px;margin-right:-4px}
+td.own .v.ov-own{cursor:text}
+/* Typed and bumped: the marker outline keeps the bump's colour, so the direction still reads. */
+.bump-fig.bump-typed.bump-up{color:var(--gr)}.bump-fig.bump-typed.bump-down{color:var(--rd)}
+/* The editor is laid over the figure (cell-editor.js sets right and top), so opening it never moves a column. */
+td.proj,td.own{position:relative}
+.ov-in{position:absolute;z-index:3;transform:translateY(-50%);width:62px;background:var(--p2);border:1px solid var(--am);color:var(--tx);padding:1px 4px;font-size:13px;text-align:right}
+.ov-in:focus{outline:none}
+.ov-in.bad{border-color:var(--rd);color:var(--rd)}
+.who{position:relative}
+.ovt{display:inline-flex;gap:3px;margin-left:auto;padding-left:8px}
+.ovt button{width:24px;height:24px;border:1px solid #2a2a30;background:var(--p2);color:var(--mu);display:inline-grid;place-items:center;padding:0;font-size:12px;line-height:1}
+.ovt button:hover:not(:disabled){color:var(--tx);border-color:var(--am)}
+.ovt .nt.on{border-color:var(--bl);color:var(--bl);background:#6aa8ff18}
+.ovt .rs{color:var(--am);border-color:#ffb00066}
+.ovt .rs.off{visibility:hidden}
+.nt-in{position:absolute;right:0;top:calc(100% + 2px);z-index:4;width:280px;background:var(--p2);border:1px solid var(--bl);color:var(--tx);padding:4px 6px;font-size:12px;box-shadow:0 8px 24px #000c}
+.nt-in:focus{outline:none}
+/* The line under an open box (cell-editor.js, standard A3), which sets where a number box's sits. It never takes a click. */
+.ed-hint{position:absolute;z-index:4;padding:1px 6px;background:var(--p2);border:1px solid var(--ln);color:var(--mu);font:500 10.5px "JetBrains Mono",monospace;white-space:nowrap;pointer-events:none}
+.ed-hint.nt{right:0;top:calc(100% + 32px)}
+.ed-hint.bad{border-color:var(--rd);color:var(--rd)}
+/* A greyed or excluded cell's opacity makes a stacking context, which would dim an open box and let the next row cover it. */
+#tbody td:has(.ov-in,.nt-in){opacity:1;position:relative;z-index:5}
+/* The one confirm (confirm.js), over everything; centred by the box itself. */
+.cfm{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:#000a}
+.cfm-box{width:min(440px,90vw);background:var(--p2);border:1px solid var(--am);padding:16px 18px;box-shadow:0 12px 40px #000c}
+.cfm-box p{margin:0 0 14px;font-size:13.5px;color:var(--tx);white-space:normal}
+.cfm-btns{display:flex;justify-content:flex-end;gap:8px}
+.cfm-btns button{min-height:28px;padding:0 14px;font-weight:700;font-size:12px;background:none;border:1px solid var(--ln);color:var(--mu)}
+.cfm-btns .cfm-yes{border-color:var(--am);color:var(--am)}
+.cfm-btns button:hover,.cfm-btns button:focus-visible{outline:1px solid var(--am);outline-offset:1px;color:var(--tx)}
+.chip.starred.on{background:var(--am);border-color:var(--am);color:#000}
+.chip.ovr{margin-left:6px}
+.chip.ovr:disabled{cursor:default}
+/* The second filter row (filters.js, standard B4, B5): it wraps inside the table's width and never sets that width, as the Out list does. */
+.fil{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-bottom:5px;width:0;min-width:100%}
+.fil label{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--mu);white-space:nowrap}
+.salb{width:76px;padding:2px 8px;text-align:right}
+.salb.bad{border-color:var(--rd);color:var(--rd)}
+#clearF:disabled{opacity:.45;cursor:default}
+.tchips{display:flex;flex-wrap:wrap;gap:2px;flex:1 1 100%}
+.tchip{display:inline-flex;align-items:center;gap:3px;padding:1px 4px 1px 2px;font-size:11px;min-height:22px}
+.tchip.on{background:var(--am);border-color:var(--am);color:#000}
+/* The filter bar and, under it, the table header stay on screen (standard A15, B7; board.js measures the bar). Collapsed borders scroll away with the rows, so the header's line is a shadow. An open typed box (z-index 3 and up) stays over both, and the Columns list inside the bar over the header. */
+.fbar{position:sticky;top:0;z-index:2;background:var(--bg);padding-top:4px}
+/* The bar's measured height rounds, so the header tucks 1px under the bar and no row shows through between them. */
+#thead th{position:sticky;top:calc(var(--fbarh,0px) - 1px);z-index:1;box-shadow:inset 0 -1px var(--ln)}
+/* A row's Min % and Max % boxes (row-limits.js, standard B10): a figure's box that opens the one typed box over itself. */
+td.lim,th.lim{padding:0 3px;width:50px}
+td.lim{position:relative}
+th.lim{cursor:default}
+.limb{width:44px;height:24px;background:var(--p);border:1px solid #2a2a30;color:var(--tx);padding:0 4px;font-size:12px;text-align:right;vertical-align:middle;cursor:text}
+.limb:hover:not(:disabled),.limb:focus-visible{border-color:var(--am);outline:none}
+.limb.on{border-color:#ffb00066;color:var(--am)}
+.limb:disabled{opacity:.4;cursor:not-allowed}
+.ov-in.lim{width:48px}
+.opt .limcount{margin-top:6px;font-size:11.5px;color:var(--mu)}
+tr.blk td.lim{opacity:.75}
+/* The Clear lineup button, on the working lineup's heading (standard B6). */
+.opt .luhr{display:inline-flex;align-items:center;gap:10px}
+.opt .clr{background:none;border:1px solid var(--ln);color:var(--mu);font-size:10.5px;font-weight:700;padding:2px 10px;min-height:24px}
+.opt .clr:hover:not(:disabled){color:var(--tx);border-color:var(--am)}
+.opt .clr:disabled{opacity:.45;cursor:default}
+/* The Columns button and its list (columns.js): a tick box and a drag handle per column, remembered per Cash and GPP. */
+.colsw{position:relative;margin-left:auto}
+#colsBtn[aria-expanded="true"]{border-color:var(--am);color:var(--am)}
+.colpop{position:absolute;right:0;top:calc(100% + 4px);z-index:12;width:220px;background:var(--p2);border:1px solid var(--am);padding:6px;box-shadow:0 12px 40px #000c}
+.colpop[hidden]{display:none}
+.collist{list-style:none;margin:0 0 6px;padding:0}
+.colrow{display:flex;align-items:center;gap:6px;border:solid transparent;border-width:2px 0;font-size:12px}
+.colrow.over{border-top-color:var(--am)}.colrow.over.down{border-top-color:transparent;border-bottom-color:var(--am)}
+.colrow label{display:flex;align-items:center;gap:6px;flex:1;min-height:26px;cursor:pointer}
+.colrow input{width:14px;height:14px;margin:0;accent-color:var(--am)}
+.colrow input:disabled+*,.colrow input:disabled{cursor:not-allowed}
+.hnd{display:inline-grid;place-items:center;width:24px;height:24px;color:var(--mu);border:1px solid #2a2a30;background:var(--p);cursor:grab;user-select:none;font-size:12px}
+.hnd:hover,.hnd:focus-visible{color:var(--tx);border-color:var(--am);outline:none}
+.colreset{width:100%;min-height:26px;background:none;border:1px solid var(--ln);color:var(--mu);font-weight:700;font-size:11.5px}
+.colreset:hover{color:var(--tx);border-color:var(--mu)}
+/* The working lineup (work-panel.js, board.js): a row click puts the man in or out, so the row reads as clickable; a man in
+   the lineup on show wears a thin amber bar at his player cell and a faint amber wash, quieter than the lock's green. A
+   filled panel slot empties on a click; a hand-picked one (Build keeps him) has a tinted slot label. */
+tr.pk{cursor:pointer}
+tr.inl td{background-color:#ffb0000a}tr.inl td.pl{box-shadow:inset 2px 0 var(--am)}
+tr.inl:hover td{background-color:#ffb00014}
+/* A man who cannot go in now (row-block.js, standard A18): greyed, no pick on a click, the reason on hover; his figures still read, and his name and row controls still work. */
+tr.blk{cursor:not-allowed}
+tr.blk td{opacity:.42}tr.blk td.ctl,tr.blk td.bmp{opacity:.75}
+tr.blk .logo{filter:grayscale(1)}
+tr.team.blk:hover td{background:none}
+tr.excl.blk td{opacity:.3}
+.opt .slot.pick{cursor:pointer}
+.opt .slot.pick:hover{background-color:#ffffff0f}
+.opt .slot.pick:hover .sl{outline:1px solid var(--am);outline-offset:1px}
+.opt .slot.hand .sl{background:#ffb00033;box-shadow:inset 3px 0 var(--am)}
+/* The built lineups as cards and their exposure table (lineups-list.js); scoped to the panel. */
+.opt .pn{font:600 13px "Space Grotesk",sans-serif;background:none;border:0;padding:0;color:var(--tx);text-align:left;cursor:pointer;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opt .pn:hover{color:var(--am);text-decoration:underline}
+.opt .pn.il{display:inline;font:inherit;font-weight:700;color:inherit;text-decoration:underline dotted;text-underline-offset:3px;white-space:normal}
+.opt .crow.locked .pn{color:var(--gr)}
+.opt .lcs{padding:4px 16px 10px;display:flex;flex-direction:column;gap:8px}
+.opt .lc{border:1px solid var(--ln);background:var(--p2);padding:4px 10px 6px}
+.opt .lc.savedc{border-color:#39e58c99}
+.opt .lch{display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:12.5px;padding-bottom:4px}
+.opt .lcb{display:inline-flex;gap:6px}
+.opt .lch button.sm{background:none;border:1px solid var(--am);color:var(--am);font-size:10.5px;font-weight:800;padding:2px 10px;min-height:24px}
+.opt .lch button.sm.on{border-color:var(--gr);color:var(--gr);cursor:default}
+.opt .exl{padding:0 16px 8px}
+.opt .ext{border-collapse:collapse;font-size:12px;white-space:nowrap;width:100%}
+.opt .ext th{background:var(--p);color:var(--mu);font-weight:600;text-align:left;padding:2px 6px 4px 0}
+.opt .ext th.sortable{cursor:pointer;color:var(--tx);user-select:none}
+.opt .ext .ex-none{color:var(--dim);font-size:11.5px;padding:6px 0}
+.opt .expos{display:flex;align-items:center;gap:4px;margin-bottom:6px;font-size:11px;color:var(--mu)}
+.opt .expos>span{margin-right:4px}
+.opt .ext td{padding:2px 6px 2px 0;color:var(--mu);text-align:left}.opt .ext th:nth-child(2){width:99%}
+.opt .ext .ex-pct,.opt .ext .ex-own{text-align:right}
+.opt .ext td.ex-pct{color:var(--am);font-weight:700;font-variant-numeric:tabular-nums}
+.opt .ext .ex-n{color:var(--dim);font-weight:400}
+.opt .ext td.ex-own{color:var(--bl)}
+.opt .ext td.ex-f{padding-right:0}
+.opt .xf{min-height:24px;padding:0 8px;background:var(--p2);border:1px solid #2a2a30;color:var(--mu);font-size:10.5px;font-weight:700}
+.opt .xf:hover{color:var(--tx);border-color:var(--am)}
+.opt .xf.on{background:var(--am);border-color:var(--am);color:#000}
+/* Full screen on the Player list (board.js): the optimizer panel is hidden and the table takes the whole width. Buttons are 32 px tall to tap. */
+#fsBtn{min-height:32px;white-space:nowrap}#fsBtn[hidden]{display:none}#colsBtn{min-height:32px}
+body.fs-list .work{grid-template-columns:minmax(0,1fr)}
+body.fs-list aside.opt{display:none}
+body.fs-list .pool{grid-row:1}
+/* Narrow screens: the table scrolls sideways in its own box, which also scrolls up and down so the header stays on top (sticky cannot cross a scrolling box). */
+.cnt{flex:none;margin-right:4px}
+body.fs-list .colsw{margin-left:0}
+body.fs-list #thead th:last-child,body.fs-list #tbody td:last-child{width:auto} /* the spare width spreads over the columns instead of stranding the last one */
+@media (max-width:1300px){
+  .work,.pool{min-width:0;max-width:100%}
+  .tbl{position:sticky;top:var(--fbarh,0px);overflow:auto;max-height:calc(100dvh - var(--fbarh,0px) - 12px)}
+  #thead th{top:0}
+  .tools,.chips,.top .stamps,.top{flex-wrap:wrap}
+  .colsw{margin-left:0}
+  .cnt{min-width:0;margin-left:0}
+  /* Sideways scroll keeps the star and the name in view (--plleft is the star column's width, set by board.js). */
+  #tbody td.pl,#thead th.pl{position:sticky;left:var(--plleft,0px);z-index:1}
+  #tbody td.pl{background-color:var(--p)}#thead th.pl{background-color:var(--p2);z-index:3}
+  #tbody td.ctl:first-child,#thead th.ctl:first-child{position:sticky;left:0;z-index:1;background-color:var(--p)}
+  #thead th.ctl:first-child{background-color:var(--p2);z-index:3}
+}
+@media (max-width:900px){
+  .tabs button,.tchip,.top .themes button,.top .vtabs button{min-height:32px}
+  .search,.search.salb,#clearF{min-height:32px}
+}
+/* On a phone the bar is too tall to stay on screen: it scrolls away and the table's own box takes the screen. */
+@media (max-width:599px){
+  .fbar{position:static}
+  .tbl{top:0;max-height:calc(100dvh - 12px)}
+}

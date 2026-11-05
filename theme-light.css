@@ -1,0 +1,67 @@
+/* The light look (optimizer standard D11, theme.js). board.css is written for dark: the shared colours change here, and the colours it spells out as dark-only tints are overridden below. */
+body.light{--bg:#f4f4f1;--p:#ffffff;--p2:#ecece8;--ln:#c9c9c2;--tx:#17171a;--mu:#55555c;--dim:#66666d;--am:#9a5b00;--gr:#0d7a44;--rd:#c21f30;--bl:#1f5fbf;--or:#b85c00;background-color:var(--bg);background-image:none;color:var(--tx)}
+html:has(body.light){scrollbar-color:#a8a8a0 transparent}
+body.light .opt .slot.pick:hover{background-color:#0000000a}
+body.light td{border-bottom-color:#e3e3dd}
+body.light tbody tr:hover td{background:#00000008}
+body.light tr.team:hover td{background:color-mix(in srgb,var(--t1) 10%,transparent)}
+body.light tr.inl td{background-color:#9a5b0012}
+body.light tr.inl:hover td{background-color:#9a5b001f}
+/* Buttons that rest in a dark edge. */
+body.light .ctl button,body.light .ovt button,body.light .bump-btn,body.light .hnd,body.light .limb,body.light .opt .lkb,body.light .opt .xf{border-color:#b9b9b2}
+body.light .ctl button,body.light .ovt button,body.light .bump-btn{background:#ffffff}
+body.light .limb{background:#ffffff}
+body.light .limb.on{border-color:var(--am)}
+body.light .bump-btn.is-on .thumb{stroke:#ffffff}
+/* A figure lit by team or tier: mixed toward dark, not white, so it reads on a light page. */
+body.light .ip.t-top,body.light .tot b.t-top{color:color-mix(in srgb,var(--tc) 45%,#000);text-shadow:none;background:color-mix(in srgb,var(--tc) 14%,transparent)}
+body.light .ip.t-solo,body.light .tot b.t-solo{color:color-mix(in srgb,var(--tc) 45%,#000);text-shadow:none;background:color-mix(in srgb,var(--tc) 24%,transparent)}
+body.light .ip.t-lit,body.light .tot b.t-lit{color:color-mix(in srgb,var(--tc) 45%,#000);text-shadow:none}
+body.light .ip.t-soft,body.light .tot b.t-soft{color:color-mix(in srgb,var(--tc) 45%,#000)}
+body.light .game.sel{background:linear-gradient(180deg,#fff3d6,var(--p))}
+body.light td.bar .b,body.light .capbar{background:#00000012}
+body.light td.val .b i,body.light td.own .b i,body.light .capbar i{box-shadow:none}
+body.light .logo{filter:drop-shadow(0 0 1px #00000059)}
+body.light .chipx{background:#0000000f}
+/* Tints written at dark strength. */
+body.light .stamps .lock{background:#9a5b0012}
+body.light .notes>button{background:#9a5b0014}
+body.light .pos{border-color:#9a5b0066}
+body.light .sl{border-color:#9a5b0080}
+body.light .crow{border-bottom-color:#d6d6cf}
+body.light .crow.tm{background-image:linear-gradient(90deg,color-mix(in srgb,var(--t1) 14%,transparent) 0,color-mix(in srgb,var(--t1) 6%,transparent) 32%,color-mix(in srgb,var(--t2) 4%,transparent) 100%)}
+body.light tr.locked:not(.team) td{background:#0d7a4412}
+body.light tr.team.locked{background:linear-gradient(#0d7a4412,#0d7a4412),linear-gradient(90deg,color-mix(in srgb,var(--t1) 5%,transparent) 0,transparent 120px)}
+body.light .ctl .lk.on{background:#0d7a441a}
+body.light .ctl .ex.on{background:#c21f301a}
+body.light .ctl .fav.on,body.light .bump-fig.bump-typed,body.light td.own .v.ov-typed,body.light .min-typed{background:#9a5b0018}
+body.light .bump-fig.bump-up{background:#0d7a441f}
+body.light .bump-fig.bump-down{background:#c21f301f}
+body.light .ovt .rs{border-color:#9a5b0066}
+body.light .dropnote{border-color:#9a5b0066;background:#9a5b0012}
+body.light .opt .md,body.light .opt .unp{border-color:#9a5b0066}
+body.light .opt .md.cash{border-color:#0d7a4466}
+body.light .opt .lc.savedc{border-color:#0d7a4499}
+body.light .opt .lch button.sm.x{border-color:#c21f3066}
+/* Text on a filled amber or tinted control stays readable. */
+body.light .tabs button.on,body.light .themes .on,body.light .seg .on,body.light .ue-seg button.on,body.light .tchip.on,body.light .chip.starred.on,body.light .opt .sw button.on,body.light .opt .xf.on,body.light .go{color:#fff}
+body.light .chip.locked.on,body.light .chip.excluded.on,body.light .chip.on b,body.light .toast.err{color:#fff}
+body.light .st,body.light .crow.locked .sl,body.light .lsw.on,body.light .lslot.frz .sl,body.light .lslot.pnd .sl{color:#fff}
+body.light .go:disabled{background:#00000014;color:var(--dim)}
+body.light .opt .act .gorun .go:disabled{color:var(--tx)}
+/* Over-page shadows and the player card. */
+body.light .notes .list,body.light .colpop,body.light .cfm-box,body.light .nt-in{box-shadow:0 12px 40px #00000033}
+body.light .cardbg{background:#00000059}
+body.light .cfm{background:#00000059}
+body.light .card{box-shadow:inset 0 2px 0 var(--am),0 12px 40px #00000040}
+body.light .log td{border-bottom-color:#e3e3dd}
+body.light .log tbody tr:nth-child(even) td{background:#00000006}
+body.light .sst tr.now td{background:#9a5b0012!important}
+body.light .spark{background:#00000006}
+body.light .ue-grid{stroke:#00000014}
+body.light .ue-tip{border-color:var(--ln);box-shadow:0 10px 30px #00000033}
+/* The working lineup's roster card (board.css .lu.wk): solid slot badges take white text on the darker amber and green; a lighter team tint. */
+body.light .lu.wk .wkr:not(.empty) .sl{color:#fff}
+body.light .lu.wk .wkr.tm{background-image:linear-gradient(90deg,color-mix(in srgb,var(--t1) 18%,transparent) 0,color-mix(in srgb,var(--t1) 7%,transparent) 42%,color-mix(in srgb,var(--t2) 5%,transparent) 100%)}
+body.light .lu.wk .wkr{border-bottom-color:#d6d6cf}
+body.light .lu.wk .wkr.empty{background:#00000008}

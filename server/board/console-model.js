@@ -1,0 +1,129 @@
+// The console's state for one slate: the teams from the inputs route, his saved work per team (ST) and the calculations on them,
+// through console-engine.js. No page here, so the tests can run it in node.
+import { keyOf, outsOf, emptyPins, scenario, teamFor } from "./console-engine.js";
+
+const SUFFIX = /^(jr\.?|sr\.?|ii|iii|iv|v)$/i;
+/** His last name, a generational suffix aside. */
+export const lastName = (name) => {
+  const words = String(name).trim().split(/\s+/);
+  while (words.length > 1 && SUFFIX.test(words.at(-1))) words.pop();
+  return words.at(-1);
+};
+/** "T. Varga": first initial and the rest of the name. */
+export const shortName = (name) => {
+  const words = String(name).trim().split(/\s+/);
+  return words.length > 1 ? `${words[0][0]}. ${words.slice(1).join(" ")}` : words[0];
+};
+/** A man's name in the table, side panel and sweep: short, or his whole name when another man on the team has the same short one. */
+export const tableName = (T, p) => (T.pl.filter((x) => shortName(x.name) === shortName(p.name)).length > 1 ? p.name : shortName(p.name));
+/** A man's name on a chip, in a scenario's name and in the history: his last name, or his whole name when another man shares it. */
+export const chipName = (T, p) => (T.pl.filter((x) => lastName(x.name) === lastName(p.name)).length > 1 ? p.name : lastName(p.name));
+/** Lowercase with accents gone, for the command box's matching. */
+export const plain = (s) => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+export const f1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
+export const sgn = (x) => (Math.abs(x) < 0.05 ? "0.0" : (x > 0 ? "+" : "") + f1(x));
+export const dcls = (x) => (Math.abs(x) < 0.05 ? "dim" : x > 0 ? "up" : "dn");
+
+/** What the team's teams object becomes: T per team (men by usual minutes, byId, tonightKey) and ST (his work). Each team opens on the scenario
+ *  an Apply last sent for it (`appliedKeys`), else Tonight, so what the board holds is what the page shows; an id no longer on the team drops. */
+export function buildModel(inputs, saved, appliedKeys = {}) {
+  const TEAMS = {}, ST = {};
+  for (const [code, input] of Object.entries(inputs.teams)) {
+    TEAMS[code] = shapeTeam(input);
+    ST[code] = stateFor(TEAMS[code], saved?.[code]);
+    if (Object.hasOwn(appliedKeys ?? {}, code)) ST[code].outs = outsOf(appliedKeys[code]).filter((id) => TEAMS[code].byId[id]);
+  }
+  return { TEAMS, ST };
+}
+
+function shapeTeam(input) {
+  const byId = {};
+  for (const p of input.men) byId[p.id] = p;
+  return { ...input, pl: input.men, byId, tonightKey: keyOf(input.tonight) };
+}
+
+/** His saved record as the working state, on Tonight. A scenario holding pins but not on his list (an earlier Tonight) shows for this session only; it is not written into saved. */
+function stateFor(T, rec) {
+  const saved = [...(rec?.saved ?? [])], shown = [];
+  for (const [key, p] of Object.entries(rec?.pins ?? {})) {
+    if (key !== "" && key !== T.tonightKey && !saved.includes(key) && hasPins(p)) shown.push(key);
+  }
+  return { outs: outsOf(T.tonightKey), saved, shown, pins:structuredClone(rec?.pins ?? {}), handouts: structuredClone(rec?.handouts ?? {}), combos: structuredClone(rec?.combos ?? {}) };
+}
+
+/** New inputs on the same work: his pins stay and everything he did not pin moves. A team that was on Tonight stays on Tonight; a man who left is dropped from who is out. */
+export function refreshTeams(model, inputs) {
+  const TEAMS = {};
+  for (const [code, input] of Object.entries(inputs.teams)) {
+    TEAMS[code] = shapeTeam(input);
+    const S = model.ST[code];
+    if (!S) { model.ST[code] = stateFor(TEAMS[code], null); continue; }
+    if (keyOf(S.outs) === model.TEAMS[code]?.tonightKey) S.outs = outsOf(TEAMS[code].tonightKey);
+    else S.outs = S.outs.filter((id) => TEAMS[code].byId[id]);
+  }
+  model.TEAMS = TEAMS;
+}
+
+export const hasPins = (p) => Boolean(p) && Object.values(p).some((sec) => Object.keys(sec ?? {}).length > 0);
+
+/** The team's scenarios in the order he reads them: Healthy, Tonight, then his saved ones whose men are all still on the team. */
+export function savedFor(T, S) {
+  const list = [""];
+  if (T.tonightKey !== "") list.push(T.tonightKey);
+  for (const key of [...S.saved, ...(S.shown ?? [])]) if (!list.includes(key) && outsOf(key).every((id) => T.byId[id])) list.push(key);
+  return list;
+}
+
+const outNames = (T, ids) => ids.map((i) => T.byId[i]).filter(Boolean).sort((a, b) => (usualMin(b) ?? 0) - (usualMin(a) ?? 0)).map((p) => chipName(T, p));
+
+/** A scenario's whole name: Tonight, Healthy, or every man out, the biggest first. */
+export function fullLabel(T, key) {
+  if (key === T.tonightKey) return "Tonight";
+  if (key === "") return "Healthy";
+  return `${outNames(T, outsOf(key)).join(" + ")} out`;
+}
+
+/** The name on a button: the whole name for one or two men out; past that, what differs from Tonight when that is shorter, else the two biggest and a count. */
+export function label(T, key) {
+  const ids = outsOf(key);
+  if (key === T.tonightKey || ids.length <= 2) return fullLabel(T, key);
+  const tonight = outsOf(T.tonightKey), extra = ids.filter((i) => !tonight.includes(i)), back = tonight.filter((i) => !ids.includes(i));
+  if (extra.length + back.length <= 2) return `Tonight${extra.length ? ` + ${outNames(T, extra).join(" + ")} out` : ""}${back.length ? `, ${outNames(T, back).join(" + ")} in` : ""}`;
+  const names = outNames(T, ids);
+  return `${names.slice(0, 2).join(" + ")} +${names.length - 2} out`;
+}
+
+/** The pins of a scenario (made when he first pins there). */
+export function pinsOf(S, key) {
+  if (!S.pins[key]) S.pins[key] = emptyPins();
+  for (const k of ["m", "u", "d", "p"]) S.pins[key][k] ??= {};
+  return S.pins[key];
+}
+
+/** The scenario's numbers: rows joined with each man, plus a saved pin never made into an empty record. */
+export function calc(T, S, outs) {
+  const key = keyOf(outs);
+  const res = scenario(teamFor(T, S), outs, S.pins[key] ?? emptyPins());
+  return { ...res, rows: res.rows.map((r) => ({ ...r, p: T.byId[r.id] })) };
+}
+
+/** A team's work as it is stored: no empty pin sections. The current outs stay in the session. */
+export function recordOf(S) {
+  const pins = {};
+  for (const [key, p] of Object.entries(S.pins)) {
+    const kept = {};
+    for (const [k, sec] of Object.entries(p)) if (Object.keys(sec).length) kept[k] = sec;
+    if (Object.keys(kept).length) pins[key] = kept;
+  }
+  return { saved: S.saved, pins, handouts: S.handouts, combos: S.combos };
+}
+
+/** His usual minutes: min_healthy where the pull has it, else Tonight's. */
+export function usualMin(p) { return typeof p.healthy === "number" ? p.healthy : p.min; }
+/** His usual projection: usual minutes times Tonight's rate; null when either is missing. */
+export const usualProj = (p) => (typeof usualMin(p) === "number" && typeof p.rate === "number" ? usualMin(p) * p.rate : null);
+/** Tonight's figures, which the Chg column, the sweep and the moved colour compare against. A man out Tonight is on 0. */
+export const tonightMin = (T, p) => (T.tonight.includes(p.id) ? 0 : p.min);
+export const tonightUsg = (T, p) => (T.tonight.includes(p.id) ? 0 : p.usg);
+export const tonightProj = (T, p) => (T.tonight.includes(p.id) ? 0 : typeof p.min === "number" && typeof p.rate === "number" ? p.min * p.rate : null);

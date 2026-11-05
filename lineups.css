@@ -1,0 +1,163 @@
+/* The Lineups tab (lineups-tab.js) and the player list's slimmer optimizer panel (panel.js). The tab is the .opt panel's own look, full width. */
+/* Exposure table's you-vs-field bar and diff; the swap button and its panel on a built lineup's slot (swap-list.js). */
+.opt .ext .ex-bar{width:90px;padding-right:8px}.opt .xb{position:relative;display:block;height:8px;background:#1b1b20}.opt .xb i{display:block;height:100%;background:var(--am)}.opt .xb u{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--bl);text-decoration:none}
+.opt .ext td.ex-diff{text-align:right;color:var(--tx);font-variant-numeric:tabular-nums}
+.opt .swb{width:24px;height:24px;padding:0;background:none;border:1px solid #2a2a30;color:var(--mu);font-size:13px;line-height:1}.opt .swb:hover:not(:disabled),.opt .swb.on{color:var(--am);border-color:var(--am)}.opt .swb:disabled{opacity:.35;cursor:not-allowed}
+.opt .swp{border:1px solid var(--am);background:var(--p);padding:6px 10px 8px;margin:2px 0 6px;font-size:12px}
+.opt .swh{display:flex;justify-content:space-between;color:var(--mu);font-size:11.5px;padding-bottom:4px}.opt .swh span{color:var(--dim)}.opt .swh b{color:var(--tx)}
+.opt .swt{width:100%;border-collapse:collapse;white-space:nowrap}.opt .swt th{background:none;color:var(--dim);font-size:10.5px;text-align:right;padding:2px 6px 3px 0;cursor:default}.opt .swt td{text-align:right;padding:3px 6px 3px 0;color:var(--mu);border-bottom:1px solid #18181c;font-variant-numeric:tabular-nums}
+.opt .swt th.swl,.opt .swt td.swl{text-align:left;width:99%;color:var(--tx)}.opt .swt .swpj{color:var(--am);font-weight:700}.opt .swt .swo{color:var(--bl)}.opt .swt b.neg{color:var(--rd)}.opt .swt b.pos0{color:var(--gr)}
+.opt .swn{color:var(--rd);font-size:11.5px;padding:4px 0}
+body.lineups-on .games,body.lineups-on .pool,body.lineups-on aside.opt,body.lineups-on #dropnote{display:none}
+body.console-on #lineups{display:none}
+#lineups.opt{border:0;box-shadow:none;background:none;padding:0 0 28px}
+#lineups[hidden]{display:none}
+.top{gap:10px 12px} /* the Player list / Lineups switch joins the first header line at the wide size */
+.vtabs{display:flex;border:1px solid var(--ln)}
+.vtabs button:last-child{min-width:104px;text-align:center} /* the count appearing or not never moves the header */
+.vtabs button{background:none;border:0;border-right:1px solid var(--ln);padding:4px 12px;font-weight:700;font-size:12px;color:var(--mu)}
+.vtabs button:last-child{border-right:0}
+.vtabs button.on{background:var(--am);color:#000}
+.vtabs b{font-weight:800}
+/* The player list's panel: count beside Build, the other settings one click away. */
+.opt .cntrow{padding:5px 16px;border-bottom:1px solid var(--ln)}
+.opt .cntrow label{display:flex;align-items:center;gap:12px;font-size:11px;color:var(--mu)}
+.opt .cntrow input{width:64px;height:24px;background:var(--p2);border:1px solid var(--ln);padding:0 8px;font-size:14px;text-align:right}
+.opt .cntrow input.bad{border-color:var(--rd)}
+.opt .setop{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--ln);padding:5px 16px;font-size:11px;font-weight:700;color:var(--mu)}
+.opt .setop:hover{color:var(--tx)}
+.set.two{grid-template-columns:repeat(2,1fr)}
+/* The summary strip, the switch / filter / sort row, the body. */
+#lineups .lt-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 8px}
+#lineups .lt-sum{display:inline-flex;flex-wrap:wrap;border:1px solid var(--ln);background:var(--p)}
+#lineups .lt-sum div{padding:4px 18px 4px 12px;border-right:1px solid var(--ln)}
+#lineups .lt-sum div:last-child{border-right:0}
+#lineups .lt-sum small{display:block;font-size:10px;color:var(--dim);letter-spacing:.4px;margin-bottom:2px}
+#lineups .lt-sum b{font:700 15px "Space Grotesk",sans-serif;color:var(--tx);white-space:nowrap}
+#lineups .lt-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-bottom:8px}
+#lineups .lt-tabs{display:flex;border:1px solid var(--am)}
+#lineups .lt-tabs button{background:none;border:0;padding:4px 12px;font-weight:800;font-size:12px;color:var(--am)}
+#lineups .lt-tabs button.on{background:var(--am);color:#000}
+#lineups .lt-q{width:230px;height:28px}
+#lineups .lt-sort{display:flex;align-items:center;gap:4px}
+#lineups .lt-sort em{font-style:normal;font-size:10.5px;color:var(--dim);margin-right:4px}
+#lineups .lt-sort button{background:none;border:1px solid var(--ln);padding:3px 10px;font-weight:700;font-size:11.5px;color:var(--mu)}
+#lineups .lt-sort button:hover{color:var(--tx)}
+#lineups .lt-sort button.on{background:var(--am);border-color:var(--am);color:#000}
+#lineups .lt-dl{flex-shrink:0;width:auto;padding:4px 12px;background:none;border:1px solid var(--am);color:var(--am);font-weight:800;font-size:12px}
+#lineups .lt-dl:disabled{opacity:.4;cursor:not-allowed}
+#lineups .lt-run{display:flex;align-items:center;gap:12px;margin:12px 0;padding:8px 12px;border:1px solid var(--am);font-size:12px;color:var(--am)}
+#lineups .lt-empty{padding:30px;color:var(--dim);font-size:13px}
+#lineups .lt-body{display:grid;grid-template-columns:minmax(450px,470px) minmax(0,1fr);gap:14px;align-items:start}
+#lineups .lt-ex{border:1px solid var(--ln);background:var(--p);padding:8px 0}
+#lineups .lt-exh{padding:2px 16px 8px;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--dim)}
+#lineups .lt-ex .sec{display:none}
+#lineups .lt-ex .exl{padding:0 12px 4px}
+#lineups .lt-ex .ext th:nth-child(4),#lineups .lt-ex .ext td:nth-child(4){display:none}
+#lineups .lt-ex .ext .ex-bar{width:40px}
+#lineups .lt-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(350px,1fr));gap:10px;align-items:start}
+#lineups .lt-ex .ext td,#lineups .lt-ex .ext th{padding-right:4px}
+#lineups .lt-ex .ext .xf{padding:0 6px}
+#lineups .crow.lead .pn{font-size:13px}
+#lineups .crow.lead .sn1{gap:4px}
+#lineups .lc{padding:6px 8px 8px}
+#lineups .lt-at{font-size:10.5px;color:var(--dim);padding:0 0 4px}
+#lineups .lt-sw{font-size:10.5px;color:var(--am);padding:0 0 4px}
+#lineups .lt-sw.ill{color:var(--rd)}
+#lineups .lc.swapped{border-color:#ffb00099}
+#lineups .lch .md{margin-left:6px}
+#lineups .lt-title{display:inline-flex;align-items:center;gap:6px;min-width:0}
+#lineups .lt-title .rn{background:none;border:0;color:var(--dim);font-size:11px;padding:0 2px}
+#lineups .lt-title .rn:hover{color:var(--am)}
+#lineups .lt-name{width:150px;background:var(--p);border:1px solid var(--am);color:var(--tx);padding:2px 6px;font-size:12.5px}
+#lineups .lt-at{display:flex;align-items:center;gap:6px;height:24px;overflow:visible;white-space:nowrap}
+#lineups .lt-at .md{margin-right:0;flex-shrink:0}
+#lineups .lt-time{min-width:0;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis} /* the time gives way before the spots do */
+/* Spots (Adam's contest entries): the chip on a saved card and its one-click menu. */
+#lineups .spw{margin-left:auto;position:relative;flex-shrink:0}
+#lineups .spchip{display:flex;align-items:center;gap:4px;background:none;border:1px solid var(--ln);padding:1px 5px;color:var(--mu)}
+#lineups .spchip:hover,#lineups .spchip.on{border-color:var(--am)}
+#lineups .spchip i{font-style:normal;font-size:11px;color:var(--mu)}
+#lineups .spt{color:var(--sc);border:1px solid var(--sc);padding:0 5px;font-size:10px;font-weight:800;line-height:1.5;white-space:nowrap}
+#lineups .spt.none{color:var(--mu);border-color:transparent;font-weight:600}
+#lineups .spmenu{position:absolute;right:0;top:calc(100% + 2px);z-index:6;width:270px;background:var(--p);border:1px solid var(--am);box-shadow:0 8px 24px #000a;padding:4px}
+#lineups .spm{display:grid;grid-template-columns:14px 1fr auto;align-items:center;gap:6px;width:100%;text-align:left;background:none;border:0;padding:5px 6px;font-size:11.5px;color:var(--tx)}
+#lineups .spm:hover{background:#ffffff12}
+#lineups .spm i{font-style:normal;font-size:11px}
+#lineups .spm em{font-style:normal;font-size:10.5px;color:var(--dim)}
+#lineups .spm.mine em{color:var(--gr)}
+#lineups .spm.new{display:block;color:var(--mu)}
+#lineups .lt-bad{margin:0 0 4px;padding:2px 6px;background:#ff4d5e22;border:1px solid var(--rd);color:var(--rd);font-size:11px;font-weight:700}
+#lineups .spwarn{margin:2px 2px 6px;padding:6px 8px;background:#ff4d5e22;border:1px solid var(--rd);color:var(--rd);font-size:11.5px;font-weight:700}
+#lineups .spwarn b{color:var(--tx)}
+#lineups .spwarn span{display:flex;gap:6px;margin-top:6px}
+#lineups .spwarn button{background:none;border:1px solid var(--rd);color:var(--rd);font-size:11px;font-weight:800;padding:2px 8px}
+#lineups .lt-order{margin-left:6px;gap:10px}
+#lineups .lt-order .on-order{background:none;border:1px solid var(--am);color:var(--am);font-weight:800;font-size:11.5px;padding:5px 12px}
+#lineups .lt-order .on-order:hover{background:#ffb00022}
+#lineups .lt-order label{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--mu);white-space:nowrap}
+/* A build's header over its cards (Recently generated), and the filtered men as chips. */
+#lineups .lt-bh{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:8px 2px 4px;margin-top:6px;border-bottom:1px solid var(--ln)}
+#lineups .lt-bh:first-child{margin-top:0}
+#lineups .lt-bh b{font:700 13px "Space Grotesk",sans-serif;color:var(--tx)}
+#lineups .lt-bh button{margin-left:auto;background:none;border:1px solid #ff4d5e66;color:var(--rd);font-size:10.5px;font-weight:800;padding:3px 10px}
+#lineups .lt-chips{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 10px;padding:8px 12px;border:1px solid var(--am);background:#ffb00010}
+#lineups .lt-chips em{font-style:normal;font-size:11px;color:var(--mu)}
+#lineups .lt-chip{display:inline-flex;align-items:center;gap:6px;padding:2px 4px 2px 10px;border:1px solid var(--am);background:var(--p)}
+#lineups .lt-chip b{font-size:12.5px;color:var(--tx)}
+#lineups .lt-chip button{background:none;border:0;color:var(--am);font-size:16px;font-weight:800;line-height:1;padding:0 6px;cursor:pointer}
+#lineups .lt-chip button:hover{color:var(--rd)}
+#lineups .lt-count{margin-left:6px;font-size:12px;font-weight:800;color:var(--am)}
+#lineups .lt-clear{margin-left:auto;background:none;border:1px solid var(--am);color:var(--am);font-weight:800;font-size:11.5px;padding:4px 12px;width:auto}
+#lineups .lt-empty .lt-clear{margin-left:10px}
+/* The banner's buttons are live buttons: Undo the primary, Keep beside it. */
+#lineups .lt-run button{padding:6px 16px;font-weight:800;font-size:12px;width:auto;cursor:pointer;opacity:1}
+#lineups .lt-run button[data-op="orderundo"]{background:var(--am);border:1px solid var(--am);color:#000}
+#lineups .lt-run button[data-op="orderundo"]:hover{filter:brightness(1.12)}
+#lineups .lt-run button[data-op="orderokay"],#lineups .lt-run button[data-op="spotmove"],#lineups .lt-run button[data-op="spotmovex"]{background:none;border:1px solid var(--am);color:var(--am)}
+#lineups .lt-run button[data-op="spotmove"]{background:var(--am);color:#000}
+#lineups .lt-run button:not([data-op="orderundo"]):hover{background:#ffb00022}
+#lineups .lt-ordwarn{margin:0 0 10px}
+#lineups .lt-ordwarn ul{margin:4px 0 0 16px;padding:0;font-weight:600;color:var(--tx)}
+#lineups .spr{display:flex;align-items:center}
+#lineups .spr .spm{flex:1}
+#lineups .spx{background:none;border:0;color:var(--dim);font-size:14px;padding:0 6px}
+#lineups .spx:hover{color:var(--rd)}
+#lineups .spchip.locked{cursor:default;border-color:var(--ln)}
+#lineups .spnone{padding:5px 6px;font-size:11px;color:var(--dim)}
+#lineups .spadd{display:flex;gap:4px;padding:4px 2px 2px}
+#lineups .spadd input{flex:1;min-width:0;background:var(--p2);border:1px solid var(--ln);color:var(--tx);padding:3px 6px;font-size:11.5px}
+#lineups .spadd button{background:none;border:1px solid var(--am);color:var(--am);font-size:11px;font-weight:800;padding:2px 10px}
+#lineups .lch button.sm{padding:2px 7px}
+/* A card row: team logo first, the team's tint (.crow.tm), the slot as small muted text, a CORR chip on a game stack. */
+#lineups .crow.lead{grid-template-columns:20px minmax(0,1fr) 22px 46px 32px 40px;gap:4px;padding:1px 4px 1px 6px;min-height:28px}
+#lineups .crow.lead .logo.sm,#lineups .crow.lead .chipx.sm{width:20px;height:20px}
+#lineups .crow.lead.tm{background-image:linear-gradient(90deg,color-mix(in srgb,var(--t1) 24%,transparent) 0,color-mix(in srgb,var(--t1) 10%,transparent) 45%,color-mix(in srgb,var(--t2) 6%,transparent) 100%)}
+#lineups .swb{width:22px;height:22px}
+#lineups .capt{flex-wrap:nowrap;justify-content:space-between;gap:8px;font-size:11px;white-space:nowrap}
+#lineups .lch{flex-wrap:wrap;gap:4px 8px}
+#lineups .lch button.sm{white-space:nowrap;font-size:10px;padding:2px 6px}
+#lineups .lt-ex .ext .ex-bar{width:32px;padding-right:4px}
+#lineups .lt-ex .ext .ex-n{font-size:10px}
+#lineups .lt-ex .ext td.ex-f{padding-right:4px}
+#lineups .lt-ex .ext .xf{padding:0 4px;font-size:10px}
+#lineups .lt-ex{overflow:hidden}
+#lineups .swt .pos,#lineups .swt small{display:none}
+#lineups .swt td.swl{white-space:normal}
+#lineups .crow.lead .sn small,#lineups .crow.lead i,#lineups .crow.lead .pos{display:none}
+#lineups .crow .slt{flex-shrink:0;font-size:10px;font-weight:600;color:var(--mu);margin-left:auto;min-width:34px;text-align:right}
+#lineups .crow .corr{margin-left:auto}#lineups .crow .corr + .slt{margin-left:0}
+#lineups .crow .corr{flex-shrink:0;font-size:9px;font-weight:800;letter-spacing:.5px;padding:1px 4px;background:var(--cc);color:#000;line-height:1.2}
+#lineups .crow .so{font-size:11.5px}
+#lineups .crow .ss{font-size:12px}
+#lineups .swp{overflow-x:auto;margin:2px 0 6px;font-size:11px}
+#lineups .swt td,#lineups .swt th{padding-right:5px}
+#lineups .swh{display:block}
+#lineups .swh span{display:block}
+/* Phone: the summary tiles wrap two or three to a row and the download button takes its own row. */
+@media (max-width:599px){
+  #lineups .lt-top{flex-direction:column;align-items:stretch}
+  #lineups .lt-sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+  #lineups .lt-sum div{border-bottom:1px solid var(--ln)}
+  #lineups .lt-dl{width:100%;min-height:36px}
+}

@@ -1,0 +1,31 @@
+{
+  "publishedAt": "2026-11-05T22:40:37.786Z",
+  "sourceCommit": "9628dbbaf148712ef5dacf94bb5e855a38e93a56",
+  "latest": {
+    "slate": "2026-11-05-main",
+    "players": 59,
+    "pulled_at": "2026-11-05T13:16:39-05:00"
+  },
+  "slates": [
+    "2026-11-05-main",
+    "2026-11-04-main",
+    "2026-11-02-main",
+    "2026-10-31-main",
+    "2026-10-30-main",
+    "2026-10-29-main"
+  ],
+  "skipped": [
+    {
+      "slate": "2026-11-03-main",
+      "why": "no slate.json"
+    }
+  ],
+  "console_missing": [],
+  "files_missing": [],
+  "cards": {
+    "log": 422,
+    "usage": 426,
+    "kept": 0,
+    "none": 160
+  }
+}

@@ -1,0 +1,51 @@
+/* The Compare view of the Lineups tab (lineups-compare.js): table, who-is-in-which grid, head to head. */
+.cp{display:flex;flex-direction:column;gap:22px;margin-top:6px}
+.cp h3{margin:0 0 2px;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--mu);font-weight:700}
+.cp-sub{font-size:11px;color:var(--mu);margin-bottom:6px}
+.cp-none{padding:20px;color:var(--mu);font-size:13px}
+.cp-scroll{overflow-x:auto;border:1px solid var(--ln);background:var(--p)}
+.cp-t{width:100%;border-collapse:collapse;white-space:nowrap;font-size:12px;font-variant-numeric:tabular-nums}
+.cp-t th,.cp-t td{padding:5px 10px;border-bottom:1px solid #18181c;color:var(--tx)}
+.cp-t th{font-size:10.5px;font-weight:700;color:var(--mu);background:var(--p2);text-align:right;vertical-align:bottom;white-space:normal;line-height:1.2}
+.cp-t th.tx,.cp-t td.tx{text-align:left}
+.cp-t .n{text-align:right}
+.cp-t th button{background:none;border:0;padding:0;font:inherit;color:inherit;text-align:inherit;cursor:pointer}
+.cp-t th button:hover,.cp-t th.on button{color:var(--am)}
+.cp-t th i{font-style:normal;font-size:8px;margin-left:3px}
+.cp-t .pk{width:26px;padding-right:2px;text-align:center}
+.cp-t td b{color:var(--mu);font-weight:600;margin-left:4px}
+.cp-t td.best{background:#ffb00022;color:var(--am);font-weight:700}
+.cp-t td.na{color:var(--dim);font-size:10.5px;font-style:italic}
+.cp-t td.zero,.cp-t th.zero{opacity:.4} /* a column of nothing but zeros has nothing to say */
+.cp-t tbody tr[data-a]{cursor:pointer}
+.cp-t tbody tr:hover{background:var(--p2)}
+.cp-t tr.hl td{background:#6aa8ff1f}
+.cp-t .dash{color:var(--dim)}
+.cp-t .over{color:var(--rd)}
+.cp-t .same{margin-left:8px;padding:0 5px;font-size:10px;font-weight:700;color:var(--am);border:1px solid #ffb00066}
+.cp-t td.mn{padding-left:10px;font-weight:600}
+/* Grid and head to head side by side where the page is wide (the grid's cells widen to fill its half); stacked below that. */
+.cp-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:start}
+@media (max-width:1500px){.cp-row{display:block}.cp-hsec{margin-top:22px}}
+.cp-g,.cp-h{width:100%;min-width:0}
+.cp-g td,.cp-g th{padding-top:3px;padding-bottom:3px}
+.cp-g th.g,.cp-g td.g{min-width:26px;padding:0;text-align:center;border-left:1px solid #18181c}
+.cp-g th.g button{width:100%;padding:5px 2px;font-size:10px;letter-spacing:0}
+.cp-g th.g.gc button{color:var(--gr)}
+.cp-g td.g.in{background:var(--am);box-shadow:inset 0 0 0 2px var(--p)}
+.cp-g td.g.hl,.cp-g th.g.hl{background:#6aa8ff1f}
+.cp-g td.g.in.hl{background:var(--bl)}
+.cp-g tr.all td{opacity:.45}
+.cp-g tr.all td.g.in{background:var(--mu)}
+.cp-g td.ct{color:var(--mu)}
+.cp-h th small{display:block;font-size:9.5px;font-weight:600;color:var(--dim);white-space:nowrap}
+.cp-h tr.cp-cap th{background:none;border-bottom:0;color:var(--mu);font-size:11px;font-weight:600;padding-bottom:2px}
+.cp-h td.in{background:#ffb00026;color:var(--am);font-weight:800;opacity:1}
+.cp-h tr.shared td{opacity:.45}
+.cp-h tr.shared td.in{opacity:1}
+.cp-h tr.diff td.mn{color:var(--am)}
+.cp-h tr.tot td{border-top:1px solid var(--ln);font-weight:700;background:var(--p2)}
+.cp-h tr.tot em{font-style:normal;font-weight:600;font-size:11px;color:var(--mu);margin-left:4px}
+.cp-h tr.tot em.up{color:var(--gr)}.cp-h tr.tot em.dn{color:var(--rd)}
+.cp-clear{background:none;border:1px solid var(--ln);color:var(--mu);font-size:11px;padding:2px 8px;margin-left:8px}
+.cp-clear:hover{color:var(--tx)}

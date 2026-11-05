@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NBA Board</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="board.css">
+<link rel="stylesheet" href="lineups.css">
+<link rel="stylesheet" href="lineups-compare.css">
+<link rel="stylesheet" href="theme-light.css">
+<link rel="stylesheet" href="console.css">
+<link rel="stylesheet" href="site/site.css">
+</head>
+<body>
+<script>try { var t = localStorage.getItem("nbaboard.theme"); if (t === "light" || t === "navy") document.body.classList.add(t); } catch (e) { /* no storage: the default look, as board.js says */ }</script>
+<header class="top" id="top"></header>
+<section class="games" id="games"></section>
+<div class="dropnote" id="dropnote" hidden></div>
+<div class="dropnote pullnote" id="pullnote" hidden></div>
+<div class="updline" id="updline" hidden></div>
+<main class="work">
+  <section class="pool">
+    <div class="fbar" id="fbar">
+    <div class="tools">
+      <div class="tabs" id="tabs"></div>
+      <div class="chips" id="chips"></div>
+      <input class="search" id="search" placeholder="Search players" autocomplete="off">
+      <span class="cnt" id="cnt"></span>
+      <div class="colsw"><button class="chip" id="colsBtn" aria-expanded="false" title="Choose and order the table's columns">Columns</button><div class="colpop" id="colPop" hidden></div></div>
+    </div>
+    <div class="fil">
+      <label>Min salary<input class="search salb" id="minSal" inputmode="numeric" autocomplete="off"></label>
+      <label>Max salary<input class="search salb" id="maxSal" inputmode="numeric" autocomplete="off"></label>
+      <button class="chip" id="clearF" disabled>Clear filters</button>
+      <div class="tchips" id="teamChips"></div>
+    </div>
+    </div>
+    <div class="tbl"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+    <div class="outs" id="outs"></div>
+  </section>
+  <aside class="opt" id="opt"></aside>
+</main>
+<section class="opt lineups" id="lineups" hidden></section>
+<section id="console" hidden></section>
+<div class="toast" id="toast" hidden></div>
+<script type="module" src="site/site.js"></script>
+<script type="module" src="board.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+/* The public site's few additions to the app's own stylesheets. */
+.site-keep {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--p);
+  color: var(--am);
+  border: 1px solid var(--am);
+  font-size: 12px;
+  z-index: 50;
+}
