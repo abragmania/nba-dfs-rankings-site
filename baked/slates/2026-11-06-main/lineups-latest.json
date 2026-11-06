@@ -1,33 +1,33 @@
 {
  "slate": "2026-11-06-main",
- "generated_at": "2026-11-06T23:33:59.920Z",
+ "generated_at": "2026-11-06T23:45:17.100Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-06-main/raw/2026-11-06T183351-0500",
+ "slate_built_from": "slates/2026-11-06-main/raw/2026-11-06T184507-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-06T23:33:55.753Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-06T183355-0500.html.gz",
-   "saved_at": "2026-11-06T23:33:55.753Z",
-   "parsed_sha": "736f180d2674a825965661e160c309604e3c0478c8fcca0635f3a976b2fd6652",
-   "sha256": "bb4235fc6e2adbff628e5736ca2885976df0c2c9ca2cc75c6b04b33b260ee46d"
+   "fetched_at": "2026-11-06T23:45:11.972Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-06T184511-0500.html.gz",
+   "saved_at": "2026-11-06T23:45:11.972Z",
+   "parsed_sha": "aef6de18e14e8bcbc93c95fa718f6dd1d5d95722325337a8076124d554aed645",
+   "sha256": "4b0a2bd59500253a8ec78a4be59dc6adbb7a3b1f5b4700bc9848bb45c07db42d"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-06T23:33:59.904Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-06T183359-0500.html.gz",
-   "saved_at": "2026-11-06T23:33:59.904Z",
-   "parsed_sha": "bbbb2e896f059d0ffafe4bfdfb34a48e3b94bd87578204303e0964d161795916",
-   "sha256": "56b2c9048ef851bcdc2cf6c115d4f985828618bffa3b367169f9740b1bfb7ff3"
+   "fetched_at": "2026-11-06T23:45:17.085Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-06T184517-0500.html.gz",
+   "saved_at": "2026-11-06T23:45:17.085Z",
+   "parsed_sha": "2383cf1695aeb1c78db386562287dcc26cf96eed12a13040fc4bd09fe707f222",
+   "sha256": "5762cad13e0e3f821282097b1d0c9bb24f9deeb8426c2955487de88c5e7453c0"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-06T23:33:53.195Z",
-  "changed_at": "2026-11-06T18:33:53-05:00",
-  "saved_as": "news/bbm/2026-11-06T183353-0500.html",
+  "fetched_at": "2026-11-06T23:45:08.864Z",
+  "changed_at": "2026-11-06T18:45:08-05:00",
+  "saved_as": "news/bbm/2026-11-06T184508-0500.html",
   "out": [
    {
     "name": "Jock Landale",
@@ -148,7 +148,7 @@
    "game": "BOS@CHA",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Derrick White",
@@ -157,19 +157,19 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44818533",
       "match": "exact"
      },
      {
-      "name": "Hugo Gonzalez",
+      "name": "Jordan Walsh",
       "pos": "SG",
-      "bmId": "7155",
-      "flag": null,
-      "word": null,
-      "status": null,
-      "verified": false,
-      "id": "44818917",
+      "bmId": "6766",
+      "flag": "S",
+      "word": "Starting",
+      "status": "UNKNOWN(S #00cc44 Starting)",
+      "verified": true,
+      "id": "44818954",
       "match": "exact"
      },
      {
@@ -179,7 +179,7 @@
       "flag": "Off",
       "word": "Off Injury Report",
       "status": "Off injury report",
-      "verified": false,
+      "verified": true,
       "id": "44818429",
       "match": "exact"
      },
@@ -190,7 +190,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44818495",
       "match": "exact"
      },
@@ -201,7 +201,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44818684",
       "match": "exact"
      }
@@ -209,7 +209,7 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Derrick White",
@@ -220,11 +220,11 @@
       "match": "exact"
      },
      {
-      "name": "Hugo Gonzalez",
+      "name": "Jordan Walsh",
       "pos": "SG",
       "flag": null,
       "status": null,
-      "id": "44818917",
+      "id": "44818954",
       "match": "exact"
      },
      {
@@ -252,7 +252,7 @@
       "match": "exact"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": []
    }
   },
@@ -310,9 +310,9 @@
       "name": "Ryan Kalkbrenner",
       "pos": "C",
       "bmId": "7192",
-      "flag": null,
-      "word": null,
-      "status": null,
+      "flag": "S",
+      "word": "Starting",
+      "status": "UNKNOWN(S #00cc44 Starting)",
       "verified": true,
       "id": "44818839",
       "match": "exact"
@@ -405,7 +405,7 @@
    "game": "WAS@ATL",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Trae Young",
@@ -414,52 +414,52 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44818471",
       "match": "exact"
      },
      {
-      "name": "AJ Dybantsa",
-      "pos": "SG",
-      "bmId": "7433",
-      "flag": null,
-      "word": null,
-      "status": null,
-      "verified": false,
-      "id": "44818605",
-      "match": "exact"
-     },
-     {
-      "name": "Bilal Coulibaly",
-      "pos": "SF",
-      "bmId": "6746",
-      "flag": null,
-      "word": null,
-      "status": null,
-      "verified": false,
-      "id": "44818811",
-      "match": "exact"
-     },
-     {
       "name": "Kyshawn George",
-      "pos": "PF",
+      "pos": "SG",
       "bmId": "6957",
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44818635",
       "match": "exact"
      },
      {
+      "name": "AJ Dybantsa",
+      "pos": "SF",
+      "bmId": "7433",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": true,
+      "id": "44818605",
+      "match": "exact"
+     },
+     {
       "name": "Alexandre Sarr",
-      "pos": "C",
+      "pos": "PF",
       "bmId": "6935",
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44818678",
+      "match": "exact"
+     },
+     {
+      "name": "Deandre Ayton",
+      "pos": "C",
+      "bmId": "5716",
+      "flag": "S",
+      "word": "Starting",
+      "status": "UNKNOWN(S #00cc44 Starting)",
+      "verified": true,
+      "id": "44818966",
       "match": "exact"
      }
     ]
@@ -558,7 +558,7 @@
    "game": "WAS@ATL",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Kingston Flemings",
@@ -567,7 +567,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44818718",
       "match": "exact"
      },
@@ -578,7 +578,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44818517",
       "match": "exact"
      },
@@ -589,7 +589,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44818555",
       "match": "exact"
      },
@@ -600,7 +600,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": null,
       "match": null
      },
@@ -611,7 +611,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44818549",
       "match": "exact"
      }
@@ -619,7 +619,7 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Kingston Flemings",
@@ -662,7 +662,7 @@
       "match": "exact"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": [
      {
       "name": "Henri Veesaar",
@@ -1552,14 +1552,14 @@
     "confirmed": false,
     "men": [
      {
-      "name": "Immanuel Quickley",
+      "name": "Jamal Shead",
       "pos": "PG",
-      "bmId": "6185",
-      "flag": "Q",
-      "word": "Questionable",
-      "status": "Questionable (undetermined)",
+      "bmId": "6980",
+      "flag": null,
+      "word": null,
+      "status": null,
       "verified": false,
-      "id": "44818543",
+      "id": "44818734",
       "match": "exact"
      },
      {
@@ -1585,25 +1585,25 @@
       "match": "exact"
      },
      {
-      "name": "Scottie Barnes",
-      "pos": "PF",
-      "bmId": "6285",
-      "flag": "Q",
-      "word": "Questionable",
-      "status": "Questionable (undetermined)",
-      "verified": false,
-      "id": "44818445",
-      "match": "exact"
-     },
-     {
       "name": "Collin Murray-Boyles",
-      "pos": "C",
+      "pos": "PF",
       "bmId": "7174",
       "flag": null,
       "word": null,
       "status": null,
       "verified": false,
       "id": "44818703",
+      "match": "exact"
+     },
+     {
+      "name": "Jakob Poeltl",
+      "pos": "C",
+      "bmId": "5355",
+      "flag": "P",
+      "word": "Probable",
+      "status": "Probable",
+      "verified": false,
+      "id": "44818762",
       "match": "exact"
      }
     ]
@@ -1613,11 +1613,11 @@
     "confirmed": false,
     "men": [
      {
-      "name": "Immanuel Quickley",
+      "name": "Jamal Shead",
       "pos": "PG",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44818543",
+      "flag": null,
+      "status": null,
+      "id": "44818734",
       "match": "exact"
      },
      {
@@ -1637,11 +1637,11 @@
       "match": "exact"
      },
      {
-      "name": "Scottie Barnes",
+      "name": "Collin Murray-Boyles",
       "pos": "PF",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44818445",
+      "flag": null,
+      "status": null,
+      "id": "44818703",
       "match": "exact"
      },
      {
@@ -1674,18 +1674,10 @@
      {
       "name": "Scottie Barnes",
       "pos": "F",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44818445",
-      "match": "exact"
-     },
-     {
-      "name": "Immanuel Quickley",
-      "pos": "G",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44818543",
-      "match": "exact"
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
      },
      {
       "name": "Nate Bittle",
@@ -1698,6 +1690,14 @@
      {
       "name": "Kawhi Leonard",
       "pos": "F",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Immanuel Quickley",
+      "pos": "G",
       "flag": "Out",
       "status": "Out",
       "id": null,
