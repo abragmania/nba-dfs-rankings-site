@@ -1,10 +1,10 @@
 {
-  "publishedAt": "2026-11-06T19:45:14.468Z",
-  "sourceCommit": "2ab4d3d69f263aabec618fbf69db404d7829ff98",
+  "publishedAt": "2026-11-06T19:51:28.840Z",
+  "sourceCommit": "51be11d55b35a802c35519eb330eaf678a645373",
   "latest": {
     "slate": "2026-11-06-main",
     "players": 191,
-    "pulled_at": "2026-11-06T14:04:44-05:00"
+    "pulled_at": "2026-11-06T14:45:38-05:00"
   },
   "slates": [
     "2026-11-06-main",
@@ -24,9 +24,9 @@
   "console_missing": [],
   "files_missing": [],
   "cards": {
-    "log": 178,
+    "log": 0,
     "usage": 0,
-    "kept": 676,
+    "kept": 854,
     "none": 156
   }
 }
