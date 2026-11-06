@@ -1,35 +1,33 @@
 {
  "slate": "2026-11-06-main",
- "generated_at": "2026-11-06T23:26:54.157Z",
+ "generated_at": "2026-11-06T23:33:59.920Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-06-main/raw/2026-11-06T182646-0500",
+ "slate_built_from": "slates/2026-11-06-main/raw/2026-11-06T183351-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-06T23:26:50.003Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-06T181851-0500.html.gz",
-   "saved_at": "2026-11-06T23:18:51.947Z",
-   "unchanged_since": "2026-11-06T23:18:51.947Z",
-   "parsed_sha": "ed76a98dbc665feabe227688d407b8bb586ab5e00fad1c6fa1563a8aad2223cd",
-   "sha256": "a521673286889b55e58657cb1dae7f8d1148c2b1617cf94744221ad197fdf3c0"
+   "fetched_at": "2026-11-06T23:33:55.753Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-06T183355-0500.html.gz",
+   "saved_at": "2026-11-06T23:33:55.753Z",
+   "parsed_sha": "736f180d2674a825965661e160c309604e3c0478c8fcca0635f3a976b2fd6652",
+   "sha256": "bb4235fc6e2adbff628e5736ca2885976df0c2c9ca2cc75c6b04b33b260ee46d"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-06T23:26:54.144Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-06T181856-0500.html.gz",
-   "saved_at": "2026-11-06T23:18:56.107Z",
-   "unchanged_since": "2026-11-06T23:18:56.107Z",
-   "parsed_sha": "7d20f50cf7932a980f55b693d2a86f987573e88467b300ad483ddd0f93c0f614",
-   "sha256": "07ce2c2cbfcdc2c4cba93b08ffe0f064a6b81bcc112ecec6ac8585623c37f46f"
+   "fetched_at": "2026-11-06T23:33:59.904Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-06T183359-0500.html.gz",
+   "saved_at": "2026-11-06T23:33:59.904Z",
+   "parsed_sha": "bbbb2e896f059d0ffafe4bfdfb34a48e3b94bd87578204303e0964d161795916",
+   "sha256": "56b2c9048ef851bcdc2cf6c115d4f985828618bffa3b367169f9740b1bfb7ff3"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-06T23:26:48.252Z",
-  "changed_at": "2026-11-06T18:18:39-05:00",
-  "saved_as": "news/bbm/2026-11-06T181839-0500.html",
+  "fetched_at": "2026-11-06T23:33:53.195Z",
+  "changed_at": "2026-11-06T18:33:53-05:00",
+  "saved_as": "news/bbm/2026-11-06T183353-0500.html",
   "out": [
    {
     "name": "Jock Landale",
@@ -262,7 +260,7 @@
    "game": "BOS@CHA",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Coby White",
@@ -271,19 +269,19 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44818616",
       "match": "exact"
      },
      {
-      "name": "Sion James",
+      "name": "Grayson Allen",
       "pos": "SG",
-      "bmId": "7184",
+      "bmId": "5724",
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
-      "id": "44818777",
+      "verified": true,
+      "id": "44818673",
       "match": "exact"
      },
      {
@@ -293,7 +291,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44818468",
       "match": "exact"
      },
@@ -304,7 +302,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44818521",
       "match": "exact"
      },
@@ -315,7 +313,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44818839",
       "match": "exact"
      }
@@ -323,7 +321,7 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Coby White",
@@ -334,11 +332,11 @@
       "match": "exact"
      },
      {
-      "name": "Sion James",
+      "name": "Grayson Allen",
       "pos": "SG",
       "flag": null,
       "status": null,
-      "id": "44818777",
+      "id": "44818673",
       "match": "exact"
      },
      {
@@ -366,7 +364,7 @@
       "match": "exact"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": [
      {
       "name": "Moussa Diabate",
@@ -468,7 +466,7 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Trae Young",
@@ -495,23 +493,23 @@
       "match": "exact"
      },
      {
-      "name": "Bilal Coulibaly",
-      "pos": "PF",
-      "flag": null,
-      "status": null,
-      "id": "44818811",
-      "match": "exact"
-     },
-     {
       "name": "Alex Sarr",
-      "pos": "C",
+      "pos": "PF",
       "flag": null,
       "status": null,
       "id": "44818678",
       "match": "near"
+     },
+     {
+      "name": "Deandre Ayton",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44818966",
+      "match": "exact"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": [
      {
       "name": "Reece Beekman",
