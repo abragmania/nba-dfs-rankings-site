@@ -105,6 +105,15 @@ async function freshStamp(slate) {
   return text;
 }
 
+/** The lineup read (baked lineups-latest.json), read again on every ask rather than once per page, so the proposals bar sees a newer publish. */
+async function freshLineups(slate) {
+  const text = await readBaked(`slates/${slate}/lineups-latest.json`);
+  const file = `${DATA}/${slate}/news/lineups/latest.json`;
+  if (text !== null) seed(file, text);
+  else dropKept(file); // the bake has none now: an earlier copy must not keep answering
+  return text;
+}
+
 /** The published files a path needs, in memory before the app's handler reads them. */
 async function loadFor(pathname) {
   if (pathname === "/api/slates") return seedBaked("slates.json", `${DATA}/manifest.json`);
@@ -118,6 +127,7 @@ async function loadFor(pathname) {
   }
   if (!/^[a-z0-9-]+$/.test(slate)) return null;
   if (m[2] === "/pull-stamp") return freshStamp(slate);
+  if (m[2] === "/news-lineups") return freshLineups(slate);
   const jobs = [seedBaked(`slates/${slate}/slate.json`, `${DATA}/${slate}/slate.json`), seedBaked(`slates/${slate}/pull-moves.json`, `${DATA}/${slate}/pull-moves.json`), figuresOf(slate)];
   if (/^\/console/.test(m[2] ?? "")) jobs.push(seedBaked(`slates/${slate}/console-inputs.json`, `${DATA}/${slate}/console-inputs.json`));
   return Promise.all(jobs);

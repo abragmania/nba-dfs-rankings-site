@@ -171,6 +171,41 @@ export function setRole(c, t, id, role) {
   });
   return res.moved;
 }
+/**
+ * A starter in and a named man out, as one role move (the lineup bar's starter proposal): `inId` becomes a Starter by the same rule as setRole, and
+ * `outId` (the man the news sources leave out of the five) is the one who goes to the Bench. When the five-starter rule would bench a different man
+ * (the starter with the fewest minutes), that man's flip is put back as it was. One history step; Ctrl+Z takes it back. Returns the men moved, or null when nothing changed.
+ */
+export function swapStarter(c, t, inId, outId) {
+  const T = c.model.TEAMS[t], S = c.model.ST[t], key = keyOf(S.outs);
+  const rows = calc(T, S, S.outs).rows, mine = rows.find((r) => r.id === inId), theirs = rows.find((r) => r.id === outId);
+  const dropOut = theirs?.role === "starter" ? outId : null; // a man the console has already benched needs no move
+  if (!mine) return null;
+  if (mine.role === "starter") return dropOut ? setRole(c, t, dropOut, "bench") : null; // he already starts: only the man to drop has a move left
+  if (!dropOut) return setRole(c, t, inId, "starter"); // nobody named to drop: the plain move, the five-starter rule's pick
+  const before = pinsOf(S, key).r;
+  const res = roleMove(T, S.outs, before, inId, "starter", Object.fromEntries(rows.map((r) => [r.id, r.min])));
+  if (keyOf(res.outs) !== key) return setRole(c, t, inId, "starter"); // he was out in this scenario: the plain move, which opens the scenario that has him in
+  const flips = Object.fromEntries(Object.entries(res.flips).filter(([fid]) => T.byId[fid]));
+  for (const m of res.moved) {
+    if (m.id === dropOut) continue;
+    if (Object.hasOwn(before ?? {}, m.id)) flips[m.id] = before[m.id]; else delete flips[m.id]; // the rule's own pick is not the man the sources drop
+  }
+  if (dropOut) flips[dropOut] = "bench";
+  const moved = dropOut ? [{ id: dropOut, from: "starter", to: "bench" }] : [];
+  mutate(c, `${t} ${nameOf(c, t, inId)} Starter${dropOut ? ` (${nameOf(c, t, dropOut)} to Bench)` : ""}`, () => {
+    pinsOf(S, key).r = flips;
+    c.G.roleMoves = { team: t, moved };
+  });
+  return moved;
+}
+/** Folds every history step after index `from` into one (the last), so a move made of several steps (scenario, roles) is undone with one Ctrl+Z. */
+export function foldHistory(c, from) {
+  const G = c.G;
+  if (G.hi - from < 2) return;
+  G.hist.splice(from + 1, G.hi - from - 1);
+  G.hi = from + 1;
+}
 export function setScenario(c, t, key) {
   mutate(c, `${t} scenario: ${label(c.model.TEAMS[t], key)}`, () => { c.model.ST[t].outs = outsOf(key); });
 }

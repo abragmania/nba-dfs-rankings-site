@@ -1,0 +1,28 @@
+/* The lineup bar (lineup-bar.js): one compact row for each lineup change the news sources show and the console does not. Uses the page's colour variables, so both looks work. */
+.lineupbar{margin:0 0 12px;border:1px solid color-mix(in srgb,var(--am) 45%,transparent);background:color-mix(in srgb,var(--am) 6%,var(--p));font-size:12px;max-height:34vh;overflow:auto}
+.lineupbar[hidden]{display:none}
+.lprow{display:flex;align-items:center;gap:10px;padding:5px 10px;flex-wrap:wrap}
+.lprow+.lprow,.lpnote+.lprow{border-top:1px solid var(--ln)}
+.lpkind{flex:none;min-width:46px;text-align:center;font-size:10px;font-weight:800;letter-spacing:.04em;padding:2px 6px;border:1px solid currentColor;color:var(--am)}
+.lprow.out .lpkind{color:var(--rd)}
+.lprow.starter .lpkind{color:var(--gr)}
+.lprow.conflict .lpkind{color:var(--bl)}
+.lptext{flex:1 1 320px;min-width:0;color:var(--tx);font-weight:600}
+.lptime{flex:none;color:var(--mu);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38%}
+.lpbtns{flex:none;display:flex;gap:6px;margin-left:auto}
+.lpbtns button{height:36px;background:none;border:1px solid var(--ln);color:var(--mu);font-weight:700;font-size:11px;padding:0 14px;white-space:nowrap;cursor:pointer}
+.lpbtns button.lpapply{border-color:var(--am);color:var(--am)}
+.lpbtns button:disabled{opacity:.5;cursor:default}
+.lpsides{flex-basis:100%;padding-left:56px;color:var(--mu);font-size:11px}
+.lpwhy{flex-basis:100%;padding-left:56px;color:var(--dim);font-size:11px}
+.lperr{flex-basis:100%;padding-left:56px;color:#ff6b6b;font-size:11px}
+body.light .lperr{color:var(--rd)}
+.lpnote{padding:5px 10px;color:var(--mu);font-size:11px}
+@media (max-width:900px){
+  .lptext{flex-basis:100%}
+  .lptime{flex-basis:100%;max-width:none;white-space:normal;overflow:visible;font-size:10.5px;color:var(--dim);margin-top:-6px} /* a small grey line under the message */
+  .lpbtns{flex:1 1 100%;margin-left:0}
+  .lpbtns button{flex:1}
+  .lpsides,.lpwhy,.lperr{padding-left:0}
+}
+body.lsw-on .lineupbar,body.lineups-on .lineupbar{display:none!important} /* the bar belongs to the player list: the Lineups tab and the Late swap screen replace it */

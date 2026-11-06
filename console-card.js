@@ -1,6 +1,7 @@
 // The console's reach outside its own screen: the A / B layout choice (remembered per browser), dragging a man between the B
 // layout's lanes, and the calls the player card makes (card-role.js) to read and write the same work the console holds.
 import { calc, plain } from "./console-model.js";
+import { keyOf, outsOf } from "./console-engine.js";
 import * as M from "./console-moves.js";
 import { applyDirect } from "./console-applybox.js";
 
@@ -68,6 +69,45 @@ export function cardApi(c, ensure) {
       const row = calc(hit.T, S, S.outs).rows.find((r) => r.id === hit.p.id);
       const moves = c.G.roleMoves?.team === hit.code ? c.G.roleMoves.moved.map((m) => ({ ...m, name: hit.T.byId[m.id]?.name ?? m.id })) : [];
       return { team: hit.code, id: hit.p.id, man: hit.p, row, moves, saveErr: c.saveErrs[hit.code] ?? null, applied: c.applied };
+    },
+    /** The Tonight scenario of every team, for the lineup proposals (lineup-proposals.js): { team: { roles: { id: role }, outs: [id], min: { id: minutes } } }. Throws when the console cannot load. */
+    async lineupView(slate) {
+      await ensure(slate);
+      if (!c.model) throw new Error(c.loadError ?? "the console could not load");
+      const view = {};
+      for (const [code, T] of Object.entries(c.model.TEAMS)) {
+        const outs = outsOf(T.tonightKey), rows = calc(T, c.model.ST[code], outs).rows;
+        view[code] = { outs: [...outs], roles: Object.fromEntries(rows.map((r) => [r.id, r.role])), min: Object.fromEntries(rows.filter((r) => typeof r.min === "number").map((r) => [r.id, r.min])) };
+      }
+      return view;
+    },
+    /** One lineup proposal (lineup-proposals.js): the console's role moves on the team's Tonight scenario, then the console's Apply for it (applyNow). A role the console already shows is not an error. */
+    async applyProposal(slate, proposal) {
+      await ensure(slate);
+      if (!c.model) throw new Error(c.loadError ?? "the console could not load");
+      const T = c.model.TEAMS[proposal.team], S = c.model.ST[proposal.team];
+      if (!T) throw new Error(`${proposal.team} is not on this slate's console.`);
+      const from = c.G.hi, roleOf = (id) => calc(T, S, S.outs).rows.find((r) => r.id === id)?.role;
+      const nameOf = (id) => proposal.players?.find((p) => p.id === id)?.name ?? (proposal.player?.id === id ? proposal.player.name : id);
+      const missing = (id) => Object.assign(new Error(`${nameOf(id)} is not on the console for ${proposal.team}`));
+      try {
+        if (keyOf(S.outs) !== T.tonightKey) M.setScenario(c, proposal.team, T.tonightKey);
+        for (const a of proposal.actions) {
+          if (a.fn === "setStarters") {
+            // Every man to start goes in and every console starter the five leaves out goes to the Bench; who replaces whom does not change the five that results.
+            for (const [i, id] of a.starters.entries()) {
+              const moved = M.swapStarter(c, a.team, id, a.bench[i] ?? null);
+              if (moved === null && roleOf(id) !== "starter") throw missing(id);
+            }
+          } else if (M.setRole(c, a.team, a.id, a.role) === null && roleOf(a.id) !== a.role) throw missing(a.id);
+        }
+        return await applyDirect(c, proposal.team);
+      } catch (e) {
+        e.undo = c.G.hi > from; // the console keeps what was moved; an Apply that was refused or a move that failed leaves steps to undo
+        throw e;
+      } finally {
+        M.foldHistory(c, from); // the scenario and role steps are one history step
+      }
     },
     setRole: (team, id, role) => M.setRole(c, team, id, role),
     setPin: (team, id, k, v) => M.setPin(c, team, id, k, v),

@@ -21,6 +21,7 @@ import { limitPatch } from "./row-limits.js";
 import { loadView, saveView, DEFAULT_SORT } from "./view-memory.js";
 import { loadTheme, saveTheme, themeClasses, themeHtml } from "./theme.js";
 import { createConsole } from "./console.js";
+import { createLineupBar } from "./lineup-bar.js";
 import { mountLateSwap } from "./lsw-main.js";
 
 const $ = (id) => document.getElementById(id);
@@ -87,6 +88,8 @@ const columns = columnsControl({ btn: $("colsBtn"), pop: $("colPop"), mode: pane
 const shownCols = () => columns.keys({ lateSwap: Boolean(panel.lateSwap()) });
 // The scenario console (console.js), the page's other view; Apply hands back the players' effective figures, as an override save does.
 const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: (t) => colourOf(t).t1, onPlayers: (players) => applyPlayers(players) });
+// The lineup bar above the list (lineup-bar.js): what the Monster and RotoWire lineup pages say that TwoGun and the console do not show yet; Apply goes through the console.
+const lineupBar = createLineupBar({ el: $("lineupbar"), api, slate: () => S.name, players: () => S.players, console: scenarioConsole, toast, tryStore });
 // Full screen (Player list header): hides the optimizer panel so the table takes the width. Remembered per viewer; under 900 px
 // wide with nothing stored it starts on. Pin slots (late swap) needs the panel, so the button and the hiding step aside then.
 const FS_KEY = "nbaboard.fullscreen";
@@ -174,6 +177,7 @@ async function loadSlate(name) {
   renderAll();
   renderUpdLine();
   fixTableWidth();
+  lineupBar.refresh();
 }
 
 // ---------- the numbers refreshing by themselves (slate-refresh.js) ----------
@@ -224,6 +228,7 @@ function applyFresh(slate) {
   // The table holds a measured width; a man added or removed may change it. The console hides the table, and measures on the way back.
   if (changed && !scenarioConsole.isOn()) fixTableWidth();
   if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
+  lineupBar.refresh(); // a new pull: the lineup read and TwoGun's flags may both have moved
 }
 /** He has left the box: the row that waited takes its new figures, and whatever named a man it dropped follows. */
 function flushHeld() {

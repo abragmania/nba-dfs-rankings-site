@@ -24,6 +24,7 @@ import { readSpots, writeSpots, checkSpotsBody, applySpots, vacateSpots } from "
 import { readBuilds, writeBuilds, checkBuildsBody, applyBuilds } from "./slate/builds.js";
 import { readOverrides, writeOverrides, checkChanges, applyChanges, resetPlayer, resetAll, mergeOverrides } from "./slate/overrides.js";
 import { consoleHandler } from "./slate/console-route.js";
+import { readNewsLineups } from "./slate/news-lineups.js";
 import { withUsualMinutes } from "../site/shim/app-only.js";
 import { pullStamp, withPullMoves } from "../site/shim/pull-moves.js";
 import { lateswapHandler } from "./slate/lateswap-route.js";
@@ -482,6 +483,15 @@ async function route(req, res, opts) {
   if (m) return handleBuildProgress(req, res, safeDecode(m[1]), opts);
   m = p.match(/^\/api\/slate\/([^/]+)\/optimize\/stop$/);
   if (m) return handleBuildStop(req, res, safeDecode(m[1]), opts);
+  m = p.match(/^\/api\/slate\/([^/]+)\/news-lineups$/);
+  if (m) { // the Monster and RotoWire lineup read (the board's proposals bar); a read-only answer, { state: "ok" | "missing" | "unreadable" }
+    if (req.method !== "GET") return fail(res, 405, "METHOD", "GET only.");
+    const slate = safeDecode(m[1]);
+    if (!SLATE_NAME.test(slate)) return fail(res, 400, "BAD_SLATE", "Slate names look like 2026-10-29-main.");
+    const refused = refuseCrossSiteRead(req.headers);
+    if (refused) return fail(res, refused.status, refused.code, refused.message);
+    return send(res, 200, readNewsLineups(slate));
+  }
   m = p.match(/^\/api\/slate\/([^/]+)\/pull-stamp$/);
   if (m) {
     if (req.method !== "GET") return fail(res, 405, "METHOD", "GET only.");
