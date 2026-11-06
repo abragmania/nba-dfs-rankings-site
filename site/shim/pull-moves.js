@@ -14,11 +14,22 @@ export function pullStamp(slate) {
   return b ? { stamp: b.stamp } : null;
 }
 
+/** The app's check on this visitor's own applied record (his scenarios file in this browser), with the app's helper. An unreadable file is said. */
+function appliedMisses(slate, players, men) {
+  const file = `${dataDir()}/slates/${slate}/scenarios.json`;
+  try {
+    const applied = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)).applied ?? null : null;
+    return appliedMinuteMisses(players, men, applied);
+  } catch (e) {
+    return [`Applied numbers could not be checked against the newest pull: ${String(e?.message ?? e).slice(0, 160)}`];
+  }
+}
+
 /** The slate with the baked pull_changes and each moved man's pull_move, as the app's withPullMoves gives them. */
 export function withPullMoves(slate, input) {
   const b = baked(slate);
   if (!b) return { ...input, pull_changes: { state: "none", why: "The pull comparison was not published with this slate.", unread_newer: [] } };
-  const misses = Array.isArray(b.row_men) ? appliedMinuteMisses(input.players ?? [], b.row_men) : [];
+  const misses = Array.isArray(b.row_men) ? appliedMisses(slate, input.players ?? [], b.row_men) : [];
   const slateData = misses.length ? { ...input, missing: [...(input.missing ?? []), ...misses] } : input;
   const moves = b.moves ?? {};
   return { ...slateData, pull_changes: b.pull_changes, players: (slateData.players ?? []).map((p) => (moves[String(p.dk_id)] ? { ...p, pull_move: moves[String(p.dk_id)] } : p)) };

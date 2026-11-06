@@ -6,6 +6,8 @@ import { buildModel, recordOf, refreshTeams, tableName } from "./console-model.j
 import { barHtml, pickerHtml, sideHtml, slateHtml, sourceHtml, teamHtml } from "./console-render.js";
 import { firstPlaying, pushHist } from "./console-moves.js";
 import { HINT, cmdHint, focusCell, onClick, onFocusIn, onFocusOut, onKey, tintCompare } from "./console-keys.js";
+import { lanesHtml } from "./console-lanes.js";
+import { wireDrag, layoutPref, saveLayout, cardApi } from "./console-card.js";
 
 const KEYS = `<span><kbd>Arrows</kbd><b>move</b></span><span><kbd>type</kbd><b>overwrite</b></span><span><kbd>Enter</kbd><kbd>Tab</kbd><b>commit + move</b></span><span><kbd>Esc</kbd><b>cancel</b></span><span><kbd>=</kbd><kbd>-</kbd><b>small step</b> <kbd>+</kbd><kbd>_</kbd><b>big</b></span><span><kbd>Del</kbd><b>clear pin</b></span><span><kbd>O</kbd><b>out</b></span><span><kbd>Ctrl+Z</kbd><kbd>Ctrl+Y</kbd><b>undo redo</b></span><span><kbd>G</kbd><b>command</b></span><span><kbd>S</kbd><b>slate</b></span><span><kbd>H</kbd><kbd>T</kbd><kbd>[</kbd><kbd>]</kbd><b>scenario</b></span><span><kbd>Alt+1-9</kbd><kbd>&lt;</kbd><kbd>&gt;</kbd><b>team</b></span><span><kbd>A</kbd><b>apply</b></span><span><kbd>R</kbd><b>reverse</b></span><span class="legend"><span><i style="background:var(--cdf)"></i>default</span><span><i style="background:var(--cmv)"></i>moved</span><span><i style="background:var(--cpin)"></i>pinned</span></span>`;
 const USAGE_RETRY_MS = 20_000;
@@ -53,7 +55,9 @@ function render(c) {
   c.E("picker").innerHTML = pickerHtml(c.model, G, colour, c.inputs.games);
   drawBar(c);
   c.el.querySelector(".shell").classList.toggle("sweepv", G.view === "slate");
+  c.el.querySelector(".shell").classList.toggle("lanesv", G.view === "team" && G.layout === "b");
   if (G.view === "slate") c.E("app").innerHTML = slateHtml(c.model, G, colour);
+  else if (G.layout === "b") c.E("app").innerHTML = lanesHtml(c.model, G, G.cur, colour(G.cur)); // sets G.rows in lane order
   else {
     G.rows = c.model.TEAMS[G.cur].pl.map((p) => ({ team: G.cur, id: p.id }));
     c.E("app").innerHTML = teamHtml(c.model, G, G.cur, colour(G.cur));
@@ -79,6 +83,15 @@ function takeInputs(c, out) {
   c.E("srcs").innerHTML = sourceHtml(c.inputs);
 }
 
+/** The slate's work loaded, shown or not (the player card asks for it): one load at a time per slate, a second ask waiting on the first. */
+function ensure(c, name) {
+  if (c.model && c.slate === name) return Promise.resolve();
+  if (c.loading?.name === name) return c.loading.p;
+  const p = load(c, name).finally(() => { if (c.loading?.p === p) c.loading = null; });
+  c.loading = { name, p };
+  return p;
+}
+
 async function load(c, name) {
   clearTimeout(c.usageTimer);
   Object.assign(c, { slate: name, loadError: null, model: null, usageTries: 0, saveErrs: {} });
@@ -91,7 +104,7 @@ async function load(c, name) {
     c.lastSaved = {};
     for (const code of Object.keys(c.model.ST)) c.lastSaved[code] = JSON.stringify(recordOf(c.model.ST[code]));
     const G = c.G, first = Object.keys(c.model.TEAMS)[0] ?? null;
-    Object.assign(G, { cur: first, view: "team", editing: false, modal: null, hist: [], hi: -1, focus: first ? { team: first, id: firstPlaying(c, first), k: "m" } : null });
+    Object.assign(G, { cur: first, view: "team", editing: false, modal: null, pick: null, roleMoves: null, hist: [], hi: -1, focus: first ? { team: first, id: firstPlaying(c, first), k: "m" } : null });
     if (!first) return showError(c, "This slate has no games.");
     pushHist(c, "Start");
     setNameWidth(c);
@@ -132,7 +145,8 @@ export function createConsole({ el, api, toast, colourOf, onPlayers }) {
   const c = {
     el, api, toast, colourOf, onPlayers, on: false, slate: null, inputs: null, model: null, applied: null, loadError: null, lastSaved: {}, saveErrs: {}, saveQueue: Promise.resolve(), usageTimer: null, usageTries: 0,
     E: (id) => el.querySelector(`#${id}`),
-    G: { cur: null, view: "team", focus: null, hist: [], hi: -1, editing: false, rows: [], modal: null },
+    G: { cur: null, view: "team", layout: layoutPref(), pick: null, roleMoves: null, focus: null, hist: [], hi: -1, editing: false, rows: [], modal: null },
+    setLayout: (v) => { c.G.layout = v === "b" ? "b" : "a"; c.G.pick = null; saveLayout(c.G.layout); if (c.G.view !== "team") c.G.view = "team"; render(c); },
     render: () => render(c), drawBar: () => drawBar(c), focusCell: () => focusCell(c),
     updateSide: () => { c.E("side").innerHTML = sideHtml(c.model, c.G, (t) => barColour(c, t)); },
   };
@@ -141,6 +155,7 @@ export function createConsole({ el, api, toast, colourOf, onPlayers }) {
   el.addEventListener("focusin", (e) => onFocusIn(c, e));
   el.addEventListener("focusout", (e) => onFocusOut(c, e));
   el.addEventListener("click", (e) => onClick(c, e));
+  wireDrag(c);
   c.E("cmd").addEventListener("input", () => cmdHint(c));
   window.addEventListener("resize", () => { if (c.on) sizeSweep(c); });
   // A click on the page's header (the look, the late swap switch) takes the keyboard away: it comes back to the last cell. The slate box keeps its own.
@@ -159,7 +174,7 @@ export function createConsole({ el, api, toast, colourOf, onPlayers }) {
     show(name) {
       c.on = true;
       el.hidden = false;
-      if (name !== c.slate || !c.model) return load(c, name);
+      if (name !== c.slate || !c.model) return ensure(c, name);
       try {
         render(c);
       } catch (e) {
@@ -170,5 +185,7 @@ export function createConsole({ el, api, toast, colourOf, onPlayers }) {
     },
     hide() { c.on = false; el.hidden = true; c.G.modal = null; c.E("applybox").hidden = true; },
     isOn: () => c.on,
+    /** The player card's reads and writes on the same work (console-card.js). */
+    ...cardApi(c, (name) => ensure(c, name)),
   };
 }

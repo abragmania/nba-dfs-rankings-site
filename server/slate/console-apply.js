@@ -49,7 +49,7 @@ export function orphanedPins(inputs, file, keys) {
 
 const shapedTeam = (t) => ({ ...t, byId: Object.fromEntries(t.men.map((p) => [p.id, p])), pl: t.men, tonightKey: keyOf(t.tonight) });
 
-/** One man's scenario minutes into the plan when the board shows otherwise: 1 if they move, else 0. Back on the slate's own figure removes the entry. Each man goes, however small, so the board's team adds to the scenario's 240. */
+/** One man's scenario minutes into the plan when the board shows otherwise: 1 if they move, else 0. Back on the slate's own figure removes the entry. Each man goes, however small, so the board holds the scenario's minutes exactly. */
 function planMinutes(plan, r, ctx) {
   if (!isNum(r.min)) return 0;
   const to = Math.round(r.min * 1000) / 1000, base = ctx.base.get(r.id).minutes, typed = ctx.overrides.min?.[r.id];
@@ -59,12 +59,16 @@ function planMinutes(plan, r, ctx) {
   return 1;
 }
 
+/** Why a man has no projection in the scenario: the row's own minutes reason first (a flipped man's role figure says why it is missing), then his inputs'. */
+function missingWhy(r, man) {
+  const min = r.missing.find((m) => m.startsWith("min: "));
+  return min ? min.slice(5) : Object.values(man.missing)[0] ?? "no projection";
+}
+
 /** One team's moves into the plan. A hand-typed board number with no pin in this scenario, not one an Apply set, stays and is listed as kept. */
 function planTeam(plan, t, rec, key, ctx) {
   const pins = rec?.pins?.[key] ?? emptyPins();
   const res = scenario(teamFor(t, rec), outsOf(key), pins);
-  const why = [res.totals.min_why, res.totals.usg_why].filter(Boolean);
-  if (why.length) return { refused: why.join(" ") };
   const before = plan.changes.length;
   let minMoves = 0;
   for (const r of res.rows) {
@@ -78,10 +82,15 @@ function planTeam(plan, t, rec, key, ctx) {
     }
     ctx.men.set(r.id, { man, t });
     minMoves += planMinutes(plan, r, ctx);
-    if (r.proj === null) { plan.missing.push({ name: man.name, team: t.code, why: Object.values(man.missing)[0] ?? "no projection" }); continue; }
+    if (r.proj === null) {
+      const earlier = ctx.applied?.set?.[r.id];
+      const held = earlier && ctx.overrides.proj?.[r.id] === earlier.to ? `; his earlier applied projection ${earlier.to} is still on the board` : "";
+      plan.missing.push({ name: man.name, team: t.code, why: `${missingWhy(r, man)}${held}` });
+      continue;
+    }
     const typedNow = ctx.overrides.proj?.[r.id];
     const fromApply = ctx.applied?.set?.[r.id]?.to === typedNow;
-    const hasPin = ["m", "u", "d", "p"].some((k) => Object.hasOwn(pins[k] ?? {}, r.id));
+    const hasPin = ["m", "u", "d", "p", "r"].some((k) => Object.hasOwn(pins[k] ?? {}, r.id));
     const to = round2(Math.max(0, Math.min(PROJ_MAX, r.proj)));
     const after = effectiveProjection(ctx.base.get(r.id).projection, to, ctx.overrides.bump?.[r.id] ?? 0);
     const from = ctx.board.get(r.id).projection;
@@ -136,10 +145,10 @@ function changedRows(plan, ctx) {
 /**
  * What Apply would do for the posted scenarios: { changes: largest move first, rows (changedRows, the preview's table), typed: { id: number, or null for a removal }, min: { id: minutes,
  * or null for a removal }, min_moves (how many), restoring (the men going back to before an earlier Apply), teams: [{ team, key, name, moves,
- * min_moves, min_total, min_off }], refused: [{ team, key, name, why }], kept,
- * missing, clamped, back_on_zero, not_on_board, orphaned_pins, unchanged, basis }. A team on Tonight with no pins sends nothing but that undoing.
- * A team whose minutes or usage cannot reach their total sends nothing and keeps what the board holds; the other teams still go. `from` and `to`
- * are the effective board figures, so a man's thumbs bump on top of the typed number is counted; each sent man's bump is in the basis.
+ * min_moves, min_total }], refused (always empty: no team total refuses Apply, Adam 11-06), kept,
+ * missing, clamped, back_on_zero, not_on_board, orphaned_pins, unchanged, basis }. A team on Tonight with no pins or role flips sends nothing but
+ * that undoing. min_total is the team's minutes for reference only. `from` and `to` are the effective board figures, so a man's thumbs bump on top
+ * of the typed number is counted; each sent man's bump is in the basis.
  */
 export function planApply(inputs, file, overrides, players, keys) {
   const ctx = {
@@ -153,12 +162,11 @@ export function planApply(inputs, file, overrides, players, keys) {
     const name = label(shapedTeam(t), key);
     if (key === tonight && !hasPins(rec?.pins?.[key])) {
       const { moves, min_moves } = undoTeam(plan, t, ctx);
-      if (moves || min_moves) plan.teams.push({ team: t.code, key, name, moves, min_moves, min_total: null, min_off: null, undone: true });
+      if (moves || min_moves) plan.teams.push({ team: t.code, key, name, moves, min_moves, min_total: null, undone: true });
       continue;
     }
-    const { moves, min_moves, totals, refused } = planTeam(plan, t, rec, key, ctx);
-    if (refused) { plan.refused.push({ team: t.code, key, name, why: refused }); continue; }
-    plan.teams.push({ team: t.code, key, name, moves, min_moves, min_total: totals.min, min_off: totals.min_off });
+    const { moves, min_moves, totals } = planTeam(plan, t, rec, key, ctx);
+    plan.teams.push({ team: t.code, key, name, moves, min_moves, min_total: totals.min });
   }
   plan.min_moves = Object.keys(plan.min).length;
   plan.changes.sort((a, b) => Math.abs(b.move ?? Infinity) - Math.abs(a.move ?? Infinity) || a.name.localeCompare(b.name));
@@ -166,7 +174,21 @@ export function planApply(inputs, file, overrides, players, keys) {
   plan.orphaned_pins = orphanedPins(inputs, file, keys);
   const sent = Object.entries(plan.typed).sort().map(([id, to]) => [id, to, overrides.bump?.[id] ?? 0]);
   plan.basis = crypto.createHash("sha256").update(JSON.stringify({ sent, min: Object.entries(plan.min).sort(), keys: Object.entries(keys).sort(), orphans: plan.orphaned_pins, refused: plan.refused })).digest("hex").slice(0, 16);
+  plan.pull = inputs.basis?.pull ?? null;
+  plan.base = baseOf(plan, ctx);
   return plan;
+}
+
+/** What TwoGun had under each man this Apply sends a number for: { id: { min, out } }, his minutes and out flag in the pull the console read.
+ *  The pull check (minute-misses.js) compares a newer pull against this. A man only going back to what he had is left out. */
+function baseOf(plan, ctx) {
+  const base = {};
+  for (const id of new Set([...Object.keys(plan.typed), ...Object.keys(plan.min)])) {
+    const sends = (Object.hasOwn(plan.typed, id) && !plan.restoring.has(id)) || (Object.hasOwn(plan.min, id) && plan.min[id] !== null);
+    const man = ctx.men.get(id)?.man;
+    if (sends && man) base[id] = { min: man.out ? 0 : isNum(man.min) ? man.min : null, out: Boolean(man.out) };
+  }
+  return base;
 }
 
 /** The overrides change an Apply makes and the applied record that goes with it. A man an earlier Apply set whose typed number is still that one keeps his first `prev`. */
@@ -185,7 +207,14 @@ export function applyRecord(plan, overrides, applied, atIso) {
     else if (t.moves > 0 || t.min_moves > 0 || Object.hasOwn(keys, t.team)) keys[t.team] = t.key;
   }
   const minLeft = Object.keys({ ...(overrides.min ?? {}), ...plan.min }).some((id) => (Object.hasOwn(plan.min, id) ? plan.min[id] !== null : true));
-  return { changes: { proj, min: plan.min }, applied: Object.keys(set).length || minLeft ? { at: atIso, set, keys } : null };
+  // What TwoGun had under each applied man, kept until his numbers come off: a man this Apply touched takes this pull's figure, or none when he went back.
+  const base = { ...(applied?.base ?? {}) };
+  for (const id of new Set([...Object.keys(plan.typed), ...Object.keys(plan.min)])) {
+    if (Object.hasOwn(plan.base ?? {}, id)) base[id] = plan.base[id];
+    else delete base[id];
+  }
+  const out = Object.keys(set).length || minLeft ? { at: atIso, set, keys, base, pull: plan.pull ?? null } : null;
+  return { changes: { proj, min: plan.min }, applied: out };
 }
 
 /** The overrides change a reverse makes: only men whose typed number is still what Apply set; anyone he has typed over since is left and named. Every applied minutes figure comes off, since only an Apply sets them. */

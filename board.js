@@ -6,6 +6,7 @@ import { esc, logo, tipWhen, isoToEastern, ICON, topStamps, keepFocus } from "./
 import { createPanel, fullScreenPref } from "./panel.js";
 import { tiers, notes } from "./highlight.js";
 import { initCard, figureSource } from "./card.js";
+import { cardRoles } from "./card-role.js";
 import { bumpPatch, delegateBumpClicks } from "./bump-control.js";
 import { createEditors } from "./cell-editor.js";
 import { askConfirm, CONFIRM } from "./confirm.js";
@@ -75,7 +76,7 @@ const when = (s) => tipWhen(S.name)(s);
 // Out list has none and stays as he was opened).
 const card = initCard({ root: document.querySelector(".work"), dash, colourOf, picks: () => S.picks,
   figs: () => ({ source: figureSource(S.slate), asOf: when(topStamps(S.slate).board) }),
-  current: (p) => S.byId.get(p.dk_id) ?? p });
+  current: (p) => S.byId.get(p.dk_id) ?? p, roles: cardRoles({ api: () => scenarioConsole, slate: () => S.name, toast }) });
 // The optimizer panel (panel.js); settled() lets a build wait for picks and override saves in flight, since the server
 // reads the saved locks and the saved overrides.
 // Late swap mode lives in the panel; onLateSwap redraws the header switch and the table's slot pickers when it changes.

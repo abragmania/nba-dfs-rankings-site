@@ -6,21 +6,22 @@
 // to the men playing who are still under their ceiling; what goes over a ceiling goes back in his pool and is shared again, up to 8 passes.
 // S empty starts from min_healthy exactly on the row basis.
 //
-// A team's minutes add to 240 (Adam, 11-04): five spots for 48 minutes each. A team off Tonight, or with minutes typed, is brought to 240 last:
-// typed minutes stay as typed, men on 0 and sitters stay on 0, and the rest absorb the difference in proportion to their minutes, under their
-// ceilings, overflow shared again. Where 240 cannot be reached the total stays off, totals.min_why says why and how to fix it, and Apply refuses
-// that team. A team on Tonight with no minutes typed is the board to the digit, its rounding included, and is not rescaled.
+// His minutes are king (Adam, 11-06): there is no team total to reach. A man with minutes typed (pins.m) has them, any number from 0 to 48,
+// never rescaled. A man flipped to a role (pins.r, console-roles.js) has that role's figure (man.role_min, from the inputs), Out of rotation 0.
+// Neither receives a sitter's hand-out, and what either gives up is handed to nobody. Every other man has the rule above, worked with the
+// typed and flipped men left out of the hand-outs; a team on Tonight with nothing typed or flipped is the board to the digit. The team's total
+// is shown for reference only.
 //
 // A team: { men: [{ id, name, pos ("PG/SG"), order (his place in TwoGun's row), min (Tonight's minutes), healthy (his usual minutes), cap, usg
 //   (his share of the team's usage Tonight, or for a man out, what he comes back with), rate (Tonight's DK points per minute), recipe, out }],
 //   tonight: [ids out], healthy_exact, tables: { sitter: { id: weight } } (TwoGun's if_he_sits),
 //   handouts: { sitter: { m: { id: percent }, u: { id: percent } } } (his edits), combos: { "a+b": { m: { id: gain }, u: { id: gain } } } }.
-// Pins: { m: minutes, u: usage, d: rate, p: projection }, each { id: value }. A pin always wins, the ceiling included.
+// Pins: { m: minutes, u: usage, d: rate, p: projection }, each { id: value }, and r: { id: role } (his role flips). A pin always wins, the ceiling included.
 import { isNum } from "./figures.js";
+import { liveFlips, resolveRoles } from "./console-roles.js";
 
-export const TEAM_MINUTES = 240;
 export const TEAM_USAGE = 100;
-/** A worked total this close to its target is on it; further off is a miss that refuses Apply. A working tolerance: Adam ruled the 240 (11-04), not this band. */
+/** A usage total this close to 100 is on it; further off is named on the page. A working tolerance. */
 export const TOTAL_ROUNDING = 0.1;
 /** The most minutes the model hands a man with no cap of his own, unless his usual or Tonight's figure is above it. A pin may go past it. */
 export const DEFAULT_CAP = 40;
@@ -41,7 +42,7 @@ const own = (o, k) => o != null && Object.hasOwn(o, k);
 
 export const keyOf = (ids) => [...ids].sort().join("+");
 export const outsOf = (key) => (key ? key.split("+") : []);
-export const emptyPins = () => ({ m: {}, u: {}, d: {}, p: {} });
+export const emptyPins = () => ({ m: {}, u: {}, d: {}, p: {}, r: {} });
 
 /** The engine's team from the inputs route's team and his saved record for it. */
 export const teamFor = (input, record) => ({ men: input.men, tonight: input.tonight ?? [], healthy_exact: Boolean(input.healthy_exact), tables: input.tables ?? {}, handouts: record?.handouts ?? {}, combos: record?.combos ?? {} });
@@ -120,15 +121,17 @@ function sharesAmong(team, sitter, kind, playing, values) {
   return total > 0 ? usable.map((p, i) => [p, w[i] / total]) : [];
 }
 
-/** M(S): every man playing on his usual minutes, then each sitter's usual minutes handed out in team order. A man with no figure is left out. */
-export function minutesFromScratch(team, outSet) {
+/** M(S): every man playing on his usual minutes, then each sitter's usual minutes handed out in team order to the men playing and not
+ *  `closed` (typed or flipped: they take no hand-out). A man with no figure is left out. */
+export function minutesFromScratch(team, outSet, closed = new Set()) {
   const live = team.men.filter((p) => !outSet.has(p.id));
+  const takers = live.filter((p) => !closed.has(p.id));
   const m = {};
   for (const p of live) m[p.id] = usualOf(p);
   const sitters = team.men.filter((p) => outSet.has(p.id)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   for (const s of sitters) {
     let pool = usualOf(s) ?? 0;
-    const shares = sharesAmong(team, s.id, "m", live, m);
+    const shares = sharesAmong(team, s.id, "m", takers, m);
     for (let pass = 0; pass < HANDOUT_PASSES && pool > 1e-6; pass++) {
       const open = shares.filter(([p, f]) => f > 0 && m[p.id] < ceilingOf(p) - EPS);
       const sum = open.reduce((a, [, f]) => a + f, 0);
@@ -172,50 +175,50 @@ function fitKind(team, outSet, modelled, pins, total, ceiling) {
 const sameSet = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
 const pinsOnPlaying = (team, outSet, pins) => Object.fromEntries(Object.entries(pins ?? {}).filter(([id]) => team.men.some((p) => p.id === id && !outSet.has(id))));
 
-/** The scenario before it is brought to 240 and before pins: Tonight exact, Healthy exact on the row basis, a saved combination table's gains, or the rule at the head of this file. */
-export function modelledMinutes(team, outSet, tonightSet) {
+/** The scenario's minutes before typed and flipped men: Tonight exact, Healthy exact on the row basis, a saved combination table's gains,
+ *  or the rule at the head of this file with `closed` (typed and flipped men) taking no hand-out. */
+export function modelledMinutes(team, outSet, tonightSet, closed = new Set()) {
   const figure = (fn) => Object.fromEntries(team.men.map((p) => [p.id, outSet.has(p.id) ? 0 : fn(p)]));
   const tonight = (p) => (tonightSet.has(p.id) ? 0 : isNum(p.min) ? p.min : null);
   if (sameSet(outSet, tonightSet)) return figure(tonight);
   if (outSet.size === 0 && team.healthy_exact) return figure((p) => (isNum(p.healthy) ? p.healthy : null));
   const combo = outSet.size >= 2 ? team.combos?.[keyOf([...outSet])]?.m : null;
   if (combo) return figure((p) => { const t = tonight(p); return t === null ? null : Math.max(0, t + (own(combo, p.id) ? combo[p.id] : 0)); });
-  const now = minutesFromScratch(team, outSet), base = minutesFromScratch(team, tonightSet);
+  const now = minutesFromScratch(team, outSet, closed), base = minutesFromScratch(team, tonightSet, closed);
   return figure((p) => {
     const t = tonight(p);
     return t === null ? null : Math.min(ceilingOf(p), Math.max(0, t + (now[p.id] ?? 0) - (base[p.id] ?? 0)));
   });
 }
 
-/** Why a team that should be on 240 is not, with the fix; null when it is on it. `unknown`: men playing with no minutes figure and none typed. */
-function minutesMiss(total, typed, unknown) {
-  if (unknown.length) return `${unknown.map((p) => p.name).join(", ")} ${unknown.length === 1 ? "has" : "have"} no minutes figure, so the team's total is not known. Type the missing minutes.`;
-  const off = total - TEAM_MINUTES;
-  if (Math.abs(off) <= TOTAL_ROUNDING) return null;
-  if (off > 0) return `Typed minutes total ${typed.toFixed(1)}, ${off.toFixed(1)} over ${TEAM_MINUTES}. Lower a typed figure.`;
-  return `Every man not typed is at his ceiling or on 0 minutes, ${(-off).toFixed(1)} short of ${TEAM_MINUTES}. Type a man's minutes past his ceiling, or bring a man back.`;
+/** A flipped man's minutes for his role: { min, basis }. Out of rotation is 0; the others are his figure from the inputs, null with the reason when missing. */
+export function roleMinutes(p, role) {
+  if (role === "oor") return { min: 0, basis: "out of rotation", median: false };
+  const f = p.role_min?.[role];
+  return f && (isNum(f.min) || f.min === null) ? { min: f.min, basis: f.basis ?? null, median: f.median === true && isNum(f.min) } : { min: null, basis: "no role figure for him in the inputs", median: false };
 }
 
 /**
- * The scenario's minutes and why they miss 240: { minutes, why }. A team on Tonight with no minutes typed is returned as the board has it. Any other
- * is fitted to 240 around what is typed, men on 0 held there. With a man's figure missing the true total is unknown, so nothing is stretched over
- * the hole: the rest fit to the scenario's own total, as far as it is known, and `why` names him.
+ * The scenario's minutes: { minutes, basis: { id: why, for a typed or flipped man } }. Typed minutes as typed; a flipped man on his role's
+ * figure; everyone else the modelled figure with typed and flipped men taking no hand-out. Nothing is rescaled to any total.
  */
-function minutesFor(team, outSet, tonightSet, pins) {
-  const modelled = modelledMinutes(team, outSet, tonightSet);
-  const live = pinsOnPlaying(team, outSet, pins);
-  const typedAny = Object.keys(live).length > 0;
-  if (!typedAny && sameSet(outSet, tonightSet)) return { minutes: modelled, why: null };
-  const playing = team.men.filter((p) => !outSet.has(p.id));
-  const unknown = playing.filter((p) => !own(live, p.id) && modelled[p.id] === null);
-  const before = playing.reduce((s, p) => s + (modelled[p.id] ?? 0), 0);
-  const typed = Object.values(live).reduce((s, v) => s + v, 0);
-  if (!typedAny && (unknown.length || Math.abs(before - TEAM_MINUTES) < EPS)) return { minutes: modelled, why: minutesMiss(before, typed, unknown) };
-  const held = { ...live };
-  for (const p of playing) if (!own(live, p.id) && modelled[p.id] === 0) held[p.id] = 0;
-  const minutes = fitKind(team, outSet, modelled, held, unknown.length ? before : TEAM_MINUTES, (p) => Math.max(ceilingOf(p), modelled[p.id] ?? 0));
-  const total = playing.reduce((s, p) => s + (minutes[p.id] ?? 0), 0);
-  return { minutes, why: minutesMiss(total, typed, unknown) };
+function minutesFor(team, outSet, tonightSet, pins, flips) {
+  const typed = pinsOnPlaying(team, outSet, pins);
+  const closed = new Set([...Object.keys(typed), ...Object.keys(flips)]);
+  const modelled = modelledMinutes(team, outSet, tonightSet, closed);
+  const minutes = {}, basis = {}, median = new Set();
+  for (const p of team.men) {
+    if (outSet.has(p.id)) { minutes[p.id] = 0; continue; }
+    if (own(typed, p.id)) { minutes[p.id] = typed[p.id]; basis[p.id] = "typed"; continue; }
+    if (own(flips, p.id)) {
+      const f = roleMinutes(p, flips[p.id]);
+      minutes[p.id] = f.min; basis[p.id] = f.basis;
+      if (f.median) median.add(p.id);
+      continue;
+    }
+    minutes[p.id] = modelled[p.id];
+  }
+  return { minutes, basis, median };
 }
 
 /** Why the usage total misses 100, with the fix; null when it is on it or no man has a figure. Only typed usage can miss: the fit places the rest. */
@@ -237,14 +240,14 @@ export function usageStart(p, m, outTonight = false) {
 /**
  * The scenario's usage. Each man starts at his Tonight share scaled by his minutes, so a pure minutes change leaves his per-minute usage
  * where it was. What that leaves short of 100 is the real redistribution: it goes out from whoever gave usage up (a man added to the out
- * list, or pinned to 0 minutes), by their shares. Then the fit to 100 around his usage pins. `keep`: rates stay where they are, when nothing
+ * list, or typed or flipped to 0 minutes), by their shares. Then the fit to 100 around his usage pins. `keep`: rates stay where they are, when nothing
  * but minutes changed, or when a man giving usage up or coming back has no usage figure, since the sums would then read a hole as a shift.
  */
-function usageFor(team, outSet, tonightSet, m, pins) {
+function usageFor(team, outSet, tonightSet, m, pins, flips) {
   const uPins = pinsOnPlaying(team, outSet, pins.u);
   const start = {};
   for (const p of team.men) start[p.id] = outSet.has(p.id) ? 0 : usageStart(p, m[p.id], tonightSet.has(p.id));
-  const gaveUp = team.men.filter((p) => !outSet.has(p.id) && pins.m?.[p.id] === 0 && !own(uPins, p.id));
+  const gaveUp = team.men.filter((p) => !outSet.has(p.id) && (own(pins.m, p.id) || own(flips, p.id)) && m[p.id] === 0 && !own(uPins, p.id));
   const added = team.men.filter((p) => outSet.has(p.id) && !tonightSet.has(p.id));
   const back = team.men.filter((p) => tonightSet.has(p.id) && !outSet.has(p.id));
   const givers = [...added, ...gaveUp];
@@ -283,35 +286,38 @@ const sum = (rows, k) => {
   return known.length ? known.reduce((a, b) => a + b, 0) : null;
 };
 
-const OFF_SCENARIO = { m: false, u: false, d: false, p: false };
+const OFF_SCENARIO = { m: false, u: false, d: false, p: false, r: false };
 
 /**
- * The scenario: { rows: [{ id, out, min, usg, rate, formula, proj, pinned: { m, u, d, p }, clamped, back_on_zero, missing: [...] }], totals: { min, usg,
- * proj, min_off, usg_off, min_why, usg_why, proj_missing } }. min_off and usg_off are the difference from 240 and 100; a total no man has a figure
- * for is null. min_why and usg_why: why a total that has to be on its target cannot be, with the fix; null when nothing is wrong. Apply refuses the team on either.
+ * The scenario: { rows: [{ id, out, role, min, min_basis, min_median (his flipped minutes are a position median, not his own), usg, rate, formula, proj, pinned: { m, u, d, p, r }, clamped, back_on_zero, missing: [...] }],
+ * totals: { min, usg, proj, usg_off, usg_why, proj_missing }, roles_note }. role: console-roles.js's role; min_basis: "typed", a flipped man's role
+ * figure basis, or null for the model's. min is the team's total for reference only. usg_off is the difference from 100; a total no man has a figure
+ * for is null. usg_why: why typed usage misses 100, with the fix; null when nothing is wrong. Nothing here refuses Apply.
  */
 export function scenario(team, outs = [], pins = emptyPins()) {
   const known = new Set(team.men.map((p) => p.id));
   const outSet = new Set(outs.filter((id) => known.has(id))), tonightSet = new Set(team.tonight ?? []);
-  const { minutes: m, why: minWhy } = minutesFor(team, outSet, tonightSet, pins.m ?? {});
-  const u = usageFor(team, outSet, tonightSet, m, pins);
+  const flips = liveFlips(team, outSet, pins.r);
+  const { roles, note: rolesNote } = resolveRoles(team, outSet, pins.r);
+  const { minutes: m, basis, median } = minutesFor(team, outSet, tonightSet, pins.m ?? {}, flips);
+  const u = usageFor(team, outSet, tonightSet, m, pins, flips);
   const rows = team.men.map((p) => {
-    if (outSet.has(p.id)) return { id: p.id, out: true, min: 0, usg: 0, rate: isNum(p.rate) ? p.rate : null, formula: 0, proj: 0, pinned: OFF_SCENARIO, clamped: false, back_on_zero: false, missing: [] };
-    const pinned = { m: own(pins.m, p.id), u: own(pins.u, p.id), d: own(pins.d, p.id), p: own(pins.p, p.id) };
+    if (outSet.has(p.id)) return { id: p.id, out: true, role: "out", min: 0, min_basis: null, min_median: false, usg: 0, rate: isNum(p.rate) ? p.rate : null, formula: 0, proj: 0, pinned: OFF_SCENARIO, clamped: false, back_on_zero: false, missing: [] };
+    const pinned = { m: own(pins.m, p.id), u: own(pins.u, p.id), d: own(pins.d, p.id), p: own(pins.p, p.id), r: own(flips, p.id) };
     const held = pinned.d ? { rate: pins.d[p.id], clamped: false }
       : u.keep && !pinned.u ? { rate: isNum(p.rate) ? p.rate : null, clamped: false }
       : rateAt(p, u.rate[p.id], m[p.id], tonightSet.has(p.id));
     const formula = isNum(m[p.id]) && isNum(held.rate) ? m[p.id] * held.rate : null;
     const proj = pinned.p ? pins.p[p.id] : formula;
-    const backOnZero = tonightSet.has(p.id) && !pinned.m && !(m[p.id] > 0);
+    const backOnZero = tonightSet.has(p.id) && !pinned.m && !pinned.r && !(m[p.id] > 0);
     const missing = [];
-    if (m[p.id] === null) missing.push("min");
+    if (m[p.id] === null) missing.push(pinned.r ? `min: ${basis[p.id]}` : "min");
     if (u.shown[p.id] === null) missing.push("usg");
     if (held.rate === null) missing.push("rate");
     if (proj === null) missing.push("proj");
     if (held.clamped) missing.push("rate clamped");
     if (backOnZero) missing.push("back on 0 minutes; pin his minutes");
-    return { id: p.id, out: false, min: m[p.id], usg: u.shown[p.id], rate: held.rate, formula, proj, pinned, clamped: held.clamped, back_on_zero: backOnZero, missing };
+    return { id: p.id, out: false, role: roles[p.id], min: m[p.id], min_basis: basis[p.id] ?? null, min_median: median.has(p.id), usg: u.shown[p.id], rate: held.rate, formula, proj, pinned, clamped: held.clamped, back_on_zero: backOnZero, missing };
   });
   const playing = rows.filter((r) => !r.out); // a man out is on 0 by the scenario, which says nothing about whether the figure is known
   const min = sum(playing, "min"), usg = sum(playing, "usg");
@@ -319,10 +325,10 @@ export function scenario(team, outs = [], pins = emptyPins()) {
     rows,
     totals: {
       min, usg, proj: sum(rows, "proj"),
-      min_off: min === null ? null : min - TEAM_MINUTES,
       usg_off: usg === null ? null : usg - TEAM_USAGE,
-      min_why: minWhy, usg_why: usageMiss(usg),
+      usg_why: usageMiss(usg),
       proj_missing: rows.filter((r) => r.proj === null).length,
     },
+    roles_note: rolesNote,
   };
 }

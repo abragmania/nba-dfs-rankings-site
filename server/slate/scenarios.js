@@ -1,5 +1,5 @@
 // Adam's saved console work for one slate: data/slates/<slate>/scenarios.json, written atomically, holding per team the saved
-// scenarios, pins, hand-out edits and combination tables, and the record of what the last Apply set. A file that cannot be read,
+// scenarios, pins (role flips among them), hand-out edits and combination tables, and the record of what the last Apply set. A file that cannot be read,
 // is not JSON or fails its check throws SCENARIOS_UNREADABLE and is never treated as empty; only no file at all is empty.
 import fs from "../../site/shim/fs.js";
 import path from "../../site/shim/path.js";
@@ -7,13 +7,14 @@ import { dataDir } from "../../site/shim/log.js";
 import { writeFileAtomic } from "../../site/shim/atomic.js";
 import { PIN_MAX, SHARE_MAX, COMBO_MAX } from "../board/override-limits.js";
 import { EMPTY_RECORD, isNum, isPlain } from "../board/figures.js";
+import { FLIP_ROLES, STARTERS } from "../board/console-roles.js";
 
 export const SCENARIOS_SCHEMA = 1;
 const MAX_SAVED_SCENARIOS = 40;
 const MAX_KEYS = 200;
 const ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
 const TEAM = /^[A-Z]{2,4}$/;
-const PIN_KINDS = ["m", "u", "d", "p"];
+const PIN_KINDS = ["m", "u", "d", "p", "r"]; // r: his role flips (console-roles.js), the others numbers
 const SHARE_KINDS = ["m", "u"];
 const RECORD_KEYS = ["saved", "pins", "handouts", "combos"];
 
@@ -38,6 +39,18 @@ function badMap(map, max, what, min = 0) {
   return null;
 }
 
+/** { id: role } with every id well formed and every role one a flip can hold; null when good, else the reason. */
+function badRoles(map) {
+  if (!isPlain(map)) return "The role flips must be an object keyed by player id";
+  const entries = Object.entries(map);
+  if (entries.length > MAX_KEYS) return "The role flips name too many men";
+  for (const [id, v] of entries) {
+    if (!ID.test(id)) return "The role flips have a bad player id";
+    if (!FLIP_ROLES.includes(v)) return `The role for ${id} must be one of ${FLIP_ROLES.join(", ")}`;
+  }
+  return null;
+}
+
 /** Null when `rec` is a well-formed team record, else the reason. Ids need not be on the team now: a pin outlives a new pull. */
 export function badRecord(rec) {
   if (!isPlain(rec)) return "A team record must be an object.";
@@ -52,9 +65,11 @@ export function badRecord(rec) {
     if (!isPlain(p)) return "A scenario's pins must be an object.";
     for (const k of Object.keys(p)) {
       if (!PIN_KINDS.includes(k)) return `Unknown pin kind: ${k.slice(0, 20)}.`;
-      const why = badMap(p[k], PIN_MAX[k], `The ${k} pin`);
+      const why = k === "r" ? badRoles(p.r) : badMap(p[k], PIN_MAX[k], `The ${k} pin`);
       if (why) return `${why}.`;
     }
+    const out = new Set(key ? key.split("+") : []);
+    if (Object.entries(p.r ?? {}).filter(([id, role]) => role === "starter" && !out.has(id)).length > STARTERS) return `A scenario names more than ${STARTERS} starters.`;
   }
   for (const [section, max] of [["handouts", SHARE_MAX], ["combos", COMBO_MAX]]) {
     const sec = rec[section] ?? {};
@@ -79,6 +94,12 @@ function badApplied(a) {
   for (const [id, e] of Object.entries(a.set)) {
     if (!ID.test(id) || !isPlain(e) || !isNum(e.to) || !(e.prev === null || isNum(e.prev))) return "the applied record has a bad entry";
   }
+  // base: what TwoGun had under each applied man ({ min, out }); pull: the pull the console read. Records written before 11-06 have neither.
+  if (a.base !== undefined) {
+    if (!isPlain(a.base)) return "the applied record's base is not well formed";
+    for (const [id, b] of Object.entries(a.base)) if (!ID.test(id) || !isPlain(b) || !(b.min === null || isNum(b.min)) || typeof b.out !== "boolean") return "the applied record's base has a bad entry";
+  }
+  if (a.pull !== undefined && a.pull !== null && typeof a.pull !== "string") return "the applied record's pull is not well formed";
   return null;
 }
 

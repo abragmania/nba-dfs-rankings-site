@@ -32,6 +32,7 @@ export function buildModel(inputs, saved, appliedKeys = {}) {
   for (const [code, input] of Object.entries(inputs.teams)) {
     TEAMS[code] = shapeTeam(input);
     ST[code] = stateFor(TEAMS[code], saved?.[code]);
+    pruneFlips(TEAMS[code], ST[code]);
     if (Object.hasOwn(appliedKeys ?? {}, code)) ST[code].outs = outsOf(appliedKeys[code]).filter((id) => TEAMS[code].byId[id]);
   }
   return { TEAMS, ST };
@@ -61,8 +62,17 @@ export function refreshTeams(model, inputs) {
     if (!S) { model.ST[code] = stateFor(TEAMS[code], null); continue; }
     if (keyOf(S.outs) === model.TEAMS[code]?.tonightKey) S.outs = outsOf(TEAMS[code].tonightKey);
     else S.outs = S.outs.filter((id) => TEAMS[code].byId[id]);
+    pruneFlips(TEAMS[code], S);
   }
   model.TEAMS = TEAMS;
+}
+
+/** Role flips on men no longer on the team come off, so a stale starter never counts toward the server's five. */
+export function pruneFlips(T, S) {
+  for (const p of Object.values(S.pins ?? {})) {
+    if (!p?.r) continue;
+    for (const id of Object.keys(p.r)) if (!T.byId[id]) delete p.r[id];
+  }
 }
 
 export const hasPins = (p) => Boolean(p) && Object.values(p).some((sec) => Object.keys(sec ?? {}).length > 0);
@@ -97,7 +107,7 @@ export function label(T, key) {
 /** The pins of a scenario (made when he first pins there). */
 export function pinsOf(S, key) {
   if (!S.pins[key]) S.pins[key] = emptyPins();
-  for (const k of ["m", "u", "d", "p"]) S.pins[key][k] ??= {};
+  for (const k of ["m", "u", "d", "p", "r"]) S.pins[key][k] ??= {};
   return S.pins[key];
 }
 

@@ -3,7 +3,7 @@
 // Header (Lock / Exclude reuse the board's own data-lock / data-excl click path, so there is no second save path), the
 // two figures his board row does not show (double-double and triple-double chance), the last-10 summary with a
 // sparkline, the whole season's game log (in its own scroll box) from /api/player-log, then the seasons table and the
-// efficiency chart (card-usage.js). One column, in that order. The header carries Sal, Proj, Own with their source and
+// efficiency chart (card-usage.js). One column, in that order. On the board, his role and minutes block (card-role.js) sits under the header. The header carries Sal, Proj, Own with their source and
 // as-of time (optimizer standard A8), since a name in the lineup or the Out list may open a card with no row beside it.
 // Every missing figure is the board's dash with a reason; nothing is ever zero-filled or borrowed from another player.
 // The state (which player, which log) lives in createCardState and the markup in cardHtml, both DOM-free so the swap
@@ -125,7 +125,7 @@ export function cardFiguresHtml(p, figs, dash) {
 /** The card's markup for a player and log state. ctx: { dash(title), colourOf(team) -> {t1, t2}, picks: {locked, excluded},
  *  figs: {source, asOf} (the header's figures line), usage (card-usage.js state; default idle), ui (its tab choice) }.
  *  A man off the slate's player pool (the Out list: no dk_id) has no Lock or Exclude. */
-export function cardHtml(p, log, { dash, colourOf, picks, figs = null, usage = { state: "idle" }, ui = { tab: "career", by: null } }) {
+export function cardHtml(p, log, { dash, colourOf, picks, figs = null, usage = { state: "idle" }, ui = { tab: "career", by: null }, roleSlot = false }) {
   const pct = (v, why) => (typeof v === "number" ? v.toFixed(1) + "%" : dash(why));
   const header = () => {
     const c = colourOf(p.team), lk = picks.locked.includes(p.dk_id), ex = picks.excluded.includes(p.dk_id);
@@ -155,7 +155,7 @@ export function cardHtml(p, log, { dash, colourOf, picks, figs = null, usage = {
     const usgSrc = gu ? `Basketball-Reference game log, fetched ${ut ? esc(ut) : dash("no fetch time in the response")}` : "Basketball-Reference game log (not read yet)";
     return `<div class="src">Game logs: ${esc(log.data.source)}, fetched ${t ? esc(t) : dash("no fetch time in the response")}. DK points from DraftKings Classic scoring. USG% per game: ${usgSrc}.</div>`;
   };
-  return header() + lastTen() + source() + usageHtml(p, usage, ui, { dash });
+  return header() + (roleSlot ? `<div class="crole" data-crole></div>` : "") + lastTen() + source() + usageHtml(p, usage, ui, { dash });
 }
 
 const fetchLogHttp = async (p, signal) => {
@@ -184,8 +184,9 @@ export function fitCard(el, view = window) {
 export const cardLeft = ({ panelLeft, cardWidth, viewWidth, zoom }) => Math.max(12, Math.floor(Math.min(panelLeft, viewWidth - cardWidth - 12 * zoom) / zoom));
 
 /** Wires the card. ctx: { root (element the card is added to), dash(title), colourOf(team), picks() -> {locked, excluded},
- *  figs() -> {source, asOf}, current(p) -> the player as the board holds him now (his figures follow an override) }. */
-export function initCard({ root, dash, colourOf, picks, figs = () => null, current = (p) => p }) {
+ *  figs() -> {source, asOf}, current(p) -> the player as the board holds him now (his figures follow an override),
+ *  roles(p, slot) -> draws his role and minutes block (card-role.js) into the slot under the header, when given }. */
+export function initCard({ root, dash, colourOf, picks, figs = () => null, current = (p) => p, roles = null }) {
   const el = document.createElement("div");
   el.className = "card";
   el.id = "card";
@@ -226,7 +227,8 @@ export function initCard({ root, dash, colourOf, picks, figs = () => null, curre
     el.hidden = !p;
     bg.hidden = !p;
     document.body.classList.toggle("noscroll", Boolean(p)); // the page behind stays where it is
-    el.innerHTML = p ? cardHtml(p, state.log, { dash, colourOf, picks: picks(), figs: figs(), usage: usage.usage, ui: usage.ui }) : "";
+    el.innerHTML = p ? cardHtml(p, state.log, { dash, colourOf, picks: picks(), figs: figs(), usage: usage.usage, ui: usage.ui, roleSlot: Boolean(roles) }) : "";
+    if (p && roles) roles(p, el.querySelector("[data-crole]"));
     place();
     if (p && !opening) {
       el.scrollTop = held.top;

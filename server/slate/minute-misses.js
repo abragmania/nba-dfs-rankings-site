@@ -1,21 +1,33 @@
 // The applied-minutes check, pure: shared by the app's pull comparison (pull-moves.js) and the public site's stand-in for it
-// (site-src/shim/pull-moves.js), so both warn on the same teams in the same words.
+// (site-src/shim/pull-moves.js), so both warn on the same teams in the same words. There is no team total to reach (Adam, 11-06): the
+// check asks only whether a pull newer than his Apply moved what TwoGun had under a man whose applied number is still on the board.
 import { isNum } from "../board/figures.js";
-import { TEAM_MINUTES, TOTAL_ROUNDING } from "../board/console-engine.js";
+
+/** Under this many minutes, a change in TwoGun's figure is rounding, not a move. A working value. */
+export const BASE_MOVE = 0.05;
 
 /**
- * A warning per team whose applied minutes no longer add to 240 against this pull: effective minutes on the board plus the row's men playing who are not on it, past the console's band.
- * A team with no applied minutes is TwoGun's own and not checked. Applied minutes are never re-fitted here: only his Apply changes them. Pure.
+ * A warning per team with an applied man whose figures the newest pull moved since the Apply: TwoGun's minutes are not the ones the
+ * Apply was made over (`applied.base[id].min`), he is out now and was not then, back now and was out then, or not in the newest pull at
+ * all. Only men whose applied number is still on the board count (applied minutes, or a typed projection). An applied record with no
+ * base (one written before the base was kept) is not checked. `players`: the board's effective players; `rowMen`: [{ id, team, min, out }]
+ * of the newest pull; `applied`: the scenarios file's applied record or null. Applied numbers are never changed here. Pure.
  */
-export function appliedMinuteMisses(players, rowMen) {
-  const onBoard = new Set(players.map((p) => String(p.dk_id)));
-  const teams = [...new Set(players.filter((p) => "base_minutes" in p).map((p) => p.team))].sort();
-  const out = [];
-  for (const team of teams) {
-    const board = players.filter((p) => p.team === team && isNum(p.minutes)).reduce((s, p) => s + p.minutes, 0);
-    const off = rowMen.filter((m) => m.team === team && !m.out && !onBoard.has(m.id) && isNum(m.min)).reduce((s, m) => s + m.min, 0);
-    const total = board + off;
-    if (Math.abs(total - TEAM_MINUTES) > TOTAL_ROUNDING) out.push(`Applied minutes for ${team} now add to ${total.toFixed(1)}, not ${TEAM_MINUTES}, against the newest pull. Reopen the console and Apply again.`);
+export function appliedMinuteMisses(players, rowMen, applied) {
+  if (!applied?.base) return [];
+  const byId = new Map(rowMen.map((m) => [String(m.id), m]));
+  const board = new Map(players.map((p) => [String(p.dk_id), p]));
+  const moved = new Map();
+  for (const [id, b] of Object.entries(applied.base)) {
+    const p = board.get(id);
+    if (!p || !("base_minutes" in p || p.ovr?.projection != null)) continue; // his applied number is no longer on the board
+    const m = byId.get(id), name = p.name ?? id;
+    let what = null;
+    if (!m) what = `${name} (not in the newest pull)`;
+    else if (m.out && !b.out) what = `${name} (now out)`;
+    else if (!m.out && b.out) what = `${name} (now playing)`;
+    else if (!m.out && isNum(m.min) && (!isNum(b.min) || Math.abs(m.min - b.min) > BASE_MOVE)) what = `${name} (TwoGun ${isNum(b.min) ? b.min.toFixed(1) : "none"} to ${m.min.toFixed(1)})`;
+    if (what) moved.set(p.team, [...(moved.get(p.team) ?? []), what]);
   }
-  return out;
+  return [...moved.keys()].sort().map((team) => `Applied numbers for ${team} sit on figures the newest pull moved since your Apply: ${moved.get(team).join(", ")}. Reopen the console and Apply again.`);
 }

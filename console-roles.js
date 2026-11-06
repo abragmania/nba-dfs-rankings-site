@@ -1,0 +1,83 @@
+// The console's roles (Adam, 11-06): Starter, Bench+, Bench, Out of rotation, Out. Pure ES module shared by the page and the
+// server, as console-engine.js is. A man's role is Out when he is out in the scenario (its key); otherwise the role he flipped
+// him to (pins.r), else the rule below. Exactly five starters, always: the flipped starters count first, the rest are filled
+// from the men not flipped, TwoGun's starter flag first, then Tonight's minutes. A man not flipped and not starting is Bench+
+// when his last season on this team was 24+ minutes a game starting under 40% (bench_plus_ok, from the inputs), Bench when
+// Tonight's minutes are above 0, else Out of rotation. Making a man Starter when five start sends the starter with the fewest
+// minutes now to Bench; moving a starter to Bench+, Bench or Out of rotation makes the man playing off the bench with the most minutes
+// now a Starter. A starter marked Out flips nobody: the rule fills the five. Each such
+// move is a flip of its own, named so the page can show it and Ctrl+Z takes it back.
+import { isNum } from "./figures.js";
+
+export const STARTERS = 5;
+export const ROLES = ["starter", "bench_plus", "bench", "oor", "out"];
+/** The roles a flip can hold: Out is the scenario's key, never a flip. */
+export const FLIP_ROLES = ["starter", "bench_plus", "bench", "oor"];
+export const ROLE_LABEL = { starter: "Starter", bench_plus: "Bench+", bench: "Bench", oor: "Out of rotation", out: "Out" };
+export const ROLE_SHORT = { starter: "S", bench_plus: "B+", bench: "B", oor: "OR", out: "Out" };
+
+const tonightMin = (p) => (isNum(p.min) ? p.min : -1);
+/** The fill order for the starting five among men not flipped: TwoGun's flag, then Tonight's minutes, then his place in the row. */
+const fillOrder = (a, b) => (b.starter === true) - (a.starter === true) || tonightMin(b) - tonightMin(a) || (a.order ?? 0) - (b.order ?? 0);
+
+/** Flips that count: a flip role on a man on the team who is playing in this scenario. */
+export function liveFlips(team, outSet, flips) {
+  const out = {};
+  for (const [id, role] of Object.entries(flips ?? {})) if (FLIP_ROLES.includes(role) && team.men.some((p) => p.id === id) && !outSet.has(id)) out[id] = role;
+  return out;
+}
+
+/**
+ * Every man's role: { roles: { id: role }, flipped: { id: role }, note }. note is null, or a sentence when TwoGun's flags among the
+ * men playing are not five and the five were filled or trimmed by Tonight's minutes, or when fewer than five are playing.
+ */
+export function resolveRoles(team, outSet, flips) {
+  const flipped = liveFlips(team, outSet, flips);
+  const roles = {};
+  const playing = team.men.filter((p) => !outSet.has(p.id));
+  for (const p of team.men) if (outSet.has(p.id)) roles[p.id] = "out";
+  for (const [id, role] of Object.entries(flipped)) roles[id] = role;
+  const need = Math.max(0, STARTERS - Object.values(flipped).filter((r) => r === "starter").length);
+  const open = playing.filter((p) => !Object.hasOwn(flipped, p.id)).sort(fillOrder);
+  for (const p of open.slice(0, need)) roles[p.id] = "starter";
+  for (const p of open.slice(need)) roles[p.id] = p.bench_plus_ok ? "bench_plus" : isNum(p.min) && p.min > 0 ? "bench" : "oor";
+  let note = null;
+  const flagged = playing.filter((p) => p.starter === true).length;
+  const starters = Object.values(roles).filter((r) => r === "starter").length;
+  if (starters < STARTERS) note = `Only ${starters} men can start: ${playing.length} are playing.`;
+  else if (!Object.keys(flipped).length && flagged !== STARTERS) {
+    const chosen = playing.filter((p) => roles[p.id] === "starter");
+    const added = chosen.filter((p) => p.starter !== true).map((p) => p.name), dropped = playing.filter((p) => p.starter === true && roles[p.id] !== "starter").map((p) => p.name);
+    note = `TwoGun flags ${flagged} starters among the men playing, so the five go by Tonight's minutes${added.length ? `: ${added.join(", ")} added` : ""}${dropped.length ? `${added.length ? ";" : ":"} ${dropped.join(", ")} left out` : ""}.`;
+  }
+  return { roles, flipped, note };
+}
+
+/**
+ * One role change and the five-starter rule: { outs: [ids out], flips, moved: [{ id, from, to }] }. `minutes`: { id: his minutes on
+ * screen now }, used to pick who leaves or joins the five. Out goes in the scenario's outs and takes his flip off; any other role
+ * takes him out of the outs and flips him.
+ */
+export function roleMove(team, outs, flips, id, role, minutes = {}) {
+  if (!ROLES.includes(role)) throw new Error(`unknown role ${role}`);
+  const before = resolveRoles(team, new Set(outs), flips).roles;
+  const nextOuts = new Set(outs), nextFlips = { ...(flips ?? {}) };
+  if (role === "out") { nextOuts.add(id); delete nextFlips[id]; } else { nextOuts.delete(id); nextFlips[id] = role; }
+  const moved = [];
+  const mins = (p) => (isNum(minutes[p.id]) ? minutes[p.id] : tonightMin(p));
+  if (role === "starter" && before[id] !== "starter") {
+    const five = team.men.filter((p) => p.id !== id && before[p.id] === "starter" && !nextOuts.has(p.id));
+    if (five.length >= STARTERS) {
+      const leaves = five.sort((a, b) => mins(a) - mins(b) || (b.order ?? 0) - (a.order ?? 0))[0];
+      nextFlips[leaves.id] = "bench";
+      moved.push({ id: leaves.id, from: "starter", to: "bench" });
+    }
+  } else if (before[id] === "starter" && role !== "starter" && role !== "out") {
+    // A starter sent out flips nobody: the five fill by the rule and the man who comes in keeps the model's hand-out minutes.
+    const rank = { bench_plus: 0, bench: 1, oor: 2 };
+    const joins = team.men.filter((p) => p.id !== id && !nextOuts.has(p.id) && Object.hasOwn(rank, before[p.id]))
+      .sort((a, b) => mins(b) - mins(a) || rank[before[a.id]] - rank[before[b.id]] || (a.order ?? 0) - (b.order ?? 0))[0];
+    if (joins) { moved.push({ id: joins.id, from: before[joins.id], to: "starter" }); nextFlips[joins.id] = "starter"; }
+  }
+  return { outs: [...nextOuts], flips: nextFlips, moved };
+}

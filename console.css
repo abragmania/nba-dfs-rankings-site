@@ -7,7 +7,7 @@ html:has(body.console-on){scroll-padding:8px 0 44px!important;scrollbar-gutter:a
 .csw.on{background:var(--gr);border-color:var(--gr);color:#000}
 body.light .csw.on{color:#fff}
 #console{
-  --cellw:56px;--slot:48px;--cmpmax:560px;--namew:26ch;--chiph:22px;
+  --cellw:56px;--slot:48px;--cmpmax:560px;--namew:26ch;--chiph:22px;--rolew:158px;--basisw:230px;
   margin-top:8px;
   kbd{font:700 10px "JetBrains Mono",monospace;color:var(--mu);border:1px solid var(--ln);background:var(--p2);padding:0 5px;border-bottom-width:2px;margin-right:6px;align-self:center}
   .grow{flex:1}
@@ -63,7 +63,7 @@ body.light .csw.on{color:#fff}
   .appl.mu{color:var(--mu);font-weight:400}
   .pc{font-size:12px}
   /* the work area: the table and compare take what they need, spare width goes to the side panel */
-  .shell{display:grid;grid-template-columns:auto minmax(360px,1fr);gap:14px;align-items:start}
+  .shell{display:grid;grid-template-columns:minmax(0,auto) minmax(360px,1fr);gap:14px;align-items:start}
   .shell.sweepv{grid-template-columns:minmax(0,1fr) 400px}
   .cwork{display:flex;gap:14px;align-items:flex-start}
   .panel,.cside{border:1px solid var(--ln);background:var(--p);min-width:0}
@@ -94,8 +94,58 @@ body.light .csw.on{color:#fff}
   td.pin,td.proj.pin{color:var(--cpin);font-weight:700}
   td.ic{padding:0 3px 0 4px;white-space:nowrap;text-align:right}
   /* the main table: fixed columns, so x never shifts between teams */
-  .main .tl{table-layout:fixed;width:calc(50px + var(--namew) + 24px + 2 * 58px + 2 * 54px + 2 * (var(--cellw) + var(--slot) + 8px) + (var(--cellw) + var(--slot) + 8px) + (var(--cellw) + var(--slot) + 8px + 47px))}
-  .c-o{width:50px}.c-n{width:calc(var(--namew) + 24px)}.c-u{width:58px}.c-d{width:54px}.c-c{width:calc(var(--cellw) + var(--slot) + 8px)}.c-p{width:calc(var(--cellw) + var(--slot) + 8px + 47px)}
+  .main .tl{table-layout:fixed;width:calc(var(--rolew) + var(--namew) + 24px + 2 * 58px + 2 * 54px + var(--basisw) + 2 * (var(--cellw) + var(--slot) + 8px) + (var(--cellw) + var(--slot) + 8px) + (var(--cellw) + var(--slot) + 8px + 47px))}
+  .c-o{width:var(--rolew)}.c-n{width:calc(var(--namew) + 24px)}.c-u{width:58px}.c-d{width:54px}.c-b{width:var(--basisw)}.c-c{width:calc(var(--cellw) + var(--slot) + 8px)}.c-p{width:calc(var(--cellw) + var(--slot) + 8px + 47px)}
+  /* roles (Adam, 11-06): five buttons per man; lit is his role, an amber foot means he set it, plain means the rule gave it */
+  td.rl{padding:0 6px 0 6px}
+  .seg{display:inline-flex;vertical-align:middle}
+  .rs{height:19px;min-width:27px;padding:0 4px;background:var(--p2);border:1px solid var(--ln);margin-left:-1px;color:var(--mu);font-size:10.5px;font-weight:800}
+  .rs:first-child{margin-left:0}
+  .rs:hover{border-color:var(--gr);color:var(--tx);position:relative}
+  .rs.on.starter{background:var(--gr);border-color:var(--gr);color:#000}
+  .rs.on.bench_plus{background:var(--am);border-color:var(--am);color:#000}
+  .rs.on.bench{background:color-mix(in srgb,var(--gr) 55%,var(--p));border-color:color-mix(in srgb,var(--gr) 55%,var(--p));color:#000}
+  .rs.on.oor{background:color-mix(in srgb,var(--mu) 55%,var(--p));border-color:color-mix(in srgb,var(--mu) 55%,var(--p));color:#000}
+  .rs.on.out{background:var(--rd);border-color:var(--rd);color:#fff}
+  .rs.on.set{box-shadow:inset 0 -3px 0 var(--cpin)}
+  .rs.on.out.set{box-shadow:none}
+  th.bsh{text-align:left}
+  td.bs{text-align:left;font-size:11px;color:var(--mu);overflow:hidden;text-overflow:ellipsis}
+  td.bs.rb{color:var(--tx)}td.bs.pin{color:var(--cpin);font-weight:700}
+  .rmv,.rnote{padding:4px 12px;font-size:12px;border-bottom:1px solid var(--ln)}
+  .rmv{color:var(--tx);background:color-mix(in srgb,var(--am) 12%,transparent)}.rmv b{color:var(--am)}.rmv kbd{margin:0 2px}
+  .rnote{color:var(--mu)}
+  .lay{display:inline-flex;gap:0;margin-left:10px}.lay .sv{margin-left:-1px}
+  /* B: lanes */
+  .shell.lanesv{grid-template-columns:minmax(0,1fr) 360px}
+  .cwork.lanesv,.panel.lanesp{width:100%}
+  .lanes{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;padding:8px}
+  .lane{border:1px solid var(--ln);border-top:3px solid var(--lc,var(--ln));background:var(--bg);min-height:120px;display:flex;flex-direction:column}
+  .lane.starter{--lc:var(--gr)}.lane.bench_plus{--lc:var(--am)}.lane.bench{--lc:color-mix(in srgb,var(--gr) 55%,var(--p))}.lane.oor{--lc:var(--mu)}.lane.out{--lc:var(--rd)}
+  .lane.over,.lane.target{background:color-mix(in srgb,var(--lc) 10%,var(--bg))}
+  .lane.target .lh{cursor:pointer}
+  .lh{display:flex;gap:8px;align-items:center;height:26px;padding:0 10px;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;border-bottom:1px solid var(--ln)}
+  .lh b{color:var(--tx)}.lt{font-weight:800;color:var(--tx)}
+  .lb{display:flex;flex-direction:column;gap:5px;padding:5px;flex:1}
+  .lb .none{color:var(--outc);font-size:11px;padding:10px;text-align:center;border:1px dashed var(--ln)}
+  .mc{border:1px solid var(--ln);background:var(--p);padding:4px 8px 3px;cursor:grab}
+  .mc.dragging{opacity:.45}
+  .mc.picked{border-color:var(--am);box-shadow:0 0 0 1px var(--am)}
+  .mc.out .mn{text-decoration:line-through;color:var(--outc)}
+  .mc .l1{display:flex;align-items:center;gap:6px;white-space:nowrap;min-width:0}
+  .grip{color:var(--dim);font-size:11px;letter-spacing:-2px}
+  .mn{background:none;border:0;padding:0;color:var(--tx);font-weight:800;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:60%;flex:none;cursor:pointer}
+  .mn:hover{color:var(--gr)}
+  .mc .pos{margin-left:0}
+  .tgm{font-size:10.5px;color:var(--mu);flex:none}
+  .mc .l2{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--mu);white-space:nowrap;margin-top:2px}
+  .mc .l2 label{display:inline-flex;align-items:center;gap:3px}
+  .mc input.ed{width:48px;height:20px}
+  .pj b{font-size:12.5px;color:var(--tx)}.pj b.pin{color:var(--cpin)}
+  .bsl{font-size:10.5px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 0;min-width:0}
+  .mdf{display:inline-block;margin-right:5px;padding:0 4px;font-size:10px;font-weight:800;color:#000;background:var(--am);vertical-align:1px}
+  .bsl.rb{color:var(--tx)}.bsl.pin{color:var(--cpin)}
+  .lnote{padding:2px 12px 8px;font-size:11.5px}
   .tl thead tr:not(.band) th:nth-child(2),.tl td:nth-child(2){text-align:left}
   .ts th:nth-child(2),.ts td:nth-child(2),.ts th:nth-child(3),.ts td:nth-child(3){text-align:left}
   td.rk{color:var(--mu);width:30px}
@@ -200,7 +250,8 @@ body.light .csw.on{color:#fff}
   .fatalc.dimc{color:var(--mu);border-color:var(--ln)}
   /* Laptop width: no page zoom, so tighter rows and tiles keep a team of 18 and its footer on one screen. */
   @media (max-width:2199px){
-    --cmpmax:440px;--slot:42px;--cellw:52px;
+    --cmpmax:440px;--slot:42px;--cellw:52px;--basisw:124px;
+    .tc td{min-width:56px;padding:0 6px}
     #picker{gap:4px 7px;margin-bottom:8px}
     .gm{gap:3px}
     .pk{padding:2px 6px 2px 9px;gap:5px}.pk b{font-size:12.5px}.pk span{font-size:10.5px}
@@ -218,7 +269,90 @@ body.light .csw.on{color:#fff}
     .legend{gap:8px}
     #bar .row+.row{margin-top:5px}
   }
+  /* Narrow desktop and tablet: the panels stack, the table scrolls inside its own panel, lanes three to a row. */
+  @media (max-width:1300px){
+    .shell,.shell.lanesv,.shell.sweepv{grid-template-columns:minmax(0,1fr)}
+    .cwork{flex-direction:column;align-items:stretch}
+    .panel.main,.panel.cmp{flex:1 1 auto;max-width:none;width:100%}
+    .tlx{overflow-x:auto}
+    .lanes{grid-template-columns:repeat(3,minmax(0,1fr))}
+    #side{position:static;max-height:none}
+  }
+  /* Phone and small tablet: one column. The A table becomes one block per man, as the mock-up: his name and where his minutes come
+     from, then his role buttons, minutes, DK per minute and projection; usual and usage columns stay on the wide screen. Lanes stack.
+     Every control is at least 36px tall for a thumb. */
+  @media (max-width:899px){
+    --cellw:56px;--slot:0px;
+    .ph{min-width:0}.ph .mu{overflow:hidden;text-overflow:ellipsis;min-width:0}
+    input.ed,.mc input.ed{height:36px}
+    .lay .sv{height:36px;padding:0 14px}
+    .main .tl tfoot tr{height:auto}
+    .shell,.shell.lanesv,.shell.sweepv{grid-template-columns:minmax(0,1fr)}
+    #side,.panel.cmp,.keys,#cmdhint,#srcs{display:none}
+    #bar .row:has(.chips2){display:none}
+    #cmd{width:100%}
+    .cwork{flex-direction:column}
+    .panel.main{flex:1 1 auto;width:100%}
+    .main .tl{table-layout:auto;width:100%}
+    .main .tl colgroup,.main .tl thead{display:none}
+    .main .tl tbody tr{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;grid-template-areas:"name name name proj" "role role role role" "min dk from from";align-items:center;gap:4px 10px;height:auto;padding:6px 8px;border-bottom:1px solid var(--ln)}
+    .main .tl tbody td:nth-child(6){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+    .main .tl tbody td{height:auto;border:0;padding:0}
+    .main .tl tbody td:nth-child(1){grid-area:role}.main .tl tbody td:nth-child(2){grid-area:name}.main .tl tbody td:nth-child(4){grid-area:min}
+    .main .tl tbody td:nth-child(6){grid-area:from;text-align:left}.main .tl tbody td:nth-child(10){grid-area:dk}.main .tl tbody td:nth-child(11){grid-area:proj;text-align:right}
+    .main .tl tbody td:nth-child(3),.main .tl tbody td:nth-child(5),.main .tl tbody td:nth-child(7),.main .tl tbody td:nth-child(8),.main .tl tbody td:nth-child(9){display:none}
+    .main .tl tbody td:nth-child(4)::before{content:"Min";font-size:10px;color:var(--mu);margin-right:2px}
+    .main .tl tbody td:nth-child(10)::before{content:"DK/min";font-size:10px;color:var(--mu);margin-right:2px}
+    .main .tl tfoot tr{display:flex;justify-content:space-between;padding:0 8px}
+    .main .tl tfoot td{padding:0}
+    .main .tl tfoot td:nth-child(n+2):not(:nth-child(4)):not(:nth-child(11)){display:none}
+    .main .tl .gs{border-left:0}
+    .dt,.fm{display:none}
+    .rs{height:36px;min-width:36px}
+    .lanes{grid-template-columns:minmax(0,1fr);padding:6px}
+    .lane{min-height:0}
+    .lb .none{padding:4px}
+    .lay{margin-left:0}
+    #bar .row{white-space:normal}
+    .lbl{width:auto}
+  }
 }
+/* The player card's role and minutes block (card-role.js), on the board page. */
+#card.card{width:min(640px,calc(100vw - 24px))}
+#card .logscroll{overflow-x:auto}
+#card .crole{padding:0 16px 6px}
+#card .crole .sec{padding-left:0;padding-right:0}
+#card .crole .hint{float:none;display:block;margin-top:2px}
+#card .crole .seg{display:inline-flex;flex-wrap:nowrap}
+#card .crole .rs{display:inline-flex;align-items:center;justify-content:center;height:24px;min-width:34px;padding:0 6px;background:transparent;border:1px solid var(--ln,#333);margin-left:-1px;font-size:11.5px;font-weight:800;line-height:1;color:var(--mu,#999);cursor:pointer}
+#card .crole .mdf{display:inline-block;margin-right:6px;padding:0 4px;font-size:10px;font-weight:800;color:#000;background:var(--am,#ffb000)}
+#card .crole .crn{margin:6px 0 0;padding-left:18px;font-size:11.5px;color:var(--mu,#999)}
+@media (max-width:899px){
+  #card .crole .rs,#card .crole .crb input,#card .crole .crap{height:36px;min-width:40px}
+  /* The card's header on a narrow card: name and Close on the first line, Lock and Exclude on their own, then the figures. */
+  #card .ch .close{order:3}
+  #card .ch .acts{order:4;flex-basis:100%}
+  #card .ch .acts button{min-height:36px}
+  #card .ch .cfig{order:5}
+}
+#card .crole .rs.on.starter{background:#3dff8f;border-color:#3dff8f;color:#000}
+#card .crole .rs.on.bench_plus{background:var(--am,#ffb000);border-color:var(--am,#ffb000);color:#000}
+#card .crole .rs.on.bench{background:#8fd9aa;border-color:#8fd9aa;color:#000}
+#card .crole .rs.on.oor{background:#7d8c84;border-color:#7d8c84;color:#000}
+#card .crole .rs.on.out{background:#ff4d5e;border-color:#ff4d5e;color:#fff}
+#card .crole .rs.on.set{box-shadow:inset 0 -3px 0 var(--am,#ffb000)}
+#card .crole .rs.on.out.set{box-shadow:none}
+#card .crole .crr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-top:6px}
+#card .crole .crf{font-size:12px;color:var(--mu,#999)}#card .crole .crf b{color:inherit;font-size:13px}#card .crole .crf b.pin{color:var(--am,#ffb000)}
+#card .crole .crb{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--mu,#999)}
+#card .crole .crb input{width:58px;height:24px;text-align:right;font-weight:700;background:transparent;border:1px solid var(--ln,#333);color:inherit;padding:0 6px}
+#card .crole .crb.pin input{border-color:var(--am,#ffb000);color:var(--am,#ffb000)}
+#card .crole .crb .x{background:none;border:0;color:var(--am,#ffb000);font-weight:800;cursor:pointer;padding:0 2px}
+#card .crole .crs{font-size:11.5px;color:var(--mu,#999);margin-top:4px}
+#card .crole .crm{font-size:12px;margin-top:4px;color:var(--am,#ffb000)}
+#card .crole .crap{height:26px;padding:0 12px;font-weight:800;border:1px solid #3dff8f;background:transparent;color:#3dff8f;cursor:pointer}
+#card .crole .crap:disabled{opacity:.5;cursor:default}
+#card .crole .crsaid{font-size:12px;color:var(--mu,#999)}
 body.light #console{
   td{border-bottom-color:#e3e3dd}
   .sv.on,.sv.hd.on{color:#fff}

@@ -10,13 +10,16 @@ export const cellOf = (c, f) => c.el.querySelector(`input.ed[data-team="${CSS.es
 export function focusCell(c) { if (c.G.focus) cellOf(c, c.G.focus)?.focus({ preventScroll: false }); }
 
 const pos = (G) => G.rows.findIndex((x) => x.team === G.focus.team && x.id === G.focus.id);
+/** The cells a row has: the lanes carry minutes and DK per minute only. */
+const colsOf = (G) => (G.view === "team" && G.layout === "b" ? ["m", "d"] : COLS);
 function nextFocus(G, dr, dc) {
-  let r = pos(G), col = COLS.indexOf(G.focus.k) + dc;
-  if (col >= COLS.length) { col = 0; r++; }
-  if (col < 0) { col = COLS.length - 1; r--; }
+  const cols = colsOf(G);
+  let r = pos(G), col = Math.max(0, cols.indexOf(G.focus.k)) + dc;
+  if (col >= cols.length) { col = 0; r++; }
+  if (col < 0) { col = cols.length - 1; r--; }
   r = Math.max(0, Math.min(G.rows.length - 1, r + dr));
-  col = Math.max(0, Math.min(COLS.length - 1, col));
-  return { team: G.rows[r].team, id: G.rows[r].id, k: COLS[col] };
+  col = Math.max(0, Math.min(cols.length - 1, col));
+  return { team: G.rows[r].team, id: G.rows[r].id, k: cols[col] };
 }
 function go(c, dr, dc) {
   if (!c.G.rows.length) return;
@@ -172,7 +175,10 @@ export function onFocusOut(c, e) {
 
 function clickAction(c, b) {
   const d = b.dataset;
-  if (d.t) M.jumpTeam(c, d.t);
+  if (d.role) { c.G.pick = null; M.setRole(c, d.team, d.ri, d.role); }
+  else if (d.lay) c.setLayout(d.lay);
+  else if (d.pick) { const same = c.G.pick?.team === d.team && c.G.pick.id === d.pick; c.G.pick = same ? null : { team: d.team, id: d.pick }; c.render(); }
+  else if (d.t) M.jumpTeam(c, d.t);
   else if (b.id === "vslate") M.setView(c, c.G.view === "slate" ? "team" : "slate");
   else if (b.id === "vapply") openApply(c);
   else if (b.id === "vreverse") openReverse(c);
@@ -188,7 +194,16 @@ function clickAction(c, b) {
 }
 export function onClick(c, e) {
   const b = e.target.closest?.("button,[data-hist]");
-  if (!b || !c.model) return;
+  if (!c.model) return;
+  // A man picked on the lanes goes to the lane tapped next (the phone's way to drag).
+  const lane = !b && !e.target.closest?.("input") ? e.target.closest?.("[data-lane]") : null;
+  if (lane && c.G.pick?.team === lane.dataset.team) {
+    const { team, id } = c.G.pick;
+    c.G.pick = null;
+    if (!M.setRole(c, team, id, lane.dataset.lane)) c.render();
+    return;
+  }
+  if (!b) return;
   clickAction(c, b);
   if (!c.G.modal) focusCell(c); // the keyboard goes back to the last cell after any toolbar click
 }

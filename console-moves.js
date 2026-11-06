@@ -1,9 +1,10 @@
-// The console's moves on his work: history and ripple, saving, pins, who is out, hand-outs. Each takes the console's shared state `c`.
+// The console's moves on his work: history and ripple, saving, pins, roles, who is out, hand-outs. Each takes the console's shared state `c`.
 import { keyOf, outsOf, usageStart } from "./console-engine.js";
-import { calc, chipName, label, pinsOf, recordOf, savedFor, sgn } from "./console-model.js";
+import { calc, chipName, hasPins, label, pinsOf, recordOf, savedFor, sgn } from "./console-model.js";
 import { FN, fmtv } from "./console-cmd.js";
 import { COLS } from "./console-render.js";
 import { PIN_MAX } from "./override-limits.js";
+import { roleMove, ROLE_LABEL } from "./console-roles.js";
 import { EMPTY_RECORD } from "./figures.js";
 
 const THR = { m: 0.05, u: 0.05, d: 0.004, p: 0.05 };
@@ -65,6 +66,7 @@ export function saveDirty(c) {
 
 export function mutate(c, text, fn) {
   const before = vals(c);
+  c.G.roleMoves = null; // the five-starter note names only the move that made it
   fn();
   pushHist(c, text);
   c.G.editing = false;
@@ -78,7 +80,7 @@ export function restore(c, i) {
   if (i < 0 || i >= G.hist.length) return;
   const before = vals(c), o = JSON.parse(G.hist[i].s);
   Object.assign(c.model.ST, o.ST);
-  G.cur = o.cur; G.hi = i; G.editing = false;
+  G.cur = o.cur; G.hi = i; G.editing = false; G.roleMoves = null;
   c.render();
   ripple(c, before);
   saveDirty(c);
@@ -104,9 +106,70 @@ export function clearPin(c, t, id, k) {
 export function clearPinAt(c, tm, sk, k, id) {
   mutate(c, `${tm} ${nameOf(c, tm, id)} pin cleared ${FN[k]}`, () => { delete c.model.ST[tm].pins[sk][k][id]; });
 }
+/** The Out chip, O key and command box: out is the role menu's Out (the five-starter rule and his pins carried); back in, he leaves the
+ *  out list on the role the rule gives him, the pins carried the same way. */
 export function toggleOut(c, t, id) {
-  const S = c.model.ST[t], was = S.outs.includes(id);
-  mutate(c, `${t} ${nameOf(c, t, id)}${was ? " back in" : " out"}`, () => { S.outs = was ? S.outs.filter((x) => x !== id) : [...S.outs, id]; });
+  const T = c.model.TEAMS[t], S = c.model.ST[t];
+  if (!S.outs.includes(id)) return setRole(c, t, id, "out");
+  const key = keyOf(S.outs), next = keyOf(S.outs.filter((x) => x !== id));
+  mutate(c, `${t} ${nameOf(c, t, id)} back in${opensSaved(S, key, next) ? " (opened saved scenario)" : ""}`, () => {
+    S.outs = S.outs.filter((x) => x !== id);
+    carryPins(S, T, key, next, {});
+  });
+  return [];
+}
+
+/** Whether moving from `from` to `to` lands on a scenario that already holds pins of its own. */
+const opensSaved = (S, from, to) => from !== to && hasPins(S.pins[to]);
+
+/**
+ * The work on show moves with a role change that moves the scenario. A target with no pins of its own takes the source's whole; a
+ * target that has pins (a saved scenario, or Tonight with his typed numbers) keeps them and takes only this move's role changes
+ * (`changes`: { id: role, or null to take a flip off }). A source holding typed pins is always kept; one with none that is neither saved,
+ * on show from an earlier pull, Healthy nor Tonight is dropped.
+ */
+function carryPins(S, T, from, to, changes) {
+  if (from === to) return;
+  if (!hasPins(S.pins[to])) S.pins[to] = structuredClone(pinsOf(S, from));
+  else {
+    const r = pinsOf(S, to).r;
+    for (const [id, role] of Object.entries(changes)) if (role === null) delete r[id]; else r[id] = role;
+  }
+  // Typed numbers are never lost: a scenario left holding typed pins (minutes, usage, DK/min, projection) is kept, and shows only as a
+  // "pins not on show" note. An unsaved scenario left with role flips alone, or nothing, is dropped.
+  const typed = ["m", "u", "d", "p"].some((k) => Object.keys(S.pins[from]?.[k] ?? {}).length);
+  if (!typed && from !== "" && from !== T.tonightKey && !S.saved.includes(from) && !(S.shown ?? []).includes(from)) delete S.pins[from];
+}
+
+/** What one role move changed in the flips: { id: new role, or null where a flip came off }. */
+function flipChanges(before, after) {
+  const out = {};
+  for (const id of new Set([...Object.keys(before ?? {}), ...Object.keys(after)])) if ((before ?? {})[id] !== after[id]) out[id] = after[id] ?? null;
+  return out;
+}
+
+/**
+ * Flips a man's role (console-roles.js), the five-starter rule with it. Out moves him into the scenario's outs, any other role out of
+ * them; his other pins, and everyone's, come along. Returns the men the rule moved as [{ id, from, to }], also kept on c.G.roleMoves for
+ * the page to name; an unchanged role does nothing and returns null.
+ */
+export function setRole(c, t, id, role) {
+  const T = c.model.TEAMS[t], S = c.model.ST[t], key = keyOf(S.outs);
+  const rows = calc(T, S, S.outs).rows, mine = rows.find((r) => r.id === id);
+  if (!mine || mine.role === role) return null;
+  const res = roleMove(T, S.outs, pinsOf(S, key).r, id, role, Object.fromEntries(rows.map((r) => [r.id, r.min])));
+  const also = res.moved.map((m) => `${nameOf(c, t, m.id)} to ${ROLE_LABEL[m.to]}`).join(", ");
+  const flips = Object.fromEntries(Object.entries(res.flips).filter(([fid]) => T.byId[fid])); // a man no longer on the team keeps no flip
+  const next = keyOf(res.outs), opened = opensSaved(S, key, next);
+  mutate(c, `${t} ${nameOf(c, t, id)} ${ROLE_LABEL[role]}${also ? ` (${also})` : ""}${opened ? " (opened saved scenario)" : ""}`, () => {
+    const changes = flipChanges(pinsOf(S, key).r, flips);
+    S.outs = res.outs;
+    if (next === key) pinsOf(S, next).r = flips;
+    else if (opened) carryPins(S, T, key, next, changes);
+    else { carryPins(S, T, key, next, changes); pinsOf(S, next).r = flips; }
+    c.G.roleMoves = { team: t, moved: res.moved };
+  });
+  return res.moved;
 }
 export function setScenario(c, t, key) {
   mutate(c, `${t} scenario: ${label(c.model.TEAMS[t], key)}`, () => { c.model.ST[t].outs = outsOf(key); });
@@ -160,7 +223,7 @@ export function setShare(c, t, sitter, kind, to, pct) {
 export function clearShare(c, t, sitter) {
   mutate(c, `${t} ${nameOf(c, t, sitter)} hand-out edits cleared`, () => { delete c.model.ST[t].handouts[sitter]; });
 }
-/** The current figures of a scenario with two or more out, as its combination table: what each man gained or lost over Tonight, so the table adds to the same 240. */
+/** The current figures of a scenario with two or more out, as its combination table: what each man gained or lost over Tonight, so the table gives the same minutes back. */
 export function saveCombo(c, t, key) {
   const T = c.model.TEAMS[t], S = c.model.ST[t], rows = calc(T, S, outsOf(key)).rows, m = {};
   for (const r of rows) {

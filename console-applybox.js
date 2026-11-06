@@ -55,6 +55,41 @@ export function closeModal(c) {
   c.focusCell();
 }
 
+/** What the preview leaves out or holds back, man by man: [{ team, text, note_only }]. The card shows these, since it has no preview box.
+ *  note_only: said, but never a reason to refuse the card's Apply (pins on a scenario not on show; a man Out tonight whom the scenario has playing). */
+export function planNotesList(plan) {
+  return [
+    ...plan.missing.map((m) => ({ team: m.team, text: `${m.name} has no projection here (${m.why})` })),
+    ...plan.kept.map((k) => ({ team: k.team, text: `${k.name} keeps the projection you typed on the board (${k.typed})` })),
+    ...plan.not_on_board.map((m) => ({ team: m.team, text: `${m.name} is not on the board, so nothing is sent for him` })),
+    ...plan.back_on_zero.map((m) => ({ team: m.team, text: `${m.name} is back on 0 minutes` })),
+    ...plan.orphaned_pins.map((o) => ({ team: o.team, text: `${o.count} pins on ${o.team}'s ${o.key || "Healthy"} scenario are not on show and not sent`, note_only: true })),
+    ...(plan.back_in ?? []).map((m) => ({ team: m.team, text: `${m.name} is out tonight but playing in this scenario`, note_only: true })),
+  ];
+}
+
+/**
+ * Apply without the box, for the player card: the same saved work, the same preview's basis, the same route. Refused, with the
+ * reasons, when the preview holds anything back on `team` (the card's own team), since the card cannot show a preview. Otherwise
+ * { changed, min_changed, teams (the teams sent), notes (what was held back on other teams) }.
+ */
+export async function applyDirect(c, team) {
+  saveDirty(c);
+  await c.saveQueue;
+  const failed = Object.values(c.saveErrs);
+  if (failed.length) throw new Error(`refused, because your last change is not saved. ${failed.join(" ")}`);
+  const plan = await post(c, "console/apply", { preview: true, scenarios: onScreenKeys(c), pull: c.inputs.basis.pull });
+  const notes = planNotesList(plan), mine = notes.filter((n) => n.team === team && !n.note_only);
+  if (mine.length) throw Object.assign(new Error(`nothing sent, because on ${team}: ${mine.map((n) => n.text).join("; ")}. Open the console's Apply to see it all.`), { notes });
+  const teams = plan.teams.filter((t) => t.moves > 0 || t.min_moves > 0).map((t) => t.team);
+  if (!plan.changes.length && !plan.min_moves) return { changed: 0, min_changed: 0, teams: [], notes };
+  const out = await post(c, "console/apply", { basis: plan.basis, scenarios: onScreenKeys(c), pull: c.inputs.basis.pull });
+  c.applied = out.applied;
+  c.onPlayers(out.players);
+  if (c.on) c.drawBar();
+  return { changed: out.changed, min_changed: out.min_changed, teams, notes };
+}
+
 async function sendApply(c, plan) {
   const out = await post(c, "console/apply", { basis: plan.basis, scenarios: onScreenKeys(c), pull: c.inputs.basis.pull });
   c.applied = out.applied;
