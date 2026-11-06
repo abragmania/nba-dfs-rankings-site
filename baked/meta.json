@@ -1,10 +1,10 @@
 {
-  "publishedAt": "2026-11-06T23:19:10.581Z",
-  "sourceCommit": "dd358e35c760a980587dbfa387047ea8f917b210",
+  "publishedAt": "2026-11-06T23:26:59.213Z",
+  "sourceCommit": "236715543e6ab673e9d213b1796da2e7fc8ec775",
   "latest": {
     "slate": "2026-11-06-main",
     "players": 188,
-    "pulled_at": "2026-11-06T18:18:33-05:00"
+    "pulled_at": "2026-11-06T18:26:46-05:00"
   },
   "slates": [
     "2026-11-06-main",
@@ -38,7 +38,7 @@
       "seen_at": "2026-11-06T23:18:39.000Z"
     },
     "last_read": {
-      "read_at": "2026-11-06T23:18:33.412Z",
+      "read_at": "2026-11-06T23:26:46.780Z",
       "status": "pulled"
     }
   }
