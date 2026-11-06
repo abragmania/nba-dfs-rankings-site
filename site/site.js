@@ -1,10 +1,13 @@
 // The public site's page script, loaded before board.js: sends the page's /api calls to the browser stand-in, adds the time this copy
-// was published to the header's stamps, and says so when this browser will not keep a visitor's changes.
+// was published to the header's stamps, says so when this browser will not keep a visitor's changes, and gives the Pull now button its GitHub runner.
 import { installApi } from "./static-api.js";
 import { onKeepFailure } from "./shim/fs.js";
+import { createSitePull, askPanel } from "./site-pull.js";
 
 installApi();
 document.documentElement.classList.add("is-site");
+// The header's Pull now runs the cloud job through GitHub here (site-pull.js); board.js reads this before it draws the header.
+globalThis.nbadfsSitePull = createSitePull({ ask: askPanel(document), slateOnShow: () => new URLSearchParams(location.search).get("slate") });
 
 const eastern = (iso) => {
   const d = new Date(iso);

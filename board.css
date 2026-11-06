@@ -132,6 +132,23 @@ th[data-sort="projection"],th[data-sort="minutes"],th[data-sort="dk_tonight"]{pa
 .pullnote .grow{flex:1}
 .updline{margin:-6px 0 8px;font-size:11px;color:var(--dim);text-align:right}
 .updline.stale{color:var(--rd)}
+/* Pull now (pull-now.js): the button and its line are one group at the end of the header row (order), wrapping together, the line directly right of
+   the button. The button is wide enough for "Cloud pull… 999 s" and the line's box is always there at a fixed width and two lines high, so neither a
+   count nor a message moves anything. On a phone the group opens up: the button stays in the Console row and the line takes its own row right
+   under it, above the theme toggles. */
+.top .pngroup{order:5;display:flex;align-items:center;gap:8px}
+.top .pullnow{min-width:19ch;justify-content:center;text-align:center;white-space:nowrap}
+.top .pullnow:disabled{opacity:.75;cursor:progress}
+.top .pnline{flex:0 0 64ch;width:64ch;min-height:2.7em;display:flex;align-items:center;flex-wrap:wrap;gap:2px 8px;font-size:11px;line-height:1.3;color:var(--tx);white-space:normal}
+.top .pnline.bad{color:var(--rd)}
+.top .pnline .pnact{font:inherit;font-size:10.5px;background:none;border:1px solid var(--ln);color:var(--mu);padding:1px 6px}
+.top .pnline .pnact:hover{color:var(--tx);border-color:var(--am)}
+@media (max-width:900px){
+  .top .pngroup{display:contents}
+  .top .pullnow{order:0}
+  .top .pnline{order:1;flex:0 0 100%;width:100%}
+  .top .themes{order:2}
+}
 /* A man on a frozen lineup card, or in a late swap slot, whom a new pull took off the slate or marked Out. */
 .crow.gonetag small{color:var(--rd)}
 .lu .crow.gonetag .sn small{display:block}
@@ -678,6 +695,7 @@ body.fs-list #thead th:last-child,body.fs-list #tbody td:last-child{width:auto} 
 }
 /* On a phone the bar is too tall to stay on screen: it scrolls away and the table's own box takes the screen. */
 @media (max-width:599px){
+  .top .lsw,.top .vtabs button,.top .themes button,.tabs button{min-height:36px}
   .fbar{position:static}
   .tbl{top:0;max-height:calc(100dvh - 12px)}
 }

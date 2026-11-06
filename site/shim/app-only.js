@@ -14,6 +14,7 @@ export class PlayerLogError extends Error {}
 export const withSeasonFigures = never("The season figures reader");
 export const seasonUsageTable = never("The season usage reader");
 export const handlePlayerUsage = never("The usage lookup");
+export const handlePullNow = never("The app's Pull now (the site's button asks GitHub's cloud job instead, site-src/site-pull.js)");
 
 /**
  * The board's usual minutes read raw pulls in the app. Here the slate-level half (the pull read, and any line it adds to missing) comes from

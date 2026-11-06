@@ -50,16 +50,54 @@ async function bakedFigures(slate) {
 }
 
 const SLATE_FILES = ["slate.json", "figures.json", "console-inputs.json", "pull-moves.json"];
+
+// ---------- files newer than Pages serves: the site's Pull now (site-pull.js) read them from the site repo the moment the cloud job pushed ----------
+const adopted = new Map(); // site path -> text
+const fileOf = (rel) => (rel === "slates.json" ? `${DATA}/manifest.json` : `${DATA}/${rel.replace(/^slates\//, "")}`);
+/** Puts files read straight from the site repo in place of what Pages still serves, so the board's next check takes them in place. */
+export function adoptFresh(files) {
+  for (const [rel, text] of Object.entries(files ?? {})) {
+    if (typeof text !== "string") continue;
+    adopted.set(rel, text);
+    once.set(rel, Promise.resolve(text));
+    seed(fileOf(rel), text);
+  }
+}
+const stampOfMoves = (text) => { try { return String(JSON.parse(text)?.stamp ?? "").split("|")[0]; } catch { return ""; } };
+const PULL_STAMP = /^\d{4}-\d{2}-\d{2}T\d{6}[+-]\d{4}$/;
+/** May the pull-moves text `next` replace `held`: its pull at least as new. Only two pull stamps are compared; a held text with none (no readable pull) always gives way, and a next text with none never replaces a held pull. Pure. */
+const atLeastAsNew = (next, held) => {
+  const a = stampOfMoves(next), b = stampOfMoves(held);
+  if (!PULL_STAMP.test(b)) return true;
+  return PULL_STAMP.test(a) && a >= b;
+};
+/**
+ * The pull-moves text the once-a-minute check goes by: an adopted file stands until Pages serves the same text, or a pull at least as new (its
+ * raw stamp the same or later, its text different: a rebuild of that pull or a newer one), and then the adoption ends for that slate. Pure but
+ * for the adopted map.
+ */
+export function keepAdopted(slate, pagesText) {
+  const rel = `slates/${slate}/pull-moves.json`;
+  if (!adopted.has(rel)) return pagesText;
+  const mine = adopted.get(rel);
+  if (pagesText !== null && (pagesText === mine || atLeastAsNew(pagesText, mine))) {
+    for (const f of SLATE_FILES) adopted.delete(`slates/${slate}/${f}`);
+    return pagesText;
+  }
+  return mine;
+}
 /**
  * The board's once-a-minute check reads the baked pull stamp afresh, so a publish made while the page is open reaches it: when the stamp has
- * moved, the slate's files are let go and the board's next read of the slate takes the new ones, as a new pull does in the app.
+ * moved to a pull at least as new as the one held, the slate's files are let go and the board's next read of the slate takes the new ones, as a
+ * new pull does in the app. A file older than the one held (a cache serving an earlier publish) never replaces it.
  */
 async function freshStamp(slate) {
   const rel = `slates/${slate}/pull-moves.json`;
-  const text = await readBaked(rel);
+  const text = keepAdopted(slate, await readBaked(rel));
   if (text === null) return null;
   const held = once.has(rel) ? await once.get(rel).catch(() => null) : null;
   if (held !== null && held !== text) {
+    if (!atLeastAsNew(text, held)) return held; // older than what the board shows: keep what is held
     for (const f of SLATE_FILES) once.delete(`slates/${slate}/${f}`);
   }
   if (held === null || held !== text) once.set(rel, Promise.resolve(text));

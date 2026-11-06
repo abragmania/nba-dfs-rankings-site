@@ -458,6 +458,7 @@ async function route(req, res, opts) {
     return send(res, 200, { now_ms: opts.now(), injected: opts.injected });
   }
   if (p === "/api/player-usage") return (await import("../site/shim/app-only.js")).handlePlayerUsage(req, res, url, { send, fail, readJson }); // the card's usage data
+  if (p === "/api/pull-now") return (await import("../site/shim/app-only.js")).handlePullNow(req, res, { send, fail, readJson, state: opts.pullNow, deps: opts.pullNowDeps }); // the header's Pull now button
   const cons = consoleHandler(p); // the scenario console (slate/console-route.js)
   if (cons) return cons.handler(req, res, safeDecode(cons.encodedSlate), { send, fail, readJson, openSlate, usageTable: opts.usageTable, now: opts.now });
   const lsw = lateswapHandler(p); // the Late swap screen (slate/lateswap-route.js)
@@ -517,9 +518,10 @@ async function route(req, res, opts) {
  *  seasonFigures: slate -> slate with this season's DK/min and usage attached (usage/board_figures.js); off unless
  *  given, so the tests never reach Basketball-Reference. The app below turns it on.
  *  nowMs: a fixed "now" for late swap (the NBADFS_NOW test clock); null means the real clock.
- *  usageTable: () -> this season's usage table for the console (usage/board_figures.js); off unless given, as seasonFigures is. */
-export function makeServer({ optimizeTimeoutMs = OPTIMIZE_CEILING_MS, optimizeUrl = OPTIMIZE_URL, seasonFigures = null, nowMs = null, answerStartMs = ANSWER_START_MS, answerKeepaliveMs = ANSWER_KEEPALIVE_MS, setTimer = setTimeout, usageTable = null } = {}) {
-  const opts = { optimizeTimeoutMs, optimizeUrl, answerStartMs, answerKeepaliveMs, setTimer, build: null, seasonFigures, usageTable, now: () => nowMs ?? Date.now(), injected: nowMs != null };
+ *  usageTable: () -> this season's usage table for the console (usage/board_figures.js); off unless given, as seasonFigures is.
+ *  pullNowDeps: Pull now's child, git and slate reads (pullnow/route.js defaultDeps when null); the tests inject them. */
+export function makeServer({ optimizeTimeoutMs = OPTIMIZE_CEILING_MS, optimizeUrl = OPTIMIZE_URL, seasonFigures = null, nowMs = null, answerStartMs = ANSWER_START_MS, answerKeepaliveMs = ANSWER_KEEPALIVE_MS, setTimer = setTimeout, usageTable = null, pullNowDeps = null } = {}) {
+  const opts = { optimizeTimeoutMs, optimizeUrl, answerStartMs, answerKeepaliveMs, setTimer, build: null, seasonFigures, usageTable, now: () => nowMs ?? Date.now(), injected: nowMs != null, pullNow: { running: null }, pullNowDeps };
   return http.createServer((req, res) => {
     route(req, res, opts).catch((e) => {
       error("request failed", { url: req.url, message: e.message });

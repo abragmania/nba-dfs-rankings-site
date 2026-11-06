@@ -11,3 +11,23 @@
   font-size: 12px;
   z-index: 50;
 }
+/* The Pull now key prompt (site-pull.js askPanel): fixed under the header's right end, outside the header, which is redrawn whole. */
+.pnask {
+  position: fixed;
+  top: 56px;
+  right: 24px;
+  max-width: min(520px, calc(100vw - 48px));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--p2);
+  border: 1px solid var(--am);
+  color: var(--tx);
+  font-size: 12px;
+  z-index: 60;
+}
+.pnask div { flex: 1 0 100%; }
+.pnask input { flex: 1 1 220px; min-height: 32px; padding: 2px 8px; font: inherit; background: var(--p); color: var(--tx); border: 1px solid var(--ln); }
+.pnask button { min-height: 32px; padding: 2px 12px; font: inherit; font-weight: 700; background: none; color: var(--tx); border: 1px solid var(--ln); }

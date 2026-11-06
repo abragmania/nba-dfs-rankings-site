@@ -14,6 +14,7 @@ import { headHtml, rowHtml, SORT_KEYS, comparePlayers, hasResettable } from "./p
 import { pullChipHtml, pullNoteHtml } from "./pull-note.js";
 import { CHECK_MS, applyHeld, createRefresher, mergeFresh, outNamesOf, overrideKey, picksOnBoard, pullOf, rememberRows, rosterCleanup, statusLine } from "./slate-refresh.js";
 import { pressSettle } from "./press-settle.js";
+import { createPullNow } from "./pull-now.js";
 import { noFilters, filtersOn, filterPlayers, salaryRange, teamsOf } from "./filters.js";
 import { limitPatch } from "./row-limits.js";
 import { loadView, saveView, DEFAULT_SORT } from "./view-memory.js";
@@ -244,6 +245,7 @@ const refresher = createRefresher({
   api, name: () => S.name, busy: () => panel.running() || formHasFocus() || press.pressing(), saves: () => ovSaves, apply: applyFresh,
   status: ({ failed, waiting = false }) => { S.upd = { ...S.upd, failed, waiting }; renderUpdLine(); },
 });
+const pullNow = createPullNow({ reload: () => refresher.tick(), runner: globalThis.nbadfsSitePull ?? null }); // the header's Pull now (pull-now.js); new numbers land through the refresh above
 
 // ---------- header ----------
 function slateLabel(name) {
@@ -267,7 +269,7 @@ function renderTop() {
 <span class="vtabs"><button data-view="list" class="${S.view === "lineups" ? "" : "on"}">Player list</button><button data-view="lineups" class="${S.view === "lineups" ? "on" : ""}">Lineups${panel.builtCount() ? ` <b>${panel.builtCount()}</b>` : ""}</button></span>
 <div class="stamps">${stamp("Board", board, "no board time in this slate file")}${stamp("Injuries", injuries, injuriesAbsent ? "the TwoGun board row carries no injury report time" : "no injury report time in this slate file", "", injuriesAbsent)}${stamp("Pulled", s.as_of?.pull_started, "no pull time in this slate file")}${stamp("Lock", s.lock, "no lock time in this slate file", "lock")}</div>
 ${count ? `<div class="notes"><button id="notesBtn" title="${count} data warning${count === 1 ? "" : "s"} on this slate">Data warnings</button><div class="list" id="notesList" hidden>${list("Conflicts", n.conflicts)}${list("Missing", n.missing)}</div></div>` : ""}
-<button id="csBtn" class="lsw csw${scenarioConsole.isOn() ? " on" : ""}" title="${scenarioConsole.isOn() ? "Back to the board" : "Scenario console: minutes and usage when men sit"}">Console</button>
+${pullNow.html()}<button id="csBtn" class="lsw csw${scenarioConsole.isOn() ? " on" : ""}" title="${scenarioConsole.isOn() ? "Back to the board" : "Scenario console: minutes and usage when men sit"}">Console</button>
 <button id="lsBtn" class="lsw${panel.lateSwap() ? " on" : ""}" title="${panel.lateSwap() ? "Leave late swap mode" : "Late swap: men whose game has started stay in their slot; pin others to a slot and fill the open ones"}"${panel.running() ? " disabled" : ""}>${ICON.lock} Pin slots</button>
 ${themeHtml(theme)}`;
 }
