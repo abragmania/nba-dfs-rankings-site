@@ -14,6 +14,7 @@ export class PlayerLogError extends Error {}
 export const withSeasonFigures = never("The season figures reader");
 export const seasonUsageTable = never("The season usage reader");
 export const handlePlayerUsage = never("The usage lookup");
+export const handlePullStatus = never("The app's pull status (the site's status block reads GitHub and its own baked files, site-src/site-pull.js)");
 export const handlePullNow = never("The app's Pull now (the site's button asks GitHub's cloud job instead, site-src/site-pull.js)");
 
 /**

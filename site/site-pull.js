@@ -6,7 +6,7 @@
 // show is read from the site repo's freshly pushed baked files through GitHub's contents API (no wait for Pages) and the board takes them in
 // place through its own refresh. Once a dispatch is sent, no GitHub error is called a failure: the job may be running. Pure parts tested in node.
 import { adoptFresh } from "./static-api.js";
-import { pullLine } from "../server/board/pull-now.js";
+import { pullLine, buildSources, etStamp, cloudState, cloudLast, newestDone } from "../server/board/pull-now.js";
 
 export const DATA_REPO = "abragmania/NBADFSRankings";
 export const SITE_REPO = "abragmania/nba-dfs-rankings-site";
@@ -86,6 +86,7 @@ export function figuresOf(slateText, movesText) {
 /** The four baked files of a slate the board reads, by their site path. Pure. */
 export const slateFiles = (slate) => ["slate.json", "figures.json", "console-inputs.json", "pull-moves.json"].map((f) => `slates/${slate}/${f}`);
 
+const metaUrl = new URL("../baked/meta.json", import.meta.url).href;
 const etNow = (ms) => new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }).format(ms).replace(/[  ]/g, " ") + " ET";
 
 /**
@@ -203,7 +204,48 @@ export function createSitePull({ fetchImpl = (...a) => fetch(...a), store = keyS
     return lastKeyProblem ? [{ label: "Replace key", run: () => { store.forget(); return "Key removed; press Pull now to paste a new one."; } }, forget] : [forget];
   }
 
-  return { run, actions, label: "Cloud pull…", title: "Start the cloud pull on GitHub (quick run), then show the new numbers here" };
+  // ---------- the status block (pull-now.js statHtml): read-only, polled by the board at most every 15 s while the page is visible ----------
+  const jsonOf = async (url, init) => { const r = await fetchImpl(url, init); if (!r.ok) throw new Error(`answered ${r.status}`); return r.json(); };
+  /** A REST run as cloudState's shape. */
+  const runShape = (r) => ({ status: r?.status, conclusion: r?.conclusion ?? null, createdMs: Date.parse(r?.created_at), startedMs: Date.parse(r?.run_started_at), doneMs: Date.parse(r?.updated_at) });
+  /**
+   * The status block's raw answer (see pull-now.js): the baked slate on show and the published time, the per-source times baked into baked/meta.json
+   * (pull_facts, written at publish: no read of the data repo, which the key cannot do), and with a key the cloud job's runs. Never throws.
+   */
+  async function status() {
+    const key = store.get(), nowMs = now();
+    let meta = null, metaWhy = null;
+    try { meta = await jsonOf(metaUrl, { cache: "no-cache" }); } catch (e) { metaWhy = `the site's baked/meta.json could not be read (${e.message})`; }
+    const name = slateOnShow?.() || meta?.latest?.slate || null;
+    const [slate, list] = await Promise.all([name ? jsonOf(`/api/slate/${encodeURIComponent(name)}`).catch(() => null) : null, jsonOf("/api/slates").catch(() => null)]);
+    const entry = list?.slates?.find((e) => e?.slate === name) ?? null;
+    const facts = meta?.pull_facts && typeof meta.pull_facts === "object" ? meta.pull_facts : null;
+    const ed = facts?.nba_edition ?? null;
+    const factsFit = facts && (!name || facts.slate === name);
+    const noNews = factsFit ? null : facts ? `unknown (the site's news times are for ${facts.slate ?? "another slate"})` : `unknown (${metaWhy ?? "the last publish carries no per-source times; the next publish adds them"})`;
+    const news = factsFit ? { bbm: { checkedMs: Date.parse(facts.bbm_checked_at) || null, changedMs: null, changedWhy: "unknown (the change log stays on the computer)" }, nba: { edition: ed ? { label: ed.label ?? null, publishedMs: Date.parse(ed.published_at) } : null, checkedMs: Date.parse(ed?.seen_at) || null } } : null;
+    let running = { local: null, cloud: "unknown", cloudWhy: "no GitHub key is kept in this browser, so the cloud job cannot be seen" }, cloudRun = null;
+    if (key) {
+      try {
+        const runs = (await listRuns(key)).map(runShape);
+        running = { local: null, ...cloudState(runs, nowMs) };
+        cloudRun = newestDone(runs);
+      } catch (e) {
+        running = { local: null, cloud: "unknown", cloudWhy: e.message };
+      }
+    }
+    const found = [];
+    const savedMs = Date.parse(slate?.as_of?.pull_started ?? meta?.latest?.pulled_at ?? "");
+    if (!Number.isNaN(savedMs)) found.push({ atMs: savedMs, where: null, result: "pulled" }); // a saved pull is a new board; this site cannot tell where it ran
+    const cloud = cloudLast({ run: cloudRun, read: { readMs: Date.parse(facts?.last_read?.read_at), status: facts?.last_read?.status ?? null } });
+    if (cloud) found.push(cloud);
+    const sources = buildSources({ slateName: name, slate, entry, bbm: news?.bbm ?? null, nba: news?.nba ?? null, noNews, refMs: nowMs });
+    const pub = Date.parse(meta?.publishedAt);
+    if (!Number.isNaN(pub)) sources.push({ label: "Site published", text: etStamp(pub), note: null });
+    return { readAtMs: nowMs, slate: name, last: found.sort((a, b) => b.atMs - a.atMs)[0] ?? null, running, sources };
+  }
+
+  return { run, actions, status, label: "Cloud pull…", title: "Start the cloud pull on GitHub (quick run), then show the new numbers here" };
 }
 
 /**

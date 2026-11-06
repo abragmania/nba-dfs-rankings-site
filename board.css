@@ -139,14 +139,46 @@ th[data-sort="projection"],th[data-sort="minutes"],th[data-sort="dk_tonight"]{pa
 .top .pngroup{order:5;display:flex;align-items:center;gap:8px}
 .top .pullnow{min-width:19ch;justify-content:center;text-align:center;white-space:nowrap}
 .top .pullnow:disabled{opacity:.75;cursor:progress}
-.top .pnline{flex:0 0 64ch;width:64ch;min-height:2.7em;display:flex;align-items:center;flex-wrap:wrap;gap:2px 8px;font-size:11px;line-height:1.3;color:var(--tx);white-space:normal}
+.top .pnbox{flex:0 1 auto;width:max-content;min-width:min(422px,100%);max-width:640px;min-height:2.7em;display:flex;flex-direction:column;justify-content:center;font-size:11px;line-height:1.3}
+.top .pnline{display:flex;align-items:center;gap:2px 8px;min-height:1.35em;color:var(--tx);white-space:nowrap}
+.top .pnline .pntext{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .top .pnline.bad{color:var(--rd)}
-.top .pnline .pnact{font:inherit;font-size:10.5px;background:none;border:1px solid var(--ln);color:var(--mu);padding:1px 6px}
+.top .pnline .pnact{font:inherit;font-size:10.5px;background:none;border:1px solid var(--ln);color:var(--mu);padding:1px 6px;flex:none}
 .top .pnline .pnact:hover{color:var(--tx);border-color:var(--am)}
+/* The pull status (pull-now.js statHtml): one summary line over the run's line, a compact panel opens under it over the page (absolute: nothing moves). */
+.top .pnstat{position:relative;display:block;min-height:1.35em}
+.top .pnsum{display:inline-flex;align-items:center;gap:6px;max-width:100%;width:auto;min-height:1.35em;padding:0;border:0;background:none;font:inherit;color:var(--mu);text-align:left;cursor:pointer;white-space:nowrap}
+.top .pnsum:hover{color:var(--tx)}
+.top .pnsumtext{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.top .pncaret{flex:none;color:var(--dim)}
+.top .pndot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--gr)}
+.top .pnstat.unk .pndot{background:var(--dim)}
+.top .pnstat.busy .pnsum{color:var(--am);font-weight:700}
+.top .pnstat.busy .pndot{background:var(--am);animation:pnpulse 1.2s ease-in-out infinite}
+@keyframes pnpulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.top .pnstat.busy .pndot{animation:none}}
+.top .pnpanel{position:absolute;left:0;top:calc(100% + 4px);z-index:20;width:max-content;min-width:100%;max-width:min(560px,90vw);background:var(--p2);border:1px solid var(--ln);padding:8px 12px;white-space:normal;font-size:11.5px;box-shadow:0 12px 40px #000c}
+.top .pnpanel h5{margin:8px 0 3px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)}
+.top .pnpanel h5:first-child{margin-top:0}
+.top .pnrow{display:flex;gap:12px;justify-content:space-between;padding:1px 0}
+.top .pnrow span{color:var(--mu)}
+.top .pnrow b{font-weight:600;text-align:right}
+.top .pnrow b.pnmiss{color:var(--am)}
+.top .pnrow span{min-width:0}
+.top .pnrow b{white-space:nowrap}
+.top .pnrow small{color:var(--dim);font-size:10.5px}
+.top .pnlast,.top .pnread{color:var(--mu);font-size:10.5px;margin-top:2px}
 @media (max-width:900px){
   .top .pngroup{display:contents}
   .top .pullnow{order:0}
-  .top .pnline{order:1;flex:0 0 100%;width:100%}
+  .top .pnbox{order:1;flex:0 0 100%;width:100%}
+  .top .pnline{white-space:normal;min-height:2.7em}
+  .top .pnline .pntext{overflow:visible;text-overflow:clip}
+  .top .pnsum{min-height:36px;white-space:normal}
+  .top .pnsumtext{overflow:visible;text-overflow:clip}
+  .top .pnpanel{max-width:100%;width:100%}
+  .top .pnbox{width:100%;max-width:none}
+  .top .pnwd{display:none}
   .top .themes{order:2}
 }
 /* A man on a frozen lineup card, or in a late swap slot, whom a new pull took off the slate or marked Out. */
@@ -246,6 +278,8 @@ tr.excl td{opacity:.3}tr.excl .name{text-decoration:line-through}
 .lu.wk .cap .capt .overcap b{color:var(--rd)}
 .lu.wk .cap .capt .perop{grid-column:3;justify-self:start;align-items:flex-start}
 .lu.wk .capt .none,.lu.wk .capt .none b{font-size:12.5px;font-weight:400;color:var(--dim)}
+/* At about 1920 the optimizer's footer columns are too tight for "Per open slot" beside "Salary used": tighter labels keep them apart. */
+@media (min-width:901px) and (max-width:2100px){.opt .lu.wk .cap .capt{font-size:10px;letter-spacing:.3px}.opt .lu.wk .cap .capt b{font-size:20px}.opt .lu.wk .cap .capt .perop{white-space:normal;max-width:60px;line-height:1.15}}
 /* A narrow optimizer panel (the 1920 laptop, about 530px): tighter columns, no position badge, and a long name (over 20 letters) shows its first name as an initial, so the last name and "Empty" always show. */
 .lu.wk{container-type:inline-size}
 @container (max-width:640px){
