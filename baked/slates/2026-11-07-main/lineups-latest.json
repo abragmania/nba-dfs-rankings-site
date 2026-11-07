@@ -1,33 +1,33 @@
 {
  "slate": "2026-11-07-main",
- "generated_at": "2026-11-07T22:29:11.635Z",
+ "generated_at": "2026-11-07T22:35:17.426Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-07-main/raw/2026-11-07T172852-0500",
+ "slate_built_from": "slates/2026-11-07-main/raw/2026-11-07T173508-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-07T22:29:07.541Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-07T172907-0500.html.gz",
-   "saved_at": "2026-11-07T22:29:07.541Z",
-   "parsed_sha": "d61d23252d483c9331f6d4ced3debd0210802ec9c3db3ed03bed539fc9dd94fe",
-   "sha256": "32fcd912c240e1856454425ff1e4edf58d0c34fd678ab487fd9b6f1b9affebde"
+   "fetched_at": "2026-11-07T22:35:13.348Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-07T173513-0500.html.gz",
+   "saved_at": "2026-11-07T22:35:13.348Z",
+   "parsed_sha": "e9cc0db424f144c2da41b2628f45c4c5a8d446c46983f248a17d3a2bf930db17",
+   "sha256": "b5442d3f2105f0bfdbb11bec8ec80d82db24020877775dbccb541bdef93a2e48"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-07T22:29:11.603Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-07T172911-0500.html.gz",
-   "saved_at": "2026-11-07T22:29:11.603Z",
-   "parsed_sha": "89955151e21593a8d39ec455ce8e594c5561e9bf31c7c79068986d59ea251af1",
-   "sha256": "f32bc4addf48e604c1ae94e156c21804f3df1276bf25c2bdfd6f57ad7a14fd61"
+   "fetched_at": "2026-11-07T22:35:17.408Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-07T173517-0500.html.gz",
+   "saved_at": "2026-11-07T22:35:17.408Z",
+   "parsed_sha": "349cf2bdd977283cda573ee7fb34913960bd2ce6aa5312d114ad159b0d3b079b",
+   "sha256": "a73825c40f41db055a6d66f439f9697034524cae35365100d12931e93a70ecad"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-07T22:28:52.474Z",
-  "changed_at": "2026-11-07T17:28:52-05:00",
-  "saved_as": "news/bbm/2026-11-07T172852-0500.html",
+  "fetched_at": "2026-11-07T22:35:08.975Z",
+  "changed_at": "2026-11-07T17:35:08-05:00",
+  "saved_as": "news/bbm/2026-11-07T173508-0500.html",
   "out": [
    {
     "name": "Tyrese Haliburton",
@@ -276,9 +276,9 @@
       "name": "Jalen Johnson",
       "pos": "PF",
       "bmId": "6295",
-      "flag": "P",
-      "word": "Probable",
-      "status": "Probable",
+      "flag": "IN",
+      "word": "Playing",
+      "status": "Playing",
       "verified": false,
       "id": "44828361",
       "match": "exact"
@@ -327,8 +327,8 @@
      {
       "name": "Jalen Johnson",
       "pos": "PF",
-      "flag": "Prob",
-      "status": "Probable",
+      "flag": null,
+      "status": null,
       "id": "44828361",
       "match": "exact"
      },
@@ -350,14 +350,6 @@
       "status": "Out",
       "id": null,
       "match": null
-     },
-     {
-      "name": "Jalen Johnson",
-      "pos": "F",
-      "flag": "Prob",
-      "status": "Probable",
-      "id": "44828361",
-      "match": "exact"
      },
      {
       "name": "Keshon Gilbert",
