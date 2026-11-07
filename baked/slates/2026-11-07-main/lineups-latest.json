@@ -1,34 +1,34 @@
 {
  "slate": "2026-11-07-main",
- "generated_at": "2026-11-07T23:18:24.273Z",
+ "generated_at": "2026-11-07T23:39:22.254Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-07-main/raw/2026-11-07T180729-0500",
+ "slate_built_from": "slates/2026-11-07-main/raw/2026-11-07T183913-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-07T23:18:20.183Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-07T173513-0500.html.gz",
-   "saved_at": "2026-11-07T22:35:13.348Z",
-   "unchanged_since": "2026-11-07T22:35:13.348Z",
-   "parsed_sha": "e9cc0db424f144c2da41b2628f45c4c5a8d446c46983f248a17d3a2bf930db17",
-   "sha256": "f3abedebbec0a0ad1dd164970acdf9721e4a12799ce3dd5c42caf9be657dae2c"
+   "fetched_at": "2026-11-07T23:39:18.172Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-07T183359-0500.html.gz",
+   "saved_at": "2026-11-07T23:33:59.845Z",
+   "unchanged_since": "2026-11-07T23:33:59.845Z",
+   "parsed_sha": "3ed87297ae31c17333292eafa7209ce558834d5201052d53ed59d9c6407772ca",
+   "sha256": "ea2867bff8b827639d19f8c4683f81ab930edc151d8b6cd392915223172e015a"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-07T23:18:24.251Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-07T181824-0500.html.gz",
-   "saved_at": "2026-11-07T23:18:24.251Z",
-   "parsed_sha": "a904aadca18ec4f33706cd94aa37055c5228ded5c7760be7ab14a725659dc0df",
-   "sha256": "0dbcf960d951e2a6c9d8010a1603105a225fa1f11c0d031b27f9ff917d489d33"
+   "fetched_at": "2026-11-07T23:39:22.233Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-07T183922-0500.html.gz",
+   "saved_at": "2026-11-07T23:39:22.233Z",
+   "parsed_sha": "bdfa7eb665294f4199ea64d16375600febeee4ace21de9d55739f83ef6bf0d61",
+   "sha256": "8f67e39197151262df6cda6d8fa8289fae2d0afb4922554dea39de9ec4f7d6c4"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-07T23:18:15.725Z",
-  "changed_at": "2026-11-07T18:18:15-05:00",
-  "saved_as": "news/bbm/2026-11-07T181815-0500.html",
+  "fetched_at": "2026-11-07T23:39:13.458Z",
+  "changed_at": "2026-11-07T18:33:55-05:00",
+  "saved_as": "news/bbm/2026-11-07T183355-0500.html",
   "out": [
    {
     "name": "Tyrese Haliburton",
@@ -52,7 +52,7 @@
     "id": null,
     "match": null,
     "status": "Out",
-    "detail": "bruised right leg - Est. Return 11/08"
+    "detail": "bruised right leg - Est. Return 11/11"
    },
    {
     "name": "Thomas Sorber",
@@ -685,25 +685,25 @@
       "match": "exact"
      },
      {
-      "name": "Anthony Davis",
-      "pos": "PF",
-      "bmId": "3640",
-      "flag": "Q",
-      "word": "Questionable",
-      "status": "Questionable (undetermined)",
-      "verified": false,
-      "id": "44828375",
-      "match": "exact"
-     },
-     {
       "name": "Alexandre Sarr",
-      "pos": "C",
+      "pos": "PF",
       "bmId": "6935",
       "flag": "Off",
       "word": "Off Injury Report",
       "status": "Off injury report",
       "verified": false,
       "id": "44828569",
+      "match": "exact"
+     },
+     {
+      "name": "Deandre Ayton",
+      "pos": "C",
+      "bmId": "5716",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44828758",
       "match": "exact"
      }
     ]
@@ -737,32 +737,24 @@
       "match": "exact"
      },
      {
-      "name": "Anthony Davis",
-      "pos": "PF",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44828375",
-      "match": "exact"
-     },
-     {
       "name": "Alex Sarr",
-      "pos": "C",
+      "pos": "PF",
       "flag": null,
       "status": null,
       "id": "44828569",
       "match": "near"
+     },
+     {
+      "name": "Deandre Ayton",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44828758",
+      "match": "exact"
      }
     ],
     "label": "Expected Lineup",
     "may_not_play": [
-     {
-      "name": "Anthony Davis",
-      "pos": "C",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44828375",
-      "match": "exact"
-     },
      {
       "name": "Reece Beekman",
       "pos": "G",
@@ -774,6 +766,14 @@
      {
       "name": "Justin Champagnie",
       "pos": "F",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Anthony Davis",
+      "pos": "C",
       "flag": "Out",
       "status": "Out",
       "id": null,

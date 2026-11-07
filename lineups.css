@@ -154,6 +154,11 @@ body.console-on #lineups{display:none}
 #lineups .swt td,#lineups .swt th{padding-right:5px}
 #lineups .swh{display:block}
 #lineups .swh span{display:block}
+/* A build of up to 150 lineups (Adam, 2026-11-07): the exposure table and the cards each scroll in their own box at most a screen
+   tall, so the page never stretches to the last card and the table stays beside the cards. */
+@media (min-width:600px){
+  #lineups .lt-ex,#lineups .lt-cards{max-height:calc(100dvh - 12px);overflow-y:auto;overscroll-behavior:contain}
+}
 /* Phone: the summary tiles wrap two or three to a row and the download button takes its own row. */
 @media (max-width:599px){
   #lineups .lt-top{flex-direction:column;align-items:stretch}

@@ -1,10 +1,12 @@
-// Recently generated builds on the page (Adam, 2026-11-04): the pure parts. A build is kept with the men it answered with, so its
-// cards keep drawing the figures it was built with; the server keeps the ten newest per slate (slate/builds.js) and this file turns a
-// finished build into the record it stores, and a stored record back into a build the tab draws. Browser and node both load it.
+// The latest build on the page (Adam, 2026-11-04; one build only since 2026-11-07): the pure parts. A build is kept with the men it
+// answered with, so its cards keep drawing the figures it was built with; the server keeps only the newest per slate (slate/builds.js),
+// so a new build replaces the last on the page and on disk, and only Save puts a lineup in the saved list. This file turns a finished
+// build into the record it stores, and a stored record back into a build the tab draws. Browser and node both load it.
 
 /** The figures of a man a card draws, as stored: scalars and short lists only (the server keeps nothing else, builds.js). */
 export const ROW_KEYS = ["dk_id", "name", "team", "opponent", "oppText", "game", "tip", "positions", "roster_positions", "salary", "projection", "proj_own", "value", "minutes", "injury_status", "starred"];
-export const KEEP_BUILDS = 10;
+/** Builds kept per slate: the latest only (Adam, 2026-11-07): a new build replaces the last, and only Save keeps lineups. */
+export const KEEP_BUILDS = 1;
 
 /** A man's row cut to what is stored. */
 export function compactRow(p) {
@@ -47,7 +49,7 @@ export function fromRecord(r) {
 }
 
 /** The builds on the page after a read of the server's list: the server's, newest first, with any build made here that the server
- *  does not have yet kept in front (its write is still on its way); the ten newest stay. */
+ *  does not have yet kept in front (its write is still on its way); the newest KEEP_BUILDS (one) stay. */
 export function mergeBuilds(local, server) {
   const have = new Set(server.map((b) => b.id));
   return [...local.filter((b) => !have.has(b.id)), ...server].sort((a, b) => b.built_at - a.built_at).slice(0, KEEP_BUILDS);

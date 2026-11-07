@@ -4,6 +4,7 @@
 // fill came back, a lineup assigned to the spot disagrees with a started man (his exact slot always wins), or the spot is blocked: its
 // entries disagree on a started man, or one holds a man or slot that cannot be read. A flagged spot is left as it was. error (a sentence) means the action could not start and nothing changed.
 import { SLOTS } from "../board/slots.js";
+import { MAX_SPOTS } from "../board/spot-name.js";
 import { leftOut } from "../board/lateswap.js";
 import { optimize } from "../lineup/optimize.js";
 import { readExposure, countLimits } from "../lineup/exposure.js";
@@ -118,7 +119,9 @@ function runFill(args) {
 }
 
 const menKey = (ids) => [...ids].sort().join("|");
-const MAX_LOOK = 20; // the most lineups optimize() builds in one run
+// The most lineups one look for a different fill asks for: one per spot a slate can hold, so every other spot's lineup can be
+// passed over (a build itself may make up to MAX_COUNT, slots.js).
+const MAX_LOOK = MAX_SPOTS;
 
 /**
  * This spot's fill, not repeating a lineup another spot took in this action (Adam, 11-04). taken: men key -> spot name, kept by the caller

@@ -147,15 +147,7 @@ export function cardHtml(p, log, { dash, colourOf, picks, figs = null, usage = {
       + `<div class="sec">This season's games<span class="hint">${games.length} game${games.length === 1 ? "" : "s"}, newest first</span></div><div class="logscroll">${logTable(games)}</div>${usgNoteHtml(games)}`;
   };
   const usgNoteHtml = (games) => { const n = usgNote(games, usage); return n ? `<div class="ue-warn logwarn">${esc(n)}</div>` : ""; };
-  const source = () => {
-    if (log.state !== "ok") return `<div class="src">Game logs: ESPN, then Basketball-Reference if ESPN fails. DK points from DraftKings Classic scoring.</div>`;
-    const t = isoToEastern(log.data.fetched_at);
-    const gu = usage.state === "ok" ? usage.data.game_usage.value : null;
-    const ut = gu ? fetchedAt(gu.as_of, usage.data.today) : null;
-    const usgSrc = gu ? `Basketball-Reference game log, fetched ${ut ? esc(ut) : dash("no fetch time in the response")}` : "Basketball-Reference game log (not read yet)";
-    return `<div class="src">Game logs: ${esc(log.data.source)}, fetched ${t ? esc(t) : dash("no fetch time in the response")}. DK points from DraftKings Classic scoring. USG% per game: ${usgSrc}.</div>`;
-  };
-  return header() + (roleSlot ? `<div class="crole" data-crole></div>` : "") + lastTen() + source() + usageHtml(p, usage, ui, { dash });
+  return header() + (roleSlot ? `<div class="crole" data-crole></div>` : "") + lastTen() + usageHtml(p, usage, ui, { dash });
 }
 
 const fetchLogHttp = async (p, signal) => {

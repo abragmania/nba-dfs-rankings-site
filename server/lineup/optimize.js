@@ -5,13 +5,12 @@
 // The projection is the effective one the server passes in (Adam's typed number or bump, server/slate/overrides.js). The
 // feed's ceiling is never read: a lineup carries no ceiling total and a man with none is never skipped for it (optimizer
 // standard A21). A man missing a figure the run needs is skipped and never scored as zero (RULES R1).
-import { SLOTS, SALARY_CAP, DEFAULT_COUNT, slotMask, pinnedMask, assign, arrangeForLateSwap, checkLineup, isSalary } from "../board/slots.js";
+import { SLOTS, SALARY_CAP, DEFAULT_COUNT, MAX_COUNT, slotMask, pinnedMask, assign, arrangeForLateSwap, checkLineup, isSalary } from "../board/slots.js";
 import { EPS, BOUND_SLACK, WIDTH, SLOT_BITS, REACH_MAX, buildBound, extendReach } from "./bound.js";
 import { readExposure, countLimits, limitStart, buildLimited } from "./exposure.js";
 import { fastLineup, checkFastLineup, jitter, seededRandom } from "./fast-search.js";
 
 const N = SLOTS.length;
-const MAX_COUNT = 20;
 const MAX_LOW_RULES = 8;
 /** The note when every man this run may use (pool and locked or pinned men) is from one game. */
 export const ONE_GAME_NOTE = "Every player this run can use is from one game; DraftKings needs players from at least two games.";

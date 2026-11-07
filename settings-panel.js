@@ -2,10 +2,9 @@
 // optimizer's settings, the per-viewer storage of what was typed, the team overrides read from storage, and the
 // low-owned rules (GPP only). Everything here is pure or touches browser storage only; the clicks live in panel.js.
 import { esc } from "./board-util.js";
-import { SLOTS, DEFAULT_COUNT } from "./slots.js";
+import { SLOTS, DEFAULT_COUNT, MAX_COUNT } from "./slots.js";
 
 const N = SLOTS.length;
-const MAX_COUNT = 20; // the optimizer's own limit on lineups per build
 // No min salary setting (Adam's ruling, 2026-10-29): an older stored minSalary is ignored because FIELDS leaves it out.
 // Standard D9: 5 lineups, min unique 1, the per-team cap DraftKings' own rule (none short of the whole lineup), nothing on that blocks a build.
 const DEFAULTS = { count: String(DEFAULT_COUNT), minUnique: "1", maxTotalOwn: "", teamMin: "0", teamMax: String(N), varOn: "", varPct: "10" };

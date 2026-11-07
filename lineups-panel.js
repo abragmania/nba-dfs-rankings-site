@@ -16,16 +16,31 @@ export function renderTab(X, c, own) {
   const el = X.lel;
   if (!el) return;
   const seat = (men) => own.lateSwapSeat(men);
-  keepFocus(el, () => { el.innerHTML = lineupsTabHtml(X.P, c, { dash: X.dash, seat, swapCtx: swapContext(c, own.lateSwapSeat), notes: own.notesHtml(X.P, c) }); });
+  const key = `${X.P.lt?.view ?? ""}|${X.P.lt?.show ?? "cards"}`; // the same list as last time: its boxes keep their place
+  keepScroll(el, X.tabScrollKey === key, () => keepFocus(el, () => { el.innerHTML = lineupsTabHtml(X.P, c, { dash: X.dash, seat, swapCtx: swapContext(c, own.lateSwapSeat), notes: own.notesHtml(X.P, c) }); }));
+  X.tabScrollKey = key;
   refit(el);
 }
 
+/** The tab's own scrolling boxes (the cards and the exposure table, lineups.css): a redraw (a swap, a Save, a refresh) keeps where
+ *  each was, as the player card does (card.js); `same` false (another view) starts them at the top. */
+const SCROLL_BOXES = [".lt-cards", ".lt-ex"];
+export function keepScroll(el, same, draw) {
+  const held = SCROLL_BOXES.map((s) => el.querySelector?.(s)?.scrollTop ?? 0);
+  draw();
+  if (!same) return;
+  SCROLL_BOXES.forEach((s, i) => { const box = el.querySelector?.(s); if (box && held[i]) box.scrollTop = held[i]; });
+}
+
 /** A row whose whole name does not fit shows the first name as an initial ("O. Okongwu"), so the last name and the chips always
- *  show; a row that fits keeps the whole name. Measured after the draw, in the browser only. Returns how many it shortened. */
+ *  show; a row that fits keeps the whole name. Measured after the draw, in the browser only. Returns how many it shortened. Every
+ *  name is measured before any is changed: a change between two measures makes the browser lay the page out again, which at 150
+ *  cards (1,200 names) took about 200 ms a draw. Each name's box is its own grid cell, so shortening one never moves another. */
 export function fitNames(el) {
-  let n = 0;
-  el.querySelectorAll?.(".crow .pn[data-short]")?.forEach((b) => { if (b.textContent !== b.dataset.short && isCut(b)) { b.textContent = b.dataset.short; n += 1; } });
-  return n;
+  const names = [...(el.querySelectorAll?.(".crow .pn[data-short]") ?? [])].filter((b) => b.textContent !== b.dataset.short);
+  const cut = names.filter((b) => isCut(b));
+  for (const b of cut) b.textContent = b.dataset.short;
+  return cut.length;
 }
 
 /** True when the text of a name is wider than its box (the ellipsis is showing). scrollWidth is a whole number, so a name 0.4px too
@@ -92,7 +107,7 @@ function swapUse(X, key, inId, own) {
     // build is kept again with the swap.
     const [, bid, idx] = key.split(":"), i = +idx, b = buildOf(P, bid), live = X.ctx().byId;
     const frozen = new Map((b.lineups[i].men ?? []).map((m) => [m.dk_id, m]));
-    updateBuild(X, { ...b, lineups: b.lineups.map((l, j) => (j === i ? { ids: next, men: next.map((id) => frozen.get(id) ?? compactRow(live.get(id))) } : l)) });
+    updateBuild(X, { ...b, lineups: b.lineups.map((l, j) => (j === i ? { ids: next, men: next.map((id) => frozen.get(id) ?? compactRow(live.get(id))) } : l)) }, own);
   } else P.saved = P.saved.map((l) => (String(l.id) === key.slice(2) ? { ...l, orig: l.orig ?? l.slots, slots: next, swapped: true } : l));
   own.render(X);
   X.onWork();
@@ -109,7 +124,7 @@ function inModeOf(X, mode) {
   X.onMemory();
 }
 
-// ---------- recently generated builds (kept per slate on the server, slate/builds.js) ----------
+// ---------- the latest build (kept per slate on the server, slate/builds.js) ----------
 /** Reads the slate's builds (only while that slate is still on show). A build made here whose write has not landed stays in front.
  *  Until a read succeeds the list is unknown, never "none". */
 export function readBuildsFor(X, name, own) {
@@ -128,9 +143,12 @@ export function retryBuilds(X, own) {
 }
 
 /** Sends one change of the builds for the slate it was made on, behind the earlier ones of that slate. The page already shows it;
- *  a write that fails says so, and the build stays on the page for the time being. */
-function sendBuild(X, slate, body) {
-  const { P } = X, gen = P.buildGen ?? 0;
+ *  a write that fails says so, and the build stays on the page for the time being. A write the server refused because it holds
+ *  a newer build (NEWER_BUILD: made in another window), or no longer holds this one (NO_BUILD), reads the server's build back, so
+ *  the page shows the newer one. */
+const REPLACED = new Set(["NEWER_BUILD", "NO_BUILD"]);
+function sendBuild(X, slate, body, own) {
+  const { P } = X;
   const run = (P.buildQueue ?? Promise.resolve()).then(() => X.api(`/api/slate/${encodeURIComponent(slate)}/builds`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
   const settled = run.then(() => ({}), (error) => ({ error }));
   P.buildQueue = settled;
@@ -138,23 +156,32 @@ function sendBuild(X, slate, body) {
   settled.then(({ error }) => {
     if (!error) return;
     const here = slate === X.ctx().name, id = body.put?.id;
+    if (here && REPLACED.has(error.code)) {
+      X.toast("This build was replaced by a newer one; the page now shows it.");
+      if (id != null) P.builds = (P.builds ?? []).filter((x) => x.id !== id);
+      P.swap = null;
+      P.cmp = noPicks(P.cmp);
+      readBuildsFor(X, slate, own);
+      return;
+    }
     X.toast(`Could not keep the build${here ? "" : ` on ${slate}`} on the server: ${error.message}`, "err");
     if (here && id != null && P.builds?.some((x) => x.id === id)) { P.builds = P.builds.map((x) => (x.id === id ? { ...x, notKept: true } : x)); X.redraw?.(); }
   });
 }
 
-/** A finished build goes to the front of the builds on the page (the ten newest stay) and is kept on the server. */
-export function keepBuild(X, b) {
+/** A finished build replaces the build on the page (KEEP_BUILDS is one: nothing of the last build stays) and on the server. It never
+ *  touches the saved lineups: only Save does (savedClick). */
+export function keepBuild(X, b, own) {
   X.P.builds = [b, ...(X.P.builds ?? []).filter((x) => x.id !== b.id)].slice(0, KEEP_BUILDS);
-  sendBuild(X, X.ctx().name, { put: toRecord(b) });
+  sendBuild(X, X.ctx().name, { put: toRecord(b) }, own);
 }
-function updateBuild(X, b) {
+function updateBuild(X, b, own) {
   X.P.builds = X.P.builds.map((x) => (x.id === b.id ? b : x));
-  sendBuild(X, X.ctx().name, { put: toRecord(b) });
+  sendBuild(X, X.ctx().name, { put: toRecord(b) }, own);
 }
-function dropBuild(X, id) {
+function dropBuild(X, id, own) {
   X.P.builds = X.P.builds.filter((x) => x.id !== id);
-  sendBuild(X, X.ctx().name, { remove: id });
+  sendBuild(X, X.ctx().name, { remove: id }, own);
 }
 
 // ---------- spots ----------
@@ -335,7 +362,7 @@ export function tabClick(X, d, own) {
     case "bremove": {
       const b = buildOf(P, d.b);
       if (!b) return true;
-      X.confirm(`Remove this build of ${b.lineups.length} lineup${b.lineups.length === 1 ? "" : "s"} from Recently generated? Saved lineups stay.`, { ok: "Remove" }).then((yes) => { if (yes) { P.swap = null; P.cmp = noPicks(P.cmp); dropBuild(X, b.id); own.render(X); X.onWork(); } });
+      X.confirm(`Remove this build of ${b.lineups.length} lineup${b.lineups.length === 1 ? "" : "s"} from Recently generated? Saved lineups stay.`, { ok: "Remove" }).then((yes) => { if (yes) { P.swap = null; P.cmp = noPicks(P.cmp); dropBuild(X, b.id, own); own.render(X); X.onWork(); } });
       return true;
     }
     case "discard": { // takes the lineup off its build; a build with none left goes. The lineups after it shift, so Compare's ticks (by place) go.
@@ -343,7 +370,7 @@ export function tabClick(X, d, own) {
       if (!b) return true;
       P.swap = null;
       P.cmp = noPicks(P.cmp);
-      if (nb) updateBuild(X, nb); else dropBuild(X, b.id);
+      if (nb) updateBuild(X, nb, own); else dropBuild(X, b.id, own);
       redraw(); X.onWork();
       return true;
     }

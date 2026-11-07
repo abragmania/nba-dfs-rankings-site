@@ -97,7 +97,7 @@ const stampET = (iso) => {
 
 /** The two lists the tab switches between, each entry { key, kind, ids, mode, ... } (key "b:<index>" or "s:<saved id>"). */
 export function entriesOf(P) {
-  // Every build kept for this slate, newest first (P.builds); a lineup's key names its build and its place in it.
+  // The slate's latest build (P.builds holds one: a new build replaces the last); a lineup's key names its build and its place in it.
   const build = (P.builds ?? []).flatMap((b) => b.lineups.map((l, i) => ({ key: `b:${b.id}:${i}`, kind: "build", bid: b.id, b, i, n: i + 1, total: b.lineups.length, ids: l.ids, mode: b.mode, builtAt: b.built_at })));
   const saved = [...(P.saved ?? [])].reverse().map((l) => {
     const base = l.orig ?? l.slots; // the men as saved: the names kept with the lineup line up with these ids

@@ -184,20 +184,6 @@ function leagueNotes(data, seasons) {
   return out;
 }
 
-function sourcesLine(data, ui) {
-  const at = (iso) => (iso ? fetchedAt(iso, data.today) ?? "time unknown" : null);
-  const c = data.career.value, v = data.view.value;
-  const parts = [];
-  const lg = Object.values(data.league).flatMap((x) => [x.usg, x.dk]).filter((x) => x && x.value !== undefined).map((x) => x.as_of).sort();
-  if (ui.tab === "career" && c) parts.push(`Seasons: ESPN season totals${c.as_of.espn ? ` (fetched ${at(c.as_of.espn)})` : ""} and Basketball-Reference's player page${c.as_of.bbr ? ` (fetched ${at(c.as_of.bbr)})` : ""}; minutes from Basketball-Reference where the two agree on games.`);
-  if (ui.tab === "season" && v) parts.push(`${v.label} games: ESPN game log${v.as_of.espn ? ` (fetched ${at(v.as_of.espn)})` : ""}, USG% from Basketball-Reference's game log${v.as_of.bbr ? ` (fetched ${at(v.as_of.bbr)})` : ""}; a period's USG% is the minutes-weighted mean of its games.`);
-  if (lg.length) parts.push(`League averages: Basketball-Reference league totals and advanced pages, fetched ${at(lg[0])}${lg.length > 1 && at(lg[0]) !== at(lg[lg.length - 1]) ? ` to ${at(lg[lg.length - 1])}` : ""}.`);
-  parts.push("DK pts/min on the league basis: DraftKings scoring with +3 per triple-double but without the +1.5 double-double bonus, as no league double-double count is published, so his line and the league's compare like with like.");
-  const od = data.opener.value?.date, oat = data.opener.value ? ` (fetched ${at(data.opener.value.as_of) ?? "time unknown"})` : "";
-  if (od) parts.push(`Season start: ESPN calendar${oat} (${seasonLabel(data.season)} opened ${MONTHS[+od.slice(5, 7) - 1]} ${+od.slice(8)}).`);
-  else if (data.opener.value) parts.push(`Season start: the ESPN calendar${oat} lists no ${seasonLabel(data.season)} start date yet, so it counts as not started.`);
-  return parts.join(" ");
-}
 
 /** The seasons table, newest season first (this season included, tagged "so far"); a traded season shows each team, then
  *  the combined row. DK/g and DK/min are full DraftKings scoring (double-double and triple-double bonuses counted). */
@@ -216,14 +202,12 @@ export function seasonsTable(data, dash) {
     return `<tr class="${[tot ? "tot" : "", now ? "now" : ""].join(" ").trim()}"><td class="ue-l">${esc(r.label ?? seasonLabel(r.season))}${now ? '<em class="sofar" title="This season is still being played">so far</em>' : ""}</td>`
       + `<td>${cell(r.games, 0, c.errors.espn ? `ESPN failed: ${c.errors.espn}` : "no games count")}</td>`
       + `<td>${cell(r.avg_minutes, 1, "no minutes for this row")}</td>`
-      + `<td class="k">${cell(r.dk_per_game, 2, none ? zeroWhy(r) : espnWhy(r))}</td>`
       + `<td>${cell(r.dk_per_min, 2, none ? zeroWhy(r) : isNum(r.dk_per_game) ? "no minutes for this row" : espnWhy(r))}</td>`
       + `<td>${cell(r.usg, 1, c.errors.bbr ? `Basketball-Reference: ${c.errors.bbr}` : "Basketball-Reference has no USG% for this row")}</td>`
+      + `<td class="k">${cell(r.dk_per_game, 2, none ? zeroWhy(r) : espnWhy(r))}</td>`
       + `<td class="ue-l tm"${tot ? ' title="All his teams that season, combined"' : ""}>${esc(r.team)}</td></tr>`;
   }).join("");
-  const at = (iso) => (iso ? ` (fetched ${fetchedAt(iso, data.today) ?? "time unknown"})` : " (not read)");
-  const src = `Seasons: games from ESPN season totals${at(c.as_of?.espn)}, minutes from Basketball-Reference's player page${at(c.as_of?.bbr)} where the two agree on games; DK/g and DK/min use full DraftKings scoring (double-double and triple-double bonuses included), from ESPN season totals; USG% from Basketball-Reference's player page.${c.seasons.some((r) => r.season === data.season) ? ` ${seasonLabel(data.season)} is partial.` : ""}`;
-  return `${heading}<table class="log ue-tbl sst"><thead><tr><th class="l">Season</th><th title="Games played">GP</th><th title="Minutes per game">Min</th><th class="s" title="DK points per game, full DraftKings scoring (double-double and triple-double bonuses included)">DK/g</th><th title="DK points per minute, full DraftKings scoring (bonuses included); the chart below uses the league basis">DK/min</th><th title="Usage rate, Basketball-Reference">USG%</th><th class="l tm">Team</th></tr></thead><tbody>${rows}</tbody></table><div class="ue-src ue-tsrc">${esc(src)}</div>`;
+  return `${heading}<table class="log ue-tbl sst"><thead><tr><th class="l">Season</th><th title="Games played">GP</th><th title="Minutes per game">Min</th><th title="DK points per minute, full DraftKings scoring (bonuses included); the chart below uses the league basis">DK/min</th><th title="Usage rate, Basketball-Reference">USG%</th><th class="s" title="DK points per game, full DraftKings scoring (double-double and triple-double bonuses included)">DK/g</th><th class="l tm">Team</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 const legend = () => {
@@ -265,7 +249,7 @@ export function usageHtml(p, usage, ui, { dash }) {
   if (usage.gaveUp) notes.push("Some figures were still loading after several tries; close and reopen the card to try again.");
   if (usage.pollError) notes.push(`The last refresh failed: ${usage.pollError}`);
   const chart = model.why ? `<div class="cardmsg">${esc(model.why)}</div>` : `${legend()}<div class="ue-chart">${chartParts(model).svg}<div class="ue-tip" hidden></div></div>`;
-  return `${seasonsTable(data, dash)}${head(tabs)}${tools}${chart}${notes.map((t) => `<div class="ue-warn">${esc(t)}</div>`).join("")}<div class="ue-src">${esc(sourcesLine(data, ui))}</div></div>`;
+  return `${seasonsTable(data, dash)}${head(tabs)}${tools}${chart}${notes.map((t) => `<div class="ue-warn">${esc(t)}</div>`).join("")}</div>`;
 }
 
 /** The browser's fetcher for the usage route; every poll of one open card sends its card id. */

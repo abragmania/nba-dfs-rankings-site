@@ -254,11 +254,15 @@ async function build(X) {
     const prev = P.results[mode];
     if (!out.lineups.length && prev?.lineups.length) P.results[mode] = { ...prev, note: out.note ?? null, partial: out.partial ?? null, error: null, kept: true }; // nothing built (a stop, or a note saying why): the lineups on show stay, the note over them
     else P.results[mode] = { idx: 0, lineups: out.lineups.map((l) => ({ ...l, ids: l.slots.map((p) => p.dk_id), men: frozenMen(l.slots, X.ctx().byId) })), skipped: out.skipped ?? [], note: out.note ?? null, partial: out.partial ?? null, error: null, picksAt, ovAt, limAt, workKey: wk, pullAt, builtAt: Date.now() };
-    // The lineups are kept as a build on the Lineups tab (Recently generated, ten newest per slate); the panel says "N lineups built:
-    // open Lineups" and Build never moves Adam to another tab by itself.
+    // The lineups are kept as the slate's one build on the Lineups tab, replacing the last build of either mode (Adam, 2026-11-07),
+    // so the other mode's result and its notes go with it; the panel says "N lineups built: open Lineups" and Build never moves Adam
+    // to another tab by itself. Nothing here writes a saved lineup: only Save does.
     P.loaded = null;
     const done = P.results[mode];
-    if (done?.lineups.length && !done.kept) keepBuild(X, newBuild(done, mode));
+    if (done?.lineups.length && !done.kept) {
+      for (const m of MODES) if (m !== mode) delete P.results[m];
+      keepBuild(X, newBuild(done, mode), own);
+    }
   } catch (e) {
     if (P.build !== watch) return;
     if (e.code === "BUSY") X.toast(e.message); // D17: a notice, not an error; the lineups on show stay as they were

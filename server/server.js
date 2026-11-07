@@ -31,6 +31,9 @@ import { lateswapHandler } from "./slate/lateswap-route.js";
 
 const BOARD_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "board");
 const MAX_BODY = 64 * 1024;
+// A kept build of 150 lineups measured about 36 KB on the 2026-11-07 slate; a bigger slate's skipped list can pass 64 KB, so the
+// builds route alone takes more. checkBuild (slate/builds.js) still bounds every part of it.
+const MAX_BUILD_BODY = 256 * 1024;
 const TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -246,14 +249,14 @@ async function handleSpots(req, res, slate) {
   send(res, 200, writeSpots(slate, next.spots));
 }
 
-/** GET the slate's recently generated builds, newest first (slate/builds.js); POST { put: build } keeps a build (new, or the one with
- *  that id replaced after a discard or a swap; the ten newest stay), POST { remove: id } drops one. Saved lineups are another file
- *  and are never touched. Origin and JSON content type are checked by openSlate. */
+/** GET the slate's latest build (slate/builds.js); POST { put: build } keeps a build (a new one replaces the last build; one with a
+ *  held id is that build after a discard or a swap), POST { remove: id } drops it. Saved lineups are another file and are never
+ *  touched. Origin and JSON content type are checked by openSlate. */
 async function handleBuilds(req, res, slate) {
   const slateData = openSlate(req, res, slate, "Builds");
   if (!slateData) return;
   if (req.method === "GET") return send(res, 200, readBuilds(slate));
-  const read = await readJson(req, res);
+  const read = await readJson(req, res, MAX_BUILD_BODY);
   if (!read) return;
   const checked = checkBuildsBody(read.body);
   if (!checked.ok) return fail(res, 400, "BAD_BUILD", checked.message);

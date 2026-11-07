@@ -7,6 +7,9 @@ export const SLOTS = ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"];
 export const SALARY_CAP = 50000;
 /** Lineups a build makes when nobody says (standard D9): the page's box and a request with no count. */
 export const DEFAULT_COUNT = 5;
+/** The most lineups one build makes: DraftKings' most entries in one contest (Adam, 2026-11-07). The optimizer, the page's box and
+ *  the server's kept build all read it. */
+export const MAX_COUNT = 150;
 
 /** Bit i set when the man may fill SLOTS[i]; 0 when he has no roster_positions. */
 export function slotMask(player) {
