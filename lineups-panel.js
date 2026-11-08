@@ -17,14 +17,60 @@ export function renderTab(X, c, own) {
   if (!el) return;
   const seat = (men) => own.lateSwapSeat(men);
   const key = `${X.P.lt?.view ?? ""}|${X.P.lt?.show ?? "cards"}`; // the same list as last time: its boxes keep their place
-  keepScroll(el, X.tabScrollKey === key, () => keepFocus(el, () => { el.innerHTML = lineupsTabHtml(X.P, c, { dash: X.dash, seat, swapCtx: swapContext(c, own.lateSwapSeat), notes: own.notesHtml(X.P, c) }); }));
+  // The boxes are sized before their scroll is put back: a box with no height limit yet has nothing to scroll.
+  keepScroll(el, X.tabScrollKey === key, () => keepFocus(el, () => { el.innerHTML = lineupsTabHtml(X.P, c, { dash: X.dash, seat, swapCtx: swapContext(c, own.lateSwapSeat), notes: own.notesHtml(X.P, c) }); sizeBoxes(el); }));
   X.tabScrollKey = key;
+  placeSpotMenu(el);
   refit(el);
+  sized.add(el);
+  if (!resizeHooked && typeof window !== "undefined" && window.addEventListener) { resizeHooked = true; window.addEventListener("resize", () => sized.forEach((x) => { sizeBoxes(x); placeSpotMenu(x); })); }
+}
+const sized = new Set(); // the tab elements drawn, sized again when the window changes size
+let resizeHooked = false;
+
+/** The tab's own scrolling boxes (the cards, the exposure table and Compare's tables, lineups.css): a redraw (a swap, a Save, a
+ *  refresh) keeps where each was, as the player card does (card.js); `same` false (another view) starts them at the top. */
+const SCROLL_BOXES = [".lt-cards", ".lt-ex", ".cp-scroll"];
+
+/** The most height a scrolling box may take, its top `docTop` px down the page on a screen `viewH` px tall: the room left below its
+ *  top, so at the top of the page the whole box is on screen. A box so far down that less than `least` is left (Compare's lower
+ *  tables) takes a screen less two gaps, and is reached by scrolling the page. */
+export function boxHeight(docTop, viewH, { gap = 12, least = 320 } = {}) {
+  const room = Math.floor(viewH - docTop - gap);
+  return room >= least ? room : Math.max(least, viewH - 2 * gap);
 }
 
-/** The tab's own scrolling boxes (the cards and the exposure table, lineups.css): a redraw (a swap, a Save, a refresh) keeps where
- *  each was, as the player card does (card.js); `same` false (another view) starts them at the top. */
-const SCROLL_BOXES = [".lt-cards", ".lt-ex"];
+/** Sizes each scrolling box to the screen (boxHeight), in page order, as sizing one moves those under it. Below 600px wide the
+ *  boxes do not scroll (lineups.css) and keep no limit. Browser only. */
+export function sizeBoxes(el) {
+  if (typeof window === "undefined" || !el.querySelectorAll) return;
+  const wide = window.matchMedia?.("(min-width:600px)").matches ?? true;
+  for (const b of el.querySelectorAll(SCROLL_BOXES.join(","))) {
+    b.style.maxHeight = wide ? `${boxHeight(b.getBoundingClientRect().top + window.scrollY, window.innerHeight)}px` : "";
+  }
+}
+
+/** Where an open spot menu goes: below its chip, or above it when there is less room below than the menu needs and more above.
+ *  roomTop and roomBottom are the edges of what can be seen (the cards box within the screen); the menu's own list scrolls inside
+ *  the height returned, so its new-spot rows and name box under the list stay in view. */
+export function menuPlacement({ anchorTop, anchorBottom, roomTop, roomBottom, need, gap = 6, least = 140 }) {
+  const below = roomBottom - anchorBottom - gap, above = anchorTop - roomTop - gap;
+  const up = need > below && above > below;
+  return { up, maxHeight: Math.max(least, Math.floor(up ? above : below)) };
+}
+
+/** Places the open spot menu (menuPlacement) and brings the whole of it into view. Browser only. */
+export function placeSpotMenu(el) {
+  const m = el.querySelector?.(".spmenu");
+  if (!m?.getBoundingClientRect || typeof window === "undefined") return;
+  m.classList.remove("up");
+  m.style.maxHeight = "";
+  const a = m.parentElement.getBoundingClientRect(), box = m.closest(".lt-cards")?.getBoundingClientRect();
+  const p = menuPlacement({ anchorTop: a.top, anchorBottom: a.bottom, roomTop: Math.max(0, box?.top ?? 0), roomBottom: Math.min(window.innerHeight, box?.bottom ?? window.innerHeight), need: m.getBoundingClientRect().height });
+  m.classList.toggle("up", p.up);
+  m.style.maxHeight = `${p.maxHeight}px`;
+  m.scrollIntoView?.({ block: "nearest" });
+}
 export function keepScroll(el, same, draw) {
   const held = SCROLL_BOXES.map((s) => el.querySelector?.(s)?.scrollTop ?? 0);
   draw();

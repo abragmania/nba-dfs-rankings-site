@@ -14,6 +14,7 @@ import { buildMessage } from "./build-progress.js";
 import { compareHtml, freshCompare } from "./lineups-compare.js";
 import { NAME_MAX, savedLetterOf } from "./saved-panel.js";
 import { HINT } from "./cell-editor.js";
+import { MAX_SPOTS } from "./spot-name.js";
 
 export const SORTS = [["proj", "Projection", "Most projected points first"], ["sal", "Salary", "Most salary used first"], ["own", "Ownership", "Lowest total ownership first"], ["new", "Newest", "Newest first (a build's own order)"]];
 export const MODE_FILTERS = ["All", "Cash", "GPP"];
@@ -71,11 +72,14 @@ function spotMenuHtml(e, { spots, saved, names, warn, text }) {
     return `<span class="spr"><button class="spm${mine ? " mine" : ""}" data-op="spotset" data-id="${id}" data-spot="${esc(n)}" title="${mine ? "Take this spot off this lineup" : "Give this spot to this lineup"}"><i style="color:${spotColour(n, spots)}">${mine ? "✓" : "●"}</i><b>${esc(n)}</b><em>${esc(holderText(spots, n, e.id, saved, names))}</em></button>`
       + (empty ? `<button class="spx" data-op="spotdrop" data-spot="${esc(n)}" title="Remove the empty spot ${esc(n)}">×</button>` : "") + `</span>`;
   }).join("");
-  const gpp = nextGppName(spots);
-  return `<div class="spmenu">${alert}${rows || `<div class="spnone">No spots yet.</div>`}`
-    + `<button class="spm new" data-op="spotset" data-id="${id}" data-spot="${esc(gpp)}">+ new <b>${esc(gpp)}</b></button>`
-    + (Object.hasOwn(spots, "Cash") ? "" : `<button class="spm new" data-op="spotset" data-id="${id}" data-spot="Cash">+ new <b>Cash</b></button>`)
-    + `<div class="spadd"><input data-spotname="${id}" maxlength="40" placeholder="or type a name" value="${esc(text?.id === String(e.id) ? text.text : "")}" autocomplete="off"><button data-op="spotadd" data-id="${id}">Add</button></div></div>`;
+  // The list scrolls inside the menu; the ways to make a new spot stay under it, always in view (lineups-panel.js placeSpotMenu). At
+  // MAX_SPOTS the slate holds as many spots as the server takes, so no new one is offered, only a line saying so.
+  const full = Object.keys(spots ?? {}).length >= MAX_SPOTS, gpp = nextGppName(spots);
+  const add = full ? `<div class="spnone spfull">This slate has ${MAX_SPOTS} spots, the most it can hold; remove an empty one to add another.</div>`
+    : `<button class="spm new" data-op="spotset" data-id="${id}" data-spot="${esc(gpp)}">+ new <b>${esc(gpp)}</b></button>`
+      + (Object.hasOwn(spots, "Cash") ? "" : `<button class="spm new" data-op="spotset" data-id="${id}" data-spot="Cash">+ new <b>Cash</b></button>`)
+      + `<div class="spadd"><input data-spotname="${id}" maxlength="40" placeholder="or type a name" value="${esc(text?.id === String(e.id) ? text.text : "")}" autocomplete="off"><button data-op="spotadd" data-id="${id}">Add</button></div>`;
+  return `<div class="spmenu">${alert}<div class="splist">${rows || `<div class="spnone">No spots yet.</div>`}</div><div class="spfoot">${add}</div></div>`;
 }
 
 const spotChipHtml = (e, ctx) => {

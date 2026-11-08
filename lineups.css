@@ -10,7 +10,8 @@
 .opt .swn{color:var(--rd);font-size:11.5px;padding:4px 0}
 body.lineups-on .games,body.lineups-on .pool,body.lineups-on aside.opt,body.lineups-on #dropnote{display:none}
 body.console-on #lineups{display:none}
-#lineups.opt{border:0;box-shadow:none;background:none;padding:0 0 28px}
+#lineups.opt{border:0;box-shadow:none;background:none;padding:0}
+body.lineups-on{padding-bottom:0} /* the tab ends at its scrolling boxes, sized to the screen (lineups-panel.js sizeBoxes): no band under them */
 #lineups[hidden]{display:none}
 .top{gap:10px 12px} /* the Player list / Lineups switch joins the first header line at the wide size */
 .vtabs{display:flex;border:1px solid var(--ln)}
@@ -39,7 +40,7 @@ body.console-on #lineups{display:none}
 #lineups .lt-tabs button{background:none;border:0;padding:4px 12px;font-weight:800;font-size:12px;color:var(--am)}
 #lineups .lt-tabs button.on{background:var(--am);color:#000}
 #lineups .lt-q{width:230px;height:28px}
-#lineups .lt-sort{display:flex;align-items:center;gap:4px}
+#lineups .lt-sort{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
 #lineups .lt-sort em{font-style:normal;font-size:10.5px;color:var(--dim);margin-right:4px}
 #lineups .lt-sort button{background:none;border:1px solid var(--ln);padding:3px 10px;font-weight:700;font-size:11.5px;color:var(--mu)}
 #lineups .lt-sort button:hover{color:var(--tx)}
@@ -48,7 +49,7 @@ body.console-on #lineups{display:none}
 #lineups .lt-dl:disabled{opacity:.4;cursor:not-allowed}
 #lineups .lt-run{display:flex;align-items:center;gap:12px;margin:12px 0;padding:8px 12px;border:1px solid var(--am);font-size:12px;color:var(--am)}
 #lineups .lt-empty{padding:30px;color:var(--dim);font-size:13px}
-#lineups .lt-body{display:grid;grid-template-columns:minmax(450px,470px) minmax(0,1fr);gap:14px;align-items:start}
+#lineups .lt-body{display:grid;grid-template-columns:minmax(480px,500px) minmax(0,1fr);gap:14px;align-items:start}
 #lineups .lt-ex{border:1px solid var(--ln);background:var(--p);padding:8px 0}
 #lineups .lt-exh{padding:2px 16px 8px;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--dim)}
 #lineups .lt-ex .sec{display:none}
@@ -154,11 +155,30 @@ body.console-on #lineups{display:none}
 #lineups .swt td,#lineups .swt th{padding-right:5px}
 #lineups .swh{display:block}
 #lineups .swh span{display:block}
-/* A build of up to 150 lineups (Adam, 2026-11-07): the exposure table and the cards each scroll in their own box at most a screen
-   tall, so the page never stretches to the last card and the table stays beside the cards. */
+/* A build of up to 150 lineups (Adam, 2026-11-07): the exposure table, the cards and Compare's tables each scroll in their own box,
+   sized by lineups-panel.js (sizeBoxes) to the room left below its top, so at the top of the page the whole box is on screen and
+   the page never stretches to the last card. The max-height here is only the fallback before that runs. Each box keeps its title
+   and its table head in view. */
 @media (min-width:600px){
-  #lineups .lt-ex,#lineups .lt-cards{max-height:calc(100dvh - 12px);overflow-y:auto;overscroll-behavior:contain}
+  #lineups .lt-ex,#lineups .lt-cards,#lineups .cp-scroll{max-height:calc(100dvh - 12px);overflow-y:auto;overscroll-behavior:contain}
+  #lineups .lt-ex{padding-top:0}
+  #lineups .lt-exh{position:sticky;top:0;z-index:3;height:26px;box-sizing:border-box;padding:8px 16px 0;background:var(--p)}
+  #lineups .lt-ex .ext thead th{position:sticky;top:26px;z-index:2;background:var(--p);box-shadow:inset 0 -1px var(--ln)}
+  #lineups .cp-scroll thead tr:not(.cp-cap) th{position:sticky;top:0;z-index:2;box-shadow:inset 0 -1px var(--ln)}
 }
+/* The exposure table fits its column: a long name ends in an ellipsis, so the Filter buttons are never cut off. */
+#lineups .lt-ex .ext td.ex-name{max-width:0;overflow:hidden;text-overflow:ellipsis}
+#lineups .lt-ex .ext td.ex-name>*{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* The spot filter: each button on one line; the row wraps between buttons. */
+#lineups .lt-sort button{white-space:nowrap}
+/* The spot menu: its list scrolls inside it and the ways to add a spot stay under the list; it opens upward when the room below is
+   short (lineups-panel.js placeSpotMenu, which also sets its height). */
+#lineups .spmenu{display:flex;flex-direction:column;max-height:420px}
+#lineups .spmenu.up{top:auto;bottom:calc(100% + 2px)}
+#lineups .spmenu .spwarn,#lineups .spfoot{flex:none}
+#lineups .splist{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+#lineups .spfoot{border-top:1px solid var(--ln);margin-top:2px;padding-top:2px}
+#lineups .spfull{white-space:normal}
 /* Phone: the summary tiles wrap two or three to a row and the download button takes its own row. */
 @media (max-width:599px){
   #lineups .lt-top{flex-direction:column;align-items:stretch}
