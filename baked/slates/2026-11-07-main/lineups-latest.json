@@ -1,34 +1,35 @@
 {
  "slate": "2026-11-07-main",
- "generated_at": "2026-11-07T23:39:22.254Z",
+ "generated_at": "2026-11-07T23:55:02.487Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-07-main/raw/2026-11-07T183913-0500",
+ "slate_built_from": "slates/2026-11-07-main/raw/2026-11-07T185455-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-07T23:39:18.172Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-07T183359-0500.html.gz",
-   "saved_at": "2026-11-07T23:33:59.845Z",
-   "unchanged_since": "2026-11-07T23:33:59.845Z",
-   "parsed_sha": "3ed87297ae31c17333292eafa7209ce558834d5201052d53ed59d9c6407772ca",
-   "sha256": "ea2867bff8b827639d19f8c4683f81ab930edc151d8b6cd392915223172e015a"
+   "fetched_at": "2026-11-07T23:54:58.405Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-07T184433-0500.html.gz",
+   "saved_at": "2026-11-07T23:44:33.102Z",
+   "unchanged_since": "2026-11-07T23:44:33.102Z",
+   "parsed_sha": "fe585f37e6fd5be07dc6fddfcb997dbb51c1bf4cf66142d3b4f0a91000e18da4",
+   "sha256": "a5170b0543e8f3c3688c11942b2063bc6d8158259380e85a7beaec94115a99f1"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-07T23:39:22.233Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-07T183922-0500.html.gz",
-   "saved_at": "2026-11-07T23:39:22.233Z",
-   "parsed_sha": "bdfa7eb665294f4199ea64d16375600febeee4ace21de9d55739f83ef6bf0d61",
-   "sha256": "8f67e39197151262df6cda6d8fa8289fae2d0afb4922554dea39de9ec4f7d6c4"
+   "fetched_at": "2026-11-07T23:55:02.477Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-07T184947-0500.html.gz",
+   "saved_at": "2026-11-07T23:49:47.513Z",
+   "unchanged_since": "2026-11-07T23:49:47.513Z",
+   "parsed_sha": "c25a84c66858e65c1e09b15dcbdf77f01dc284475502d1c6b75fe830b85d4a70",
+   "sha256": "155586268d7e12f1aaf04ee28d3f4ded481b2019a0668f5073f74e91495fcf37"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-07T23:39:13.458Z",
-  "changed_at": "2026-11-07T18:33:55-05:00",
-  "saved_as": "news/bbm/2026-11-07T183355-0500.html",
+  "fetched_at": "2026-11-07T23:54:55.155Z",
+  "changed_at": "2026-11-07T18:49:39-05:00",
+  "saved_as": "news/bbm/2026-11-07T184939-0500.html",
   "out": [
    {
     "name": "Tyrese Haliburton",
@@ -400,9 +401,9 @@
       "name": "Landry Shamet",
       "pos": "SG",
       "bmId": "5713",
-      "flag": null,
-      "word": null,
-      "status": null,
+      "flag": "S",
+      "word": "Starting",
+      "status": "UNKNOWN(S #00cc44 Starting)",
       "verified": false,
       "id": "44828620",
       "match": "exact"
@@ -1228,14 +1229,6 @@
       "flag": "Ques",
       "status": "Questionable",
       "id": "44828503",
-      "match": "exact"
-     },
-     {
-      "name": "Gary Payton",
-      "pos": "G",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44828718",
       "match": "exact"
      },
      {

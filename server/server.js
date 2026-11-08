@@ -430,7 +430,9 @@ async function handlePlayerLog(req, res, url) {
   const gone = new AbortController();
   res.on("close", () => { if (!res.writableFinished) gone.abort(); });
   try {
-    return send(res, 200, await getPlayerLog(q.name, q.team, { signal: gone.signal }));
+    // taken: his DK teammates on the newest slate, so a near-name match never lands on a teammate's row (none readable: no near match).
+    const { cardTeammates } = await import("../site/shim/app-only.js");
+    return send(res, 200, await getPlayerLog(q.name, q.team, { signal: gone.signal, taken: cardTeammates(q.name, q.team) }));
   } catch (e) {
     if (!(e instanceof PlayerLogError)) throw e;
     if (e.cancelled) return res.destroy(); // nobody is waiting for this answer
