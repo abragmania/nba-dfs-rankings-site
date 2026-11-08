@@ -1,33 +1,33 @@
 {
  "slate": "2026-11-07-main",
- "generated_at": "2026-11-08T00:05:27.643Z",
+ "generated_at": "2026-11-08T00:10:42.817Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-07-main/raw/2026-11-07T190520-0500",
+ "slate_built_from": "slates/2026-11-07-main/raw/2026-11-07T191035-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-08T00:05:23.531Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-07T190523-0500.html.gz",
-   "saved_at": "2026-11-08T00:05:23.531Z",
-   "parsed_sha": "78158b10cadd85c3ac8f1922c46cf9f28d679039f9e5707a1796abb54e347c7c",
-   "sha256": "48e4f7823fdee60de71075b2e4b906f5d7ed62673ae33df17830e0c87b57407f"
+   "fetched_at": "2026-11-08T00:10:38.663Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-07T191038-0500.html.gz",
+   "saved_at": "2026-11-08T00:10:38.663Z",
+   "parsed_sha": "914ba038194cf1bd1ec76dfed4bfbc1edeb0998c128d88ded45472e5d44b150b",
+   "sha256": "379f9cbf44adf3400cb4bf431bc5e60963106a70401c11a518974282d626a2b6"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-08T00:05:27.625Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-07T190527-0500.html.gz",
-   "saved_at": "2026-11-08T00:05:27.625Z",
-   "parsed_sha": "8facc421a8890cec25666ce09e48f1c481bb0f2cb602577bf00bb95cecebfa06",
-   "sha256": "75b57e800872af19c1a1abf04528569c0622a3a2cfbdc3645abeb680f52cb16d"
+   "fetched_at": "2026-11-08T00:10:42.773Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-07T191042-0500.html.gz",
+   "saved_at": "2026-11-08T00:10:42.773Z",
+   "parsed_sha": "da66ffcb261e551792a86500a78942216af11811c5e35d715fbe70c5757804fc",
+   "sha256": "43e5fb5050f5a72ab8a7b3ea4aca56bdc53760e464afdc8585560de07f69a428"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-08T00:05:20.205Z",
-  "changed_at": "2026-11-07T19:05:20-05:00",
-  "saved_as": "news/bbm/2026-11-07T190520-0500.html",
+  "fetched_at": "2026-11-08T00:10:35.079Z",
+  "changed_at": "2026-11-07T19:10:35-05:00",
+  "saved_as": "news/bbm/2026-11-07T191035-0500.html",
   "out": [
    {
     "name": "Tyrese Haliburton",
@@ -108,7 +108,7 @@
    "game": "BKN@ATL",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Nolan Traore",
@@ -117,41 +117,41 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44828560",
       "match": "exact"
      },
      {
-      "name": "Michael Porter Jr.",
+      "name": "Danny Wolf",
       "pos": "SG",
+      "bmId": "7151",
+      "flag": "S",
+      "word": "Starting",
+      "status": "UNKNOWN(S #00cc44 Starting)",
+      "verified": true,
+      "id": "44828740",
+      "match": "exact"
+     },
+     {
+      "name": "Michael Porter Jr.",
+      "pos": "SF",
       "bmId": "5682",
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44828412",
       "match": "exact"
      },
      {
       "name": "Julius Randle",
-      "pos": "SF",
+      "pos": "PF",
       "bmId": "3946",
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44828406",
-      "match": "exact"
-     },
-     {
-      "name": "Danny Wolf",
-      "pos": "PF",
-      "bmId": "7151",
-      "flag": null,
-      "word": null,
-      "status": null,
-      "verified": false,
-      "id": "44828740",
       "match": "exact"
      },
      {
@@ -161,7 +161,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44828539",
       "match": "exact"
      }
@@ -169,7 +169,7 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Nolan Traore",
@@ -188,11 +188,11 @@
       "match": "exact"
      },
      {
-      "name": "Chaney Johnson",
+      "name": "Danny Wolf",
       "pos": "SF",
       "flag": null,
       "status": null,
-      "id": "44828634",
+      "id": "44828740",
       "match": "exact"
      },
      {
@@ -212,7 +212,7 @@
       "match": "exact"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": [
      {
       "name": "Egor Demin",
@@ -290,7 +290,7 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Kingston Flemings",
@@ -333,7 +333,7 @@
       "match": "exact"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": [
      {
       "name": "Henri Veesaar",
