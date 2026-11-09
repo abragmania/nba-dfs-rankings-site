@@ -175,7 +175,8 @@ export function starterFigure(fig, key, pos0) {
  * man keeps his place on the ladder and his minutes count toward the bench, so typing a man's current figure moves nobody. Pure.
  *   Starters past room: every untyped man is scaled by one factor. Otherwise, if the starters leave the bench under BENCH_FLOOR they are scaled down to leave it exactly that;
  *   each bench man then takes his rung until the rest runs out (the last takes what is left, the men after him 0); when the rest is more than the rungs hold, every rung is raised in proportion.
- *   Known limit: once scale-all is on (starters past room), typing a man's scaled figure can drop the starters back under room and turn it off, so the others do move; the factor is not held across that switch.
+ *   This function alone is not a no-op for a typed man's own figure once scale-all is on (typing a scaled figure can drop the starters back under room and turn it off); chartMinutes
+ *   therefore drops a typed figure equal to the man's own before calling it (settleTyped), which is what makes typing a current figure move nobody.
  */
 export function shareMinutes(starters, bench, ladder, typed = 0, typedOn = {}) {
   const out = {}, room = Math.max(0, TEAM_MINUTES - typed);
@@ -237,6 +238,10 @@ export function chartFive(chart, active, flips, extraIns = []) {
  * order, then the men off it) shares the rest of TEAM_MINUTES by shareMinutes; Out of rotation and the injured list play 0. min is null with no figure.
  */
 export function chartMinutes(chart, state = {}) {
+  if (!state.settled && Object.keys(state.typed ?? {}).length) { // a typed figure that is what the sharing gives him anyway is no edit: it moves nobody (settleTyped)
+    const edits = settleTyped(state.typed, (rest) => Object.fromEntries(Object.entries(chartMinutes(chart, { ...state, typed: rest, settled: true }).minutes).map(([k, v]) => [k, v.min])));
+    return chartMinutes(chart, { ...state, typed: edits, echo: Object.fromEntries(Object.entries(state.typed).filter(([k]) => !(k in edits))), settled: true });
+  }
   const men = chart.men, extra = (state.extraIns ?? []).filter((e) => e && typeof e.key === "string" && !men[e.key]);
   const extraOf = Object.fromEntries(extra.map((e) => [e.key, { ...e, role: e.role ?? "starter" }]));
   const keys = [...Object.keys(men), ...Object.keys(extraOf)];
@@ -264,6 +269,7 @@ export function chartMinutes(chart, state = {}) {
   for (const k of keys) {
     if (down(k)) { set(k, 0, absent.has(k) ? "not on tonight's board" : "out"); continue; }
     if (k in typed) { set(k, typed[k], "typed by you"); continue; }
+    if (isNum(state.echo?.[k])) { set(k, state.echo[k], "typed by you"); continue; } // typed at his own figure: shown as typed, shared as if untyped
     const s = starts.find((x) => x.key === k);
     if (s) { const sh = share[k]; set(k, sh ? sh.min : s.min, [s.basis, sh?.how, startsFor(k)].filter(Boolean).join("; "), s.median === true); continue; }
     if (share[k]) { set(k, share[k].min, share[k].how); continue; }
@@ -274,6 +280,27 @@ export function chartMinutes(chart, state = {}) {
   const total = Object.values(minutes).reduce((s, v) => (isNum(v.min) ? s + v.min : s), 0);
   const totalNote = totalMissNote(total, typedSum, fig, blank && nameOf(blank.key));
   return { minutes, starters: five, total: r3(total), total_note: totalNote, notes: [...fiveNotes(chart, five, (k) => Boolean(men[k]) && active(k), why, asked), ...(totalNote ? [totalNote] : [])] };
+}
+
+/**
+ * The typed minutes that are real edits: { key: minutes } without the men typed at the figure the sharing gives them untyped (within SAME_MIN, a thousandth kept).
+ * Such a man is no edit, so he is shared as if untyped and nobody moves; this is the one place that rule lives, for Ours here and the TwoGun source in console-engine.js.
+ * `minutesWith(edits)`: { key: minutes } for everyone when only `edits` is typed. The no-edits are the largest set of typed men who each get exactly their typed figure when all of them
+ * are left untyped together (two men typed at their own figures are judged together, and so is a man typed beside a real edit, whatever order they are listed in). More than SETTLE_MAX
+ * typed men are all kept as edits, the old rule.
+ */
+export const SAME_MIN = 0.0006;
+const SETTLE_MAX = 6;
+export function settleTyped(typed, minutesWith) {
+  const keys = Object.keys(typed), n = keys.length;
+  if (n === 0 || n > SETTLE_MAX) return typed;
+  const bits = (m) => keys.filter((_, i) => (m >> i) & 1).length, kept = (m) => Object.fromEntries(keys.filter((_, i) => !((m >> i) & 1)).map((k) => [k, typed[k]]));
+  const masks = [...Array((1 << n) - 1).keys()].map((i) => i + 1).sort((a, b) => bits(b) - bits(a) || a - b); // every non-empty set of men to leave untyped, the largest first
+  for (const mask of masks) {
+    const got = minutesWith(kept(mask));
+    if (keys.every((k, i) => !((mask >> i) & 1) || (isNum(got?.[k]) && Math.abs(got[k] - typed[k]) <= SAME_MIN))) return kept(mask);
+  }
+  return typed;
 }
 
 /** Why the team's minutes are not 240, naming the cause; null when they are, within 0.05. */

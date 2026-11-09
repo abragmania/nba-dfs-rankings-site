@@ -232,6 +232,7 @@ function applyFresh(slate) {
   if (changed && !scenarioConsole.isOn()) fixTableWidth();
   if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
   lineupBar.refresh(); boardMarks.refresh(); // a new pull: the lineup read and TwoGun's flags may both have moved
+  scenarioConsole.onPull(S.name).then((ok) => { if (ok && S.slate) { S.consolePull = pullOf(S.slate).key; renderUpdLine(); } }).catch((e) => toast(`The console could not check the new pull: ${e.message}`, "err")); // the console has the new pull, so its line stops asking to reopen it; his marks are sent over the new pull with no click (console.js onPull)
 }
 /** He has left the box: the row that waited takes its new figures, and whatever named a man it dropped follows. */
 function flushHeld() {

@@ -29,5 +29,5 @@ export function appliedMinuteMisses(players, rowMen, applied) {
     else if (!m.out && isNum(m.min) && (!isNum(b.min) || Math.abs(m.min - b.min) > BASE_MOVE)) what = `${name} (TwoGun ${isNum(b.min) ? b.min.toFixed(1) : "none"} to ${m.min.toFixed(1)})`;
     if (what) moved.set(p.team, [...(moved.get(p.team) ?? []), what]);
   }
-  return [...moved.keys()].sort().map((team) => `Applied numbers for ${team} sit on figures the newest pull moved since your Apply: ${moved.get(team).join(", ")}. Reopen the console and Apply again.`);
+  return [...moved.keys()].sort().map((team) => `The numbers sent for ${team} sit on figures the newest pull moved: ${moved.get(team).join(", ")}. Open the console and they are sent again.`);
 }

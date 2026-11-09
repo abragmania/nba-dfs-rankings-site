@@ -29,7 +29,7 @@ export function cardApi(c, ensure) {
     c.touched = sets.touched; c.pending = sets.pending;
   };
   /** A move from the player card: held for its Apply, with where it started kept from the first one, so a refused Apply can take them all back. */
-  const cardMove = (fn) => { c.cardStart ??= { base: M.histMark(c), sets: keepSets() }; return held(fn); };
+  const cardMove = (fn) => { c.cardStart ??= { base: M.histMark(c), sets: keepSets(), carried: false }; return held(fn); };
   return {
     /** { team, id, man, row (the scenario's row for him), moves (the five-starter rule's last moves on his team), saveErr, applied }, or null when he is not on any team of the slate. Throws when the console cannot load. */
     async manView(slate, who) {
@@ -136,14 +136,18 @@ export function cardApi(c, ensure) {
     setMark: (team, id, k, v) => M.setPin(c, team, id, k, v),
     /** The card's Apply: checks and sends in one step. When the check refuses (err.notes), the card's held moves are taken back, so "nothing sent" stays true; a failure of any other kind leaves them on show and waiting. */
     async applyNow(team) {
-      const start = c.cardStart;
+      // One send owns the moves made since the last send (its start); a move made after this point opens a new start of its own. A refusal takes back only this send's moves,
+      // and only when no other send has carried them and nothing has been done since (the history is where this send found it); otherwise they stay and the refusal says so.
+      const start = c.cardStart, end = M.histMark(c);
+      c.cardStart = null;
+      if (start) (c.cardOwned ??= new Set()).add(start);
       try {
-        const out = await applyDirect(c, team);
-        if (c.cardStart === start) c.cardStart = null;
-        return out;
+        return await applyDirect(c, team);
       } catch (e) {
-        if (e.notes && start && c.cardStart === start) { backOut(start.base, start.sets); c.cardStart = null; }
+        if (e.notes && start && !start.carried && M.histMark(c) === end) backOut(start.base, start.sets);
         throw e;
+      } finally {
+        c.cardOwned?.delete(start);
       }
     },
   };

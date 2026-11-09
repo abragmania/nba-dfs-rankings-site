@@ -1,6 +1,6 @@
 // The console's moves on his work: history and ripple, saving, pins, roles, who is out, hand-outs. Each takes the console's shared state `c`.
 import { keyOf, outsOf, usageStart } from "./console-engine.js";
-import { calc, chipName, hasPins, label, moveTo, noteOuts, pinsOf, recordOf, savedFor, sgn } from "./console-model.js";
+import { calc, canonRecord, chipName, dropCopies, hasPins, label, moveTo, noteOuts, pinsOf, recordOf, savedFor, sgn } from "./console-model.js";
 import { FN, fmtv } from "./console-cmd.js";
 import { COLS } from "./console-render.js";
 import { PIN_MAX } from "./override-limits.js";
@@ -22,6 +22,7 @@ function touch(c, before, { track = false } = {}) {
   c.touched ??= new Set();
   c.pending ??= new Set();
   for (const [code, S] of Object.entries(c.model.ST)) {
+    dropCopies(S); // a scenario left holding the same marks as the one on show is not kept
     if (before[code] !== teamState(S)) { c.touched.add(code); c.pending.add(code); }
     if (track && c.model.TEAMS[code] && before[code] !== undefined) noteOuts(c.model.TEAMS[code], S, JSON.parse(before[code])[0]); // who he put Out or back in, kept as its own record
     if (S.tonight !== undefined && keyOf(S.outs) !== S.tonight) S.sticky = true; // off Tonight once: where he is stays saved (console-model.js recordOf)
@@ -29,7 +30,7 @@ function touch(c, before, { track = false } = {}) {
 }
 const states = (c) => Object.fromEntries(Object.entries(c.model.ST).map(([code, S]) => [code, teamState(S)]));
 /** The send after a step, unless the caller holds it (the player card sends with its own check, console-card.js). */
-const kick = (c) => { if (c.holdSend) return; c.cardStart = null; c.auto?.kick(); }; // anything sent from here on carries the card's moves, so they can no longer be taken back as unsent
+const kick = (c) => { if (c.holdSend) return; c.cardStart = null; for (const s of c.cardOwned ?? []) s.carried = true; c.auto?.kick(); }; // anything sent from here on carries the card's moves, so they can no longer be taken back as unsent
 
 export function pushHist(c, text) {
   const G = c.G;
@@ -70,9 +71,11 @@ export function saveDirty(c) {
     const text = JSON.stringify(recordOf(S));
     if (text === (c.lastSaved[code] ?? EMPTY_RECORD_TEXT)) continue;
     c.lastSaved[code] = text;
+    c.saveGen = (c.saveGen ?? 0) + 1; // a save of his own is under way: a read of the server's records during it is not comparable (console.js refresh)
     c.saveQueue = c.saveQueue.then(async () => {
       try {
         await c.api(`/api/slate/${encodeURIComponent(name)}/scenarios`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ team: code, record: JSON.parse(text) }) });
+        (c.serverSeen ??= {})[code] = canonRecord(JSON.parse(text)); // what the server holds for the team is now what this page wrote
         if (c.saveErrs[code] && name === c.slate) { delete c.saveErrs[code]; c.drawBar(); }
       } catch (e) {
         if (name === c.slate) { c.saveErrs[code] = `${code} not saved: ${e.message}`; c.lastSaved[code] = "unsaved"; c.drawBar(); }
@@ -222,6 +225,7 @@ function carryPins(S, T, from, to, changes) {
   // "pins not on show" note. An unsaved scenario left with role flips alone, or nothing, is dropped.
   const typed = ["m", "u", "d", "p"].some((k) => Object.keys(S.pins[from]?.[k] ?? {}).length);
   if (!typed && from !== "" && from !== T.tonightKey && !S.saved.includes(from) && !(S.shown ?? []).includes(from)) delete S.pins[from];
+  if (S.pins[from] && !(S.left ??= []).includes(from)) S.left.push(from); // a copy he left by moving: dropCopies may drop it once it holds nothing different
 }
 
 /** What one role move changed in the flips: { id: new role, or null where a flip came off }. */

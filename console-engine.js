@@ -20,6 +20,7 @@
 import { isNum } from "./figures.js";
 import { FLIP_ROLES, liveFlips, resolveRoles } from "./console-roles.js";
 import { chartUse, oursFor, sourceOf } from "./console-ours.js";
+import { settleTyped } from "./depth-chart.js";
 
 export const TEAM_USAGE = 100;
 /** A usage total this close to 100 is on it; further off is named on the page. A working tolerance. */
@@ -205,7 +206,8 @@ export function roleMinutes(p, role) {
  */
 function minutesFor(team, outSet, tonightSet, pins, flips, implicit = {}) {
   const typed = pinsOnPlaying(team, outSet, pins), moved = { ...implicit, ...flips }; // his flips, and the men they moved; only his own go to the chart as flips
-  const closed = new Set([...Object.keys(typed), ...Object.keys(moved)]);
+  const edits = settleTyped(typed, (rest) => modelledMinutes(team, outSet, tonightSet, new Set([...Object.keys(rest), ...Object.keys(moved)]))); // a man typed at his own figure is no edit: he takes his hand-out and nobody moves
+  const closed = new Set([...Object.keys(edits), ...Object.keys(moved)]);
   const modelled = modelledMinutes(team, outSet, tonightSet, closed);
   const minutes = {}, basis = {}, median = new Set(), fromOurs = new Set();
   const src = sourceOf(team), ours = src === "twogun" ? null : oursFor(team, outSet, flips, typed, src === "ours_edits");

@@ -32,19 +32,33 @@ export const dcls = (x) => (Math.abs(x) < 0.05 ? "dim" : x > 0 ? "up" : "dn");
  *  Each is rebased from the Tonight it was made on onto this one (moveTo), his pins carried across; an id no longer on the team drops. */
 export function buildModel(inputs, saved, appliedKeys = {}) {
   const TEAMS = {}, ST = {};
-  for (const [code, input] of Object.entries(inputs.teams)) {
-    const T = TEAMS[code] = shapeTeam(input), rec = saved?.[code], S = ST[code] = stateFor(T, rec);
-    pruneFlips(T, S);
-    const recTonight = typeof rec?.tonight === "string" ? rec.tonight : T.tonightKey;
-    const ak = Object.hasOwn(appliedKeys ?? {}, code) ? appliedKeys[code] : undefined;
-    const applied = ak === undefined ? null : typeof ak === "string" ? { key: ak, tonight: recTonight } : ak;
-    if (typeof rec?.on === "string") moveTo(T, S, outsOf(rec.on), recTonight);
-    else if (applied) moveTo(T, S, outsOf(applied.key), typeof applied.tonight === "string" ? applied.tonight : recTonight);
-    else moveTo(T, S, outsOf(recTonight), recTonight);
-    S.sticky = Boolean(applied) || typeof rec?.on === "string"; // keeps saving where he is, so a reload never falls back to an older applied key
-  }
+  for (const [code, input] of Object.entries(inputs.teams)) ({ T: TEAMS[code], S: ST[code] } = buildTeam(input, saved?.[code], appliedKeys?.[code]));
   return { TEAMS, ST };
 }
+
+/** One team's T and S from its inputs, its saved record and its applied key (buildModel's rules). Also how a page takes another page's newer record for a team. */
+export function buildTeam(input, rec, ak) {
+  const T = shapeTeam(input), S = stateFor(T, rec);
+  pruneFlips(T, S);
+  const recTonight = typeof rec?.tonight === "string" ? rec.tonight : T.tonightKey;
+  const applied = ak === undefined || ak === null ? null : typeof ak === "string" ? { key: ak, tonight: recTonight } : ak;
+  if (typeof rec?.on === "string") moveTo(T, S, outsOf(rec.on), recTonight);
+  else if (applied) moveTo(T, S, outsOf(applied.key), typeof applied.tonight === "string" ? applied.tonight : recTonight);
+  else moveTo(T, S, outsOf(recTonight), recTonight);
+  S.sticky = Boolean(applied) || typeof rec?.on === "string"; // keeps saving where he is, so a reload never falls back to an older applied key
+  return { T, S };
+}
+
+/** A saved team record in one canonical text (default sections filled, every key sorted), so two pages' records compare by what they hold, not by how they were written. */
+export function canonRecord(rec) {
+  const sort = (v) => (Array.isArray(v) ? v.map(sort) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sort(v[k])])) : v);
+  return JSON.stringify(sort({ saved: [], pins: {}, handouts: {}, combos: {}, ...(rec ?? {}) }));
+}
+/** Whether two saved team records differ: another page wrote one of them. */
+export const recordsDiffer = (a, b) => canonRecord(a) !== canonRecord(b);
+
+/** What is in the box he is typing in (an input with a value other than its shown default), else null. A redraw puts it back (console.js keepInput). */
+export const typedText = (a) => (a && typeof a.value === "string" && a.value !== a.defaultValue ? a.value : null);
 
 /**
  * Who is out on a Tonight (Adam, 11-07): its outs, plus the men he or the news put Out, minus the men he put back in. `mine` is the explicit record of those
@@ -120,6 +134,35 @@ export function pruneFlips(T, S) {
 }
 
 export const hasPins = (p) => Boolean(p) && Object.values(p).some((sec) => Object.keys(sec ?? {}).length > 0);
+
+/** Whether the file still holds an older form of this team's work than the model just built from it: rebased onto a newer Tonight (a pull landed since it was saved).
+ *  Such a team is written on the next save, so the server's pins sit under the scenario the console sends. */
+export const savedBehind = (rec, S) => typeof rec?.tonight === "string" && rec.tonight !== S.tonight;
+
+/** A scenario's pins as one text, empty sections left out: two scenarios with the same text hold the same marks. */
+const pinsText = (p) => JSON.stringify(["m", "u", "d", "p", "r"].map((k) => Object.entries(p?.[k] ?? {}).sort(([a], [b]) => (a < b ? -1 : 1))));
+/** Whether two scenarios' pins hold the same marks (empty sections ignored). The one compare, here and on the server (console-apply.js). */
+export const pinsSame = (a, b) => pinsText(a) === pinsText(b);
+
+/**
+ * The copies he leaves behind by clicking men Out and back (S.left: the scenarios he moved off, with their pins carried along): one that is neither Tonight, Healthy, saved nor on show and holds
+ * exactly the marks of the scenario on show is dropped, since going to it again carries the same marks again. A scenario he did not leave by moving (one he retyped by hand, one on file
+ * from an earlier session) is never dropped here; the server does not call an equal copy held back (console-apply.js). True when any was dropped.
+ */
+export function dropCopies(S) {
+  const here = keyOf(S.outs);
+  let any = false;
+  if (hasPins(S.pins[here])) {
+    for (const key of S.left ?? []) {
+      if (key === here || key === "" || key === S.tonight || S.saved.includes(key) || !S.pins[key] || !pinsSame(S.pins[key], S.pins[here])) continue;
+      delete S.pins[key];
+      S.shown = (S.shown ?? []).filter((k) => k !== key);
+      any = true;
+    }
+  }
+  S.left = (S.left ?? []).filter((k) => k !== here && S.pins[k]); // a scenario he stands on is his own from then on
+  return any;
+}
 
 /** The team's scenarios in the order he reads them: Healthy, Tonight, then his saved ones whose men are all still on the team. */
 export function savedFor(T, S) {

@@ -2,7 +2,7 @@
 // writes the files. A plan is worked out on the server from the saved work and the posted scenario keys, so preview and Apply are the same sums.
 import crypto from "../../site/shim/crypto.js";
 import { keyOf, outsOf, scenario, teamFor, emptyPins } from "../board/console-engine.js";
-import { hasPins, label, tableName } from "../board/console-model.js";
+import { hasPins, label, pinsSame, tableName } from "../board/console-model.js";
 import { effectiveProjection, mergeOverrides } from "./overrides.js";
 import { PROJ_MAX } from "../board/override-limits.js";
 import { isNum, isPlain, round2, tonightRate } from "../board/figures.js";
@@ -40,15 +40,19 @@ export function orphanedPins(inputs, file, keys) {
   for (const [code, rec] of Object.entries(file.teams)) {
     if (!Object.hasOwn(inputs.teams, code)) continue;
     const t = inputs.teams[code];
-    const known = new Set(t.men.map((p) => p.id)), tonight = keyOf(t.tonight);
+    const known = new Set(t.men.map((p) => p.id)), tonight = keyOf(t.tonight), nameOf = Object.fromEntries(t.men.map((p) => [p.id, p.name]));
     for (const [key, pins] of Object.entries(rec.pins ?? {})) {
       const ids = Object.values(pins).flatMap((sec) => Object.keys(sec ?? {}));
       if (!ids.length) continue;
+      if (key !== keys[code] && pinsSame(pins, rec.pins?.[keys[code]])) continue; // a copy of the marks on show holds nothing different: nothing is held back
       const stale = !outsOf(key).every((id) => known.has(id));
       const gone = ids.filter((id) => !known.has(id)).length;
       const unsent = key !== keys[code] && key !== tonight && key !== "" && !(rec.saved ?? []).includes(key);
-      if (stale || unsent) out.push({ team: code, key, count: ids.length });
-      else if (gone) out.push({ team: code, key, count: gone });
+      // who: the men holding the pins, by name (a man no longer on the team has no name to give); scenario: its name, null when it names a man no longer on the team
+      const who = (list) => [...new Set(list.map((id) => nameOf[id]).filter(Boolean))];
+      const scenario = stale ? null : label(shapedTeam(t), key);
+      if (stale || unsent) out.push({ team: code, key, count: ids.length, who: who(ids), scenario });
+      else if (gone) out.push({ team: code, key, count: gone, who: [], scenario, gone: true });
     }
   }
   return out;
@@ -162,7 +166,7 @@ function changedRows(plan, ctx) {
  * What Apply would do for the posted scenarios: { changes: largest move first, rows (changedRows, the preview's table), typed: { id: number, or null for a removal }, min: { id: minutes,
  * or null for a removal }, min_moves (how many), restoring (the men going back to before an earlier Apply), teams: [{ team, key, name, moves,
  * min_moves, min_total }], refused (always empty: no team total refuses Apply, Adam 11-06), kept,
- * missing, clamped, back_on_zero, not_on_board, orphaned_pins, unchanged, basis }. A team on Tonight with no pins or role flips sends nothing but
+ * missing, clamped, back_on_zero, not_on_board, orphaned_pins, unchanged, basis }. A team on Tonight with no pins or role flips, on TwoGun minutes, sends nothing but
  * that undoing. min_total is the team's minutes for reference only. `from` and `to` are the effective board figures, so a man's thumbs bump on top
  * of the typed number is counted; each sent man's bump is in the basis.
  */
@@ -177,15 +181,18 @@ export function planApply(inputs, file, overrides, players, keys, only = null) {
     if (only && !only.has(t.code)) continue; // a team not asked for is not planned, sent or undone (the console sends only the teams he changed)
     const rec = Object.hasOwn(file.teams, t.code) ? file.teams[t.code] : null, key = keys[t.code], tonight = keyOf(t.tonight);
     const name = label(shapedTeam(t), key);
-    if (key === tonight && !hasPins(rec?.pins?.[key])) {
+    const ownSource = Boolean(rec?.source) && rec.source !== "twogun"; // Ours feeds the optimizer here, so Tonight with no pins is still a send
+    if (key === tonight && !hasPins(rec?.pins?.[key]) && !ownSource) {
       const { moves, min_moves } = undoTeam(plan, t, ctx);
       if (moves || min_moves) plan.teams.push({ team: t.code, key, tonight, name, moves, min_moves, min_total: null, undone: true });
       continue;
     }
     const { moves, min_moves, totals } = planTeam(plan, t, rec, key, ctx);
-    plan.teams.push({ team: t.code, key, tonight, name, moves, min_moves, min_total: totals.min });
+    plan.teams.push({ team: t.code, key, tonight, name, moves, min_moves, min_total: totals.min, held: true });
   }
   plan.min_moves = Object.keys(plan.min).length;
+  // A mark that moved no number is still held: the applied record names its team and scenario, so a reload sends it again and the header does not call it unsent.
+  plan.holds = plan.teams.some((t) => { const ak = file.applied?.keys?.[t.team], k = typeof ak === "string" ? ak : ak?.key; return t.held && k !== t.key; });
   plan.changes.sort((a, b) => Math.abs(b.move ?? Infinity) - Math.abs(a.move ?? Infinity) || a.name.localeCompare(b.name));
   plan.rows = changedRows(plan, ctx);
   plan.orphaned_pins = orphanedPins(inputs, file, keys).filter((o) => !only || only.has(o.team));
@@ -223,7 +230,7 @@ export function applyRecord(plan, overrides, applied, atIso) {
   const keys = { ...(applied?.keys ?? {}) };
   for (const t of plan.teams) {
     if (t.undone) delete keys[t.team];
-    else if (t.moves > 0 || t.min_moves > 0 || Object.hasOwn(keys, t.team)) keys[t.team] = { key: t.key, tonight: t.tonight };
+    else if (t.moves > 0 || t.min_moves > 0 || t.held || Object.hasOwn(keys, t.team)) keys[t.team] = { key: t.key, tonight: t.tonight };
   }
   const minLeft = Object.keys({ ...(overrides.min ?? {}), ...plan.min }).some((id) => (Object.hasOwn(plan.min, id) ? plan.min[id] !== null : true));
   // What TwoGun had under each applied man, kept until his numbers come off: a man this Apply touched takes this pull's figure, or none when he went back.
@@ -232,7 +239,7 @@ export function applyRecord(plan, overrides, applied, atIso) {
     if (Object.hasOwn(plan.base ?? {}, id)) base[id] = plan.base[id];
     else delete base[id];
   }
-  const out = Object.keys(set).length || minLeft ? { at: atIso, set, keys, base, pull: plan.pull ?? null } : null;
+  const out = Object.keys(set).length || minLeft || Object.keys(keys).length ? { at: atIso, set, keys, base, pull: plan.pull ?? null } : null;
   return { changes: { proj, min: plan.min }, applied: out };
 }
 

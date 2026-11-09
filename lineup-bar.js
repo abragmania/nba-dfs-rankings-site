@@ -44,22 +44,22 @@ export function statusLine(read) {
 }
 
 /**
- * The words for a refused Apply: the cause once, the men listed. "nothing sent, because on CHA: A has no projection here (why); B has ..." becomes
- * "Apply refused, nothing sent: no projection for A, B (why)". Anything else is said as it came, without the console's pointer sentence.
+ * The words for a send that was refused: the cause once, the men listed. "nothing sent, because on CHA: A has no projection here (why); B has ..." becomes
+ * "Not sent: no projection for A, B (why)". Anything else is said as it came, without the console's pointer sentence.
  */
 export function refusalText(message) {
-  const clean = String(message ?? "").replace(/\s*Open the console's Apply to see it all\.?\s*$/, "").replace(/\.$/, "");
+  const clean = String(message ?? "").replace(/\s*Open the console(?:'s Apply)? to see it all\.?\s*$/, "").replace(/\.$/, "");
   const m = /^nothing sent, because on \w+: (.*)$/.exec(clean);
-  if (!m) return `Apply refused: ${clean}`;
+  if (!m) return `Not sent: ${clean}`;
   const segs = m[1].split("; ").map((s) => /^(.+?) has no projection here \((.*)\)$/.exec(s));
-  if (segs.some((x) => !x)) return `Apply refused, nothing sent: ${m[1]}`;
+  if (segs.some((x) => !x)) return `Not sent: ${m[1]}`;
   const groups = new Map();
   for (const [, who, why] of segs) {
     const reason = /^no (.+ season totals file) \(run node (\S+)\)$/.exec(why);
     const text = reason ? `${reason[1]} missing; run ${reason[2]}` : why;
     groups.set(text, [...(groups.get(text) ?? []), lastName(who)]);
   }
-  return `Apply refused, nothing sent: ${[...groups].map(([why, who]) => `no projection for ${who.join(", ")} (${why})`).join("; ")}`;
+  return `Not sent: ${[...groups].map(([why, who]) => `no projection for ${who.join(", ")} (${why})`).join("; ")}`;
 }
 
 /** The one summary line the bar shows while the console is open (lineup-bar.css): "Lineup news: 2 applied, 3 for information, 1 check, 1 note · show". Pure. */
@@ -153,7 +153,7 @@ export function createLineupBar({ el, api, slate, players, console: cons, toast,
       return settle([line, `Lineup news waits: the console could not load (${e.message})`]);
     }
     if (mine !== gen || name !== slate()) return;
-    const stale = seen.result.stale ? `The lineup read is ${seen.result.stale.ageMin == null ? "of unknown age" : `${seen.result.stale.ageMin} minutes old`}; nothing from it applies until the next pull.` : "";
+    const stale = seen.result.stale ? `The lineup read is ${seen.result.stale.ageMin == null ? "of unknown age" : `${seen.result.stale.ageMin} minutes old`}; nothing from it is made by itself until the next pull.` : "";
     settle([line, stale], { applied: newsRows(seen.view), info: seen.plan.info, conflicts: seen.result.conflicts });
   }
   /** One look at a time, so a change is never applied twice; a call while one runs makes one more after it. */

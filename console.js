@@ -3,11 +3,11 @@
 // (console-auto.js), so there is no Apply step. This file holds the shared state, drawing, loading and the screen's clicks and keys;
 // console-moves.js acts on the state.
 import { esc, tipWhen } from "./board-util.js";
-import { buildModel, recordOf, refreshTeams } from "./console-model.js";
+import { buildModel, buildTeam, canonRecord, recordOf, refreshTeams, savedBehind, typedText } from "./console-model.js";
 import { depthHtml } from "./console-depth.js";
 import { dropMark, firstPlaying, jumpTeam, pushHist, redo, setPin, setSource, toggleOut, toggleStarter, undo } from "./console-moves.js";
 import { cardApi } from "./console-card.js";
-import { createAutoApply, requeueNews } from "./console-auto.js";
+import { createAutoApply, createPullReads, mayAutoSend, requeueApplied, requeueNews, resendChanged, resultSigs } from "./console-auto.js";
 import { PIN_MAX } from "./override-limits.js";
 import { keyOf } from "./console-engine.js";
 
@@ -25,18 +25,23 @@ function teamColour(c, team) {
 
 /** The input with the keyboard, found again after a redraw by its team, man and kind. */
 function keepInput(c, draw) {
-  const a = document.activeElement, at = a && c.el.contains(a) && a.matches("input.fin") ? { ...a.dataset, s: a.selectionStart, e: a.selectionEnd } : null;
+  const a = document.activeElement, at = a && c.el.contains(a) && a.matches("input.fin") ? { ...a.dataset, s: a.selectionStart, e: a.selectionEnd, typed: typedText(a) } : null;
   draw();
   if (!at) return;
   const el = c.el.querySelector(`input.fin[data-team="${CSS.escape(at.team)}"][data-id="${CSS.escape(at.id)}"][data-k="${at.k}"]`);
   if (!el) return;
   el.focus({ preventScroll: true });
-  el.select();
+  if (at.typed === null) { el.select(); return; }
+  el.value = at.typed; // a redraw (a pull, a send's state) never changes what he is in the middle of typing; the box keeps its new default, so a commit still sees a change
+  el.setSelectionRange(at.s ?? at.typed.length, at.e ?? at.typed.length);
 }
 
 function render(c) {
   const G = c.G;
   if (c.loadError || !c.model || !G.cur) return;
+  const typing = document.activeElement;
+  if (typing && c.el.contains(typing) && typing.matches?.("input.fin") && typedText(typing) !== null) { c.redrawLater = true; return; } // he is part-way through a number: a redraw would end the box (and commit half of it), so it waits until he leaves it
+  c.redrawLater = false;
   const saveErr = Object.values(c.saveErrs).join(" ") || null;
   keepInput(c, () => {
     c.E("app").innerHTML = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr });
@@ -67,6 +72,7 @@ function ensure(c, name) {
 
 async function load(c, name) {
   clearTimeout(c.usageTimer);
+  clearTimeout(c.retryTimer);
   Object.assign(c, { slate: name, loadError: null, model: null, usageTries: 0, saveErrs: {}, sync: { state: "ok", at: null }, touched: new Set(), pending: new Set() }); // another slate: nothing changed on it yet
   c.E("app").innerHTML = `<div class="fatalc dimc">Loading ${esc(name)}...</div>`;
   try {
@@ -75,13 +81,16 @@ async function load(c, name) {
     takeInputs(c, out);
     c.model = buildModel(c.inputs, out.scenarios.teams, out.scenarios.applied?.keys);
     c.lastSaved = {};
-    for (const code of Object.keys(c.model.ST)) c.lastSaved[code] = JSON.stringify(recordOf(c.model.ST[code]));
+    c.serverSeen = Object.fromEntries(Object.keys(c.model.ST).map((code) => [code, canonRecord(out.scenarios.teams[code])])); // what the server held for each team when this page last looked or wrote
+    for (const code of Object.keys(c.model.ST)) c.lastSaved[code] = savedBehind(out.scenarios.teams[code], c.model.ST[code]) ? "unsaved" : JSON.stringify(recordOf(c.model.ST[code])); // work rebased on a newer pull, or cleaned of old copies, is written on the next save
     const G = c.G, first = Object.keys(c.model.TEAMS)[0] ?? null;
     Object.assign(G, { cur: first, view: "team", editing: false, modal: null, pick: null, roleMoves: null, hist: [], hi: -1, focus: first ? { team: first, id: firstPlaying(c, first), k: "m" } : null });
     if (!first) return showError(c, "This slate has no games.");
     pushHist(c, "Start");
     render(c);
-    if (requeueNews(c)) c.auto.kick(); // a news change whose send never landed reaches the board now
+    const news = requeueNews(c), applied = requeueApplied(c);
+    if (news || applied) c.auto.kick(); // a news change whose send never landed, or a pull since the last send, reaches the board now
+    else c.auto.settleNow(); // old work this page does not send (a locked or older slate, a mark nothing moved) is said in the header, not "up to date"
     watchUsage(c);
   } catch (e) {
     if (name === c.slate) showError(c, e.message);
@@ -92,14 +101,37 @@ async function load(c, name) {
 async function refresh(c) {
   const name = c.slate;
   try {
+    await c.saveQueue; // his own saves have landed, so what the server holds is comparable
+    const gen = c.saveGen;
     const out = await c.api(`/api/slate/${encodeURIComponent(name)}/console`);
     if (name !== c.slate || !c.model) return;
+    const was = resultSigs(c);
     takeInputs(c, out);
     refreshTeams(c.model, c.inputs);
+    const others = c.saveGen === gen ? takeOthersWork(c, out) : []; // a save of his own during the read makes the comparison unsafe, so it waits for the next one
+    resendChanged(c, was); // a pull that moved a team the board holds is sent without a click
     render(c);
+    if (others.length) c.toast(`Another page changed ${others.join(", ")}: this page took its marks and sent nothing over them.`, "notice");
   } catch (e) {
     c.toast(`Could not refresh the console's inputs: ${e.message}`, "err");
+    c.auto?.fail(`The console could not read the new inputs, so the board may be behind: ${e.message}`); // the header is not green
   }
+}
+
+/** A team whose saved record on the server is not the one this page last saved was written by another page: this page takes the server's record for it (marks, scenario, source) and does not send its own copy. The teams taken. */
+export function takeOthersWork(c, out) {
+  const taken = [];
+  for (const [code, input] of Object.entries(c.inputs.teams)) {
+    const seen = c.serverSeen?.[code], now = canonRecord(out.scenarios.teams[code]);
+    (c.serverSeen ??= {})[code] = now;
+    if (seen === undefined || seen === now || c.lastSaved[code] === "unsaved") continue; // nobody else wrote, or his own write is still to come
+    const { T, S } = buildTeam(input, out.scenarios.teams[code], out.scenarios.applied?.keys?.[code]);
+    c.model.TEAMS[code] = T; c.model.ST[code] = S;
+    c.lastSaved[code] = savedBehind(out.scenarios.teams[code], S) ? "unsaved" : JSON.stringify(recordOf(S));
+    c.touched?.delete(code); c.pending?.delete(code);
+    taken.push(code);
+  }
+  return taken;
 }
 
 function watchUsage(c) {
@@ -113,6 +145,8 @@ function watchUsage(c) {
 function commitBox(c, inp) {
   if (inp.dataset.done) return; // Enter has sent it; the change event that follows is the same commit
   inp.dataset.done = "1";
+  const shown = inp.defaultValue;
+  inp.defaultValue = inp.value; // what he typed is now committed text, so the redraw this commit causes is not held back as half-typed (render)
   const { team, id, k } = inp.dataset, text = inp.value.trim();
   const T = c.model.TEAMS[team];
   if (!T) return;
@@ -120,7 +154,7 @@ function commitBox(c, inp) {
   if (text === "") { if (had !== undefined) dropMark(c, team, id, k); else render(c); return; }
   const v = /^(\d+\.?\d*|\.\d+)$/.test(text) ? Number(text) : NaN;
   if (!(v >= 0 && v <= PIN_MAX[k])) { c.toast(`${k === "m" ? "Minutes" : "DK/min"} must be a number from 0 to ${PIN_MAX[k]}.`, "err"); render(c); return; }
-  if (inp.defaultValue !== "" && Number(inp.defaultValue) === v) { delete inp.dataset.done; return; } // unchanged as shown
+  if (shown !== "" && Number(shown) === v) { delete inp.dataset.done; return; } // unchanged as shown
   setPin(c, team, id, k, v);
 }
 
@@ -161,6 +195,7 @@ export function createConsole({ el, api, toast, colourOf, onPlayers, onWork }) {
   c.auto = createAutoApply(c, { refreshInputs: () => refresh(c), onState: () => { if (c.on) render(c); else c.onWork?.(); } }); // the board shows the send's state too
   el.addEventListener("click", (e) => onClick(c, e));
   el.addEventListener("change", (e) => { if (e.target.matches?.("input.fin")) commitBox(c, e.target); });
+  el.addEventListener("focusout", () => setTimeout(() => { if (c.redrawLater && c.on) render(c); }, 0)); // the redraw that waited for him to finish typing
   document.addEventListener("keydown", (e) => onKey(c, e));
   return {
     /** The slate on show changed. Nothing loads until the console is opened or the board asks. */
@@ -168,6 +203,7 @@ export function createConsole({ el, api, toast, colourOf, onPlayers, onWork }) {
       if (name === c.slate) return;
       Object.assign(c, { slate: name, model: null, inputs: null, loadError: null });
       clearTimeout(c.usageTimer);
+      clearTimeout(c.retryTimer);
       if (c.on) load(c, name);
     },
     show(name) {
@@ -184,6 +220,17 @@ export function createConsole({ el, api, toast, colourOf, onPlayers, onWork }) {
     },
     hide() { c.on = false; el.hidden = true; },
     isOn: () => c.on,
+    /** An in-place pull refresh landed on the open page (board.js applyFresh), console open or not: the work loads if it has not (a load re-checks every team the board holds), else its inputs are
+     *  read again and each team whose result moved is sent by the console's own send line, one at a time after any send in flight. One read at a time; teams with nothing held send nothing. */
+    async onPull(name) {
+      c.pullName = name;
+      await (c.pullReads ??= createPullReads({
+        read: () => (c.pullName !== c.slate || !c.model ? ensure(c, c.pullName) : refresh(c)),
+        kick: () => { if (mayAutoSend(c.inputs)) c.auto.kick(); },
+        pending: () => c.pending ?? new Set(),
+      }))();
+      return !c.loadError && Boolean(c.model);
+    },
     /** The player card's and the board's reads and writes on the same work (console-card.js). */
     ...cardApi(c, (name) => ensure(c, name)),
   };

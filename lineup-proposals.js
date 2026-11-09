@@ -131,7 +131,7 @@ export function makeProposals({ latest, players, view = null, nowMs = Date.now()
         text: `${labelsOf(sources)}: ${name} OUT (TwoGun still ${mins(tgMin(p))} min)${typed.has(id) || markedS.has(id) ? `; overrides your ${[typed.has(id) ? "typed numbers" : "", markedS.has(id) ? "S" : ""].filter(Boolean).join(" and ")}` : ""}`,
         sources, twogun: { minutes: tgMin(p) ?? null },
         actions: [{ fn: "setRole", team, id, role: "out" }],
-        ...(near ? { nearApply: "the source's name for him matched only nearly, so Apply is off; check him by hand" } : {}),
+        ...(near ? { nearApply: "the source's name for him matched only nearly, so it is not made by itself; check him by hand" } : {}),
         signature: JSON.stringify({ kind: "out", id, s: sources.map((s) => [s.key, s.detail]) }),
       });
     }
@@ -164,7 +164,7 @@ export function makeProposals({ latest, players, view = null, nowMs = Date.now()
       signature: JSON.stringify({ kind: "starter", in: incoming, out: missing, s: sources.map((s) => [s.key, s.lineup]) }),
     });
   }
-  if (stale) for (const p of proposals) p.noApply = `the lineup read is ${stale.ageMin == null ? "of unknown age" : `${stale.ageMin} minutes old`}, so Apply is off until the next pull`;
+  if (stale) for (const p of proposals) p.noApply = `the lineup read is ${stale.ageMin == null ? "of unknown age" : `${stale.ageMin} minutes old`}, so nothing from it is made by itself until the next pull`;
   for (const p of proposals) p.auto = isAuto(p);
   return { proposals, conflicts, stale };
 }

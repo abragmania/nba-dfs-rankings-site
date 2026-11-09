@@ -39,7 +39,7 @@ async function inputsFor(res, ctx, slate, slateData) {
   }
 }
 
-const publicPlan = ({ changes, rows, min_moves, teams, refused, kept, missing, clamped, back_on_zero, not_on_board, back_in, orphaned_pins, unchanged, basis }) => ({ changes, rows, min_moves, teams, refused, kept, missing, clamped, back_on_zero, not_on_board, back_in, orphaned_pins, unchanged, basis });
+const publicPlan = ({ changes, rows, min_moves, holds, teams, refused, kept, missing, clamped, back_on_zero, not_on_board, back_in, orphaned_pins, unchanged, basis }) => ({ changes, rows, min_moves, holds, teams, refused, kept, missing, clamped, back_on_zero, not_on_board, back_in, orphaned_pins, unchanged, basis });
 /** count: men whose projection an Apply set. min_count: men holding applied minutes, read from the overrides, the only place they are kept. */
 const appliedView = (applied, overrides) => (applied ? { at: applied.at, count: Object.keys(applied.set).length, min_count: Object.keys(overrides.min ?? {}).length, keys: applied.keys ?? {} } : null);
 
@@ -90,14 +90,14 @@ function writeApply(slate, file, overrides, rec, players) {
 
 async function handleApply(req, res, slate, ctx) {
   if (req.method !== "POST") return ctx.fail(res, 405, "METHOD", "POST only.");
-  const slateData = ctx.openSlate(req, res, slate, "An Apply");
+  const slateData = ctx.openSlate(req, res, slate, "A send");
   if (!slateData) return;
   const read = await ctx.readJson(req, res);
   if (!read) return;
   const inputs = await inputsFor(res, ctx, slate, slateData);
   if (!inputs) return;
   // A console left open across a pull holds an old Tonight: what it reads as a chosen scenario would be sent as one.
-  if (Object.hasOwn(read.body ?? {}, "pull") && read.body.pull !== inputs.basis.pull) return ctx.fail(res, 409, "CONSOLE_OLD_PULL", "A new pull has landed since this console opened, so nothing was applied. Go back to the board and open the console again, then Apply.");
+  if (Object.hasOwn(read.body ?? {}, "pull") && read.body.pull !== inputs.basis.pull) return ctx.fail(res, 409, "CONSOLE_OLD_PULL", "A new pull has landed since this console read its inputs, so nothing was sent. The console reads the new pull and sends again by itself.");
   const checked = checkKeys(read.body?.scenarios, inputs), teams = checkTeams(read.body?.teams, inputs);
   if (!checked.ok) return ctx.fail(res, 400, "BAD_SCENARIO", checked.message);
   if (!teams.ok) return ctx.fail(res, 400, "BAD_SCENARIO", teams.message);
@@ -106,9 +106,13 @@ async function handleApply(req, res, slate, ctx) {
     const file = readScenarios(slate), overrides = readOverrides(slate);
     const plan = planApply(inputs, file, overrides, players, checked.keys, teams.only);
     if (read.body.preview === true) return ctx.send(res, 200, { ...publicPlan(plan), usage: inputs.usage });
-    if (inputs.usage.state === "loading") return ctx.fail(res, 409, "USAGE_LOADING", "The usage table is still loading; try Apply again in a moment.");
-    if (read.body.basis !== plan.basis) return ctx.fail(res, 409, "CONSOLE_MOVED", "The numbers moved since the preview, so nothing was applied. Look again.");
-    if (!plan.changes.length && !plan.min_moves) return ctx.send(res, 200, { applied: appliedView(file.applied, overrides), changed: 0, min_changed: 0, refused: plan.refused, players: mergeOverrides(players, overrides) });
+    if (inputs.usage.state === "loading") return ctx.fail(res, 409, "USAGE_LOADING", "The usage table is still loading; try again in a moment.");
+    if (read.body.basis !== plan.basis) return ctx.fail(res, 409, "CONSOLE_MOVED", "The numbers moved since the preview, so nothing was sent. Look again.");
+    if (!plan.changes.length && !plan.min_moves) {
+      if (plan.holds) writeScenarios(slate, { ...file, applied: applyRecord(plan, overrides, file.applied, new Date(ctx.now()).toISOString()).applied }); // no number moved, but the mark is held: only the record is written
+      const held = plan.holds ? readScenarios(slate).applied : file.applied;
+      return ctx.send(res, 200, { applied: appliedView(held, overrides), changed: 0, min_changed: 0, refused: plan.refused, players: mergeOverrides(players, overrides) });
+    }
     const rec = applyRecord(plan, overrides, file.applied, new Date(ctx.now()).toISOString());
     const written = writeApply(slate, file, overrides, rec, players);
     ctx.send(res, 200, { applied: appliedView(rec.applied, written), changed: plan.changes.length, min_changed: plan.min_moves, refused: plan.refused, players: mergeOverrides(players, written) });
