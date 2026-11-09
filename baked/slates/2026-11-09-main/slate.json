@@ -2,17 +2,17 @@
   "slate": "2026-11-09-main",
   "date": "2026-11-09",
   "label": "TwoGun nba_projections row (slate group 156358)",
-  "built_from": "slates/2026-11-09-main/raw/2026-11-09T173741-0500",
+  "built_from": "slates/2026-11-09-main/raw/2026-11-09T174826-0500",
   "as_of": {
-    "board_updated": "Mon, Nov 9, 4:36 PM CT",
-    "injury_report": "Mon, Nov 9, 4:30 PM CT (row meta.report)",
-    "pull_started": "2026-11-09T17:37:41-05:00",
+    "board_updated": "Mon, Nov 9, 4:46 PM CT",
+    "injury_report": "Mon, Nov 9, 4:45 PM CT (row meta.report)",
+    "pull_started": "2026-11-09T17:48:26-05:00",
     "page_updated": null
   },
   "as_of_by_source": {
     "twogun_row": {
-      "updated": "Mon, Nov 9, 4:36 PM CT",
-      "injury_report": "Mon, Nov 9, 4:30 PM CT"
+      "updated": "Mon, Nov 9, 4:46 PM CT",
+      "injury_report": "Mon, Nov 9, 4:45 PM CT"
     }
   },
   "lock": "Mon, Nov 9, 6:00 PM CT",
@@ -260,7 +260,7 @@
     {"dk_id":"44847729","name":"Cameron Carr","team":"LAL","opponent":"ATL","game":"LAL@ATL","positions":["SG","SF"],"roster_positions":["SG","SF","F","G","UTIL"],"tip":"Mon, Nov 9, 6:00 PM CT","salary":3000,"minutes":0.1,"projection":0.08,"ceiling":2.82,"value":0.03,"proj_own":0,"injury_status":null,"starter":false,"dd_pct":0,"td_pct":0,"no_history":null}
   ],
   "out": [
-    {"name":"Austin Reaves","team":"LAL","salary_text":"$8K","status":"QUESTIONABLE","reason":"Illness","usual_minutes":36.6,"sources":["twogun_row"]},
+    {"name":"Austin Reaves","team":"LAL","salary_text":"$8K","status":"OUT","reason":"Illness","usual_minutes":36.6,"sources":["twogun_row"]},
     {"name":"Tyrese Haliburton","team":"IND","salary_text":"$8.4K","status":"OUT","reason":"Left Hamstring Strain","usual_minutes":33,"sources":["twogun_row"]},
     {"name":"Brandon Miller","team":"CHA","salary_text":"$7.9K","status":"OUT","reason":"Right Hip Strain","usual_minutes":29.6,"sources":["twogun_row"]},
     {"name":"Devin Vassell","team":"SAS","salary_text":"$5.3K","status":"OUT","reason":"Left Adductor Tightness","usual_minutes":29.5,"sources":["twogun_row"]},
@@ -334,9 +334,7 @@
     "EJ Harkless (DET $3K): Questionable, but likely playing — projected as playing",
     "Malachi Smith (TOR $3K): Available — projected as playing"
   ],
-  "conflicts": [
-    {"player":"Austin Reaves","field":"unknown out status","values":{"twogun_row":"QUESTIONABLE"}}
-  ],
+  "conflicts": [],
   "missing": [
     "TwoGun's identity note: unmatched: EJ Harkless DET $3000"
   ]

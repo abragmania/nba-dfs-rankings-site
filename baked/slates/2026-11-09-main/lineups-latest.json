@@ -1,31 +1,33 @@
 {
  "slate": "2026-11-09-main",
- "generated_at": "2026-11-09T22:37:48.612Z",
+ "generated_at": "2026-11-09T22:48:35.496Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-09-main/raw/2026-11-09T173741-0500",
+ "slate_built_from": "slates/2026-11-09-main/raw/2026-11-09T174826-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-09T22:37:44.498Z",
+   "fetched_at": "2026-11-09T22:48:31.336Z",
    "saved_as": "news/lineups/pages/monster-2026-11-09T173744-0500.html.gz",
    "saved_at": "2026-11-09T22:37:44.498Z",
+   "unchanged_since": "2026-11-09T22:37:44.498Z",
    "parsed_sha": "024c731738fc639149612cff6464feeda0047d1a3427163648b29f32b73ae41b",
-   "sha256": "32c9af35134629c70de169f36c3442fe0bc72633270d5100797c8d9424eaca6c"
+   "sha256": "f55fa26d5bbce998275a2275bf57ea99a95ed4620623bde7539aebea698ce791"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-09T22:37:48.592Z",
+   "fetched_at": "2026-11-09T22:48:35.446Z",
    "saved_as": "news/lineups/pages/rotowire-2026-11-09T173748-0500.html.gz",
    "saved_at": "2026-11-09T22:37:48.592Z",
+   "unchanged_since": "2026-11-09T22:37:48.592Z",
    "parsed_sha": "a183807d1d552d530fd2bdffec46f87d5119aa0e3537b6c75550c5769c9cefdd",
-   "sha256": "2556cc982bfe69c297676fed8902643fed2585ad8c5522bb3b7106d1d099b009"
+   "sha256": "523430e6fc8091b9ed34258aae622790774d1768f70faec313d04838737dc039"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-09T22:37:41.310Z",
+  "fetched_at": "2026-11-09T22:48:26.689Z",
   "changed_at": "2026-11-09T17:37:41-05:00",
   "saved_as": "news/bbm/2026-11-09T173741-0500.html",
   "out": [
