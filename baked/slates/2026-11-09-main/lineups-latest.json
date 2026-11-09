@@ -1,34 +1,35 @@
 {
  "slate": "2026-11-09-main",
- "generated_at": "2026-11-09T23:44:20.009Z",
+ "generated_at": "2026-11-09T23:49:56.211Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-09-main/raw/2026-11-09T184412-0500",
+ "slate_built_from": "slates/2026-11-09-main/raw/2026-11-09T184948-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-09T23:44:15.924Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-09T183839-0500.html.gz",
-   "saved_at": "2026-11-09T23:38:39.176Z",
-   "unchanged_since": "2026-11-09T23:38:39.176Z",
-   "parsed_sha": "0c9871eb1a0cf949c5fc8374ab128d3d3da4de00a45d280035f5b413ba1a94f2",
-   "sha256": "ba617199b73705c4ed6ccd2174659cbfde854c0415e1f529a8382c1d50339549"
+   "fetched_at": "2026-11-09T23:49:52.140Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-09T184656-0500.html.gz",
+   "saved_at": "2026-11-09T23:46:56.298Z",
+   "unchanged_since": "2026-11-09T23:46:56.298Z",
+   "parsed_sha": "c807b631b64fd8874d7f1f5400e02a39488bde64599703392411fb5b46caf80a",
+   "sha256": "d21b6bdb8527ff913ddcafb6ffaa37ee47e3e60d5e50c67e215b354f2f9f597d"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-09T23:44:19.991Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-09T184419-0500.html.gz",
-   "saved_at": "2026-11-09T23:44:19.991Z",
-   "parsed_sha": "7da78d7e095c2e82e1117c2e29e753f17084e8e01417b6193a24c78f427632ad",
-   "sha256": "2245dda16a22038b077342896d188dc7fbf62ad6dff17971a737255401172884"
+   "fetched_at": "2026-11-09T23:49:56.197Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-09T184700-0500.html.gz",
+   "saved_at": "2026-11-09T23:47:00.346Z",
+   "unchanged_since": "2026-11-09T23:47:00.346Z",
+   "parsed_sha": "45be22388c3a35b14664af9d70e81e2e1cc8d5b846707bc60113f2513c6307c8",
+   "sha256": "ef297736a14913333355bb94a88581e7d7d3be7ce7671504e3bfd89858233dfb"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-09T23:44:12.452Z",
-  "changed_at": "2026-11-09T18:44:12-05:00",
-  "saved_as": "news/bbm/2026-11-09T184412-0500.html",
+  "fetched_at": "2026-11-09T23:49:48.676Z",
+  "changed_at": "2026-11-09T18:46:51-05:00",
+  "saved_as": "news/bbm/2026-11-09T184651-0500.html",
   "out": [
    {
     "name": "Isaiah Joe",
@@ -297,6 +298,34 @@
   ],
   "cards": [
    {
+    "id": "182142",
+    "name": "Paul Reed",
+    "team": "DET",
+    "dk_id": "44847185",
+    "match": "exact",
+    "word": "Off the Bench",
+    "label": "UNKNOWN(Off the Bench #a6a6a6)",
+    "body": null,
+    "words_at": "2026-11-09T184651-0500",
+    "at": "2026-11-09T23:45:51.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182140",
+    "name": "Daniss Jenkins",
+    "team": "DET",
+    "dk_id": "44847406",
+    "match": "exact",
+    "word": "Starting",
+    "label": "Starting",
+    "body": null,
+    "words_at": "2026-11-09T184651-0500",
+    "at": "2026-11-09T23:45:51.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
     "id": "182139",
     "name": "T.J. McConnell",
     "team": "IND",
@@ -305,7 +334,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "hamstring",
-    "words_at": "2026-11-09T184412-0500",
+    "words_at": "2026-11-09T184651-0500",
     "at": "2026-11-09T23:40:12.000Z",
     "precision": "minute",
     "out_as": null
@@ -319,7 +348,7 @@
     "word": "Starting",
     "label": "Starting",
     "body": null,
-    "words_at": "2026-11-09T184412-0500",
+    "words_at": "2026-11-09T184651-0500",
     "at": "2026-11-09T23:36:12.000Z",
     "precision": "minute",
     "out_as": null
@@ -333,7 +362,7 @@
     "word": "Starting",
     "label": "Starting",
     "body": null,
-    "words_at": "2026-11-09T184412-0500",
+    "words_at": "2026-11-09T184651-0500",
     "at": "2026-11-09T23:34:12.000Z",
     "precision": "minute",
     "out_as": null
@@ -347,7 +376,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "right knee contusion",
-    "words_at": "2026-11-09T184412-0500",
+    "words_at": "2026-11-09T184651-0500",
     "at": "2026-11-09T23:11:41.000Z",
     "precision": "minute",
     "out_as": null
@@ -361,8 +390,8 @@
     "word": "Out",
     "label": "Out",
     "body": "left shin/tibia contusion",
-    "words_at": "2026-11-09T184412-0500",
-    "at": "2026-11-09T23:05:54.000Z",
+    "words_at": "2026-11-09T184651-0500",
+    "at": "2026-11-09T23:05:51.000Z",
     "precision": "minute",
     "out_as": "Morez Johnson"
    },
@@ -375,7 +404,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "g league twoway",
-    "words_at": "2026-11-09T184412-0500",
+    "words_at": "2026-11-09T184651-0500",
     "at": "2026-11-09T23:01:12.000Z",
     "precision": "minute",
     "out_as": null
@@ -389,7 +418,7 @@
     "word": "Out",
     "label": "Out",
     "body": "left hand soreness",
-    "words_at": "2026-11-09T184412-0500",
+    "words_at": "2026-11-09T184651-0500",
     "at": "2026-11-09T23:01:12.000Z",
     "precision": "minute",
     "out_as": "Bilal Coulibaly"
@@ -403,7 +432,7 @@
     "word": "Off Injury Report",
     "label": "UNKNOWN(Off Injury Report #00cc44)",
     "body": null,
-    "words_at": "2026-11-09T184412-0500",
+    "words_at": "2026-11-09T184651-0500",
     "at": "2026-11-09T23:01:12.000Z",
     "precision": "minute",
     "out_as": null
@@ -417,8 +446,8 @@
     "word": "Playing",
     "label": "Playing",
     "body": "right ankle sprain",
-    "words_at": "2026-11-09T184412-0500",
-    "at": "2026-11-09T23:00:54.000Z",
+    "words_at": "2026-11-09T184651-0500",
+    "at": "2026-11-09T23:00:51.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -431,7 +460,7 @@
     "word": "Probable",
     "label": "Probable",
     "body": "right wrist sprain",
-    "words_at": "2026-11-09T184412-0500",
+    "words_at": "2026-11-09T184651-0500",
     "at": "2026-11-09T23:00:41.000Z",
     "precision": "minute",
     "out_as": null
@@ -445,7 +474,7 @@
     "word": "Off Injury Report",
     "label": "UNKNOWN(Off Injury Report #00cc44)",
     "body": null,
-    "words_at": "2026-11-09T184412-0500",
+    "words_at": "2026-11-09T184651-0500",
     "at": "2026-11-09T23:00:41.000Z",
     "precision": "minute",
     "out_as": null
@@ -459,7 +488,7 @@
     "word": "Out",
     "label": "Out",
     "body": "right hamstring tightness / soreness",
-    "words_at": "2026-11-09T184412-0500",
+    "words_at": "2026-11-09T184651-0500",
     "at": "2026-11-09T22:49:23.000Z",
     "precision": "minute",
     "out_as": "Immanuel Quickley"
@@ -955,7 +984,8 @@
    "2026-11-09T183323-0500.html",
    "2026-11-09T183541-0500.html",
    "2026-11-09T183835-0500.html",
-   "2026-11-09T184412-0500.html"
+   "2026-11-09T184412-0500.html",
+   "2026-11-09T184651-0500.html"
   ],
   "unreadable_age": 0
  },
@@ -1681,16 +1711,16 @@
    "game": "WAS@DET",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Daniss Jenkins",
       "pos": "PG",
       "bmId": "7076",
-      "flag": null,
-      "word": null,
-      "status": null,
-      "verified": false,
+      "flag": "S",
+      "word": "Starting",
+      "status": "Starting",
+      "verified": true,
       "id": "44847406",
       "match": "exact"
      },
@@ -1701,7 +1731,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44847061",
       "match": "exact"
      },
@@ -1712,7 +1742,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44847258",
       "match": "exact"
      },
@@ -1723,7 +1753,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44847198",
       "match": "exact"
      },
@@ -1734,7 +1764,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44847281",
       "match": "exact"
      }
@@ -1742,7 +1772,7 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Cade Cunningham",
@@ -1753,8 +1783,16 @@
       "match": "exact"
      },
      {
-      "name": "Duncan Robinson",
+      "name": "Daniss Jenkins",
       "pos": "SG",
+      "flag": null,
+      "status": null,
+      "id": "44847406",
+      "match": "exact"
+     },
+     {
+      "name": "Duncan Robinson",
+      "pos": "SF",
       "flag": null,
       "status": null,
       "id": "44847258",
@@ -1762,7 +1800,7 @@
      },
      {
       "name": "Ausar Thompson",
-      "pos": "SF",
+      "pos": "PF",
       "flag": null,
       "status": null,
       "id": "44847198",
@@ -1770,22 +1808,14 @@
      },
      {
       "name": "John Collins",
-      "pos": "PF",
+      "pos": "C",
       "flag": null,
       "status": null,
       "id": "44847281",
       "match": "exact"
-     },
-     {
-      "name": "Paul Reed",
-      "pos": "C",
-      "flag": null,
-      "status": null,
-      "id": "44847185",
-      "match": "exact"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": [
      {
       "name": "Jalen Duren",
