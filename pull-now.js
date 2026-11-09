@@ -126,6 +126,7 @@ export function newestTime(text, field) {
   return best;
 }
 
+const GOOD_RESULT = new Set(["pulled", "unchanged", "older", "no_board"]);
 export const resultWords = (r) => ({ pulled: "new board", unchanged: "no new board", older: "no new board", no_board: "no new board", failed: "failed", missing: "failed", finished: "finished, board unknown", busy: "unknown", unknown: "unknown" })[r] ?? "unknown";
 export const whereWords = (w) => (["desktop", "laptop", "cloud", "this computer"].includes(w) ? w : "where unknown");
 
@@ -220,7 +221,7 @@ export function statusView(s) {
   if (b.busy) return { summary: `Pulling… don't press (${b.why})`, title, cls: "busy" };
   if (!st) return s.statusErr ? { summary: `Pull status unknown (${s.statusErr})`, title: s.statusErr, cls: "unk" } : { summary: "Checking pull status…", title: "", cls: "" };
   if (!st.last) return { summary: `Last pull unknown${tail}`, title: title || "No pull time is saved on this computer", cls: "unk" };
-  return { summary: `Last pull ${etStamp(st.last.atMs) ?? "at an unknown time"} · ${whereWords(st.last.where)} · ${resultWords(st.last.result)}${tail}`, title, cls: s.statusErr ? "unk" : "" };
+  return { summary: `Last pull ${etStamp(st.last.atMs) ?? "at an unknown time"} · ${whereWords(st.last.where)} · ${resultWords(st.last.result)}${tail}`, title, cls: s.statusErr || !GOOD_RESULT.has(st.last.result) ? "unk" : "" }; // the dim dot: the read failed, or the last pull failed or its outcome is unknown
 }
 
 /** Escaped text with a leading weekday ("Fri, Nov 6, ...") wrapped so a phone can hide it. Pure. */

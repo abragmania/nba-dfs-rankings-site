@@ -1,7 +1,9 @@
 // Lineup proposals (Adam, 11-06): what the news sources say against what the console shows for Tonight. Pure ES module shared by the page and
 // the tests; it reads nothing and applies nothing. Input is news/lineups/latest.json (tools/lineups_read.mjs), the slate's players (names and
 // TwoGun's minutes), `view`, the console's Tonight scenario { <team>: { roles: { id: role }, outs: [id], min: { id: minutes on screen } } } and `nowMs`.
-// Without a view nothing is proposed: whether a man starts or plays comes only from the console.
+// Without a view nothing is proposed: whether a man starts or plays comes only from the console. view[team].marks ({ out, s, typed }: his own marks)
+// win over every source: no Out is proposed for a man he marked Out, marked S or typed numbers for, and no start is proposed for a team where a man he
+// marked S is not in the sources' five.
 //   "out"     a man Out by Monster's player news, Monster's lineup page or RotoWire, whom the console still has playing (minutes above 0).
 //   "starter" the men both lineup sources list in the five, or one source lists with its lineup Confirmed / Verified, whom the console does not
 //             start: ONE proposal for the team, its action `setStarters` naming every man to start and every console starter the sources' five leaves
@@ -9,8 +11,12 @@
 // Rows that are not proposals (kind "conflict", "unmatched" or "unknown", Dismiss only): the sources disagree about a team (two confirmed fives that
 // differ, or a man Out in one feed and in another's five); a man in a used five has no id on the slate; a man in a used five has a status that was
 // not recognised; the console's starters left out of the five and the men to start do not match in number.
+// Applying (Adam, 11-07): there is no Apply button. isAuto says which proposals apply themselves (an Out; a start only from confirmed lineups) and
+// autoPlan which of those are new; the rest are words only. Marks win: a man he put back in gets no Out, and a man he benched gets no start.
 // A proposal built from a name matched only nearly (match "near") on an Out has `nearApply` (no Apply); when the read is over 90 minutes old, or
 // of unknown age, every proposal has `noApply` and `stale` says so.
+/** A source's words on a man are cut to this many characters, so no proposal grows past what the saved record holds. */
+const DETAIL_MAX = 160;
 const ORDER = ["monster", "monster_news", "rotowire"]; // the order sources are named in
 const LABEL = { monster: "Monster", monster_news: "Monster", rotowire: "RotoWire" };
 export const STALE_MIN = 90;
@@ -20,6 +26,8 @@ const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const okBlock = (b) => b?.state === "ok" && Array.isArray(b.men);
 /** TwoGun's own minutes for a man: a board row carries his typed minutes in `minutes` and TwoGun's in `base_minutes`. */
 const tgMin = (p) => (isNum(p?.base_minutes) ? p.base_minutes : p?.minutes);
+/** A short stable hash (djb2, base 36): a start proposal's id is the sources' five alone, so a changed five is new news and the same five from another source is not (Adam, 11-07). */
+export const hashOf = (text) => { let h = 5381; for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0; return h.toString(36); };
 const mins = (v) => (isNum(v) ? `${Math.round(v * 10) / 10}` : "?");
 
 const sourceTime = (latest, key) => (key === "monster_news" ? latest.monster_news?.fetched_at : latest.sources?.[key]?.fetched_at) ?? null;
@@ -35,11 +43,11 @@ function claimsFor(latest, team) {
     const b = block[key];
     if (!okBlock(b)) continue;
     const at = sourceTime(latest, key), lineup = b.confirmed ? "confirmed" : "projected";
-    for (const m of b.men) add(m.status === "Out" ? out : five, m, { key, at, lineup, detail: m.status === "Out" ? `${m.flag ?? "Out"} in its five` : null });
-    for (const m of Array.isArray(b.may_not_play) ? b.may_not_play : []) if (m.status === "Out") add(out, m, { key, at, lineup: null, detail: `${m.flag ?? "Out"} on MAY NOT PLAY` });
+    for (const m of b.men) add(m.status === "Out" ? out : five, m, { key, at, lineup, detail: m.status === "Out" ? `${String(m.flag ?? "Out").slice(0, DETAIL_MAX)} in its five` : null });
+    for (const m of Array.isArray(b.may_not_play) ? b.may_not_play : []) if (m.status === "Out") add(out, m, { key, at, lineup: null, detail: `${String(m.flag ?? "Out").slice(0, DETAIL_MAX)} on MAY NOT PLAY` });
   }
   const news = latest.monster_news;
-  if (news?.status === "ok") for (const m of Array.isArray(news.out) ? news.out : []) if (m.team === team) add(out, m, { key: "monster_news", at: news.fetched_at ?? null, lineup: null, detail: m.detail ?? "Out" });
+  if (news?.status === "ok") for (const m of Array.isArray(news.out) ? news.out : []) if (m.team === team) add(out, m, { key: "monster_news", at: news.fetched_at ?? null, lineup: null, detail: String(m.detail ?? "Out").slice(0, DETAIL_MAX) });
   return { out, five };
 }
 
@@ -104,6 +112,8 @@ export function makeProposals({ latest, players, view = null, nowMs = Date.now()
     const v = view[team];
     if (!v) continue;
     const claims = claimsFor(latest, team), consoleOut = new Set(v.outs ?? []), roles = v.roles ?? {};
+    // His own marks win over any news (Adam, 11-07): a proposal that would undo or contradict one is dropped, never offered.
+    const marks = v.marks ?? {}, markedOut = new Set(marks.out ?? []), markedS = new Set(marks.s ?? []), typed = new Set(marks.typed ?? []), markedIn = new Set(marks.in ?? []), benched = new Set(marks.benched ?? []);
     const q = qualifying(latest, team), clash = outVsFive(claims);
     if (q.conflict || clash.length) {
       const names = clash.map((c) => nameOf(c.id, c.outs[0].name));
@@ -112,12 +122,13 @@ export function makeProposals({ latest, players, view = null, nowMs = Date.now()
     }
     for (const [id, cl] of claims.out) {
       if (consoleOut.has(id) || !(v.min?.[id] > 0)) continue; // the console has him out, or not playing, or does not know him
+      if (markedIn.has(id)) continue; // he put him back in himself: no Out, ever. An Out is a fact otherwise: it applies over his typed numbers or S, and says so
       const p = byId.get(id);
       const sources = [...new Map(cl.map((c) => [c.key, { key: c.key, label: LABEL[c.key], at: c.at, lineup: c.lineup, detail: c.detail }])).values()].sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key));
       const name = nameOf(id, cl[0].name), near = cl.some((c) => c.near);
       proposals.push({
         id: `${slate}|${team}|out|${id}`, kind: "out", team, player: { id, name },
-        text: `${labelsOf(sources)}: ${name} OUT (TwoGun still ${mins(tgMin(p))} min)`,
+        text: `${labelsOf(sources)}: ${name} OUT (TwoGun still ${mins(tgMin(p))} min)${typed.has(id) || markedS.has(id) ? `; overrides your ${[typed.has(id) ? "typed numbers" : "", markedS.has(id) ? "S" : ""].filter(Boolean).join(" and ")}` : ""}`,
         sources, twogun: { minutes: tgMin(p) ?? null },
         actions: [{ fn: "setRole", team, id, role: "out" }],
         ...(near ? { nearApply: "the source's name for him matched only nearly, so Apply is off; check him by hand" } : {}),
@@ -130,10 +141,13 @@ export function makeProposals({ latest, players, view = null, nowMs = Date.now()
     if (unmatched.length) conflicts.push(checkRow(slate, team, "unmatched", `${team}: ${unmatched.join(", ")} in a lineup ${unmatched.length > 1 ? "are" : "is"} not matched to a slate player; no start proposed.`, unmatched));
     if (unknown.length) conflicts.push(checkRow(slate, team, "unknown", `${team}: ${unknown.join(", ")} in a lineup ${unknown.length > 1 ? "have" : "has"} a status that was not recognised; no start proposed.`, unknown));
     if (unmatched.length || unknown.length) continue;
-    const outNow = (id) => consoleOut.has(id) || claims.out.has(id);
-    const incoming = [...q.q].filter((id) => roles[id] !== undefined && roles[id] !== "starter" && !outNow(id)).sort((a, b) => (v.min?.[b] ?? 0) - (v.min?.[a] ?? 0) || a.localeCompare(b));
+    if ([...markedS].some((id) => !q.five.has(id))) continue; // a man he marked S is not in the sources' five: their five contradicts his mark
+    const outNow = (id) => consoleOut.has(id) || markedOut.has(id) || claims.out.has(id);
+    // A man he sent to the bench or out of the rotation is never proposed to start.
+    const incoming = [...q.q].filter((id) => roles[id] !== undefined && roles[id] !== "starter" && !outNow(id) && !benched.has(id)).sort((a, b) => (v.min?.[b] ?? 0) - (v.min?.[a] ?? 0) || a.localeCompare(b));
     if (!incoming.length) continue;
     const missing = Object.entries(roles).filter(([id, r]) => r === "starter" && !outNow(id) && !q.five.has(id)).map(([id]) => id).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+    if (missing.some((id) => typed.has(id))) continue; // the five would bench a man whose numbers he typed: his mark wins
     if (missing.length && missing.length !== incoming.length) {
       conflicts.push(conflictRow(slate, team, latest, `the console starts ${missing.map((id) => nameOf(id)).join(", ")}, not in the five, and ${incoming.length} men are to start`, missing));
       continue;
@@ -143,15 +157,39 @@ export function makeProposals({ latest, players, view = null, nowMs = Date.now()
     const ins = incoming.map((id) => ({ id, name: nameOf(id) })), outs = missing.map((id) => ({ id, name: nameOf(id) }));
     const tg = incoming.map((id) => mins(tgMin(byId.get(id)))).join(", ");
     proposals.push({
-      id: `${slate}|${team}|starter`, kind: "starter", team, player: ins[0], players: ins, bench: outs,
+      id: `${slate}|${team}|starter|${hashOf(JSON.stringify([...q.five].sort()))}`, kind: "starter", team, player: ins[0], players: ins, bench: outs,
       text: `${labelsOf(sources)}: ${ins.map((m) => m.name).join(", ")} ${ins.length > 1 ? "START" : "STARTS"}${outs.length ? `; ${outs.map((m) => m.name).join(", ")} to the bench` : ""} (${word}; TwoGun ${tg} min${ins.length === 1 ? `, console has him ${roles[incoming[0]] === "bench_plus" ? "Bench+" : roles[incoming[0]]}` : ""})`,
       sources, twogun: { minutes: tgMin(byId.get(incoming[0])) ?? null },
-      actions: [{ fn: "setStarters", team, starters: incoming, bench: missing }], // console-card.js applyProposal: the five-starter move that puts these men in and those out
+      actions: [{ fn: "setStarters", team, starters: incoming, bench: missing }], // console-card.js autoApplyProposal: the five-starter move that puts these men in and those out
       signature: JSON.stringify({ kind: "starter", in: incoming, out: missing, s: sources.map((s) => [s.key, s.lineup]) }),
     });
   }
   if (stale) for (const p of proposals) p.noApply = `the lineup read is ${stale.ageMin == null ? "of unknown age" : `${stale.ageMin} minutes old`}, so Apply is off until the next pull`;
+  for (const p of proposals) p.auto = isAuto(p);
   return { proposals, conflicts, stale };
+}
+
+/** Whether a proposal applies itself (Adam, 11-07): an Out from any source does; a start only when every lineup behind it is confirmed. A projected
+ *  start, a name matched only nearly, or a stale read is information only. */
+export function isAuto(p) {
+  if (p.noApply || p.nearApply) return false;
+  if (p.kind === "out") return true;
+  return p.kind === "starter" && p.sources.length > 0 && p.sources.every((s) => s.lineup === "confirmed");
+}
+
+/**
+ * What the bar does with a read: { apply: [proposals to apply now], info: [proposals shown as words only] }. `news`: { team: { id: entry } }, the console's
+ * record (console-card.js). A proposal applies once per id: once applied or undone it is never offered or applied again, whatever he did since; a failed one
+ * is tried again only when its news changes.
+ */
+export function autoPlan(result, news = {}) {
+  const apply = [], info = [];
+  for (const p of result.proposals) {
+    const e = news[p.team]?.[p.id];
+    if (e && (e.state !== "failed" || e.sig === hashOf(String(p.signature)))) continue; // sig is the hash of its news (console-card.js)
+    (p.auto ? apply : info).push(p);
+  }
+  return { apply, info };
 }
 
 /** What stays on the bar after his dismissals: `dismissed` is { id: signature }; a row returns when its sources change (its signature differs). */

@@ -1,9 +1,10 @@
-// The typed Proj and Own boxes and the note box on a player row (optimizer standard A3): click-away saves, Enter saves, Esc
+// The typed Proj, Own, Min and DK/m TON boxes and the note box on a player row (optimizer standard A3): click-away saves, Enter saves, Esc
 // cancels, with the hint under the box. The rows redraw on every pick, save and answer from the server, so an open box is
 // lifted out and put back around each redraw: the same element, with what was typed, its caret and its listeners. The box is
 // laid over the figure, right-aligned to it, while the figure keeps its place hidden, so no column moves. The outcomes are
 // pure and tested in node; the rest is tested on a stand-in page.
-import { PROJ_MAX, OWN_MAX, NOTE_MAX, BUMP_STEP_PCT } from "./override-limits.js";
+import { PROJ_MAX, OWN_MAX, NOTE_MAX, BUMP_STEP_PCT, PIN_MAX } from "./override-limits.js";
+import { tonightRate } from "./figures.js";
 import { pressSettle } from "./press-settle.js";
 
 export const HINT = "Enter saves, Esc cancels";
@@ -29,10 +30,14 @@ export function noteOutcome(text, old) {
 }
 
 /** The number a Proj or Own box starts from: the typed one when there is one, else the slate's own, never the bumped one
- *  (a bump stays on top of whatever is typed). */
+ *  (a bump stays on top of whatever is typed). A Min (cmin) or DK/m TON (crate) box starts from the figure the board shows. */
 export function typedBase(p, kind) {
+  if (kind === "cmin") return p.minutes;
+  if (kind === "crate") return tonightRate(p.projection, p.minutes);
   return kind === "proj" ? p.ovr?.projection ?? p.base?.projection ?? p.projection : p.ovr?.proj_own ?? p.base?.proj_own ?? p.proj_own;
 }
+/** Each number box's ceiling and name. Min and DK/m TON are the console's typed minutes and DK/min (Adam, 11-07), with the console's limits. */
+const NUMBER_BOX = { proj: [PROJ_MAX, "Projection"], own: [OWN_MAX, "Ownership"], cmin: [PIN_MAX.m, "Minutes"], crate: [PIN_MAX.d, "DK/min"] };
 
 /**
  * The one editor at a time. deps: root (the table body), rowOf(id) (the player as the board holds him now), save(kind, id,
@@ -86,8 +91,8 @@ export function createEditors({ root, rowOf, save, toast, limits = null, onClose
     if (!p || e.input.value === e.start) return { act: "cancel" };
     if (e.kind === "note") return noteOutcome(e.input.value, p.note);
     if (isLimit(e.kind)) return limits.outcome(e.kind, e.id, e.input.value);
-    const proj = e.kind === "proj";
-    return numberOutcome(e.input.value, { cur: typedBase(p, e.kind), max: proj ? PROJ_MAX : OWN_MAX, what: proj ? "Projection" : "Ownership" });
+    const [max, what] = NUMBER_BOX[e.kind];
+    return numberOutcome(e.input.value, { cur: typedBase(p, e.kind), max, what });
   };
 
   /** Enter: a bad number keeps the box open, marked, with the reason in the hint line. A note box hands the keyboard back to its button. */

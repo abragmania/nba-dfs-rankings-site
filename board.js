@@ -22,6 +22,7 @@ import { loadView, saveView, DEFAULT_SORT } from "./view-memory.js";
 import { loadTheme, saveTheme, themeClasses, themeHtml } from "./theme.js";
 import { createConsole } from "./console.js";
 import { createLineupBar } from "./lineup-bar.js";
+import { createBoardMarks } from "./board-marks.js";
 import { mountLateSwap } from "./lsw-main.js";
 
 const $ = (id) => document.getElementById(id);
@@ -87,8 +88,10 @@ const panel = createPanel({ el: $("opt"), lineupsEl: $("lineups"), onView: (v) =
 const columns = columnsControl({ btn: $("colsBtn"), pop: $("colPop"), mode: panel.mode, tryStore, onChange: () => { if (S.slate) { renderHead(); fixTableWidth(); } } });
 const shownCols = () => columns.keys({ lateSwap: Boolean(panel.lateSwap()) });
 // The scenario console (console.js), the page's other view; Apply hands back the players' effective figures, as an override save does.
-const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: (t) => colourOf(t).t1, onPlayers: (players) => applyPlayers(players) });
-// The lineup bar above the list (lineup-bar.js): what the Monster and RotoWire lineup pages say that TwoGun and the console do not show yet; Apply goes through the console.
+const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: (t) => colourOf(t).t1, onPlayers: (players) => applyPlayers(players), onWork: () => { boardMarks.refresh({ news: false }); lineupBar.newsOnly(); } });
+// The console's word on each row (board-marks.js): the S chip, and his typed Min and DK/m TON with their undo chips; those cells write through the console.
+const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, onChange: () => { if (S.slate) renderRows(); }, noteEl: $("lineupbar").insertAdjacentElement("beforebegin", Object.assign(document.createElement("div"), { hidden: true })) });
+// The lineup bar above the list (lineup-bar.js): an Out or a confirmed start from the Monster and RotoWire pages applies itself through the console, with an undo X; a projected start is words only.
 const lineupBar = createLineupBar({ el: $("lineupbar"), api, slate: () => S.name, players: () => S.players, console: scenarioConsole, toast, tryStore });
 // Full screen (Player list header): hides the optimizer panel so the table takes the width. Remembered per viewer; under 900 px
 // wide with nothing stored it starts on. Pin slots (late swap) needs the panel, so the button and the hiding step aside then.
@@ -177,7 +180,7 @@ async function loadSlate(name) {
   renderAll();
   renderUpdLine();
   fixTableWidth();
-  lineupBar.refresh();
+  lineupBar.refresh(); boardMarks.refresh();
 }
 
 // ---------- the numbers refreshing by themselves (slate-refresh.js) ----------
@@ -228,7 +231,7 @@ function applyFresh(slate) {
   // The table holds a measured width; a man added or removed may change it. The console hides the table, and measures on the way back.
   if (changed && !scenarioConsole.isOn()) fixTableWidth();
   if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
-  lineupBar.refresh(); // a new pull: the lineup read and TwoGun's flags may both have moved
+  lineupBar.refresh(); boardMarks.refresh(); // a new pull: the lineup read and TwoGun's flags may both have moved
 }
 /** He has left the box: the row that waited takes its new figures, and whatever named a man it dropped follows. */
 function flushHeld() {
@@ -353,7 +356,7 @@ function renderRows() {
   $("cnt").textContent = `${rows.length} player${rows.length === 1 ? "" : "s"}${sortNote(keys, S.sort)}`;
   // A keyboard user keeps his place, and an open box what he typed: the rows redraw on every pick, save and answer from the server.
   editors.around(() => keepFocus($("tbody"), () => {
-    $("tbody").innerHTML = rows.length ? rows.map((p) => rowHtml(p, keys, { dash, when, colourOf, tag: posTag(p), lock, ex, L, inl, blocks, vmin, vmax, omax, limits: panel.limits() })).join("") : `<tr><td colspan="${keys.length}" class="nores">No players match.</td></tr>`;
+    $("tbody").innerHTML = rows.length ? rows.map((p) => rowHtml(p, keys, { dash, when, colourOf, tag: posTag(p), lock, ex, L, inl, blocks, vmin, vmax, omax, limits: panel.limits(), marks: boardMarks.of })).join("") : `<tr><td colspan="${keys.length}" class="nores">No players match.</td></tr>`;
   }));
 }
 // The table is only as wide as its content, so its width would follow the visible rows and the optimizer beside it would
@@ -519,7 +522,7 @@ function applyPlayers(players) {
 // The typed Proj and Own boxes and the note box (cell-editor.js, standard A3).
 const editors = createEditors({
   root: $("tbody"), rowOf: (id) => S.byId.get(id), toast, onClosed: () => press(() => setTimeout(flushHeld, 0)), limits: { current: (kind, id) => panel.limits()[id]?.[kind] ?? null, outcome: (kind, id, text) => panel.limitOutcome(kind, id, text) },
-  save: (kind, id, v, settle) => (kind === "min" || kind === "max" ? (limitPatch($("tbody"), kind, id, v), panel.setLimit(kind, id, v, settle)) : kind === "note" ? saveOverride({ notes: { [id]: v } }, "the note") : saveOverride({ [kind]: { [id]: v } }, kind === "proj" ? "the projection" : "the ownership")),
+  save: (kind, id, v, settle) => (kind === "min" || kind === "max" ? (limitPatch($("tbody"), kind, id, v), panel.setLimit(kind, id, v, settle)) : kind === "cmin" || kind === "crate" ? boardMarks.setPin(id, kind === "cmin" ? "m" : "d", v) : kind === "note" ? saveOverride({ notes: { [id]: v } }, "the note") : saveOverride({ [kind]: { [id]: v } }, kind === "proj" ? "the projection" : "the ownership")),
 });
 // The thumbs pairs are redrawn with the rows, so one listener on the table body serves them all (bump-control.js).
 delegateBumpClicks($("tbody"), { rowOf: (id) => S.byId.get(id), onBump: (id, stepsAt) => saveOverride(() => bumpPatch(id, stepsAt()), "the projection bump") });
@@ -537,7 +540,7 @@ $("tbody").addEventListener("click", (e) => {
 
 // ---------- events ----------
 document.addEventListener("click", (e) => {
-  const t = e.target.closest("[data-sort],[data-tab],[data-game],[data-dk-id],[data-out-i],[data-lock],[data-excl],[data-unpick],[data-chip],[data-view],[data-theme],[data-star],[data-note],[data-reset],[data-edit],[data-fteam],[data-shade],#ovReset,#clearF,#notesBtn,#lsBtn,#csBtn,#outTog,#pullDismiss");
+  const t = e.target.closest("[data-sort],[data-tab],[data-game],[data-dk-id],[data-out-i],[data-lock],[data-excl],[data-unpick],[data-chip],[data-view],[data-theme],[data-star],[data-note],[data-reset],[data-edit],[data-unmark],[data-fteam],[data-shade],#ovReset,#clearF,#notesBtn,#lsBtn,#csBtn,#outTog,#pullDismiss");
   if (!t) { const l = $("notesList"); if (l && !e.target.closest(".notes")) l.hidden = true; return; }
   const d = t.dataset;
   if (t.id === "notesBtn") { const l = $("notesList"); l.hidden = !l.hidden; }
@@ -562,6 +565,7 @@ document.addEventListener("click", (e) => {
   else if (d.star) { const id = d.star; saveOverride(() => ({ stars: { [id]: !S.byId.get(id)?.starred } }), "the star"); }
   else if (d.note) editors.openNote(t);
   else if (d.reset) saveOverride({ reset: d.reset }, "the reset");
+  else if (d.unmark) boardMarks.drop(d.id, d.unmark);
   else if (d.edit) editors.openNumber(t);
   else if (t.id === "ovReset") askConfirm(CONFIRM.resetAll, { ok: "Reset" }).then((yes) => { if (yes) saveOverride({ resetAll: true }, "the reset"); });
 });

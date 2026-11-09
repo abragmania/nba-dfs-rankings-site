@@ -1,7 +1,7 @@
 // The scenario console's routes, called from server.js with its shared helpers:
 //   GET  /api/slate/<slate>/console          the inputs and his saved work
 //   POST /api/slate/<slate>/scenarios        { team, record } saves one team's work
-//   POST /api/slate/<slate>/console/apply    { scenarios, preview: true } what Apply would change, nothing written;
+//   POST /api/slate/<slate>/console/apply    { scenarios, teams?, preview: true } what Apply would change, nothing written (teams: only those are planned);
 //                                            { scenarios, basis } sends each team's on-screen scenario; a basis that no longer matches is refused
 //   POST /api/slate/<slate>/console/reverse  { preview: true } what a reverse would restore; {} restores only what Apply set
 // Writes go through openSlate (origin and content type, as the overrides route) and read the files only after the body has arrived,
@@ -12,7 +12,7 @@ import { error } from "../../site/shim/log.js";
 import { SLATE_NAME } from "./store.js";
 import { buildInputs } from "../../site/shim/app-only.js";
 import { readScenarios, writeScenarios, checkTeamBody } from "./scenarios.js";
-import { planApply, applyRecord, reverseChanges, checkKeys } from "./console-apply.js";
+import { planApply, applyRecord, reverseChanges, checkKeys, checkTeams } from "./console-apply.js";
 import { readOverrides, writeOverrides, applyChanges, mergeOverrides } from "./overrides.js";
 
 export const USAGE_OFF = { state: "off", message: "The usage table is not connected on this server." };
@@ -98,12 +98,13 @@ async function handleApply(req, res, slate, ctx) {
   if (!inputs) return;
   // A console left open across a pull holds an old Tonight: what it reads as a chosen scenario would be sent as one.
   if (Object.hasOwn(read.body ?? {}, "pull") && read.body.pull !== inputs.basis.pull) return ctx.fail(res, 409, "CONSOLE_OLD_PULL", "A new pull has landed since this console opened, so nothing was applied. Go back to the board and open the console again, then Apply.");
-  const checked = checkKeys(read.body?.scenarios, inputs);
+  const checked = checkKeys(read.body?.scenarios, inputs), teams = checkTeams(read.body?.teams, inputs);
   if (!checked.ok) return ctx.fail(res, 400, "BAD_SCENARIO", checked.message);
+  if (!teams.ok) return ctx.fail(res, 400, "BAD_SCENARIO", teams.message);
   const players = slateData.players ?? [];
   try {
     const file = readScenarios(slate), overrides = readOverrides(slate);
-    const plan = planApply(inputs, file, overrides, players, checked.keys);
+    const plan = planApply(inputs, file, overrides, players, checked.keys, teams.only);
     if (read.body.preview === true) return ctx.send(res, 200, { ...publicPlan(plan), usage: inputs.usage });
     if (inputs.usage.state === "loading") return ctx.fail(res, 409, "USAGE_LOADING", "The usage table is still loading; try Apply again in a moment.");
     if (read.body.basis !== plan.basis) return ctx.fail(res, 409, "CONSOLE_MOVED", "The numbers moved since the preview, so nothing was applied. Look again.");

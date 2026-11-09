@@ -11,36 +11,46 @@ export const COLUMNS = [
   { key: "projection", label: "Proj" },
   { key: "proj_own", label: "Own" },
   { key: "value", label: "Val" },
+  { key: "minutes", label: "Min" },
+  { key: "dk_tonight", label: "DK/m TON" },
   { key: "thumbs", label: "Thumbs" },
   { key: "lock", label: "Lock" },
   { key: "exclude", label: "Exclude" },
   { key: "min_pct", label: "Min %" },
   { key: "max_pct", label: "Max %" },
-  { key: "minutes", label: "Min" },
   { key: "min_usual", label: "Usual" },
   { key: "min_chg", label: "Chg" },
   { key: "dk_per_min", label: "DK/m SZN" },
-  { key: "dk_tonight", label: "DK/m TON" },
   { key: "usage", label: "Usg" },
 ];
 const BY_KEY = new Map(COLUMNS.map((c) => [c.key, c]));
 const STANDARD = COLUMNS.map((c) => c.key);
 
+/** The remembered state's version. 2 (Adam, 11-07): Min and DK/m TON sit right after Val, the two halves of the projection beside it. */
+export const COLUMNS_VERSION = 2;
+const BESIDE_VAL = ["minutes", "dk_tonight"];
+
 /** The standard's order with every column ticked. */
-export const defaultColumns = () => ({ order: [...STANDARD], hidden: [] });
+export const defaultColumns = () => ({ v: COLUMNS_VERSION, order: [...STANDARD], hidden: [] });
 
 /** A remembered state made safe: unknown and repeated keys dropped, a column it does not know put back after its standard
- *  neighbour, a required column never hidden. Anything that is not a state gives the standard's. */
+ *  neighbour, a required column never hidden. A state from before version 2 has Min and DK/m TON moved right after Val and ticked,
+ *  once, so the new order shows without a reset. Anything that is not a state gives the standard's. */
 export function cleanColumns(saved) {
   if (!saved || typeof saved !== "object" || !Array.isArray(saved.order)) return defaultColumns();
-  const order = [...new Set(saved.order)].filter((k) => BY_KEY.has(k));
+  let order = [...new Set(saved.order)].filter((k) => BY_KEY.has(k));
   STANDARD.forEach((k, i) => {
     if (order.includes(k)) return;
     const prev = i === 0 ? -1 : order.indexOf(STANDARD[i - 1]);
     order.splice(prev + 1, 0, k);
   });
-  const hidden = Array.isArray(saved.hidden) ? [...new Set(saved.hidden)].filter((k) => BY_KEY.has(k) && !BY_KEY.get(k).required) : [];
-  return { order, hidden };
+  const old = !(saved.v >= COLUMNS_VERSION);
+  if (old) {
+    order = order.filter((k) => !BESIDE_VAL.includes(k));
+    order.splice(order.indexOf("value") + 1, 0, ...BESIDE_VAL);
+  }
+  const hidden = Array.isArray(saved.hidden) ? [...new Set(saved.hidden)].filter((k) => BY_KEY.has(k) && !BY_KEY.get(k).required && !(old && BESIDE_VAL.includes(k))) : [];
+  return { v: COLUMNS_VERSION, order, hidden };
 }
 
 /** The stored text to a state; missing or unreadable text gives the standard's. */

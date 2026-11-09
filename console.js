@@ -1,89 +1,62 @@
-// The scenario console: a keyboard-driven view of the board page for the slate on show. Every number comes from console-engine.js over
-// the inputs route; his work saves to the slate's scenarios.json as he goes. Nothing reaches the board until Apply. This file holds the
-// shared state, drawing and loading; console-moves.js, console-keys.js and console-applybox.js act on the state.
-import { esc } from "./board-util.js";
-import { buildModel, recordOf, refreshTeams, tableName } from "./console-model.js";
-import { barHtml, pickerHtml, sideHtml, slateHtml, sourceHtml, teamHtml } from "./console-render.js";
-import { firstPlaying, pushHist } from "./console-moves.js";
-import { HINT, cmdHint, focusCell, onClick, onFocusIn, onFocusOut, onKey, tintCompare } from "./console-keys.js";
-import { lanesHtml } from "./console-lanes.js";
-import { wireDrag, layoutPref, saveLayout, cardApi } from "./console-card.js";
+// The console: one team's depth chart on a plain light page (console-depth.js draws it). Every number comes from console-engine.js over the
+// inputs route; his work saves to the slate's scenarios.json as he goes, and each change goes to the board and the optimizer by itself
+// (console-auto.js), so there is no Apply step. This file holds the shared state, drawing, loading and the screen's clicks and keys;
+// console-moves.js acts on the state.
+import { esc, tipWhen } from "./board-util.js";
+import { buildModel, recordOf, refreshTeams } from "./console-model.js";
+import { depthHtml } from "./console-depth.js";
+import { dropMark, firstPlaying, jumpTeam, pushHist, redo, setPin, setSource, toggleOut, toggleStarter, undo } from "./console-moves.js";
+import { cardApi } from "./console-card.js";
+import { createAutoApply, requeueNews } from "./console-auto.js";
+import { PIN_MAX } from "./override-limits.js";
+import { keyOf } from "./console-engine.js";
 
-const KEYS = `<span><kbd>Arrows</kbd><b>move</b></span><span><kbd>type</kbd><b>overwrite</b></span><span><kbd>Enter</kbd><kbd>Tab</kbd><b>commit + move</b></span><span><kbd>Esc</kbd><b>cancel</b></span><span><kbd>=</kbd><kbd>-</kbd><b>small step</b> <kbd>+</kbd><kbd>_</kbd><b>big</b></span><span><kbd>Del</kbd><b>clear pin</b></span><span><kbd>O</kbd><b>out</b></span><span><kbd>Ctrl+Z</kbd><kbd>Ctrl+Y</kbd><b>undo redo</b></span><span><kbd>G</kbd><b>command</b></span><span><kbd>S</kbd><b>slate</b></span><span><kbd>H</kbd><kbd>T</kbd><kbd>[</kbd><kbd>]</kbd><b>scenario</b></span><span><kbd>Alt+1-9</kbd><kbd>&lt;</kbd><kbd>&gt;</kbd><b>team</b></span><span><kbd>A</kbd><b>apply</b></span><span><kbd>R</kbd><b>reverse</b></span><span class="legend"><span><i style="background:var(--cdf)"></i>default</span><span><i style="background:var(--cmv)"></i>moved</span><span><i style="background:var(--cpin)"></i>pinned</span></span>`;
 const USAGE_RETRY_MS = 20_000;
 const USAGE_RETRIES = 6;
 
-/** A team's bar colour. On the light page a pale colour would vanish, so it is darkened to read. */
-function barColour(c, team) {
+/** A team's colour for its switcher button and header rule. On the light console a pale colour would vanish, so it is darkened to read. */
+function teamColour(c, team) {
   const colour = c.colourOf(team);
-  if (!document.body.classList.contains("light")) return colour;
   const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(colour);
   if (!m) return colour;
   const [r, g, b] = m.slice(1).map((h) => parseInt(h, 16));
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.55 ? `color-mix(in srgb, ${colour} 45%, #000)` : colour;
 }
 
-function drawBar(c) {
-  const failed = Object.values(c.saveErrs);
-  const errLine = failed.length ? `<div class="row err">${esc(failed.join(" "))}</div>` : "";
-  c.E("bar").innerHTML = errLine + barHtml(c.model, c.G, c.applied);
-}
-
-/** The sweep scrolls inside its panel, cut to whole rows above the key bar, so no part-row shows and its heading stays. */
-function sizeSweep(c) {
-  const box = c.el.querySelector(".sweepx");
-  if (!box) return;
-  const row = box.querySelector("tbody tr"), head = box.querySelector("thead");
-  if (!row || !head) return;
-  const z = parseFloat(getComputedStyle(document.body).zoom) || 1;
-  const room = c.el.querySelector(".keys").getBoundingClientRect().top - box.getBoundingClientRect().top - 6;
-  const headH = head.getBoundingClientRect().height, rowH = row.getBoundingClientRect().height;
-  box.style.maxHeight = `${(Math.max(3, Math.floor((room - headH) / rowH)) * rowH + headH) / z}px`;
-  box.style.scrollPaddingTop = `${headH / z}px`;
-}
-
-/** The team table's name column fits the slate's longest name, so nothing shifts between teams. */
-function setNameWidth(c) {
-  const longest = Math.max(10, ...Object.values(c.model.TEAMS).flatMap((T) => T.pl.map((p) => tableName(T, p).length + (p.pos ? p.pos.length + 2 : 0))));
-  c.el.style.setProperty("--namew", `${longest}ch`);
+/** The input with the keyboard, found again after a redraw by its team, man and kind. */
+function keepInput(c, draw) {
+  const a = document.activeElement, at = a && c.el.contains(a) && a.matches("input.fin") ? { ...a.dataset, s: a.selectionStart, e: a.selectionEnd } : null;
+  draw();
+  if (!at) return;
+  const el = c.el.querySelector(`input.fin[data-team="${CSS.escape(at.team)}"][data-id="${CSS.escape(at.id)}"][data-k="${at.k}"]`);
+  if (!el) return;
+  el.focus({ preventScroll: true });
+  el.select();
 }
 
 function render(c) {
   const G = c.G;
   if (c.loadError || !c.model || !G.cur) return;
-  const colour = (t) => barColour(c, t);
-  c.E("picker").innerHTML = pickerHtml(c.model, G, colour, c.inputs.games);
-  drawBar(c);
-  c.el.querySelector(".shell").classList.toggle("sweepv", G.view === "slate");
-  c.el.querySelector(".shell").classList.toggle("lanesv", G.view === "team" && G.layout === "b");
-  if (G.view === "slate") c.E("app").innerHTML = slateHtml(c.model, G, colour);
-  else if (G.layout === "b") c.E("app").innerHTML = lanesHtml(c.model, G, G.cur, colour(G.cur)); // sets G.rows in lane order
-  else {
-    G.rows = c.model.TEAMS[G.cur].pl.map((p) => ({ team: G.cur, id: p.id }));
-    c.E("app").innerHTML = teamHtml(c.model, G, G.cur, colour(G.cur));
-  }
-  if (G.rows.length && !G.rows.some((x) => x.team === G.focus.team && x.id === G.focus.id)) G.focus = { team: G.rows[0].team, id: G.rows[0].id, k: G.focus.k };
-  c.E("side").innerHTML = sideHtml(c.model, G, colour);
-  sizeSweep(c);
-  tintCompare(c);
-  if (document.activeElement?.id !== "cmd") focusCell(c);
+  const saveErr = Object.values(c.saveErrs).join(" ") || null;
+  keepInput(c, () => {
+    c.E("app").innerHTML = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr });
+  });
+  c.onWork?.();
 }
 
 /** Console trouble stays in the console: the board underneath is never written over. */
 function showError(c, message) {
   c.loadError = message;
   c.model = null;
-  for (const id of ["picker", "bar", "side", "srcs"]) c.E(id).innerHTML = "";
   c.E("app").innerHTML = `<div class="fatalc">The console could not load, so nothing here can be trusted or saved: ${esc(message)}</div>`;
 }
 
 function takeInputs(c, out) {
   c.inputs = out.inputs;
   c.applied = out.scenarios.applied;
-  c.E("srcs").innerHTML = sourceHtml(c.inputs);
 }
 
-/** The slate's work loaded, shown or not (the player card asks for it): one load at a time per slate, a second ask waiting on the first. */
+/** The slate's work loaded, shown or not (the player card and the board ask for it): one load at a time per slate, a second ask waiting on the first. */
 function ensure(c, name) {
   if (c.model && c.slate === name) return Promise.resolve();
   if (c.loading?.name === name) return c.loading.p;
@@ -94,8 +67,8 @@ function ensure(c, name) {
 
 async function load(c, name) {
   clearTimeout(c.usageTimer);
-  Object.assign(c, { slate: name, loadError: null, model: null, usageTries: 0, saveErrs: {} });
-  c.E("app").innerHTML = `<div class="dimc fatalc">Loading ${esc(name)}...</div>`;
+  Object.assign(c, { slate: name, loadError: null, model: null, usageTries: 0, saveErrs: {}, sync: { state: "ok", at: null }, touched: new Set(), pending: new Set() }); // another slate: nothing changed on it yet
+  c.E("app").innerHTML = `<div class="fatalc dimc">Loading ${esc(name)}...</div>`;
   try {
     const out = await c.api(`/api/slate/${encodeURIComponent(name)}/console`);
     if (name !== c.slate) return;
@@ -107,15 +80,15 @@ async function load(c, name) {
     Object.assign(G, { cur: first, view: "team", editing: false, modal: null, pick: null, roleMoves: null, hist: [], hi: -1, focus: first ? { team: first, id: firstPlaying(c, first), k: "m" } : null });
     if (!first) return showError(c, "This slate has no games.");
     pushHist(c, "Start");
-    setNameWidth(c);
     render(c);
+    if (requeueNews(c)) c.auto.kick(); // a news change whose send never landed reaches the board now
     watchUsage(c);
   } catch (e) {
     if (name === c.slate) showError(c, e.message);
   }
 }
 
-/** New inputs on the work on show: his pins stay and the numbers move. Comes on every show, and while the usage table is loading. */
+/** New inputs on the work on show: his marks stay and the numbers move. Comes on every show, while the usage table is loading, and when a send finds a newer pull. */
 async function refresh(c) {
   const name = c.slate;
   try {
@@ -123,10 +96,9 @@ async function refresh(c) {
     if (name !== c.slate || !c.model) return;
     takeInputs(c, out);
     refreshTeams(c.model, c.inputs);
-    setNameWidth(c);
-    if (c.on && !c.G.editing && !c.G.modal) render(c);
+    render(c);
   } catch (e) {
-    c.E("cmdhint").textContent = `Could not refresh the inputs: ${e.message}`;
+    c.toast(`Could not refresh the console's inputs: ${e.message}`, "err");
   }
 }
 
@@ -137,34 +109,61 @@ function watchUsage(c) {
   c.usageTimer = setTimeout(async () => { await refresh(c); watchUsage(c); }, USAGE_RETRY_MS);
 }
 
-const SHELL = `<div id="picker"></div><div id="cmdbar"><span class="pr">&gt;</span><input id="cmd" placeholder="press G, then type a move" autocomplete="off" spellcheck="false"><span id="cmdhint">${esc(HINT)}</span><div class="grow"></div><div id="srcs"></div></div><div id="bar"></div><div class="shell"><div id="app"></div><div id="side"></div></div><div class="keys">${KEYS}</div><div id="applybox" hidden></div>`;
+/** A typed minutes or DK/min box closed with a new number: it becomes his mark; an empty box drops the mark. A bad number is refused, said, and put back. */
+function commitBox(c, inp) {
+  if (inp.dataset.done) return; // Enter has sent it; the change event that follows is the same commit
+  inp.dataset.done = "1";
+  const { team, id, k } = inp.dataset, text = inp.value.trim();
+  const T = c.model.TEAMS[team];
+  if (!T) return;
+  const S = c.model.ST[team], had = S.pins[keyOf(S.outs)]?.[k]?.[id];
+  if (text === "") { if (had !== undefined) dropMark(c, team, id, k); else render(c); return; }
+  const v = /^(\d+\.?\d*|\.\d+)$/.test(text) ? Number(text) : NaN;
+  if (!(v >= 0 && v <= PIN_MAX[k])) { c.toast(`${k === "m" ? "Minutes" : "DK/min"} must be a number from 0 to ${PIN_MAX[k]}.`, "err"); render(c); return; }
+  if (inp.defaultValue !== "" && Number(inp.defaultValue) === v) { delete inp.dataset.done; return; } // unchanged as shown
+  setPin(c, team, id, k, v);
+}
 
-/** deps: { el, api, toast, colourOf(team) -> css colour, onPlayers(players) }. show() never rejects: its trouble goes to showError. */
-export function createConsole({ el, api, toast, colourOf, onPlayers }) {
+function onClick(c, e) {
+  const t = e.target.closest?.("button");
+  if (!t || !c.model || t.disabled) return;
+  const d = t.dataset;
+  if (d.teamGo) jumpTeam(c, d.teamGo);
+  else if (d.undo) dropMark(c, d.team, d.id, d.undo);
+  else if (d.s) toggleStarter(c, d.team, d.s);
+  else if (d.out) toggleOut(c, d.team, d.out);
+  else if (d.source) setSource(c, d.team, d.source);
+  else if (d.sourceAll) setSource(c, d.team, d.sourceAll, true);
+  else if (d.hist) (d.hist === "-1" ? undo : redo)(c);
+}
+
+function onKey(c, e) {
+  if (!c.on || !c.model) return;
+  const inBox = e.target.matches?.("input.fin");
+  if (inBox && e.key === "Escape") { e.preventDefault(); e.target.value = e.target.defaultValue; e.target.blur(); return; }
+  if (inBox && e.key === "Enter") { e.preventDefault(); commitBox(c, e.target); return; }
+  if (inBox || !(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(c); } else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); redo(c); }
+}
+
+const SHELL = `<div id="app"></div>`;
+
+/** deps: { el, api, toast, colourOf(team) -> css colour, onPlayers(players), onWork() (his work moved: the board reads his marks again) }. show() never rejects: its trouble goes to showError. */
+export function createConsole({ el, api, toast, colourOf, onPlayers, onWork }) {
   el.innerHTML = SHELL;
   const c = {
-    el, api, toast, colourOf, onPlayers, on: false, slate: null, inputs: null, model: null, applied: null, loadError: null, lastSaved: {}, saveErrs: {}, saveQueue: Promise.resolve(), usageTimer: null, usageTries: 0,
+    el, api, toast, colourOf, onPlayers, onWork, on: false, slate: null, inputs: null, model: null, applied: null, loadError: null, lastSaved: {}, saveErrs: {}, saveQueue: Promise.resolve(), usageTimer: null, usageTries: 0, sync: { state: "ok", at: null },
     E: (id) => el.querySelector(`#${id}`),
-    G: { cur: null, view: "team", layout: layoutPref(), pick: null, roleMoves: null, focus: null, hist: [], hi: -1, editing: false, rows: [], modal: null },
-    setLayout: (v) => { c.G.layout = v === "b" ? "b" : "a"; c.G.pick = null; saveLayout(c.G.layout); if (c.G.view !== "team") c.G.view = "team"; render(c); },
-    render: () => render(c), drawBar: () => drawBar(c), focusCell: () => focusCell(c),
-    updateSide: () => { c.E("side").innerHTML = sideHtml(c.model, c.G, (t) => barColour(c, t)); },
+    G: { cur: null, view: "team", pick: null, roleMoves: null, focus: null, hist: [], hi: -1, editing: false, rows: [], modal: null },
+    render: () => render(c), drawBar: () => render(c), focusCell: () => {},
   };
-  if (typeof window !== "undefined") window.consoleState = c.G; // what the key-driving test reads
-  document.addEventListener("keydown", (e) => onKey(c, e));
-  el.addEventListener("focusin", (e) => onFocusIn(c, e));
-  el.addEventListener("focusout", (e) => onFocusOut(c, e));
+  c.auto = createAutoApply(c, { refreshInputs: () => refresh(c), onState: () => { if (c.on) render(c); else c.onWork?.(); } }); // the board shows the send's state too
   el.addEventListener("click", (e) => onClick(c, e));
-  wireDrag(c);
-  c.E("cmd").addEventListener("input", () => cmdHint(c));
-  window.addEventListener("resize", () => { if (c.on) sizeSweep(c); });
-  // A click on the page's header (the look, the late swap switch) takes the keyboard away: it comes back to the last cell. The slate box keeps its own.
-  document.addEventListener("click", (e) => {
-    if (!c.on || !c.model || c.G.modal || el.contains(e.target) || e.target.closest?.("select")) return;
-    if (e.target.closest?.("[data-shade],[data-theme]")) render(c); else focusCell(c);
-  });
+  el.addEventListener("change", (e) => { if (e.target.matches?.("input.fin")) commitBox(c, e.target); });
+  document.addEventListener("keydown", (e) => onKey(c, e));
   return {
-    /** The slate on show changed. Nothing loads until the console is opened. */
+    /** The slate on show changed. Nothing loads until the console is opened or the board asks. */
     setSlate(name) {
       if (name === c.slate) return;
       Object.assign(c, { slate: name, model: null, inputs: null, loadError: null });
@@ -183,9 +182,9 @@ export function createConsole({ el, api, toast, colourOf, onPlayers }) {
       }
       return refresh(c);
     },
-    hide() { c.on = false; el.hidden = true; c.G.modal = null; c.E("applybox").hidden = true; },
+    hide() { c.on = false; el.hidden = true; },
     isOn: () => c.on,
-    /** The player card's reads and writes on the same work (console-card.js). */
+    /** The player card's and the board's reads and writes on the same work (console-card.js). */
     ...cardApi(c, (name) => ensure(c, name)),
   };
 }

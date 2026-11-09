@@ -5,6 +5,7 @@ import { keyOf, outsOf, handoutShares, teamFor, TEAM_USAGE } from "./console-eng
 import { calc, chipName, dcls, f1, fullLabel, hasPins, label, savedFor, sgn, tableName, tonightMin, tonightProj, tonightUsg, usualMin, usualProj, pinsOf } from "./console-model.js";
 import { FN, fmtv } from "./console-cmd.js";
 import { isNum as num } from "./figures.js";
+import { MINUTE_SOURCES, SOURCE_LABEL } from "./depth-chart.js";
 import { ROLES, ROLE_LABEL, ROLE_SHORT } from "./console-roles.js";
 
 export const COLS = ["m", "u", "d", "p"];
@@ -18,12 +19,12 @@ const rateText = (v) => (num(v) ? v.toFixed(2) : MISS);
 const posTag = (p) => (p.pos ? `<span class="pos">${esc(p.pos)}</span>` : "");
 
 function cellIn(t, id, k, state, txt, raw, extra, title) {
-  return `<td class="ic${k === "d" ? " gs" : ""}">${extra ?? ""}<input class="ed ${state}" data-team="${esc(t)}" data-i="${esc(id)}" data-k="${k}" data-v="${raw ?? ""}" value="${esc(txt)}"${title ? ` title="${esc(title)}"` : ""} autocomplete="off" spellcheck="false"><s class="dt"></s></td>`;
+  return `<td class="ic x-${k}${k === "d" ? " gs" : ""}">${extra ?? ""}<input class="ed ${state}" data-team="${esc(t)}" data-i="${esc(id)}" data-k="${k}" data-v="${raw ?? ""}" value="${esc(txt)}"${title ? ` title="${esc(title)}"` : ""} autocomplete="off" spellcheck="false"><s class="dt"></s></td>`;
 }
 function outCell(t, p, k) {
   const txt = k === "m" ? "OUT" : k === "d" ? rateText(p.rate) : "0.0";
   const fm = k === "p" ? '<span class="fm"></span>' : "";
-  return `<td class="ic${k === "d" ? " gs" : ""}">${fm}<input class="ed out${k === "d" && !num(p.rate) ? " gone" : ""}" readonly data-team="${esc(t)}" data-i="${esc(p.id)}" data-k="${k}" data-v="${k === "d" ? "" : "0"}" value="${txt}"><s class="dt"></s></td>`;
+  return `<td class="ic x-${k}${k === "d" ? " gs" : ""}">${fm}<input class="ed out${k === "d" && !num(p.rate) ? " gone" : ""}" readonly data-team="${esc(t)}" data-i="${esc(p.id)}" data-k="${k}" data-v="${k === "d" ? "" : "0"}" value="${txt}"><s class="dt"></s></td>`;
 }
 function rowCells(T, t, r) {
   const p = r.p;
@@ -39,19 +40,22 @@ function rowCells(T, t, r) {
 }
 /** The role buttons for a man: the one he holds is lit; amber when he flipped it, plain when the rule gave it. Out is his scenario's out list. */
 export const roleSeg = (t, r) => `<span class="seg">${ROLES.map((k) => `<button class="rs${r.role === k ? ` on ${k}${r.pinned?.r || (k === "out" && r.out) ? " set" : ""}` : ""}" data-role="${k}" data-ri="${esc(r.id)}" data-team="${esc(t)}" title="${ROLE_LABEL[k]}" tabindex="-1">${ROLE_SHORT[k]}</button>`).join("")}</span>`;
-const roleCell = (t, r) => `<td class="rl">${roleSeg(t, r)}</td>`;
-const nameCell = (T, p) => `<td class="nm" title="${esc(p.name)}"><span class="n">${esc(tableName(T, p))}</span>${posTag(p)}</td>`;
+const roleCell = (t, r) => `<td class="rl x-role">${roleSeg(t, r)}</td>`;
+const nameCell = (T, p) => `<td class="nm x-name" title="${esc(p.name)}"><span class="n">${esc(tableName(T, p))}</span>${posTag(p)}</td>`;
 /** Where a man's minutes come from, in words: what he typed, his role's figure, or TwoGun's board and its hand-outs. */
 export function basisText(r) {
   if (r.out) return "out";
   if (r.pinned.m) return "typed by you";
   if (r.pinned.r) return r.min_basis ?? "role figure";
+  if (r.min_from_ours) return "ours"; // the chart's basis is in the Ours column's tooltip and this cell's
   const tg = r.p ? (r.p.out ? 0 : r.p.min) : null; // an untouched man the hand-outs moved off TwoGun's figure is the model's
   return num(tg) && num(r.min) && Math.abs(r.min - tg) > 0.05 ? "model (hand-outs)" : "TwoGun";
 }
 /** Adam's flag (11-06): a flipped man on a position median, not his own figure, so he knows to adjust it. Gone once he types the minutes. */
 export const medianFlag = (r) => (r.min_median && !r.pinned.m ? `<span class="mdf" title="A position median, not his own figure: type his minutes if you know better">median — adjust?</span>` : "");
-const basisCell = (r) => `<td class="bs${r.pinned.m ? " pin" : r.pinned.r ? " rb" : ""}" title="${esc(basisText(r))}">${medianFlag(r)}${esc(basisText(r))}</td>`;
+/** The saved depth chart's minutes for him beside TwoGun's; amber when his figure is a role median, with the basis on hover. */
+const oursCell = (r) => (num(r.ours_min) ? `<td class="mu x-ours${r.ours_median ? " mdn" : ""}" title="${esc(r.ours_basis)}">${f1(r.ours_min)}</td>` : `<td class="mu x-ours">${dash(r.ours_basis ?? "no depth chart for this team")}</td>`);
+const basisCell = (r) => `<td class="bs x-from${r.pinned.m ? " pin" : r.pinned.r ? " rb" : ""}" title="${esc(r.min_from_ours ? `ours: ${r.min_basis}` : basisText(r))}">${medianFlag(r)}${esc(basisText(r))}</td>`;
 
 /** How far a usage total may sit off 100 and read as rounding. A working value. */
 const BOARD_ROUNDING = 1;
@@ -64,7 +68,7 @@ function totalCell(total, target, why, cls = "") {
   return `<td class="ic ${cls}"${why ? ` title="${esc(why)}"` : ""}><span class="tnum ${ok ? "" : "sumbad"}">${f1(total)}</span><s class="tt ${ok ? "" : "dn"}">${ok ? `/ ${target}` : `${off > 0 ? "+" : ""}${f1(off)}`}</s></td>`;
 }
 /** The team's minutes, for reference only (Adam, 11-06: no team total to reach): never red, never a refusal. */
-const minTotalCell = (total) => `<td class="ic" title="The team's minutes, for reference only: nothing is brought to a total"><span class="tnum">${num(total) ? f1(total) : dash("no man has this figure")}</span><s class="tt">min</s></td>`;
+const minTotalCell = (total) => `<td class="ic x-fm" title="The team's minutes, for reference only: nothing is brought to a total"><span class="tnum">${num(total) ? f1(total) : dash("no man has this figure")}</span><s class="tt">min</s></td>`;
 /** Why typed usage misses 100, under the team's table. Nothing refuses Apply. */
 const missLines = (totals) => (totals.usg_why ? `<div class="mis">${esc(totals.usg_why)}</div>` : "");
 /** The five-starter rule's word on the team: the move it just made, and TwoGun's flags when they were not five. */
@@ -83,14 +87,14 @@ function projTotal(res, against) {
   const n = res.totals.proj_missing;
   const delta = n ? `<s class="tt part" title="${n} men have no projection, so this total is partial and is not compared">partial</s>`
     : num(res.totals.proj) && num(against) ? `<s class="tt ${dcls(res.totals.proj - against)}">${sgn(res.totals.proj - against)}</s>` : '<s class="tt"></s>';
-  return `<td class="ic"><span class="fm nostrike">${n ? `${n} ${MISS}` : ""}</span><span class="tnum">${num(res.totals.proj) ? f1(res.totals.proj) : MISS}</span>${delta}</td>`;
+  return `<td class="ic x-fp"><span class="fm nostrike">${n ? `${n} ${MISS}` : ""}</span><span class="tnum">${num(res.totals.proj) ? f1(res.totals.proj) : MISS}</span>${delta}</td>`;
 }
 /** Tonight's own projection total, the board's. */
 const tonightTotal = (T) => T.pl.reduce((sum, p) => { const v = tonightProj(T, p); return num(v) ? sum + v : sum; }, 0);
 
-const GROUP_ROW = `<tr class="band"><th colspan="2" class="blank"></th><th colspan="4" class="grp">Minutes</th><th colspan="3" class="grp gs">Usage %</th><th colspan="2" class="grp gs">Output</th></tr>`;
-const HEAD_ROW = `<tr><th>Role</th><th>Player</th><th>Usual</th><th class="hsl">Scenario</th><th title="Against TwoGun's Tonight">Chg</th><th class="bsh">From</th><th class="gs">Usual</th><th class="hsl">Scenario</th><th>Chg</th><th class="hsl gs">DK / min</th><th class="hsl">Projection</th></tr>`;
-const COLGROUP = `<colgroup><col class="c-o"><col class="c-n"><col class="c-u"><col class="c-c"><col class="c-d"><col class="c-b"><col class="c-u"><col class="c-c"><col class="c-d"><col class="c-c"><col class="c-p"></colgroup>`;
+const GROUP_ROW = `<tr class="band"><th colspan="2" class="blank"></th><th colspan="5" class="grp">Minutes</th><th colspan="3" class="grp gs">Usage %</th><th colspan="2" class="grp gs">Output</th></tr>`;
+const HEAD_ROW = `<tr><th>Role</th><th>Player</th><th>Usual</th><th class="hsl">Scenario</th><th title="Against TwoGun's Tonight">Chg</th><th class="bsh">From</th><th title="The saved depth chart's minutes on this scenario's outs; amber = a median, not his own figure">Ours</th><th class="gs">Usual</th><th class="hsl">Scenario</th><th>Chg</th><th class="hsl gs">DK / min</th><th class="hsl">Projection</th></tr>`;
+const COLGROUP = `<colgroup><col class="c-o"><col class="c-n"><col class="c-u"><col class="c-c"><col class="c-d"><col class="c-b"><col class="c-r"><col class="c-u"><col class="c-c"><col class="c-d"><col class="c-c"><col class="c-p"></colgroup>`;
 
 function compareHtml(T, S, key, colour) {
   const C = savedFor(T, S).map((k) => ({ k, r: calc(T, S, outsOf(k)) }));
@@ -112,18 +116,20 @@ export function teamHtml(model, G, code, colour) {
   const R = calc(T, S, outs);
   const rows = R.rows.map((r) => {
     const p = r.p, c = rowCells(T, code, r), uMin = usualMin(p);
-    const usual = `<td class="mu">${fig(uMin, whyMissing(p, "h"))}</td>`, usualU = `<td class="mu gs">${fig(p.usg_usual, whyMissing(p, "u"))}</td>`;
-    return `<tr${r.out ? ' class="out"' : ""}>${roleCell(code, r)}${nameCell(T, p)}${usual}${c.m}${chg(r.min, tonightMin(T, p))}${basisCell(r)}${usualU}${c.u}${chg(r.usg, tonightUsg(T, p))}${c.d}${c.p}</tr>`;
+    const usual = `<td class="mu x-usu">${fig(uMin, whyMissing(p, "h"))}</td>`, usualU = `<td class="mu gs x-uu">${fig(p.usg_usual, whyMissing(p, "u"))}</td>`;
+    return `<tr${r.out ? ' class="out"' : ""}>${roleCell(code, r)}${nameCell(T, p)}${usual}${c.m}${chg(r.min, tonightMin(T, p), "x-chg")}${basisCell(r)}${oursCell(r)}${usualU}${c.u}${chg(r.usg, tonightUsg(T, p), "x-uchg")}${c.d}${c.p}</tr>`;
   }).join("");
-  const list = `<div class="tlx"><table class="tl">${COLGROUP}<thead>${GROUP_ROW}${HEAD_ROW}</thead><tbody>${rows}</tbody><tfoot><tr><td>Team</td><td></td><td></td>${minTotalCell(R.totals.min)}<td></td><td></td><td class="gs"></td>${totalCell(R.totals.usg, TEAM_USAGE, R.totals.usg_why)}<td></td><td class="gs"></td>${projTotal(R, tonightTotal(T))}</tr></tfoot></table></div>`;
+  const list = `<div class="tlx"><table class="tl">${COLGROUP}<thead>${GROUP_ROW}${HEAD_ROW}</thead><tbody>${rows}</tbody><tfoot><tr><td class="x-fteam">Team</td><td></td><td></td>${minTotalCell(R.totals.min)}<td></td><td></td><td></td><td class="gs"></td>${totalCell(R.totals.usg, TEAM_USAGE, R.totals.usg_why)}<td></td><td class="gs"></td>${projTotal(R, tonightTotal(T))}</tr></tfoot></table></div>`;
   return `<div class="cwork"><div class="panel main" style="--t1:${colour}">${teamHead(T, S, code, key)}${roleLines(G, code, R)}${list}${missLines(R.totals)}</div>${compareHtml(T, S, key, colour)}</div>`;
 }
 
+/** Which minutes feed the optimizer for this team: TwoGun's (the default), the saved depth chart's, or the chart with his edits. "All" sets every team. Only where the team has a chart. */
+const sourceSwitch = (T, S, code) => (!T.depth ? "" : `<span class="grow"></span><span class="msrc"><span class="mu">Optimizer minutes</span>${MINUTE_SOURCES.map((k) => `<button class="ms${(S.source ?? "twogun") === k ? " on" : ""}" data-msrc="${k}" data-team="${esc(code)}" title="${k === "twogun" ? "TwoGun's minutes (the default)" : k === "ours" ? "The saved depth chart, on this scenario's outs" : "The depth chart that also follows your role flips and typed minutes"}" tabindex="-1">${SOURCE_LABEL[k]}</button>`).join("")}<button class="ms all" data-msrc-all="${esc(S.source ?? "twogun")}" data-team="${esc(code)}" title="Use this team's choice for every team that has a chart" tabindex="-1">All teams</button></span>`);
 /** The team panel's heading: its code, its scenario and who is out. Shared by both layouts. */
 export function teamHead(T, S, code, key) {
   const named = S.outs.map((i) => T.byId[i]).filter(Boolean).map((p) => chipName(T, p));
   const outText = !S.outs.length ? "everyone available" : named.length <= 3 ? `${named.join(" + ")} out` : `${named.length} men out`;
-  return `<div class="ph"><span class="code">${esc(code)}</span><b>Scenario: ${esc(label(T, key))}</b><span class="mu" title="${esc(named.join(", "))}">${esc(outText)}</span></div>`;
+  return `<div class="ph"><span class="code">${esc(code)}</span><b>Scenario: ${esc(label(T, key))}</b><span class="mu" title="${esc(named.join(", "))}">${esc(outText)}</span>${sourceSwitch(T, S, code)}</div>`;
 }
 
 export function slateHtml(model, G, colourOf) {

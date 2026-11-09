@@ -1,6 +1,7 @@
 // The console's state for one slate: the teams from the inputs route, his saved work per team (ST) and the calculations on them,
 // through console-engine.js. No page here, so the tests can run it in node.
 import { keyOf, outsOf, emptyPins, scenario, teamFor } from "./console-engine.js";
+import { MINUTE_SOURCES } from "./depth-chart.js";
 
 const SUFFIX = /^(jr\.?|sr\.?|ii|iii|iv|v)$/i;
 /** His last name, a generational suffix aside. */
@@ -26,16 +27,59 @@ export const sgn = (x) => (Math.abs(x) < 0.05 ? "0.0" : (x > 0 ? "+" : "") + f1(
 export const dcls = (x) => (Math.abs(x) < 0.05 ? "dim" : x > 0 ? "up" : "dn");
 
 /** What the team's teams object becomes: T per team (men by usual minutes, byId, tonightKey) and ST (his work). Each team opens on the scenario
- *  an Apply last sent for it (`appliedKeys`), else Tonight, so what the board holds is what the page shows; an id no longer on the team drops. */
+ *  on show when his work was last saved (rec.on), else the one an Apply last sent (`appliedKeys`: { key, tonight }, or the key alone in an older record),
+ *  else Tonight. rec.on is saved with every change, so it is never older than the applied key: a change whose send never landed is not lost on a reload.
+ *  Each is rebased from the Tonight it was made on onto this one (moveTo), his pins carried across; an id no longer on the team drops. */
 export function buildModel(inputs, saved, appliedKeys = {}) {
   const TEAMS = {}, ST = {};
   for (const [code, input] of Object.entries(inputs.teams)) {
-    TEAMS[code] = shapeTeam(input);
-    ST[code] = stateFor(TEAMS[code], saved?.[code]);
-    pruneFlips(TEAMS[code], ST[code]);
-    if (Object.hasOwn(appliedKeys ?? {}, code)) ST[code].outs = outsOf(appliedKeys[code]).filter((id) => TEAMS[code].byId[id]);
+    const T = TEAMS[code] = shapeTeam(input), rec = saved?.[code], S = ST[code] = stateFor(T, rec);
+    pruneFlips(T, S);
+    const recTonight = typeof rec?.tonight === "string" ? rec.tonight : T.tonightKey;
+    const ak = Object.hasOwn(appliedKeys ?? {}, code) ? appliedKeys[code] : undefined;
+    const applied = ak === undefined ? null : typeof ak === "string" ? { key: ak, tonight: recTonight } : ak;
+    if (typeof rec?.on === "string") moveTo(T, S, outsOf(rec.on), recTonight);
+    else if (applied) moveTo(T, S, outsOf(applied.key), typeof applied.tonight === "string" ? applied.tonight : recTonight);
+    else moveTo(T, S, outsOf(recTonight), recTonight);
+    S.sticky = Boolean(applied) || typeof rec?.on === "string"; // keeps saving where he is, so a reload never falls back to an older applied key
   }
   return { TEAMS, ST };
+}
+
+/**
+ * Who is out on a Tonight (Adam, 11-07): its outs, plus the men he or the news put Out, minus the men he put back in. `mine` is the explicit record of those
+ * ({ out: [ids], in: [ids] }, kept by noteOuts as each change is made), so a later pull can never undo his Out. A man newly Out on TwoGun's list is Out, never "back in". Pure.
+ */
+export function rebaseOuts(tonight, mine) {
+  const next = new Set(outsOf(tonight));
+  for (const id of mine.out) next.add(id);
+  for (const id of mine.in) next.delete(id);
+  return [...next];
+}
+
+/** The record seeded from a scenario and the Tonight it was made on, for work saved before `mine` was kept. */
+const seedMine = (outs, old) => { const t = new Set(outsOf(old)), now = new Set(outs); return { out: outs.filter((id) => !t.has(id)), in: [...t].filter((id) => !now.has(id)) }; };
+
+/** A change of who is out goes in the record: a man put Out beyond Tonight is his Out (a man TwoGun already has Out is only no longer his back-in, so browsing scenarios marks nobody); a man taken off the list is no longer his Out, and if TwoGun has him Out he is his back-in. `wasKey`: the scenario before the change. */
+export function noteOuts(T, S, wasKey) {
+  const was = new Set(outsOf(wasKey)), now = new Set(S.outs), tonight = new Set(outsOf(T.tonightKey)), mine = (S.mine ??= { out: [], in: [] });
+  for (const id of now) if (!was.has(id)) { if (!tonight.has(id) && !mine.out.includes(id)) mine.out.push(id); mine.in = mine.in.filter((x) => x !== id); }
+  for (const id of was) if (!now.has(id)) { mine.out = mine.out.filter((x) => x !== id); if (tonight.has(id) && !mine.in.includes(id)) mine.in.push(id); }
+}
+
+/** The team onto the current Tonight: new Tonight + his outs - his ins (`old` only seeds the record for older work), men off the team dropped, and the pins on the scenario
+ *  he was on carried to the one he lands on, his entries winning over any already there (moved, or copied from a saved scenario so it stays saved). */
+export function moveTo(T, S, outs, old) {
+  const from = keyOf(outs);
+  S.mine ??= seedMine(outs, old);
+  S.outs = rebaseOuts(T.tonightKey, S.mine).filter((id) => T.byId[id]);
+  S.tonight = T.tonightKey;
+  const to = keyOf(S.outs);
+  if (from === to || !hasPins(S.pins[from])) return;
+  const moved = S.saved.includes(from) ? structuredClone(S.pins[from]) : S.pins[from], there = S.pins[to] ?? {};
+  S.pins[to] = Object.fromEntries([...new Set([...Object.keys(there), ...Object.keys(moved)])].map((k) => [k, { ...there[k], ...moved[k] }]));
+  if (!S.saved.includes(from)) delete S.pins[from];
+  S.shown = (S.shown ?? []).filter((k) => k !== from && k !== to);
 }
 
 function shapeTeam(input) {
@@ -50,18 +94,18 @@ function stateFor(T, rec) {
   for (const [key, p] of Object.entries(rec?.pins ?? {})) {
     if (key !== "" && key !== T.tonightKey && !saved.includes(key) && hasPins(p)) shown.push(key);
   }
-  return { outs: outsOf(T.tonightKey), saved, shown, pins:structuredClone(rec?.pins ?? {}), handouts: structuredClone(rec?.handouts ?? {}), combos: structuredClone(rec?.combos ?? {}) };
+  return { outs: outsOf(T.tonightKey), tonight: T.tonightKey, source: MINUTE_SOURCES.includes(rec?.source) ? rec.source : "twogun", saved, shown, pins:structuredClone(rec?.pins ?? {}), handouts: structuredClone(rec?.handouts ?? {}), combos: structuredClone(rec?.combos ?? {}), news: structuredClone(rec?.news ?? {}), ...(rec?.mine ? { mine: structuredClone(rec.mine) } : {}) };
 }
 
-/** New inputs on the same work: his pins stay and everything he did not pin moves. A team that was on Tonight stays on Tonight; a man who left is dropped from who is out. */
+/** New inputs on the same work (a pull landed): his pins stay and everything he did not pin moves. Every team is rebased on the new Tonight
+ *  (moveTo): a team with nothing of his stays on Tonight, his own Outs and back-ins stay his through any number of pulls, and his pins go with the scenario; a man who left is dropped. */
 export function refreshTeams(model, inputs) {
   const TEAMS = {};
   for (const [code, input] of Object.entries(inputs.teams)) {
     TEAMS[code] = shapeTeam(input);
     const S = model.ST[code];
     if (!S) { model.ST[code] = stateFor(TEAMS[code], null); continue; }
-    if (keyOf(S.outs) === model.TEAMS[code]?.tonightKey) S.outs = outsOf(TEAMS[code].tonightKey);
-    else S.outs = S.outs.filter((id) => TEAMS[code].byId[id]);
+    moveTo(TEAMS[code], S, S.outs, model.TEAMS[code]?.tonightKey ?? TEAMS[code].tonightKey);
     pruneFlips(TEAMS[code], S);
   }
   model.TEAMS = TEAMS;
@@ -118,7 +162,8 @@ export function calc(T, S, outs) {
   return { ...res, rows: res.rows.map((r) => ({ ...r, p: T.byId[r.id] })) };
 }
 
-/** A team's work as it is stored: no empty pin sections. The current outs stay in the session. */
+/** A team's work as it is stored: no empty pin sections. Once he has pins or has been off Tonight it also keeps `on` (the scenario on show) and
+ *  `tonight` (the Tonight it was made on), so a reload opens where he was, rebased on a newer pull. */
 export function recordOf(S) {
   const pins = {};
   for (const [key, p] of Object.entries(S.pins)) {
@@ -126,7 +171,10 @@ export function recordOf(S) {
     for (const [k, sec] of Object.entries(p)) if (Object.keys(sec).length) kept[k] = sec;
     if (Object.keys(kept).length) pins[key] = kept;
   }
-  return { saved: S.saved, pins, handouts: S.handouts, combos: S.combos };
+  const offTonight = S.tonight !== undefined && keyOf(S.outs) !== S.tonight;
+  const where = (Object.keys(pins).length || offTonight || S.sticky) && S.tonight !== undefined ? { tonight: S.tonight, on: keyOf(S.outs) } : {};
+  const mine = S.mine?.out.length || S.mine?.in.length ? { mine: S.mine } : {};
+  return { saved: S.saved, pins, handouts: S.handouts, combos: S.combos, ...where, ...mine, ...(S.source && S.source !== "twogun" ? { source: S.source } : {}), ...(Object.keys(S.news ?? {}).length ? { news: S.news } : {}) };
 }
 
 /** His usual minutes: min_healthy where the pull has it, else Tonight's. */

@@ -1,3 +1,5 @@
+// A team with a valid depth chart takes its five from the chart (resolveFromChart below); the formula that follows is only for a team
+// with no chart or a chart that fails its check, and says so in its note.
 // The console's roles (Adam, 11-06): Starter, Bench+, Bench, Out of rotation, Out. Pure ES module shared by the page and the
 // server, as console-engine.js is. A man's role is Out when he is out in the scenario (its key); otherwise the role he flipped
 // him to (pins.r), else the rule below. Exactly five starters, always: the flipped starters count first, the rest are filled
@@ -8,6 +10,7 @@
 // now a Starter. A starter marked Out flips nobody: the rule fills the five. Each such
 // move is a flip of its own, named so the page can show it and Ctrl+Z takes it back.
 import { isNum } from "./figures.js";
+import { chartStarters, chartUse, unmatchedNote } from "./console-ours.js";
 
 export const STARTERS = 5;
 export const ROLES = ["starter", "bench_plus", "bench", "oor", "out"];
@@ -32,6 +35,31 @@ export function liveFlips(team, outSet, flips) {
  * men playing are not five and the five were filled or trimmed by Tonight's minutes, or when fewer than five are playing.
  */
 export function resolveRoles(team, outSet, flips) {
+  const use = chartUse(team);
+  if (use.ok) return resolveFromChart(team, outSet, flips);
+  const res = resolveByRule(team, outSet, flips);
+  if (use.why) res.note = `Starters by TwoGun's flag and Tonight's minutes: ${use.why}.${res.note ? ` ${res.note}` : ""}`;
+  return res;
+}
+
+/** The starters from the team's depth chart (Adam, 11-07): a set, its named starters who play plus every man marked S, an Out starter's named backup while fewer than five; positions play no part. A chart man keeps his chart role; a man not on the chart gets the rule's bench role. */
+function resolveFromChart(team, outSet, flips) {
+  const flipped = liveFlips(team, outSet, flips), roles = {};
+  const { ids, notes } = chartStarters(team, outSet, flipped);
+  const five = new Set(ids), toRole = { bench_plus: "bench_plus", bench: "bench", oor: "oor", injured: "oor", starter: "bench" };
+  for (const p of team.men) {
+    if (outSet.has(p.id)) roles[p.id] = "out";
+    else if (Object.hasOwn(flipped, p.id)) roles[p.id] = flipped[p.id];
+    else if (five.has(p.id)) roles[p.id] = "starter";
+    else {
+      const m = p.depth_key ? team.depth.men[p.depth_key] : null;
+      roles[p.id] = m ? toRole[m.role] : p.bench_plus_ok ? "bench_plus" : isNum(p.min) && p.min > 0 ? "bench" : "oor";
+    }
+  }
+  return { roles, flipped, note: [...notes, unmatchedNote(team)].filter(Boolean).join(" ") || null };
+}
+
+function resolveByRule(team, outSet, flips) {
   const flipped = liveFlips(team, outSet, flips);
   const roles = {};
   const playing = team.men.filter((p) => !outSet.has(p.id));
@@ -64,6 +92,11 @@ export function roleMove(team, outs, flips, id, role, minutes = {}) {
   const nextOuts = new Set(outs), nextFlips = { ...(flips ?? {}) };
   if (role === "out") { nextOuts.add(id); delete nextFlips[id]; } else { nextOuts.delete(id); nextFlips[id] = role; }
   const moved = [];
+  if (chartUse(team).ok) { // the chart's starters are a set: marking a man never moves another; only an Out starter's named backup can change, and the move names him
+    const after = resolveRoles(team, nextOuts, nextFlips).roles;
+    for (const p of team.men) if (p.id !== id && after[p.id] !== "out" && before[p.id] !== after[p.id] && (before[p.id] === "starter" || after[p.id] === "starter")) moved.push({ id: p.id, from: before[p.id], to: after[p.id] });
+    return { outs: [...nextOuts], flips: nextFlips, moved };
+  }
   const mins = (p) => (isNum(minutes[p.id]) ? minutes[p.id] : tonightMin(p));
   if (role === "starter" && before[id] !== "starter") {
     const five = team.men.filter((p) => p.id !== id && before[p.id] === "starter" && !nextOuts.has(p.id));
@@ -80,4 +113,35 @@ export function roleMove(team, outs, flips, id, role, minutes = {}) {
     if (joins) { moved.push({ id: joins.id, from: before[joins.id], to: "starter" }); nextFlips[joins.id] = "starter"; }
   }
   return { outs: [...nextOuts], flips: nextFlips, moved };
+}
+
+/**
+ * A starter in and a named man out, as one move (the lineup bar's starter proposal): the pure part of console-moves.js swapStarter.
+ * Returns null when nothing is left to do, { call: { id, role } } when the plain role move is the answer (nobody named to leave, or he already starts
+ * and only the man to drop has a move), { backIn: { id, role: "bench" } } when the man in is Out in this scenario (he comes back in on a non-starting role
+ * first, then the swap is asked again in the scenario he is back in, so both flips land there), else { outs, flips, moved } for the scenario's new flips.
+ *   Chart team: the man out is flipped to Bench and the man in marked S; the starters are a set (depth-chart.js chartFive), so exactly those two change.
+ *   Team with no chart: roleMove's five-starter rule, with any flip it made for a man other than the one named put back as it was.
+ * `minutes`: { id: minutes on screen now }, used only by the no-chart rule.
+ */
+export function swapStarterMove(team, outs, flips, inId, outId, minutes = {}) {
+  const outSet = new Set(outs), before = resolveRoles(team, outSet, flips).roles;
+  if (!Object.hasOwn(before, inId)) return null;
+  const dropOut = before[outId] === "starter" ? outId : null; // a man already benched needs no move
+  if (before[inId] === "starter") return dropOut ? { call: { id: dropOut, role: "bench" } } : null;
+  if (!dropOut) return { call: { id: inId, role: "starter" } };
+  if (outSet.has(inId)) return { backIn: { id: inId, role: "bench" } };
+  if (chartUse(team).ok) {
+    const next = { ...(flips ?? {}), [inId]: "starter", [dropOut]: "bench" };
+    const after = resolveRoles(team, outSet, next).roles;
+    const moved = team.men.filter((p) => p.id !== inId && after[p.id] !== "out" && before[p.id] !== after[p.id] && (before[p.id] === "starter" || after[p.id] === "starter")).map((p) => ({ id: p.id, from: before[p.id], to: after[p.id] }));
+    return { outs: [...outSet], flips: next, moved };
+  }
+  const res = roleMove(team, outs, flips, inId, "starter", minutes), kept = { ...res.flips };
+  for (const m of res.moved) {
+    if (m.id === dropOut) continue;
+    if (Object.hasOwn(flips ?? {}, m.id)) kept[m.id] = flips[m.id]; else delete kept[m.id]; // the rule's own pick is not the man the sources drop
+  }
+  kept[dropOut] = "bench";
+  return { outs: res.outs, flips: kept, moved: [{ id: dropOut, from: "starter", to: "bench" }] };
 }

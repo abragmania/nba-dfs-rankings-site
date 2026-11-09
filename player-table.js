@@ -9,6 +9,7 @@ import { limitCellHtml } from "./row-limits.js";
 import { sgn, dcls } from "./console-model.js";
 import { tonightRate } from "./figures.js";
 import { moveLine, moveTag } from "./pull-note.js";
+import { starterChipHtml, undoChipHtml } from "./board-marks.js";
 
 export const FIG_COLS = {
   salary: { key: "salary", label: "Sal", cls: "num sal", title: "no salary in this slate file" },
@@ -35,14 +36,14 @@ export const sortValue = (p, key) => (key === "min_chg" ? minChg(p) : key === "d
 /** Why a man has no figure tonight, for the dash's hover. */
 const noTonight = (p) => (typeof p.minutes !== "number" ? "no minutes in this pull, so no DK/min tonight" : p.minutes <= 0 ? "on 0 minutes, so no DK/min tonight" : "no projection in this pull, so no DK/min tonight");
 /** The Tonight cell: the figure, its arrow against the season's and both numbers on hover. */
-function tonightCell(p, col, dash, withWhy) {
+function tonightCell(p, col, dash, withWhy, mark) {
   const v = dkTonight(p);
-  if (v === null) return `<td class="${col.cls}">${dash(noTonight(p))}${moveTag(null)}</td>`;
+  if (v === null) return `<td class="${col.cls}"><span class="cu"></span>${dash(noTonight(p))}${moveTag(null)}</td>`;
   const season = p.dk_per_min, d = typeof season === "number" ? Math.round((v - season) * 100) / 100 : null;
   const yours = p.ovr?.projection != null || p.ovr?.steps || "base_minutes" in p ? " · from your projection or applied minutes" : "";
-  const title = `${d === null ? `Tonight ${v.toFixed(2)}; no season figure to compare` : `Tonight ${v.toFixed(2)}, season ${season.toFixed(2)}, ${d > 0 ? "+" : ""}${d.toFixed(2)}`}${yours}`;
+  const title = `${d === null ? `Tonight ${v.toFixed(2)}; no season figure to compare` : `Tonight ${v.toFixed(2)}, season ${season.toFixed(2)}, ${d > 0 ? "+" : ""}${d.toFixed(2)}`}${mark ? " · your typed DK/min" : yours}. Click to type his DK/min; Proj = Min × DK/min`;
   const arrow = d !== null && Math.abs(d) > TON_ARROW_BAND ? `<i class="ton-arr ${d > 0 ? "up" : "dn"}">${d > 0 ? "▲" : "▼"}</i>` : "";
-  return `<td class="${col.cls}" title="${esc(withWhy(title))}">${arrow}${v.toFixed(2)}${moveTag(p.pull_move?.rate, 2, "TwoGun's DK/min", { signed: true })}</td>`;
+  return `<td class="${col.cls}" title="${esc(withWhy(title))}"><span class="cu">${undoChipHtml(p.dk_id, "d", mark)}</span>${arrow}<span class="cedit${mark ? " ctyped" : ""}" data-edit="crate" data-id="${esc(p.dk_id)}">${v.toFixed(2)}</span>${moveTag(p.pull_move?.rate, 2, "TwoGun's DK/min", { signed: true })}</td>`;
 }
 /** The table's row order for sort { key, dir }: a blank figure goes last either way, ties by name. */
 export function comparePlayers(a, b, { key, dir }) {
@@ -83,7 +84,7 @@ function figCell(k, p, x) {
   const also = x.why ?? "";
   const withWhy = (t) => (also ? `${t} · ${also}` : t);
   if (k === "projection") return `<td class="${col.cls}">${bumpFigureHtml(p, v == null ? dash(col.title) : v.toFixed(1), also)}${moveTag(p.pull_move?.proj, 1, "TwoGun's projection")}</td>`;
-  if (k === "dk_tonight") return tonightCell(p, col, dash, withWhy);
+  if (k === "dk_tonight") return tonightCell(p, col, dash, withWhy, x.mark?.d);
   if (k === "value" || k === "proj_own") {
     const own = k === "proj_own", typed = own && p.ovr?.proj_own != null;
     const edit = own ? ` data-edit="own" data-id="${esc(p.dk_id)}" title="${esc(withWhy(typed ? `Your number. Base ${p.base?.proj_own == null ? "none" : p.base.proj_own.toFixed(1) + "%"}; click to change it, or reset the row` : "Click to type your own projected ownership"))}"` : "";
@@ -108,7 +109,13 @@ function figCell(k, p, x) {
   const shown = v == null ? dash(col.title) : k === "salary" ? money(v) : v.toFixed(1);
   // Applied minutes stay across pulls, as a typed projection does, so they wear its marker and name TwoGun's figure.
   const moved = k === "minutes" ? moveTag(p.pull_move?.min, 1, "TwoGun's minutes") : "";
-  if (k === "minutes" && v != null && "base_minutes" in p) return `<td class="${col.cls}"><span class="min-typed" title="${esc(withWhy(`From your Apply; TwoGun's ${p.base_minutes == null ? "none" : p.base_minutes.toFixed(1)}`))}">${shown}</span>${moved}</td>`;
+  if (k === "minutes") {
+    // Min is typeable (Adam, 11-07): the number goes to the console as his typed minutes, and the console sends the board his projection.
+    const mk = x.mark?.m, applied = v != null && "base_minutes" in p, tg = applied ? p.base_minutes : v;
+    const tgText = `TwoGun's ${tg == null ? "none" : tg.toFixed(1)}`;
+    const hover = mk ? `Your typed minutes; ${tgText}. Click to change them` : applied ? `From the console; ${tgText}. Click to type his minutes` : "Click to type his minutes; Proj = Min × DK/min";
+    return `<td class="${col.cls}"><span class="cu">${undoChipHtml(p.dk_id, "m", mk)}</span><span class="cedit${mk ? " ctyped" : applied ? " min-typed" : ""}" data-edit="cmin" data-id="${esc(p.dk_id)}" title="${esc(withWhy(hover))}">${shown}</span>${moved}</td>`;
+  }
   return `<td class="${col.cls}">${shown}${moved}</td>`;
 }
 
@@ -116,12 +123,13 @@ function figCell(k, p, x) {
  * One player row. x: { dash, when(stamp), colourOf(team), tag (his position tag on this tab), lock, ex (Sets of dk_ids),
  * L (lateSwap view or null), inl (Set of the lineup on show, or null), blocks (Map of dk_id to why he cannot go into the
  * working lineup, or null: a greyed row, its figures and controls still there, standard A18), vmin, vmax, omax, limits (dk_id to
- * his { min, max }, standard B10) }.
+ * his { min, max }, standard B10), marks(dk_id) (board-marks.js: his S chip and typed minutes and DK/min, or null) }.
  */
 export function rowHtml(p, keys, x) {
   const c = x.colourOf(p.team), id = esc(p.dk_id), L = x.L, dash = x.dash;
   const why = L ? null : x.blocks?.get(p.dk_id) ?? null;
   const lk = x.lock.has(p.dk_id), ex = x.ex.has(p.dk_id);
+  x = { ...x, mark: x.marks?.(p.dk_id) ?? null }; // the console's word on him (board-marks.js): S chip, typed minutes and DK/min
   const gone = L && L.started.has(p.dk_id) && !L.inLineup.has(p.dk_id);
   // Any started man's lock and exclude are off in the mode: excluding a frozen man would only make the build fail.
   const btn = (title) => (L && L.started.has(p.dk_id) ? ` disabled title="Game started"` : ` title="${title}"`);
@@ -132,7 +140,7 @@ export function rowHtml(p, keys, x) {
   const cell = (k) => {
     switch (k) {
       case "star": return `<td class="ctl"><button class="fav${p.starred ? " on" : ""}" data-star="${id}" title="${p.starred ? "Unstar" : "Star"}">${p.starred ? "★" : "☆"}</button></td>`;
-      case "name": return `<td class="pl"><div class="who">${logo(p.team)}<div class="nm"><div class="l1"><button class="name" data-dk-id="${id}">${esc(p.name)}</button>${x.tag ? `<span class="pos">${esc(x.tag)}</span>` : ""}${injBadge(p.injury_status)}</div><div class="l2${p.pull_move ? " why" : ""}"${p.pull_move && p.tip ? ` title="Tip ${esc(x.when(p.tip))}"` : ""}>${esc(p.team)} ${p.oppText ? esc(p.oppText) : dash("no opponent in this slate file")} · ${p.pull_move ? moveLine(p.pull_move) : p.tip ? esc(x.when(p.tip)) : dash("no tip time in this slate file")}</div></div>${tools}</div></td>`;
+      case "name": return `<td class="pl"><div class="who">${logo(p.team)}<div class="nm"><div class="l1"><button class="name" data-dk-id="${id}">${esc(p.name)}</button>${starterChipHtml(x.mark?.chip)}${x.tag ? `<span class="pos">${esc(x.tag)}</span>` : ""}${injBadge(p.injury_status)}</div><div class="l2${p.pull_move ? " why" : ""}"${p.pull_move && p.tip ? ` title="Tip ${esc(x.when(p.tip))}"` : ""}>${esc(p.team)} ${p.oppText ? esc(p.oppText) : dash("no opponent in this slate file")} · ${p.pull_move ? moveLine(p.pull_move) : p.tip ? esc(x.when(p.tip)) : dash("no tip time in this slate file")}</div></div>${tools}</div></td>`;
       case "thumbs": return `<td class="bmp">${bumpControlHtml(p)}</td>`;
       // Late swap mode: the slot picker takes the lock button's place; a lock is still set from the player card.
       case "lock": return `<td class="ctl${L ? " ls" : ""}">${L ? rowPin(p, L) : `<button class="lk${lk ? " on" : ""}" data-lock="${id}"${btn("Lock")}>${ICON.lock}</button>`}</td>`;

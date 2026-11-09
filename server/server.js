@@ -24,6 +24,7 @@ import { readSpots, writeSpots, checkSpotsBody, applySpots, vacateSpots } from "
 import { readBuilds, writeBuilds, checkBuildsBody, applyBuilds } from "./slate/builds.js";
 import { readOverrides, writeOverrides, checkChanges, applyChanges, resetPlayer, resetAll, mergeOverrides } from "./slate/overrides.js";
 import { consoleHandler } from "./slate/console-route.js";
+import { depthHandler } from "./slate/depth-store.js";
 import { readNewsLineups } from "./slate/news-lineups.js";
 import { withUsualMinutes } from "../site/shim/app-only.js";
 import { pullStamp, withPullMoves } from "../site/shim/pull-moves.js";
@@ -467,6 +468,8 @@ async function route(req, res, opts) {
   if (p === "/api/player-usage") return (await import("../site/shim/app-only.js")).handlePlayerUsage(req, res, url, { send, fail, readJson }); // the card's usage data
   if (p === "/api/pull-now") return (await import("../site/shim/app-only.js")).handlePullNow(req, res, { send, fail, readJson, state: opts.pullNow, deps: opts.pullNowDeps }); // the header's Pull now button
   if (p === "/api/pull-status") return (await import("../site/shim/app-only.js")).handlePullStatus(req, res, { send, fail, state: opts.pullNow, deps: opts.pullNowDeps, url }); // the Pull now status block
+  const depth = depthHandler(p); // the saved depth charts (slate/depth-store.js)
+  if (depth) return depth.handler(req, res, depth.team, { send, fail, readJson, now: opts.now });
   const cons = consoleHandler(p); // the scenario console (slate/console-route.js)
   if (cons) return cons.handler(req, res, safeDecode(cons.encodedSlate), { send, fail, readJson, openSlate, usageTable: opts.usageTable, now: opts.now });
   const lsw = lateswapHandler(p); // the Late swap screen (slate/lateswap-route.js)

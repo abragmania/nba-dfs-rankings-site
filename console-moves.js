@@ -1,17 +1,35 @@
 // The console's moves on his work: history and ripple, saving, pins, roles, who is out, hand-outs. Each takes the console's shared state `c`.
 import { keyOf, outsOf, usageStart } from "./console-engine.js";
-import { calc, chipName, hasPins, label, pinsOf, recordOf, savedFor, sgn } from "./console-model.js";
+import { calc, chipName, hasPins, label, moveTo, noteOuts, pinsOf, recordOf, savedFor, sgn } from "./console-model.js";
 import { FN, fmtv } from "./console-cmd.js";
 import { COLS } from "./console-render.js";
 import { PIN_MAX } from "./override-limits.js";
-import { roleMove, ROLE_LABEL } from "./console-roles.js";
+import { roleMove, ROLE_LABEL, swapStarterMove } from "./console-roles.js";
 import { EMPTY_RECORD } from "./figures.js";
+import { MINUTE_SOURCES, SOURCE_LABEL } from "./depth-chart.js";
+import { alignNews, manAsLeft, marksOf } from "./console-marks.js";
 
 const THR = { m: 0.05, u: 0.05, d: 0.004, p: 0.05 };
 const STEP = { m: [0.5, 2], u: [0.5, 2], d: [0.01, 0.05], p: [0.1, 1] };
 const EMPTY_RECORD_TEXT = JSON.stringify(EMPTY_RECORD());
 
-export const snap = (c) => JSON.stringify({ ST: c.model.ST, cur: c.G.cur });
+/** A history snapshot: his work without the lineup-news record, which no undo or redo ever changes (it would let news apply twice). */
+export const snap = (c) => JSON.stringify({ ST: Object.fromEntries(Object.entries(c.model.ST).map(([code, S]) => [code, { ...S, news: undefined }])), cur: c.G.cur });
+/** One team's work as the send compares it: who is out and every pin. */
+const teamState = (S) => JSON.stringify([keyOf(S.outs), S.pins, S.source ?? null]);
+/** The teams a step changed join c.touched: only those (and teams the board already holds an Apply for) are sent (console-auto.js). */
+function touch(c, before, { track = false } = {}) {
+  c.touched ??= new Set();
+  c.pending ??= new Set();
+  for (const [code, S] of Object.entries(c.model.ST)) {
+    if (before[code] !== teamState(S)) { c.touched.add(code); c.pending.add(code); }
+    if (track && c.model.TEAMS[code] && before[code] !== undefined) noteOuts(c.model.TEAMS[code], S, JSON.parse(before[code])[0]); // who he put Out or back in, kept as its own record
+    if (S.tonight !== undefined && keyOf(S.outs) !== S.tonight) S.sticky = true; // off Tonight once: where he is stays saved (console-model.js recordOf)
+  }
+}
+const states = (c) => Object.fromEntries(Object.entries(c.model.ST).map(([code, S]) => [code, teamState(S)]));
+/** The send after a step, unless the caller holds it (the player card sends with its own check, console-card.js). */
+const kick = (c) => { if (c.holdSend) return; c.cardStart = null; c.auto?.kick(); }; // anything sent from here on carries the card's moves, so they can no longer be taken back as unsent
 
 export function pushHist(c, text) {
   const G = c.G;
@@ -65,36 +83,51 @@ export function saveDirty(c) {
 }
 
 export function mutate(c, text, fn) {
-  const before = vals(c);
+  const before = vals(c), was = states(c);
   c.G.roleMoves = null; // the five-starter note names only the move that made it
   fn();
+  touch(c, was, { track: true });
   pushHist(c, text);
   c.G.editing = false;
   c.render();
   ripple(c, before);
   saveDirty(c);
+  kick(c); // the change goes to the board by itself (console-auto.js)
 }
 
 export function restore(c, i) {
   const G = c.G;
   if (i < 0 || i >= G.hist.length) return;
-  const before = vals(c), o = JSON.parse(G.hist[i].s);
-  Object.assign(c.model.ST, o.ST);
+  const before = vals(c), was = states(c), o = JSON.parse(G.hist[i].s), leaving = G.hist[G.hi];
+  // A reverted news entry remembers the history step it was reverted from, and goes back to applied only when a restore reaches that step again. A step he has since overwritten is gone, so the entry stays reverted.
+  const anchors = (G.revertedAt ??= new Map());
+  const memo = { reverted: (key) => anchors.set(key, leaving), mayReturn: (key) => { const at = G.hist.indexOf(anchors.get(key)); return at >= 0 && i >= at; } };
+  for (const [code, S] of Object.entries(o.ST)) {
+    const T = c.model.TEAMS[code];
+    if (!T) continue;
+    const next = c.model.ST[code] = { ...S, news: c.model.ST[code]?.news ?? {}, sticky: Boolean(S.sticky || c.model.ST[code]?.sticky) }; // the news record is not part of history; once he has been off Tonight, where he is stays saved
+    moveTo(T, next, next.outs, next.tonight ?? T.tonightKey); // a step taken before a pull lands on the current Tonight, pins carried
+    alignNews(next, memo); // and the news records follow the screen: reverted, or applied again
+  }
+  touch(c, was);
   G.cur = o.cur; G.hi = i; G.editing = false; G.roleMoves = null;
   c.render();
   ripple(c, before);
   saveDirty(c);
+  kick(c);
 }
 export const undo = (c) => restore(c, c.G.hi - 1);
 export const redo = (c) => restore(c, c.G.hi + 1);
 
 const nameOf = (c, t, id) => chipName(c.model.TEAMS[t], c.model.TEAMS[t].byId[id]);
 
+/** His typed number on a man. False, with nothing changed, when the man is Out in the scenario on show (a typed number on an Out man is never used). */
 export function setPin(c, t, id, k, raw) {
   const S = c.model.ST[t];
-  if (S.outs.includes(id)) return;
+  if (S.outs.includes(id)) return false;
   const v = Math.max(0, Math.min(PIN_MAX[k], Math.round(raw * 1000) / 1000));
   mutate(c, `${t} ${nameOf(c, t, id)} ${FN[k]} = ${fmtv(k, v)}`, () => { pinsOf(S, keyOf(S.outs))[k][id] = v; });
+  return true;
 }
 export function clearPin(c, t, id, k) {
   const S = c.model.ST[t], pn = pinsOf(S, keyOf(S.outs));
@@ -105,6 +138,56 @@ export function clearPin(c, t, id, k) {
 }
 export function clearPinAt(c, tm, sk, k, id) {
   mutate(c, `${tm} ${nameOf(c, tm, id)} pin cleared ${FN[k]}`, () => { delete c.model.ST[tm].pins[sk][k][id]; });
+}
+/** A role he set on a man comes off: the man goes back to the role the app gives him. False when he had none. */
+export function clearFlip(c, t, id) {
+  const S = c.model.ST[t], r = pinsOf(S, keyOf(S.outs)).r;
+  if (!Object.hasOwn(r, id)) return false;
+  mutate(c, `${t} ${nameOf(c, t, id)} role mark cleared`, () => { delete r[id]; });
+  return true;
+}
+/** The S toggle (Adam, 11-07): a man not starting is marked S; a man he marked S whom the app would not start loses the mark; any other
+ *  starter goes to the bench (the chart puts him first there, depth-chart.js). */
+export function toggleStarter(c, t, id) {
+  const T = c.model.TEAMS[t], S = c.model.ST[t];
+  const row = calc(T, S, S.outs).rows.find((r) => r.id === id);
+  if (!row) return null;
+  if (row.role !== "starter") return setRole(c, t, id, "starter");
+  const mark = marksOf(T, S)[id]?.r;
+  if (mark?.v === "starter" && mark.live !== "starter") return clearFlip(c, t, id);
+  return setRole(c, t, id, "bench");
+}
+/** An undo chip: drops one of his marks on a man (marksOf's kinds m, d, r, out), and the man goes back to what the app has live. */
+export function dropMark(c, t, id, kind) {
+  if (kind === "m" || kind === "d") return clearPin(c, t, id, kind);
+  if (kind === "r") return clearFlip(c, t, id);
+  if (kind === "out") return toggleOut(c, t, id);
+  return false;
+}
+/** One lineup-news entry saved on its team (lineup-bar.js). Not a history step: undo and redo never touch the news record. */
+export function setNews(c, t, key, entry) {
+  const S = c.model.ST[t];
+  (S.news ??= {})[key] = entry;
+  saveDirty(c);
+  c.render();
+}
+/** The undo X on a lineup-news note: what that entry moved goes back (an Out back in, a role it set off), and it is kept as undone so it never
+ *  applies again. One history step. False when there is nothing applied under that key. */
+export function undoNews(c, t, key) {
+  const S = c.model.ST[t], e = S.news?.[key];
+  if (!e || e.state !== "applied") return false;
+  const base = histMark(c);
+  const tonight = new Set(c.model.TEAMS[t].tonight ?? []);
+  for (const m of e.men) {
+    const cur = c.model.ST[t]; // a move may put a new team object in place
+    if (!manAsLeft(cur, m)) continue; // he is not as the news left him: what he is now is his own mark, and stays
+    if (m.kind === "out" && !tonight.has(m.id)) toggleOut(c, t, m.id);
+    else if (m.kind === "out") mutate(c, `${t} ${nameOf(c, t, m.id)} news Out undone`, () => { cur.mine.out = cur.mine.out.filter((x) => x !== m.id); }); // TwoGun has him Out too now: he stays Out, never "back in", for as long as TwoGun says so; a history step, so Ctrl+Z then Ctrl+Y keeps it
+    else if (m.kind === "r") clearFlip(c, t, m.id);
+  }
+  setNews(c, t, key, { ...e, state: "undone" });
+  foldHistory(c, base);
+  return true;
 }
 /** The Out chip, O key and command box: out is the role menu's Out (the five-starter rule and his pins carried); back in, he leaves the
  *  out list on the role the rule gives him, the pins carried the same way. */
@@ -171,38 +254,45 @@ export function setRole(c, t, id, role) {
   });
   return res.moved;
 }
+/** Which minutes feed the optimizer (depth-chart.js MINUTE_SOURCES): one team, or every team that has a chart. It is saved with his work and takes Ctrl+Z like any move. */
+export function setSource(c, t, source, all = false) {
+  if (!MINUTE_SOURCES.includes(source)) return;
+  const codes = (all ? Object.keys(c.model.TEAMS) : [t]).filter((code) => c.model.TEAMS[code].depth && (c.model.ST[code].source ?? "twogun") !== source);
+  if (!codes.length) return;
+  mutate(c, `${all ? "all teams" : t} minutes: ${SOURCE_LABEL[source]}`, () => { for (const code of codes) c.model.ST[code].source = source; });
+}
 /**
- * A starter in and a named man out, as one role move (the lineup bar's starter proposal): `inId` becomes a Starter by the same rule as setRole, and
- * `outId` (the man the news sources leave out of the five) is the one who goes to the Bench. When the five-starter rule would bench a different man
+ * A starter in and a named man out, as one role move (the lineup news's start): `inId` becomes a Starter and `outId` (the man the news sources leave out of the
+ * five) goes to the Bench. On a chart team exactly those two change; only a team with no chart has the five-starter rule, and when that would bench a different man
  * (the starter with the fewest minutes), that man's flip is put back as it was. One history step; Ctrl+Z takes it back. Returns the men moved, or null when nothing changed.
  */
 export function swapStarter(c, t, inId, outId) {
   const T = c.model.TEAMS[t], S = c.model.ST[t], key = keyOf(S.outs);
-  const rows = calc(T, S, S.outs).rows, mine = rows.find((r) => r.id === inId), theirs = rows.find((r) => r.id === outId);
-  const dropOut = theirs?.role === "starter" ? outId : null; // a man the console has already benched needs no move
-  if (!mine) return null;
-  if (mine.role === "starter") return dropOut ? setRole(c, t, dropOut, "bench") : null; // he already starts: only the man to drop has a move left
-  if (!dropOut) return setRole(c, t, inId, "starter"); // nobody named to drop: the plain move, the five-starter rule's pick
-  const before = pinsOf(S, key).r;
-  const res = roleMove(T, S.outs, before, inId, "starter", Object.fromEntries(rows.map((r) => [r.id, r.min])));
-  if (keyOf(res.outs) !== key) return setRole(c, t, inId, "starter"); // he was out in this scenario: the plain move, which opens the scenario that has him in
-  const flips = Object.fromEntries(Object.entries(res.flips).filter(([fid]) => T.byId[fid]));
-  for (const m of res.moved) {
-    if (m.id === dropOut) continue;
-    if (Object.hasOwn(before ?? {}, m.id)) flips[m.id] = before[m.id]; else delete flips[m.id]; // the rule's own pick is not the man the sources drop
+  const rows = calc(T, S, S.outs).rows;
+  const res = swapStarterMove(T, S.outs, pinsOf(S, key).r, inId, outId, Object.fromEntries(rows.map((r) => [r.id, r.min]))); // the pure move (console-roles.js): through the chart where the team has one
+  if (res === null) return null;
+  if (res.backIn) {
+    // He is Out here: back in on a non-starting role first (the scenario moves once), then the swap in the scenario he is back in, so both flips land there; one history step.
+    const base = histMark(c), first = setRole(c, t, res.backIn.id, res.backIn.role);
+    if (first === null) return null;
+    const second = swapStarter(c, t, inId, outId);
+    foldHistory(c, base);
+    return [...first, ...(second ?? [])];
   }
-  if (dropOut) flips[dropOut] = "bench";
-  const moved = dropOut ? [{ id: dropOut, from: "starter", to: "bench" }] : [];
-  mutate(c, `${t} ${nameOf(c, t, inId)} Starter${dropOut ? ` (${nameOf(c, t, dropOut)} to Bench)` : ""}`, () => {
+  if (res.call) return setRole(c, t, res.call.id, res.call.role); // the plain role move
+  const flips = Object.fromEntries(Object.entries(res.flips).filter(([fid]) => T.byId[fid]));
+  mutate(c, `${t} ${nameOf(c, t, inId)} Starter (${nameOf(c, t, outId)} to Bench)`, () => {
     pinsOf(S, key).r = flips;
-    c.G.roleMoves = { team: t, moved };
+    c.G.roleMoves = { team: t, moved: res.moved };
   });
-  return moved;
+  return res.moved;
 }
-/** Folds every history step after index `from` into one (the last), so a move made of several steps (scenario, roles) is undone with one Ctrl+Z. */
-export function foldHistory(c, from) {
-  const G = c.G;
-  if (G.hi - from < 2) return;
+/** The history entry a move starts from; hold it across the move (foldHistory, console-card.js backOut). */
+export const histMark = (c) => c.G.hist[c.G.hi];
+/** Folds every history step after the entry `base` into one (the last), so a move made of several steps (scenario, roles) is undone with one Ctrl+Z. */
+export function foldHistory(c, base) {
+  const G = c.G, from = G.hist.indexOf(base); // found by the entry: an index goes stale when the 80-step cap drops the oldest
+  if (from < 0 || G.hi - from < 2) return;
   G.hist.splice(from + 1, G.hi - from - 1);
   G.hi = from + 1;
 }

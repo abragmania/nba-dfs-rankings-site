@@ -139,7 +139,8 @@ th[data-sort="projection"],th[data-sort="minutes"],th[data-sort="dk_tonight"]{pa
 .top .pngroup{order:5;display:flex;align-items:center;gap:8px}
 .top .pullnow{min-width:19ch;justify-content:center;text-align:center;white-space:nowrap}
 .top .pullnow:disabled{opacity:.75;cursor:progress}
-.top .pnbox{flex:0 1 auto;width:max-content;min-width:min(422px,100%);max-width:640px;min-height:2.7em;display:flex;flex-direction:column;justify-content:center;font-size:11px;line-height:1.3}
+.top .pnbox{flex:0 1 auto;width:max-content;min-width:0;max-width:640px;display:flex;flex-direction:column;justify-content:center;font-size:11px;line-height:1.3} /* as high as its lines, so it sits centred on the button */
+.top .pnline:has(>.pntext:empty):not(:has(>.pnact)){display:none} /* no empty second line */
 .top .pnline{display:flex;align-items:center;gap:2px 8px;min-height:1.35em;color:var(--tx);white-space:nowrap}
 .top .pnline .pntext{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .top .pnline.bad{color:var(--rd)}
@@ -172,7 +173,7 @@ th[data-sort="projection"],th[data-sort="minutes"],th[data-sort="dk_tonight"]{pa
   .top .pngroup{display:contents}
   .top .pullnow{order:0}
   .top .pnbox{order:1;flex:0 0 100%;width:100%}
-  .top .pnline{white-space:normal;min-height:2.7em}
+  .top .pnline{white-space:normal}
   .top .pnline .pntext{overflow:visible;text-overflow:clip}
   .top .pnsum{min-height:36px;white-space:normal}
   .top .pnsumtext{overflow:visible;text-overflow:clip}
@@ -708,6 +709,7 @@ body.fs-list aside.opt{display:none}
 body.fs-list .pool{grid-row:1}
 /* Narrow screens: the table scrolls sideways in its own box, which also scrolls up and down so the header stays on top (sticky cannot cross a scrolling box). */
 .cnt{flex:none;margin-right:4px}
+.tools{flex-wrap:wrap;row-gap:6px} /* the toolbar wraps at any width, so Columns never runs under the Optimizer panel */
 body.fs-list .colsw{margin-left:0}
 body.fs-list #thead th:last-child,body.fs-list #tbody td:last-child{width:auto} /* the spare width spreads over the columns instead of stranding the last one */
 @media (max-width:1300px){
@@ -733,3 +735,32 @@ body.fs-list #thead th:last-child,body.fs-list #tbody td:last-child{width:auto} 
   .fbar{position:static}
   .tbl{top:0;max-height:calc(100dvh - 12px)}
 }
+
+/* On a phone the moved-since-last-pull note stacks: the text full width, then its two buttons in one row of 36px. */
+@media (max-width:899px){
+  .pullnote:not([hidden]){flex-wrap:wrap;gap:8px}
+  .pullnote>span:first-child{flex:1 1 100%}
+  .pullnote .grow{display:none}
+  .pullnote button{flex:1 1 0;height:36px;padding:0 10px}
+}
+/* The console's word on a row (board-marks.js, Adam 11-07). Min and DK/m TON are typeable: the box lays over the figure as Proj's does; his typed
+   number wears the typed marker, and a fixed slot after it holds its undo chip so no column moves when one appears. */
+td:has(> .cedit){position:relative}
+.cedit{display:inline-block;min-width:4ch;padding:0 3px;margin-right:-3px;text-align:right;cursor:text;border-bottom:1px dotted transparent}
+.cedit:hover{border-bottom-color:var(--mu)}
+.cedit.ctyped{outline:1px solid var(--am);outline-offset:-1px;background:#ffb00014;color:var(--am);font-weight:700}
+.cu{display:inline-block;width:18px;text-align:right;vertical-align:middle}
+.cundo{width:16px;height:16px;padding:0;border:1px solid #ffb00088;background:transparent;color:var(--am);font-size:11px;line-height:1;display:inline-grid;place-items:center;border-radius:2px}
+.cundo:hover{background:var(--am);color:#000}
+/* The S chip: green when a lineup source confirmed him or he is Adam's own pick, orange when only expected. */
+.schip{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;flex-shrink:0;font-size:10.5px;font-weight:800;line-height:1;border-radius:2px;cursor:default}
+.schip.confirmed{background:#1fae5b;color:#fff}
+.schip.expected{background:transparent;color:#ff8a1f;box-shadow:inset 0 0 0 1.5px #ff8a1f}
+body.light .schip.expected{color:#c25e00;box-shadow:inset 0 0 0 1.5px #c25e00}
+body.light .cedit.ctyped{background:#9a5b0018}
+/* The console's send, when anything is held back, waiting or unsent (board-marks.js syncHtml): one line above the list. */
+.syncnote{margin:0 0 10px;padding:6px 10px;border:1px solid color-mix(in srgb,var(--am) 45%,transparent);color:var(--am);font-size:12px;display:flex;flex-wrap:wrap;gap:4px 14px}
+.syncnote.err{border-color:color-mix(in srgb,var(--rd) 60%,transparent);color:var(--rd)}
+.syncnote.busy{border-color:var(--ln);color:var(--mu)}
+.syncnote span{color:var(--mu)}
+body.console-on .syncnote{display:none}

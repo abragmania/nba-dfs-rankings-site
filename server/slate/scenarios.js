@@ -8,6 +8,7 @@ import { writeFileAtomic } from "../../site/shim/atomic.js";
 import { PIN_MAX, SHARE_MAX, COMBO_MAX } from "../board/override-limits.js";
 import { EMPTY_RECORD, isNum, isPlain } from "../board/figures.js";
 import { FLIP_ROLES, STARTERS } from "../board/console-roles.js";
+import { MINUTE_SOURCES } from "../board/depth-chart.js";
 
 export const SCENARIOS_SCHEMA = 1;
 const MAX_SAVED_SCENARIOS = 40;
@@ -16,7 +17,10 @@ const ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
 const TEAM = /^[A-Z]{2,4}$/;
 const PIN_KINDS = ["m", "u", "d", "p", "r"]; // r: his role flips (console-roles.js), the others numbers
 const SHARE_KINDS = ["m", "u"];
-const RECORD_KEYS = ["saved", "pins", "handouts", "combos"];
+const RECORD_KEYS = ["saved", "pins", "handouts", "combos", "source", "news", "tonight", "on", "mine"]; // on: the scenario on show when last saved; mine: the men he or the news put Out and the men he put back in // tonight: the Tonight key his work was made on (console-model.js rebases on a newer one) // source: which minutes feed the optimizer (depth-chart.js MINUTE_SOURCES); absent is TwoGun's. news: below
+const NEWS_STATES = ["applied", "undone", "failed", "reverted"]; // reverted: taken back with Ctrl+Z (never applied again; applied once more on Ctrl+Y)
+const NEWS_KINDS = ["out", "r"];
+const NEWS_FIELDS = ["sig", "state", "at", "text", "men", "why"];
 
 export class ScenariosError extends Error {
   constructor(code, message) { super(message); this.code = code; }
@@ -51,11 +55,44 @@ function badRoles(map) {
   return null;
 }
 
-/** Null when `rec` is a well-formed team record, else the reason. Ids need not be on the team now: a pin outlives a new pull. */
-export function badRecord(rec) {
+/**
+ * The lineup news the console applied by itself (lineup-bar.js, Adam 11-07), keyed by proposal id: { sig (a hash of its news), state ("applied" | "undone" | "failed" | "reverted"), at,
+ * text, men: [{ id, kind ("out" | "r") }] (what it moved, so its undo X takes back only that), why (a failure's reason) }. Null when good, else the reason.
+ */
+const SLATE_PART = /^\d{4}-\d{2}-\d{2}-[a-z0-9-]+$/;
+const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+/** Whether a news key is one the bar makes for this team: "<slate>|<TEAM>|out|<id>" or "<slate>|<TEAM>|starter|<hash>". */
+const goodNewsKey = (key, team) => {
+  const [slate, t, kind, rest, ...more] = key.split("|");
+  if (!SLATE_PART.test(slate ?? "") || (team ? t !== team : !TEAM.test(t ?? "")) || more.length) return false;
+  return kind === "out" ? ID.test(rest ?? "") : kind === "starter" && /^[0-9a-z]{1,16}$/.test(rest ?? "");
+};
+function badNews(news, team) {
+  if (!isPlain(news) || Object.keys(news).length > MAX_KEYS) return '"news" must be an object keyed by proposal';
+  const text = (v, max) => typeof v === "string" && v.length <= max;
+  for (const [key, e] of Object.entries(news)) {
+    if (!text(key, 300) || !goodNewsKey(key, team) || !isPlain(e)) return "A news entry's key is not one for this team";
+    if (Object.keys(e).some((k) => !NEWS_FIELDS.includes(k))) return "A news entry has an unknown field";
+    if (!text(e.sig, 64) || !NEWS_STATES.includes(e.state) || !text(e.text, 600)) return "A news entry has a bad field";
+    if (!text(e.at, 40) || !ISO.test(e.at) || Number.isNaN(Date.parse(e.at))) return "A news entry's time is not an ISO time";
+    if (e.state === "failed" ? !text(e.why, 600) : e.why !== undefined) return "A news entry has a reason only when it failed";
+    // to: what the news set on him (a flip, or "out"); he is the news's only while he is still that (console-marks.js newsOwned).
+    if (!Array.isArray(e.men) || e.men.length > 20 || !e.men.every((m) => isPlain(m) && ID.test(m.id ?? "") && NEWS_KINDS.includes(m.kind) && Object.keys(m).every((f) => ["id", "kind", "to"].includes(f)) && (m.to === undefined || (m.kind === "out" ? m.to === "out" : FLIP_ROLES.includes(m.to))))) return "A news entry's men are not well formed";
+    if ((e.state === "applied" || e.state === "reverted") && !e.men.length) return "An applied news entry must name the men it moved";
+  }
+  return null;
+}
+
+/** Null when `rec` is a well-formed team record (filed under `team`, when given), else the reason. Ids need not be on the team now: a pin outlives a new pull. */
+export function badRecord(rec, team = null) {
   if (!isPlain(rec)) return "A team record must be an object.";
   const unknown = Object.keys(rec).filter((k) => !RECORD_KEYS.includes(k));
   if (unknown.length) return `Unknown field: ${unknown[0].slice(0, 20)}.`;
+  if (rec.source !== undefined && !MINUTE_SOURCES.includes(rec.source)) return `"source" must be one of ${MINUTE_SOURCES.join(", ")}.`;
+  if (rec.tonight !== undefined && !validKey(rec.tonight)) return '"tonight" must be a scenario key.';
+  if (rec.on !== undefined && !validKey(rec.on)) return '"on" must be a scenario key.';
+  if (rec.mine !== undefined && !(isPlain(rec.mine) && Object.keys(rec.mine).every((k) => k === "out" || k === "in") && ["out", "in"].every((k) => Array.isArray(rec.mine[k]) && rec.mine[k].length <= MAX_KEYS && rec.mine[k].every((id) => typeof id === "string" && ID.test(id))))) return '"mine" must list the men out and in by id.';
+  if (rec.news !== undefined) { const why = badNews(rec.news, team); if (why) return `${why}.`; }
   const saved = rec.saved ?? [];
   if (!Array.isArray(saved) || saved.length > MAX_SAVED_SCENARIOS || !saved.every(validKey)) return `"saved" must be up to ${MAX_SAVED_SCENARIOS} scenario keys.`;
   const pins = rec.pins ?? {};
@@ -90,7 +127,9 @@ export function badRecord(rec) {
 function badApplied(a) {
   if (a === null || a === undefined) return null;
   if (!isPlain(a) || typeof a.at !== "string" || !isPlain(a.set)) return "the applied record is not well formed";
-  if (a.keys !== undefined && (!isPlain(a.keys) || !Object.entries(a.keys).every(([t, k]) => TEAM.test(t) && validKey(k)))) return "the applied record's scenario keys are not well formed";
+  // Each applied key is { key, tonight } (the Tonight it was made on); a record written before 11-07 holds the key alone, still read.
+  const goodKey = (k) => validKey(k) || (isPlain(k) && Object.keys(k).every((f) => f === "key" || f === "tonight") && validKey(k.key) && validKey(k.tonight));
+  if (a.keys !== undefined && (!isPlain(a.keys) || !Object.entries(a.keys).every(([t, k]) => TEAM.test(t) && goodKey(k)))) return "the applied record's scenario keys are not well formed";
   for (const [id, e] of Object.entries(a.set)) {
     if (!ID.test(id) || !isPlain(e) || !isNum(e.to) || !(e.prev === null || isNum(e.prev))) return "the applied record has a bad entry";
   }
@@ -109,7 +148,7 @@ function badFile(obj) {
   if (!isPlain(obj.teams)) return "it has no teams object";
   for (const [t, rec] of Object.entries(obj.teams)) {
     if (!TEAM.test(t)) return "it has a bad team code";
-    const why = badRecord(rec);
+    const why = badRecord(rec, t);
     if (why) return `team ${t}: ${why}`;
   }
   return badApplied(obj.applied);
@@ -149,7 +188,7 @@ export function checkTeamBody(body, slateData) {
   if (!isPlain(body)) return { ok: false, message: "Body must be a JSON object." };
   const teams = new Set((slateData.games ?? []).flatMap((g) => [g.away, g.home]));
   if (typeof body.team !== "string" || !teams.has(body.team)) return { ok: false, message: '"team" must be a team on this slate.' };
-  const why = badRecord(body.record);
+  const why = badRecord(body.record, body.team);
   if (why) return { ok: false, message: why };
   return { ok: true, team: body.team, record: { ...EMPTY_RECORD(), ...body.record } };
 }
