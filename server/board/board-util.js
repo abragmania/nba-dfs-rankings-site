@@ -2,6 +2,16 @@
 import { isKnownTeam } from "./teams.js";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+/** A data warning (a string, or { player, field, values } from the slate checks) as one plain sentence; never raw JSON. Pure. */
+export function warningText(c) {
+  if (typeof c === "string") return c;
+  if (c === null || typeof c !== "object") return String(c);
+  const shown = (v) => (v === null || v === undefined ? "none" : typeof v === "object" ? JSON.stringify(v) : String(v));
+  const vals = Object.entries(c.values ?? {});
+  if (c.field === "unknown out status" && c.player && vals.length === 1) return `${c.player} is on the out list, but his status there is ${shown(vals[0][1])}, not Out.`;
+  const list = vals.map(([k, v]) => `${k.replace(/_/g, " ")} ${shown(v)}`).join("; ");
+  return `${c.player ? `${c.player}: ` : ""}${c.field ?? "conflict"}${list ? ` (${list})` : ""}.`;
+}
 export const money = (n) => "$" + n.toLocaleString("en-US");
 /** A figure at one decimal; null when it is not a number. */
 export const dec1 = (v) => (typeof v === "number" && Number.isFinite(v) ? v.toFixed(1) : null);

@@ -504,7 +504,7 @@ async function route(req, res, opts) {
     if (!SLATE_NAME.test(slate)) return fail(res, 400, "BAD_SLATE", "Slate names look like 2026-10-29-main.");
     const refused = refuseCrossSiteRead(req.headers);
     if (refused) return fail(res, refused.status, refused.code, refused.message);
-    return send(res, 200, readNewsLineups(slate));
+    return send(res, 200, { ...readNewsLineups(slate), now_ms: opts.now() }); // the server's clock (the test clock when set), so the read's age is judged on the same clock as late swap
   }
   m = p.match(/^\/api\/slate\/([^/]+)\/pull-stamp$/);
   if (m) {

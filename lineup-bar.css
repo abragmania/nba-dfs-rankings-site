@@ -1,28 +1,28 @@
-/* The lineup bar (lineup-bar.js): one compact row for each lineup change the news sources show and the console does not. Uses the page's colour variables, so both looks work. */
-.lineupbar{margin:0 0 12px;border:1px solid color-mix(in srgb,var(--am) 45%,transparent);background:color-mix(in srgb,var(--am) 6%,var(--p));font-size:12px;max-height:34vh;overflow:auto}
+/* The lineup bar (lineup-bar.js): one thin line in the news row, beside the "pull moved" bar, the same height and look. Show floats the rows over the page like the Data
+   warnings list, so the table never moves. Amber while anything is to check, quiet grey otherwise. Uses the page's colour variables, so both looks work. */
+.newsrow{display:flex;align-items:stretch;gap:12px}
+.newsrow>.pullnote{flex:1 1 0;min-width:0}
+.lineupbar{position:relative;flex:none;margin:0 0 12px;margin-left:auto;border:1px solid var(--ln);background:var(--p);font-size:12px}
+.lineupbar:has(.need){border-color:#ffb00055;background:#ffb00010}
 .lineupbar[hidden]{display:none}
-/* While the console is open the bar is one summary line (lineup-bar.js), opened by clicking it; elsewhere the summary is not shown. */
-.lpsum{display:none;width:100%;align-items:center;gap:8px;padding:5px 10px;background:none;border:0;color:var(--am);font:inherit;font-weight:700;text-align:left;cursor:pointer}
-body.console-on .lpsum{display:flex}
-body.console-on .lineupbar:not(.open)>:not(.lpsum){display:none}
+.lpsum{display:flex;align-items:center;gap:4px;box-sizing:border-box;min-height:32px;padding:0 12px;background:none;border:0;color:var(--mu);font:inherit;font-weight:700;white-space:nowrap;cursor:pointer}
+.lpsum.need{color:var(--am)}
+.lpsum u{text-decoration:underline;text-underline-offset:2px}
+/* The dropdown: floats over the page, right edge under the line, scrolls inside itself. */
+.lpdrop{position:absolute;right:0;top:calc(100% + 6px);z-index:6;width:max-content;min-width:360px;max-width:min(900px,90vw);max-height:60vh;overflow:auto;background:var(--p2);border:1px solid var(--am);box-shadow:0 12px 40px #000c;font-size:12px}
+.lpdrop[hidden]{display:none}
 .lprow{display:flex;align-items:center;gap:10px;padding:5px 10px;flex-wrap:wrap}
-.lprow+.lprow,.lpnote+.lprow{border-top:1px solid var(--ln)}
+.lprow+.lprow{border-top:1px solid var(--ln)}
 .lpkind{flex:none;min-width:46px;text-align:center;font-size:10px;font-weight:800;letter-spacing:.04em;padding:2px 6px;border:1px solid currentColor;color:var(--am)}
 .lprow.out .lpkind{color:var(--rd)}
 .lprow.starter .lpkind{color:var(--gr)}
 .lprow.conflict .lpkind{color:var(--bl)}
+.lprow.lpnote .lpkind{color:var(--mu)}
 .lptext{flex:1 1 320px;min-width:0;color:var(--tx);font-weight:600}
 .lptime{flex:none;color:var(--mu);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38%}
-.lpbtns{flex:none;display:flex;gap:6px;margin-left:auto}
-.lpbtns button{height:36px;background:none;border:1px solid var(--ln);color:var(--mu);font-weight:700;font-size:11px;padding:0 14px;white-space:nowrap;cursor:pointer}
-.lpbtns button.lpapply{border-color:var(--am);color:var(--am)}
-.lpbtns button:disabled{opacity:.5;cursor:default}
 .lpsides{flex-basis:100%;padding-left:56px;color:var(--mu);font-size:11px}
-.lpwhy{flex-basis:100%;padding-left:56px;color:var(--dim);font-size:11px}
-.lperr{flex-basis:100%;padding-left:56px;color:#ff6b6b;font-size:11px}
-body.light .lperr{color:var(--rd)}
-.lpnote{padding:5px 10px;color:var(--mu);font-size:11px}
-/* No buttons to press (Adam, 11-07): a change the news applied is a note with an undo X; a projected start is a line of information. */
+.lpnote .lptext{color:var(--mu);font-weight:500}
+/* No buttons to press (Adam 11-07): a change the news applied is a row with an undo X; a projected start is a line of information. */
 .lpx{flex:none;margin-left:auto;width:26px;height:26px;display:inline-grid;place-items:center;padding:0;background:none;border:1px solid var(--ln);color:var(--mu);font-size:12px;line-height:1;cursor:pointer}
 .lpx:hover{color:var(--tx);border-color:var(--tx)}
 .lprow.auto .lpx{border-color:color-mix(in srgb,var(--am) 60%,transparent);color:var(--am)}
@@ -31,13 +31,13 @@ body.light .lperr{color:var(--rd)}
 .lprow.auto.reverted .lptext{color:var(--mu);font-weight:500;text-decoration:line-through}
 .lprow.info .lpkind{color:var(--mu)}
 .lprow.info .lptext{font-weight:500;color:var(--mu)}
-@media (max-width:900px){
-  .lineupbar{max-height:none;overflow:visible} /* on a phone the bar grows to its full height: no inner scroll */
-  .lpsum{min-height:36px}
+@media (max-width:899px){
+  .newsrow{flex-direction:column;align-items:stretch;gap:0}
+  .lineupbar{margin-left:0}
+  .lpsum{min-height:36px;width:100%}
+  .lpdrop{left:0;right:0;width:auto;min-width:0;max-width:none}
   .lptext{flex-basis:100%}
   .lptime{flex-basis:100%;max-width:none;white-space:normal;overflow:visible;font-size:10.5px;color:var(--dim);margin-top:-6px} /* a small grey line under the message */
-  .lpbtns{flex:1 1 100%;margin-left:0}
-  .lpbtns button{flex:1}
-  .lpsides,.lpwhy,.lperr{padding-left:0}
+  .lpsides{padding-left:0}
 }
 body.lsw-on .lineupbar,body.lineups-on .lineupbar{display:none!important} /* the bar belongs to the player list: the Lineups tab and the Late swap screen replace it */

@@ -20,6 +20,11 @@ const DETAIL_MAX = 160;
 const ORDER = ["monster", "monster_news", "rotowire"]; // the order sources are named in
 const LABEL = { monster: "Monster", monster_news: "Monster", rotowire: "RotoWire" };
 export const STALE_MIN = 90;
+/** The one age test of a lineup read: null while it is fresh, else { ageMin } (null when its time is unknown). Used by the proposals, the bar and the board's S chips. */
+export function staleOf(latest, nowMs) {
+  const gen = Date.parse(latest?.generated_at ?? "");
+  return Number.isNaN(gen) || (nowMs - gen) / 60000 > STALE_MIN ? { ageMin: Number.isNaN(gen) ? null : Math.round((nowMs - gen) / 60000) } : null;
+}
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 /** A source's block for a team that can be used: it says ok and carries a men list. A block without one counts as missing. */
@@ -33,6 +38,8 @@ const mins = (v) => (isNum(v) ? `${Math.round(v * 10) / 10}` : "?");
 const sourceTime = (latest, key) => (key === "monster_news" ? latest.monster_news?.fetched_at : latest.sources?.[key]?.fetched_at) ?? null;
 const labelsOf = (sources) => [...new Set(sources.map((s) => LABEL[s.key]))].join(" + ");
 const unknownStatus = (m) => String(m.status ?? "").startsWith("UNKNOWN");
+/** An unrecognised status as words only: "UNKNOWN(Q #123456 Questionable)" becomes "Q Questionable"; a colour code is never shown. */
+export const statusWords = (s) => String(s ?? "").replace(/^UNKNOWN\((.*)\)$/, "$1").replace(/\s*#[0-9A-Fa-f]{3,8}\b/g, "").replace(/\s+/g, " ").trim() || "unreadable";
 
 /** The Out claims and the in-five claims on one team, by man id: { out: Map(id -> [claim]), five: Map(id -> [claim]) }. A claim is { key, at, lineup, detail, name, near }. */
 function claimsFor(latest, team) {
@@ -104,8 +111,7 @@ export function makeProposals({ latest, players, view = null, nowMs = Date.now()
   const none = { proposals: [], conflicts: [], stale: null };
   if (!isObj(latest?.teams) || !Array.isArray(players) || !isObj(view)) return none;
   const slate = latest.slate ?? "", byId = new Map(players.map((p) => [String(p.dk_id), p]));
-  const gen = Date.parse(latest.generated_at ?? "");
-  const stale = Number.isNaN(gen) || (nowMs - gen) / 60000 > STALE_MIN ? { ageMin: Number.isNaN(gen) ? null : Math.round((nowMs - gen) / 60000) } : null;
+  const stale = staleOf(latest, nowMs);
   const nameOf = (id, fallback) => byId.get(id)?.name ?? fallback ?? id;
   const proposals = [], conflicts = [];
   for (const team of Object.keys(latest.teams)) {
@@ -137,7 +143,7 @@ export function makeProposals({ latest, players, view = null, nowMs = Date.now()
     }
     const usedMen = q.used.flatMap((k) => latest.teams[team][k].men);
     const unmatched = [...new Set(usedMen.filter((m) => m.id == null).map((m) => m.name))];
-    const unknown = [...new Set(usedMen.filter(unknownStatus).map((m) => `${m.name} (${m.status})`))];
+    const unknown = [...new Set(usedMen.filter(unknownStatus).map((m) => `${m.name} (${statusWords(m.status)})`))];
     if (unmatched.length) conflicts.push(checkRow(slate, team, "unmatched", `${team}: ${unmatched.join(", ")} in a lineup ${unmatched.length > 1 ? "are" : "is"} not matched to a slate player; no start proposed.`, unmatched));
     if (unknown.length) conflicts.push(checkRow(slate, team, "unknown", `${team}: ${unknown.join(", ")} in a lineup ${unknown.length > 1 ? "have" : "has"} a status that was not recognised; no start proposed.`, unknown));
     if (unmatched.length || unknown.length) continue;

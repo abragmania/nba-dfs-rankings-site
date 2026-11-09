@@ -28,14 +28,15 @@ const named = (list, digits) => list.map(({ p }) => `${esc(lastName(p.name))} ${
 export function pullNoteHtml(ch, players, { dismissed = null, filterOn = false } = {}) {
   if (ch?.state !== "ready" || dismissed === ch.pull) return "";
   const moved = players.filter((p) => p.pull_move);
-  if (!moved.length && !ch.now_out.length && !ch.gone.length && !ch.unread_newer.length) return "";
+  const quest = ch.now_questionable ?? []; // on TwoGun's out list but only Questionable: said as Questionable, not as out
+  if (!moved.length && !ch.now_out.length && !quest.length && !ch.gone.length && !ch.unread_newer.length) return "";
   const byProj = moved.filter((p) => p.pull_move.proj).map((p) => ({ p, d: diff(p.pull_move.proj) }));
   const ups = byProj.filter((x) => x.d > 0).sort((a, b) => b.d - a.d).slice(0, LIST_UP);
   const downs = byProj.filter((x) => x.d < 0).sort((a, b) => a.d - b.d).slice(0, LIST_DOWN);
   const lists = [ups.length ? `${named(ups, 1)} up` : "", downs.length ? `${named(downs, 1)} down` : ""].filter(Boolean).join("; ");
   const more = moved.length - ups.length - downs.length;
   const namesOf = (head, names) => (names.length ? ` <span title="${esc(names.join(", "))}">${head}: ${names.slice(0, LIST_OUT).map((n) => esc(lastName(n))).join(", ")}${names.length > LIST_OUT ? ` and ${names.length - LIST_OUT} more` : ""}.</span>` : "");
-  const out = namesOf("Now out", ch.now_out) + namesOf("Gone from this pull", ch.gone);
+  const out = namesOf("Now out", ch.now_out) + namesOf("Off the board, listed Questionable", quest) + namesOf("Gone from this pull", ch.gone);
   const behind = ch.board_behind ? ` The board still shows the ${esc(pullTime(ch.board_behind))} pull.` : "";
   const unread = ch.unread_newer.length ? ` The ${ch.unread_newer.map((s) => esc(pullTime(s))).join(", ")} pull could not be compared.` : "";
   return `<span><b>The ${esc(pullTime(ch.pull))} pull moved ${moved.length} ${moved.length === 1 ? "man" : "men"}</b> since the ${esc(pullTime(ch.prev))} pull${lists ? `: ${lists}${more > 0 ? `, ${more} more` : ""}` : ""}.${out}${behind}${unread}</span><span class="grow"></span>${moved.length ? `<button data-chip="changed">${filterOn ? "Show everyone" : "Show only these"}</button>` : ""}<button id="pullDismiss">Dismiss</button>`;

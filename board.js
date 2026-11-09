@@ -2,7 +2,7 @@
 // Every figure is read from the slate file or its route as given; a missing one is shown as an em dash with a title, never zero.
 import { paletteOf, teamColors } from "./teams.js";
 import { assignColours } from "./colours.js";
-import { esc, logo, tipWhen, isoToEastern, ICON, topStamps, keepFocus } from "./board-util.js";
+import { esc, warningText, logo, tipWhen, isoToEastern, ICON, topStamps, keepFocus } from "./board-util.js";
 import { createPanel, fullScreenPref } from "./panel.js";
 import { tiers, notes } from "./highlight.js";
 import { initCard, figureSource } from "./card.js";
@@ -90,7 +90,7 @@ const shownCols = () => columns.keys({ lateSwap: Boolean(panel.lateSwap()) });
 // The scenario console (console.js), the page's other view; each change there hands back the players' effective figures, as an override save does.
 const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: (t) => colourOf(t).t1, onPlayers: (players) => applyPlayers(players), onWork: () => { boardMarks.refresh({ news: false }); lineupBar.newsOnly(); } });
 // The console's word on each row (board-marks.js): the S chip, and his typed Min and DK/m TON with their undo chips; those cells write through the console.
-const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, onChange: () => { if (S.slate) renderRows(); }, noteEl: $("lineupbar").insertAdjacentElement("beforebegin", Object.assign(document.createElement("div"), { hidden: true })) });
+const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, onChange: () => { if (S.slate) renderRows(); }, noteEl: $("newsrow").insertAdjacentElement("afterend", Object.assign(document.createElement("div"), { hidden: true })) });
 // The lineup bar above the list (lineup-bar.js): an Out or a confirmed start from the Monster and RotoWire pages applies itself through the console, with an undo X; a projected start is words only.
 const lineupBar = createLineupBar({ el: $("lineupbar"), api, slate: () => S.name, players: () => S.players, console: scenarioConsole, toast, tryStore });
 // Full screen (Player list header): hides the optimizer panel so the table takes the width. Remembered per viewer; under 900 px
@@ -266,7 +266,7 @@ function slateLabel(name) {
   return `${day} · ${m[4][0].toUpperCase()}${m[4].slice(1)}`;
 }
 function noteLists() {
-  const f = (x) => (typeof x === "string" ? x : JSON.stringify(x));
+  const f = warningText;
   return { conflicts: (S.slate.conflicts ?? []).map(f), missing: [...(S.slate.missing ?? []).map(f), ...(S.slate.min_ours_problem ? [S.slate.min_ours_problem] : [])] };
 }
 function renderTop() {

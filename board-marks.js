@@ -5,6 +5,7 @@
 import { esc, isoToEastern } from "./board-util.js";
 import { liveText } from "./console-marks.js";
 import { syncWords } from "./console-auto.js";
+import { staleOf } from "./lineup-proposals.js";
 
 const LABEL = { monster: "Monster", rotowire: "RotoWire" };
 const okBlock = (b) => b?.state === "ok" && Array.isArray(b.men);
@@ -52,7 +53,7 @@ export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onC
   async function refresh({ news = true } = {}) {
     const name = slate(), g = ++gen;
     if (!name) return;
-    const read = !news ? Promise.resolve(latest) : api(`/api/slate/${encodeURIComponent(name)}/news-lineups`).then((r) => (r?.state === "ok" ? r.latest : null), (e) => { console.warn("lineup read for the S chips:", e.message); return null; });
+    const read = !news ? Promise.resolve(latest) : api(`/api/slate/${encodeURIComponent(name)}/news-lineups`).then((r) => (r?.state === "ok" && !staleOf(r.latest, Number.isFinite(r.now_ms) ? r.now_ms : Date.now()) ? r.latest : null), (e) => { console.warn("lineup read for the S chips:", e.message); return null; });
     try {
       const [v, l] = await Promise.all([cons.boardView(name), read]);
       if (g !== gen || name !== slate()) return;

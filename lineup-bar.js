@@ -2,7 +2,8 @@
 // did not show. An Out, and a start from confirmed lineups, apply themselves through the console's role moves on the scenario the team is on (his marks
 // kept; console-card.js autoApplyProposal) and reach the board by the console's own send; each shows as a note with an undo X. A projected start is
 // information only. A change is applied once per proposal, recorded in the console's saved work, so a reload never applies one he undid. A check or a
-// line of information can be hidden (remembered in this browser until its sources change). Shows nothing when there is nothing to say. The same code runs
+// line of information can be hidden (remembered in this browser until its sources change). Shows nothing when there is nothing to say, or when the read is too old to act on.
+// It is one thin line ("Lineup news: 4 changes, 3 to check · Show", amber while anything is to check); Show floats the rows over the page. The same code runs
 // on the public site, from the published lineups-latest.json. barHtml, statusLine, newsRows and refusalText are DOM-free (tested in node). Look: lineup-bar.css.
 import { esc } from "./board-util.js";
 import { lastName } from "./console-model.js";
@@ -62,11 +63,15 @@ export function refusalText(message) {
   return `Not sent: ${[...groups].map(([why, who]) => `no projection for ${who.join(", ")} (${why})`).join("; ")}`;
 }
 
-/** The one summary line the bar shows while the console is open (lineup-bar.css): "Lineup news: 2 applied, 3 for information, 1 check, 1 note · show". Pure. */
+/**
+ * The bar is one thin line (lineup-bar.css): "Lineup news: 4 changes, 3 to check · Show". A change is a line the news applied or shows as information; "to check"
+ * is everything that needs Adam: a CHECK row, a change that failed, a note about the read. The line is amber while anything is to check. Pure.
+ */
 export function summaryHtml(bar, state = {}) {
-  const n = (x) => (x ?? []).length, applied = n(bar.applied), info = n(bar.info), checks = n(bar.conflicts), notes = n(state.notes);
-  const bits = [applied ? `${applied} applied` : "", info ? `${info} for information` : "", checks ? `${checks} check${checks === 1 ? "" : "s"}` : "", notes ? `${notes} note${notes === 1 ? "" : "s"}` : ""].filter(Boolean);
-  return `<button type="button" class="lpsum" data-lp-sum aria-expanded="${state.open ? "true" : "false"}">Lineup news: ${bits.join(", ")} · ${state.open ? "hide" : "show"}</button>`;
+  const n = (x) => (x ?? []).length, failed = (bar.applied ?? []).filter((r) => r?.entry?.state === "failed").length;
+  const changes = n(bar.applied) - failed + n(bar.info), check = n(bar.conflicts) + failed + n(state.notes);
+  const bits = [changes ? `${changes} change${changes === 1 ? "" : "s"}` : "", check ? `${check} to check` : ""].filter(Boolean);
+  return `<button type="button" class="lpsum${check ? " need" : ""}" data-lp-sum aria-expanded="${state.open ? "true" : "false"}">Lineup news: ${bits.join(", ")} · <u>${state.open ? "Hide" : "Show"}</u></button>`;
 }
 
 /** The news entries the console holds, newest first: [{ team, key, entry }] for every applied, reverted or failed one (an undone one is gone from the bar). */
@@ -96,11 +101,12 @@ export function barHtml(bar, state = {}) {
   };
   const words = (r) => {
     const check = r.kind === "conflict" || r.kind === "unmatched" || r.kind === "unknown", where = check ? "" : sourcesText(r.sources);
-    const why = check ? "" : r.nearApply ?? r.noApply ?? (r.kind === "starter" ? "projected, not confirmed: not applied" : "");
+    const why = check ? "" : r.nearApply ?? r.noApply ?? ""; // the text already says projected or confirmed: that is not repeated on every row
     return `<div class="lprow info ${check ? "conflict" : r.kind}" data-lp="${esc(r.id)}"><span class="lpkind">${check ? KIND[r.kind] : "INFO"}</span><span class="lptext"${where ? ` title="${esc(where)}"` : ""}>${esc(r.text)}</span><span class="lptime">${esc([why, where].filter(Boolean).join(" · "))}</span>${hide(r.id, check ? "check" : "line")}`
       + `${check && r.sides?.length ? `<div class="lpsides">${r.sides.map((x) => `<div>${esc(x)}</div>`).join("")}</div>` : ""}</div>`;
   };
-  return `${notes.map((n) => `<div class="lpnote">${esc(n)}</div>`).join("")}${applied.map(news).join("")}${info.map(words).join("")}${conflicts.map(words).join("")}`;
+  const note = (n) => `<div class="lprow lpnote"><span class="lpkind">NOTE</span><span class="lptext">${esc(n)}</span></div>`;
+  return `${notes.map(note).join("")}${conflicts.map(words).join("")}${applied.map(news).join("")}${info.map(words).join("")}`; // what needs a look first
 }
 
 /**
@@ -112,17 +118,22 @@ export function createLineupBar({ el, api, slate, players, console: cons, toast,
   const key = () => `nbaboard.lineupdismiss.${slate()}`;
   const readDismissed = () => { try { return JSON.parse(tryStore(() => localStorage.getItem(key())) ?? "{}") ?? {}; } catch (e) { console.warn("Lineup dismissals unreadable:", e.message); return {}; } };
   const state = { notes: [], open: false };
+  let stale = false; // a read too old to act on shows nothing at all (STALE_MIN, the same test that stops anything being made by itself)
   let gen = 0, running = null, again = false, shown = { applied: [], info: [], conflicts: [] };
 
   function draw() {
     const dismissed = readDismissed(), keep = (sig) => (r) => dismissed[r.id ?? r.key] !== sig(r);
-    const bar = { applied: shown.applied.filter(keep((r) => r.entry.sig + r.entry.state)), info: shown.info.filter(keep((r) => r.signature)), conflicts: shown.conflicts.filter(keep((r) => r.signature)) };
-    const html = barHtml(bar, state);
+    const all = { applied: shown.applied.filter(keep((r) => r.entry.sig + r.entry.state)), info: shown.info.filter(keep((r) => r.signature)), conflicts: shown.conflicts.filter(keep((r) => r.signature)) };
+    // A stale read hides everything that came from it, but a change that failed is not part of the read: it needs Adam, so it stays.
+    const bar = stale ? { applied: all.applied.filter((r) => r.entry.state === "failed"), info: [], conflicts: [] } : all;
+    const shownState = stale ? { ...state, notes: [] } : state;
+    const html = barHtml(bar, shownState);
+    if (!html) state.open = false;
     el.hidden = !html;
-    el.innerHTML = html ? summaryHtml(bar, state) + html : "";
+    el.innerHTML = html ? `${summaryHtml(bar, shownState)}<div class="lpdrop"${state.open ? "" : " hidden"}>${html}</div>` : "";
     el.classList.toggle("open", Boolean(state.open));
   }
-  const settle = (notes, next = { applied: [], info: [], conflicts: [] }) => { shown = next; state.notes = notes.filter(Boolean); draw(); };
+  const settle = (notes, next = { applied: [], info: [], conflicts: [] }, old = false) => { stale = old; shown = next; state.notes = notes.filter(Boolean); draw(); };
 
   async function once() {
     const mine = ++gen, name = slate();
@@ -139,7 +150,7 @@ export function createLineupBar({ el, api, slate, players, console: cons, toast,
     // The console's Tonight view is always loaded before anything is decided: who starts and who plays come only from it.
     const look = async () => {
       const view = await cons.lineupView(name);
-      const result = makeProposals({ latest: read.latest, players: players(), view, nowMs: now() });
+      const result = makeProposals({ latest: read.latest, players: players(), view, nowMs: Number.isFinite(read.now_ms) ? read.now_ms : now() });
       return { view, result, plan: autoPlan(result, Object.fromEntries(Object.entries(view).map(([t, v]) => [t, v.news ?? {}]))) };
     };
     let seen;
@@ -153,8 +164,8 @@ export function createLineupBar({ el, api, slate, players, console: cons, toast,
       return settle([line, `Lineup news waits: the console could not load (${e.message})`]);
     }
     if (mine !== gen || name !== slate()) return;
-    const stale = seen.result.stale ? `The lineup read is ${seen.result.stale.ageMin == null ? "of unknown age" : `${seen.result.stale.ageMin} minutes old`}; nothing from it is made by itself until the next pull.` : "";
-    settle([line, stale], { applied: newsRows(seen.view), info: seen.plan.info, conflicts: seen.result.conflicts });
+    // A read over STALE_MIN minutes old (or of unknown age) says nothing in the default view: no line, no box. Nothing from it was made by itself.
+    settle([line], { applied: newsRows(seen.view), info: seen.plan.info, conflicts: seen.result.conflicts }, Boolean(seen.result.stale));
   }
   /** One look at a time, so a change is never applied twice; a call while one runs makes one more after it. */
   function refresh() {
@@ -180,7 +191,7 @@ export function createLineupBar({ el, api, slate, players, console: cons, toast,
   }
 
   el.addEventListener("click", async (e) => {
-    if (e.target.closest("[data-lp-sum]")) { state.open = !state.open; return draw(); } // the one-line summary shown while the console is open
+    if (e.target.closest("[data-lp-sum]")) { state.open = !state.open; return draw(); } // Show / Hide: the rows float over the page as a dropdown
     const dismiss = e.target.closest("[data-lp-dismiss]"), undo = e.target.closest("[data-lp-undo]");
     if (dismiss) {
       const id = dismiss.dataset.lpDismiss, row = [...shown.info, ...shown.conflicts].find((r) => r.id === id), news = shown.applied.find((r) => r.key === id);
@@ -197,5 +208,11 @@ export function createLineupBar({ el, api, slate, players, console: cons, toast,
     }
     await refresh();
   });
+  // The dropdown closes on Esc and on a click anywhere outside the bar (node tests have no document).
+  if (typeof document !== "undefined") {
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.open) { state.open = false; draw(); } });
+    // composedPath is the path as it was at the click: a row this very click redrew is still inside the bar.
+    document.addEventListener("click", (e) => { if (state.open && !e.composedPath().includes(el)) { state.open = false; draw(); } });
+  }
   return { refresh, newsOnly };
 }
