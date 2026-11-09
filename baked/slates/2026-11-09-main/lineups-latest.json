@@ -1,35 +1,35 @@
 {
  "slate": "2026-11-09-main",
- "generated_at": "2026-11-09T23:49:56.211Z",
+ "generated_at": "2026-11-09T23:55:33.042Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-09-main/raw/2026-11-09T184948-0500",
+ "slate_built_from": "slates/2026-11-09-main/raw/2026-11-09T185525-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-09T23:49:52.140Z",
+   "fetched_at": "2026-11-09T23:55:28.957Z",
    "saved_as": "news/lineups/pages/monster-2026-11-09T184656-0500.html.gz",
    "saved_at": "2026-11-09T23:46:56.298Z",
    "unchanged_since": "2026-11-09T23:46:56.298Z",
    "parsed_sha": "c807b631b64fd8874d7f1f5400e02a39488bde64599703392411fb5b46caf80a",
-   "sha256": "d21b6bdb8527ff913ddcafb6ffaa37ee47e3e60d5e50c67e215b354f2f9f597d"
+   "sha256": "015a5d1db3103243d2f4ccd60fc59a5b4bcbd7b2df28e0ccc2f2cbcd7259f0c2"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-09T23:49:56.197Z",
+   "fetched_at": "2026-11-09T23:55:33.033Z",
    "saved_as": "news/lineups/pages/rotowire-2026-11-09T184700-0500.html.gz",
    "saved_at": "2026-11-09T23:47:00.346Z",
    "unchanged_since": "2026-11-09T23:47:00.346Z",
    "parsed_sha": "45be22388c3a35b14664af9d70e81e2e1cc8d5b846707bc60113f2513c6307c8",
-   "sha256": "ef297736a14913333355bb94a88581e7d7d3be7ce7671504e3bfd89858233dfb"
+   "sha256": "b54c8652346a315188f2ed3ff88f43f6f6777df5051b6711df2a0ec718a20247"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-09T23:49:48.676Z",
-  "changed_at": "2026-11-09T18:46:51-05:00",
-  "saved_as": "news/bbm/2026-11-09T184651-0500.html",
+  "fetched_at": "2026-11-09T23:55:25.590Z",
+  "changed_at": "2026-11-09T18:55:25-05:00",
+  "saved_as": "news/bbm/2026-11-09T185525-0500.html",
   "out": [
    {
     "name": "Isaiah Joe",
@@ -298,6 +298,34 @@
   ],
   "cards": [
    {
+    "id": "182144",
+    "name": "Cam Christie",
+    "team": "LAC",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "ankle",
+    "words_at": "2026-11-09T185525-0500",
+    "at": "2026-11-09T23:54:25.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182143",
+    "name": "Isaiah Jackson",
+    "team": "LAC",
+    "dk_id": null,
+    "match": null,
+    "word": "Playing",
+    "label": "Playing",
+    "body": "groin",
+    "words_at": "2026-11-09T185525-0500",
+    "at": "2026-11-09T23:54:25.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
     "id": "182142",
     "name": "Paul Reed",
     "team": "DET",
@@ -306,7 +334,7 @@
     "word": "Off the Bench",
     "label": "UNKNOWN(Off the Bench #a6a6a6)",
     "body": null,
-    "words_at": "2026-11-09T184651-0500",
+    "words_at": "2026-11-09T185525-0500",
     "at": "2026-11-09T23:45:51.000Z",
     "precision": "minute",
     "out_as": null
@@ -320,8 +348,8 @@
     "word": "Starting",
     "label": "Starting",
     "body": null,
-    "words_at": "2026-11-09T184651-0500",
-    "at": "2026-11-09T23:45:51.000Z",
+    "words_at": "2026-11-09T185525-0500",
+    "at": "2026-11-09T23:45:25.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -334,7 +362,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "hamstring",
-    "words_at": "2026-11-09T184651-0500",
+    "words_at": "2026-11-09T185525-0500",
     "at": "2026-11-09T23:40:12.000Z",
     "precision": "minute",
     "out_as": null
@@ -348,7 +376,7 @@
     "word": "Starting",
     "label": "Starting",
     "body": null,
-    "words_at": "2026-11-09T184651-0500",
+    "words_at": "2026-11-09T185525-0500",
     "at": "2026-11-09T23:36:12.000Z",
     "precision": "minute",
     "out_as": null
@@ -362,7 +390,7 @@
     "word": "Starting",
     "label": "Starting",
     "body": null,
-    "words_at": "2026-11-09T184651-0500",
+    "words_at": "2026-11-09T185525-0500",
     "at": "2026-11-09T23:34:12.000Z",
     "precision": "minute",
     "out_as": null
@@ -376,7 +404,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "right knee contusion",
-    "words_at": "2026-11-09T184651-0500",
+    "words_at": "2026-11-09T185525-0500",
     "at": "2026-11-09T23:11:41.000Z",
     "precision": "minute",
     "out_as": null
@@ -390,7 +418,7 @@
     "word": "Out",
     "label": "Out",
     "body": "left shin/tibia contusion",
-    "words_at": "2026-11-09T184651-0500",
+    "words_at": "2026-11-09T185525-0500",
     "at": "2026-11-09T23:05:51.000Z",
     "precision": "minute",
     "out_as": "Morez Johnson"
@@ -404,7 +432,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "g league twoway",
-    "words_at": "2026-11-09T184651-0500",
+    "words_at": "2026-11-09T185525-0500",
     "at": "2026-11-09T23:01:12.000Z",
     "precision": "minute",
     "out_as": null
@@ -418,7 +446,7 @@
     "word": "Out",
     "label": "Out",
     "body": "left hand soreness",
-    "words_at": "2026-11-09T184651-0500",
+    "words_at": "2026-11-09T185525-0500",
     "at": "2026-11-09T23:01:12.000Z",
     "precision": "minute",
     "out_as": "Bilal Coulibaly"
@@ -432,7 +460,7 @@
     "word": "Off Injury Report",
     "label": "UNKNOWN(Off Injury Report #00cc44)",
     "body": null,
-    "words_at": "2026-11-09T184651-0500",
+    "words_at": "2026-11-09T185525-0500",
     "at": "2026-11-09T23:01:12.000Z",
     "precision": "minute",
     "out_as": null
@@ -446,7 +474,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "right ankle sprain",
-    "words_at": "2026-11-09T184651-0500",
+    "words_at": "2026-11-09T185525-0500",
     "at": "2026-11-09T23:00:51.000Z",
     "precision": "minute",
     "out_as": null
@@ -460,7 +488,7 @@
     "word": "Probable",
     "label": "Probable",
     "body": "right wrist sprain",
-    "words_at": "2026-11-09T184651-0500",
+    "words_at": "2026-11-09T185525-0500",
     "at": "2026-11-09T23:00:41.000Z",
     "precision": "minute",
     "out_as": null
@@ -985,7 +1013,8 @@
    "2026-11-09T183541-0500.html",
    "2026-11-09T183835-0500.html",
    "2026-11-09T184412-0500.html",
-   "2026-11-09T184651-0500.html"
+   "2026-11-09T184651-0500.html",
+   "2026-11-09T185525-0500.html"
   ],
   "unreadable_age": 0
  },
