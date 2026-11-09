@@ -2,17 +2,17 @@
   "slate": "2026-11-09-main",
   "date": "2026-11-09",
   "label": "TwoGun nba_projections row (slate group 156358)",
-  "built_from": "slates/2026-11-09-main/raw/2026-11-09T170514-0500",
+  "built_from": "slates/2026-11-09-main/raw/2026-11-09T172117-0500",
   "as_of": {
-    "board_updated": "Mon, Nov 9, 4:03 PM CT",
-    "injury_report": "Mon, Nov 9, 4:00 PM CT (row meta.report)",
-    "pull_started": "2026-11-09T17:05:14-05:00",
+    "board_updated": "Mon, Nov 9, 4:18 PM CT",
+    "injury_report": "Mon, Nov 9, 4:15 PM CT (row meta.report)",
+    "pull_started": "2026-11-09T17:21:17-05:00",
     "page_updated": null
   },
   "as_of_by_source": {
     "twogun_row": {
-      "updated": "Mon, Nov 9, 4:03 PM CT",
-      "injury_report": "Mon, Nov 9, 4:00 PM CT"
+      "updated": "Mon, Nov 9, 4:18 PM CT",
+      "injury_report": "Mon, Nov 9, 4:15 PM CT"
     }
   },
   "lock": "Mon, Nov 9, 6:00 PM CT",
@@ -170,7 +170,7 @@
     {"dk_id":"44847494","name":"Tyrese Proctor","team":"CLE","opponent":"CHA","game":"CLE@CHA","positions":["PG"],"roster_positions":["PG","G","UTIL"],"tip":"Mon, Nov 9, 6:00 PM CT","salary":3900,"minutes":17.1,"projection":14.61,"ceiling":20.26,"value":3.75,"proj_own":0.1,"injury_status":null,"starter":false,"dd_pct":0,"td_pct":0,"no_history":null},
     {"dk_id":"44847308","name":"Marcus Smart","team":"HOU","opponent":"DEN","game":"DEN@HOU","positions":["PG","SG"],"roster_positions":["PG","SG","G","UTIL"],"tip":"Mon, Nov 9, 7:30 PM CT","salary":4900,"minutes":20.7,"projection":14.47,"ceiling":20.74,"value":2.95,"proj_own":0.1,"injury_status":null,"starter":false,"dd_pct":0,"td_pct":0,"no_history":null},
     {"dk_id":"44847467","name":"Bub Carrington","team":"WAS","opponent":"DET","game":"WAS@DET","positions":["PG","SG"],"roster_positions":["PG","SG","G","UTIL"],"tip":"Mon, Nov 9, 6:00 PM CT","salary":4000,"minutes":17.9,"projection":13.74,"ceiling":19.46,"value":3.44,"proj_own":0.1,"injury_status":null,"starter":false,"dd_pct":0,"td_pct":0,"no_history":null},
-    {"dk_id":"44847753","name":"PJ Hall","team":"CHA","opponent":"CLE","game":"CLE@CHA","positions":["C"],"roster_positions":["C","UTIL"],"tip":"Mon, Nov 9, 6:00 PM CT","salary":3000,"minutes":13.8,"projection":13.71,"ceiling":18.66,"value":4.57,"proj_own":0.1,"injury_status":"Questionable","starter":false,"dd_pct":0,"td_pct":0,"no_history":null},
+    {"dk_id":"44847753","name":"PJ Hall","team":"CHA","opponent":"CLE","game":"CLE@CHA","positions":["C"],"roster_positions":["C","UTIL"],"tip":"Mon, Nov 9, 6:00 PM CT","salary":3000,"minutes":13.8,"projection":13.71,"ceiling":18.66,"value":4.57,"proj_own":0.1,"injury_status":"Available","starter":false,"dd_pct":0,"td_pct":0,"no_history":null},
     {"dk_id":"44847687","name":"Caleb Martin","team":"DAL","opponent":"IND","game":"IND@DAL","positions":["SG","SF"],"roster_positions":["SG","SF","F","G","UTIL"],"tip":"Mon, Nov 9, 7:00 PM CT","salary":3000,"minutes":17.5,"projection":12.77,"ceiling":18.35,"value":4.26,"proj_own":0.2,"injury_status":"Available","starter":true,"dd_pct":0,"td_pct":0,"no_history":null},
     {"dk_id":"44847471","name":"Jamison Battle","team":"TOR","opponent":"MEM","game":"MEM@TOR","positions":["SF"],"roster_positions":["SF","F","UTIL"],"tip":"Mon, Nov 9, 6:30 PM CT","salary":4000,"minutes":16,"projection":12.6,"ceiling":17.74,"value":3.15,"proj_own":0.1,"injury_status":null,"starter":false,"dd_pct":0,"td_pct":0,"no_history":null},
     {"dk_id":"44847501","name":"Jay Huff","team":"IND","opponent":"DAL","game":"IND@DAL","positions":["C"],"roster_positions":["C","UTIL"],"tip":"Mon, Nov 9, 7:00 PM CT","salary":3800,"minutes":11.9,"projection":11.84,"ceiling":16.3,"value":3.12,"proj_own":0.1,"injury_status":null,"starter":false,"dd_pct":0,"td_pct":0,"no_history":null},
@@ -210,7 +210,7 @@
     {"dk_id":"44847684","name":"Khris Middleton","team":"WAS","opponent":"DET","game":"WAS@DET","positions":["PF"],"roster_positions":["PF","F","UTIL"],"tip":"Mon, Nov 9, 6:00 PM CT","salary":3000,"minutes":4,"projection":3.16,"ceiling":5.84,"value":1.05,"proj_own":0,"injury_status":null,"starter":false,"dd_pct":0,"td_pct":0,"no_history":null},
     {"dk_id":"44847755","name":"Rasheer Fleming","team":"PHX","opponent":"SAS","game":"SAS@PHX","positions":["SF","PF"],"roster_positions":["SF","PF","F","UTIL"],"tip":"Mon, Nov 9, 8:00 PM CT","salary":3000,"minutes":3.9,"projection":2.96,"ceiling":5.63,"value":0.99,"proj_own":0,"injury_status":null,"starter":false,"dd_pct":0,"td_pct":0,"no_history":null},
     {"dk_id":"44847609","name":"Marcus Sasser","team":"DAL","opponent":"IND","game":"IND@DAL","positions":["PG","SG"],"roster_positions":["PG","SG","G","UTIL"],"tip":"Mon, Nov 9, 7:00 PM CT","salary":3100,"minutes":3.4,"projection":2.89,"ceiling":5.75,"value":0.93,"proj_own":0,"injury_status":null,"starter":false,"dd_pct":0,"td_pct":0,"no_history":null},
-    {"dk_id":"44847829","name":"Michael Ajayi","team":"CHA","opponent":"CLE","game":"CLE@CHA","positions":["SF"],"roster_positions":["SF","F","UTIL"],"tip":"Mon, Nov 9, 6:00 PM CT","salary":3000,"minutes":3.3,"projection":2.65,"ceiling":5.31,"value":0.88,"proj_own":0,"injury_status":"Questionable","starter":false,"dd_pct":0,"td_pct":0,"no_history":"no NBA box scores yet: minutes from his salary and role"},
+    {"dk_id":"44847829","name":"Michael Ajayi","team":"CHA","opponent":"CLE","game":"CLE@CHA","positions":["SF"],"roster_positions":["SF","F","UTIL"],"tip":"Mon, Nov 9, 6:00 PM CT","salary":3000,"minutes":3.3,"projection":2.65,"ceiling":5.31,"value":0.88,"proj_own":0,"injury_status":"Available","starter":false,"dd_pct":0,"td_pct":0,"no_history":"no NBA box scores yet: minutes from his salary and role"},
     {"dk_id":"44847617","name":"Olivier-Maxence Prosper","team":"MEM","opponent":"TOR","game":"MEM@TOR","positions":["C"],"roster_positions":["C","UTIL"],"tip":"Mon, Nov 9, 6:30 PM CT","salary":3100,"minutes":2.8,"projection":2.64,"ceiling":5.3,"value":0.85,"proj_own":0,"injury_status":null,"starter":false,"dd_pct":0,"td_pct":0,"no_history":null},
     {"dk_id":"44847653","name":"Jaden Hardy","team":"LAL","opponent":"ATL","game":"LAL@ATL","positions":["SF"],"roster_positions":["SF","F","UTIL"],"tip":"Mon, Nov 9, 6:00 PM CT","salary":3000,"minutes":2.9,"projection":2.54,"ceiling":5.19,"value":0.85,"proj_own":0,"injury_status":null,"starter":false,"dd_pct":0,"td_pct":0,"no_history":null},
     {"dk_id":"44847656","name":"Tarris Reed Jr.","team":"SAS","opponent":"PHX","game":"SAS@PHX","positions":["C"],"roster_positions":["C","UTIL"],"tip":"Mon, Nov 9, 8:00 PM CT","salary":3000,"minutes":2.2,"projection":2.34,"ceiling":4.99,"value":0.78,"proj_own":0,"injury_status":null,"starter":false,"dd_pct":0,"td_pct":0,"no_history":null},
@@ -264,7 +264,7 @@
     {"name":"Tyrese Haliburton","team":"IND","salary_text":"$8.4K","status":"OUT","reason":"Left Hamstring Strain","usual_minutes":33,"sources":["twogun_row"]},
     {"name":"Brandon Miller","team":"CHA","salary_text":"$7.9K","status":"OUT","reason":"Right Hip Strain","usual_minutes":29.6,"sources":["twogun_row"]},
     {"name":"Devin Vassell","team":"SAS","salary_text":"$5.3K","status":"OUT","reason":"Left Adductor Tightness","usual_minutes":29.5,"sources":["twogun_row"]},
-    {"name":"Moussa Diabate","team":"CHA","salary_text":"$5.7K","status":"DOUBTFUL","reason":"Right Quadriceps Tendinopathy","usual_minutes":29.1,"sources":["twogun_row"]},
+    {"name":"Moussa Diabate","team":"CHA","salary_text":"$5.7K","status":"OUT","reason":"Right Quadriceps Tendinopathy","usual_minutes":29.1,"sources":["twogun_row"]},
     {"name":"Dennis Schroder","team":"CHA","salary_text":"$5.4K","status":"OUT","reason":"Left Hamstring Strain","usual_minutes":29.1,"sources":["twogun_row"]},
     {"name":"Kawhi Leonard","team":"TOR","salary_text":"$7.8K","status":"OUT","reason":"Left Knee Injury Management","usual_minutes":28,"sources":["twogun_row"]},
     {"name":"Tobias Harris","team":"SAS","salary_text":"$5.1K","status":"OUT","reason":"Left Calf Strain","usual_minutes":27.8,"sources":["twogun_row"]},
@@ -328,8 +328,8 @@
     "T.J. McConnell (IND $4.2K): Questionable, but likely playing — projected as playing",
     "Jock Landale (ATL $4.1K): Available — projected as playing",
     "Bilal Coulibaly (WAS $4.1K): Questionable, but likely playing — projected as playing",
-    "PJ Hall (CHA $3K): Questionable, but likely playing — projected as playing",
-    "Michael Ajayi (CHA $3K): Questionable, but likely playing — projected as playing",
+    "PJ Hall (CHA $3K): Available — projected as playing",
+    "Michael Ajayi (CHA $3K): Available — projected as playing",
     "Caleb Martin (DAL $3K): Available — projected as playing",
     "Isaac Jones (DET $3K): Questionable, but likely playing — projected as playing",
     "EJ Harkless (DET $3K): Questionable, but likely playing — projected as playing",
