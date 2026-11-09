@@ -1,9 +1,9 @@
-// The lineup bar (Adam, 11-06; no buttons to press, Adam 11-07): above the player list, what the Monster and RotoWire lineup pages say that the console
-// did not show. An Out, and a start from confirmed lineups, apply themselves through the console's role moves on the scenario the team is on (his marks
+// The lineup news (Adam, 11-06; no buttons to press, 11-07; its own tab, 11-09): what the Monster and RotoWire lineup pages say that the console
+// did not show, as the rows of the News tab. An Out, and a start from confirmed lineups, apply themselves through the console's role moves on the scenario the team is on (his marks
 // kept; console-card.js autoApplyProposal) and reach the board by the console's own send; each shows as a note with an undo X. A projected start is
 // information only. A change is applied once per proposal, recorded in the console's saved work, so a reload never applies one he undid. A check or a
-// line of information can be hidden (remembered in this browser until its sources change). Shows nothing when there is nothing to say, or when the read is too old to act on.
-// It is one thin line ("Lineup news: 4 changes, 3 to check · Show", amber while anything is to check); Show floats the rows over the page. The same code runs
+// line of information can be hidden (remembered in this browser until its sources change). Says nothing when there is nothing to say, or when the read is too old to act on.
+// The tab's label is "News" with the count, amber while anything needs Adam (newsLabel); nothing opens over the page. The same code runs
 // on the public site, from the published lineups-latest.json. barHtml, statusLine, newsRows and refusalText are DOM-free (tested in node). Look: lineup-bar.css.
 import { esc } from "./board-util.js";
 import { lastName } from "./console-model.js";
@@ -64,14 +64,13 @@ export function refusalText(message) {
 }
 
 /**
- * The bar is one thin line (lineup-bar.css): "Lineup news: 4 changes, 3 to check · Show". A change is a line the news applied or shows as information; "to check"
- * is everything that needs Adam: a CHECK row, a change that failed, a note about the read. The line is amber while anything is to check. Pure.
+ * The News tab's label (board.js): `n` rows to show, `need` true while anything needs Adam: a CHECK row, a change that failed, a note about the read. The tab reads
+ * "News 4" and turns amber on need; with nothing it is plain "News". Pure.
  */
-export function summaryHtml(bar, state = {}) {
+export function newsLabel(bar, state = {}) {
   const n = (x) => (x ?? []).length, failed = (bar.applied ?? []).filter((r) => r?.entry?.state === "failed").length;
-  const changes = n(bar.applied) - failed + n(bar.info), check = n(bar.conflicts) + failed + n(state.notes);
-  const bits = [changes ? `${changes} change${changes === 1 ? "" : "s"}` : "", check ? `${check} to check` : ""].filter(Boolean);
-  return `<button type="button" class="lpsum${check ? " need" : ""}" data-lp-sum aria-expanded="${state.open ? "true" : "false"}">Lineup news: ${bits.join(", ")} · <u>${state.open ? "Hide" : "Show"}</u></button>`;
+  const check = n(bar.conflicts) + failed + n(state.notes);
+  return { n: n(bar.applied) + n(bar.info) + n(bar.conflicts) + n(state.notes), check, need: check > 0 };
 }
 
 /** The news entries the console holds, newest first: [{ team, key, entry }] for every applied, reverted or failed one (an undone one is gone from the bar). */
@@ -114,10 +113,11 @@ export function barHtml(bar, state = {}) {
  * toast(msg, kind), tryStore(fn), now() }. Returns { refresh(), newsOnly() }. refresh asks again for the lineup read, applies what is new and allowed, and redraws;
  * call it when the slate or its numbers change. newsOnly redraws the applied notes from the console; call it when his work moves.
  */
-export function createLineupBar({ el, api, slate, players, console: cons, toast, tryStore, now = Date.now }) {
+export function createLineupBar({ el, api, slate, players, console: cons, toast, tryStore, now = Date.now, onLabel = () => {} }) {
   const key = () => `nbaboard.lineupdismiss.${slate()}`;
   const readDismissed = () => { try { return JSON.parse(tryStore(() => localStorage.getItem(key())) ?? "{}") ?? {}; } catch (e) { console.warn("Lineup dismissals unreadable:", e.message); return {}; } };
-  const state = { notes: [], open: false };
+  const state = { notes: [] };
+  let label = { n: 0, check: 0, need: false }; // what the News tab says (newsLabel); onLabel hears each change
   let stale = false; // a read too old to act on shows nothing at all (STALE_MIN, the same test that stops anything being made by itself)
   let gen = 0, running = null, again = false, shown = { applied: [], info: [], conflicts: [] };
 
@@ -128,16 +128,15 @@ export function createLineupBar({ el, api, slate, players, console: cons, toast,
     const bar = stale ? { applied: all.applied.filter((r) => r.entry.state === "failed"), info: [], conflicts: [] } : all;
     const shownState = stale ? { ...state, notes: [] } : state;
     const html = barHtml(bar, shownState);
-    if (!html) state.open = false;
-    el.hidden = !html;
-    el.innerHTML = html ? `${summaryHtml(bar, shownState)}<div class="lpdrop"${state.open ? "" : " hidden"}>${html}</div>` : "";
-    el.classList.toggle("open", Boolean(state.open));
+    el.innerHTML = html || '<div class="lpempty">No lineup news right now.</div>';
+    label = newsLabel(bar, shownState);
+    onLabel(label);
   }
   const settle = (notes, next = { applied: [], info: [], conflicts: [] }, old = false) => { stale = old; shown = next; state.notes = notes.filter(Boolean); draw(); };
 
   async function once() {
     const mine = ++gen, name = slate();
-    if (!name) { el.hidden = true; return; }
+    if (!name) { settle([]); return; }
     let read;
     try { read = await api(`/api/slate/${encodeURIComponent(name)}/news-lineups`); } catch (e) {
       if (mine !== gen) return;
@@ -191,7 +190,6 @@ export function createLineupBar({ el, api, slate, players, console: cons, toast,
   }
 
   el.addEventListener("click", async (e) => {
-    if (e.target.closest("[data-lp-sum]")) { state.open = !state.open; return draw(); } // Show / Hide: the rows float over the page as a dropdown
     const dismiss = e.target.closest("[data-lp-dismiss]"), undo = e.target.closest("[data-lp-undo]");
     if (dismiss) {
       const id = dismiss.dataset.lpDismiss, row = [...shown.info, ...shown.conflicts].find((r) => r.id === id), news = shown.applied.find((r) => r.key === id);
@@ -208,11 +206,5 @@ export function createLineupBar({ el, api, slate, players, console: cons, toast,
     }
     await refresh();
   });
-  // The dropdown closes on Esc and on a click anywhere outside the bar (node tests have no document).
-  if (typeof document !== "undefined") {
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.open) { state.open = false; draw(); } });
-    // composedPath is the path as it was at the click: a row this very click redrew is still inside the bar.
-    document.addEventListener("click", (e) => { if (state.open && !e.composedPath().includes(el)) { state.open = false; draw(); } });
-  }
-  return { refresh, newsOnly };
+  return { refresh, newsOnly, label: () => label };
 }

@@ -90,9 +90,9 @@ const shownCols = () => columns.keys({ lateSwap: Boolean(panel.lateSwap()) });
 // The scenario console (console.js), the page's other view; each change there hands back the players' effective figures, as an override save does.
 const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: (t) => colourOf(t).t1, onPlayers: (players) => applyPlayers(players), onWork: () => { boardMarks.refresh({ news: false }); lineupBar.newsOnly(); } });
 // The console's word on each row (board-marks.js): the S chip, and his typed Min and DK/m TON with their undo chips; those cells write through the console.
-const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, onChange: () => { if (S.slate) renderRows(); }, noteEl: $("newsrow").insertAdjacentElement("afterend", Object.assign(document.createElement("div"), { hidden: true })) });
+const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, onChange: () => { if (S.slate) renderRows(); }, noteEl: $("pullnote").insertAdjacentElement("afterend", Object.assign(document.createElement("div"), { hidden: true })) });
 // The lineup bar above the list (lineup-bar.js): an Out or a confirmed start from the Monster and RotoWire pages applies itself through the console, with an undo X; a projected start is words only.
-const lineupBar = createLineupBar({ el: $("lineupbar"), api, slate: () => S.name, players: () => S.players, console: scenarioConsole, toast, tryStore });
+const lineupBar = createLineupBar({ el: $("lineupbar"), api, slate: () => S.name, players: () => S.players, console: scenarioConsole, toast, tryStore, onLabel: (l) => { S.news = l; renderTop(); } });
 // Full screen (Player list header): hides the optimizer panel so the table takes the width. Remembered per viewer; under 900 px
 // wide with nothing stored it starts on. Pin slots (late swap) needs the panel, so the button and the hiding step aside then.
 const FS_KEY = "nbaboard.fullscreen";
@@ -128,12 +128,14 @@ function setConsole(open) {
 
 /** The page's two tabs: the player list (with the working lineup and Build) and the Lineups tab (the built and saved lineups). */
 function setView(v) {
-  const next = v === "lineups" ? "lineups" : "list";
+  const next = v === "lineups" || v === "news" ? v : "list";
   if (next === (S.view ?? "list")) return; // clicking the tab already on show does nothing
   S.scroll = { ...S.scroll, [S.view ?? "list"]: window.scrollY }; // each tab keeps its own place
   S.view = next;
   document.body.classList.toggle("lineups-on", next === "lineups");
+  document.body.classList.toggle("news-on", next === "news");
   $("lineups").hidden = next !== "lineups";
+  $("news").hidden = next !== "news";
   renderTop();
   if (next === "list") fixTableWidth();
   window.scrollTo(0, S.scroll?.[next] ?? 0);
@@ -277,7 +279,7 @@ function renderTop() {
   const list = (h, a) => (a.length ? `<h4>${h}</h4><ul>${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "");
   $("top").innerHTML = `<div class="brand"><span class="mk"></span>NBA_BOARD<small>dk classic</small></div>
 <select class="slate" id="slateSel">${S.slates.map((x) => `<option value="${esc(x.slate)}"${x.slate === S.name ? " selected" : ""}>${esc(slateLabel(x.slate))}${x.slate === S.name ? ` · ${s.games.length} game${s.games.length === 1 ? "" : "s"}` : ""}</option>`).join("")}</select>
-<span class="vtabs"><button data-view="list" class="${S.view === "lineups" ? "" : "on"}">Player list</button><button data-view="lineups" class="${S.view === "lineups" ? "on" : ""}">Lineups${panel.builtCount() ? ` <b>${panel.builtCount()}</b>` : ""}</button></span>
+<span class="vtabs"><button data-view="list" class="${S.view === "lineups" || S.view === "news" ? "" : "on"}">Player list</button><button data-view="lineups" class="${S.view === "lineups" ? "on" : ""}">Lineups${panel.builtCount() ? ` <b>${panel.builtCount()}</b>` : ""}</button><button data-view="news" class="${S.view === "news" ? "on" : ""}${S.news?.need ? " need" : ""}" title="${S.news?.need ? "Lineup news that needs your look" : "What the lineup sources say that the console does not show"}">News${S.news?.n ? ` <b>${S.news.n}</b>` : ""}</button></span>
 <div class="stamps">${stamp("Board", board, "no board time in this slate file")}${stamp("Injuries", injuries, injuriesAbsent ? "the TwoGun board row carries no injury report time" : "no injury report time in this slate file", "", injuriesAbsent)}${stamp("Pulled", s.as_of?.pull_started, "no pull time in this slate file")}${stamp("Lock", s.lock, "no lock time in this slate file", "lock")}</div>
 ${count ? `<div class="notes"><button id="notesBtn" title="${count} data warning${count === 1 ? "" : "s"} on this slate">Data warnings</button><div class="list" id="notesList" hidden>${list("Conflicts", n.conflicts)}${list("Missing", n.missing)}</div></div>` : ""}
 ${pullNow.html()}<button id="csBtn" class="lsw csw${scenarioConsole.isOn() ? " on" : ""}" title="${scenarioConsole.isOn() ? "Back to the board" : "Scenario console: minutes and usage when men sit"}">Console</button>
