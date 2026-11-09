@@ -63,12 +63,18 @@ export function outcomeLine(o) {
   return `<li class="o-${o.amber ? "amber" : o.status}"><b>${esc(o.spot)}</b>: ${tag}${why}${dup}${out}${o.notes.map((n) => `<em>${esc(n)}</em>`).join("")}</li>`;
 }
 
+/** The spots picked for "Export this spot" that are still on the screen, in the order picked: a spot removed since it was picked is never sent. */
+export const livePicks = (picked, spots) => [...picked].filter((n) => spots.some((s) => s.name === n));
+
 /**
  * What the page does with an answer, given the newest server revision it has drawn. A read older than that is thrown away. An action's
  * answer is never thrown away: what it says (outcomes, refusals, go-aheads) belongs on screen even when a later read has already been drawn;
- * only its model is skipped when it is older than the one on show. Returns { use, takeModel, applied }.
+ * only its model is skipped when it is older than the one on show. Returns { use, takeModel, applied }. boots = { seen, now }: the server's boot
+ * id on the last answer drawn and on this one. The count starts again at 1 when the server restarts, so a different id means the numbers are not
+ * comparable: nothing drawn so far is "newer", and this answer is taken.
  */
-export function replyVerdict(applied, rev, isAction) {
+export function replyVerdict(applied, rev, isAction, boots = null) {
+  if (boots && boots.seen != null && boots.now != null && boots.seen !== boots.now) applied = 0;
   if (!Number.isFinite(rev)) return { use: true, takeModel: true, applied };
   const older = rev < applied;
   if (older && !isAction) return { use: false, takeModel: false, applied };

@@ -5,8 +5,13 @@
 
 /** The figures of a man a card draws, as stored: scalars and short lists only (the server keeps nothing else, builds.js). */
 export const ROW_KEYS = ["dk_id", "name", "team", "opponent", "oppText", "game", "tip", "positions", "roster_positions", "salary", "projection", "proj_own", "value", "minutes", "injury_status", "starred"];
-/** Builds kept per slate: the latest only (Adam, 2026-11-07): a new build replaces the last, and only Save keeps lineups. */
-export const KEEP_BUILDS = 1;
+/** Builds kept per slate: the latest of each mode (Cash and GPP), so building one mode never wipes the other (Adam, 2026-11-09); a new build of a mode replaces that mode's last, and only Save keeps lineups. */
+export const KEEP_BUILDS = 2;
+/** The newest build of each mode, newest first: what a slate keeps. */
+export function keepRecent(list) {
+  const seen = new Set();
+  return [...list].sort((a, b) => (b.built_at ?? 0) - (a.built_at ?? 0)).filter((b) => (seen.has(b.mode) ? false : seen.add(b.mode))).slice(0, KEEP_BUILDS);
+}
 
 /** A man's row cut to what is stored. */
 export function compactRow(p) {
@@ -52,7 +57,7 @@ export function fromRecord(r) {
  *  does not have yet kept in front (its write is still on its way); the newest KEEP_BUILDS (one) stay. */
 export function mergeBuilds(local, server) {
   const have = new Set(server.map((b) => b.id));
-  return [...local.filter((b) => !have.has(b.id)), ...server].sort((a, b) => b.built_at - a.built_at).slice(0, KEEP_BUILDS);
+  return [...local.filter((b) => !have.has(b.id)), ...server].sort((a, b) => b.built_at - a.built_at).filter((b, i, all) => all.findIndex((x) => x.mode === b.mode) === i).slice(0, KEEP_BUILDS);
 }
 
 /** The build with this id, with lineup i taken out (a Discard); null when that was its last lineup (the build goes). */

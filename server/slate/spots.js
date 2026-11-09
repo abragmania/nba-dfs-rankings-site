@@ -13,9 +13,9 @@ import path from "../../site/shim/path.js";
 import { dataRoot, hiddenIdAliases } from "./store.js";
 import { writeFileAtomic } from "../../site/shim/atomic.js";
 import { SLOTS } from "../board/slots.js";
-import { cleanSpotName, SPOT_NAME_MAX, MAX_SPOTS } from "../board/spot-name.js";
+import { cleanSpotName, SPOT_NAME_MAX, MAX_SPOTS, MAX_TOTAL_SPOTS, hasRoomFor, isCashSpot } from "../board/spot-name.js";
 
-export { cleanSpotName, SPOT_NAME_MAX, MAX_SPOTS };
+export { cleanSpotName, SPOT_NAME_MAX, MAX_SPOTS, MAX_TOTAL_SPOTS };
 const EMPTY = { lineup_id: null, slots: null, assigned_at: null };
 
 const spotsFile = (slate) => path.join(dataRoot(), "cache", "spots", `${slate}.json`);
@@ -71,7 +71,7 @@ export function checkSpotsBody(body) {
   const idOk = (v) => typeof v === "string" && v.length > 0 && v.length <= 40;
   if ("bulk" in body) {
     const b = body.bulk;
-    if (!plain(b) || !Array.isArray(b.assignments) || !b.assignments.length || b.assignments.length > MAX_SPOTS) return bad(`"bulk" needs 1 to ${MAX_SPOTS} assignments.`);
+    if (!plain(b) || !Array.isArray(b.assignments) || !b.assignments.length || b.assignments.length > MAX_TOTAL_SPOTS) return bad(`"bulk" needs 1 to ${MAX_TOTAL_SPOTS} assignments.`);
     const seen = new Set(), assignments = [];
     for (const a of b.assignments) {
       const spot = plain(a) ? cleanSpotName(a.spot) : null;
@@ -88,7 +88,8 @@ export function checkSpotsBody(body) {
   if ("restore" in body) {
     const r = body.restore;
     if (!plain(r) || !plain(r.spots) || !plain(r.expect)) return bad('"restore" needs { "spots": the earlier spots, "expect": the spots as they are now }.');
-    if (Object.keys(r.spots).length > MAX_SPOTS) return bad(`At most ${MAX_SPOTS} spots for one slate.`);
+    const restored = Object.keys(r.spots);
+    if (restored.length > MAX_TOTAL_SPOTS || restored.filter((n) => !isCashSpot(n)).length > MAX_SPOTS) return bad(`At most ${MAX_SPOTS} spots besides Cash (${MAX_TOTAL_SPOTS} in all) for one slate.`);
     for (const [name, e] of Object.entries(r.spots)) { const why = entryProblem(name, e); if (why) return bad(why); }
     return { ok: true, kind: "restore", spots: r.spots, expect: r.expect };
   }
@@ -144,7 +145,7 @@ export function applySpots(current, checked, lineups, now = new Date().toISOStri
     if (!offBoardOnly(l)) return fail(400, "BAD_SPOT", "That saved lineup is not legal on this slate now, so it cannot hold a spot.");
     if (!checked.confirmed) return fail(409, "NEEDS_CONFIRM", "That saved lineup holds a man who is not on the board; confirm to give it a spot anyway.");
   }
-  if (!has && Object.keys(current).length >= MAX_SPOTS) return fail(400, "TOO_MANY", `At most ${MAX_SPOTS} spots for one slate.`);
+  if (!has && !hasRoomFor(Object.keys(current), checked.spot)) return fail(400, "TOO_MANY", `At most ${MAX_SPOTS} spots besides Cash (${MAX_TOTAL_SPOTS} in all) for one slate.`);
   return { ok: true, spots: { ...current, [checked.spot]: { lineup_id: String(l.id), slots: [...l.slots], assigned_at: now } } };
 }
 
@@ -163,7 +164,7 @@ function applyBulk(current, checked, lineups, now) {
       if (!offBoardOnly(l)) return fail(400, "BAD_SPOT", `Saved lineup ${lineupId} is not legal on this slate now, so it cannot hold a spot; nothing was changed.`);
       if (!checked.confirmed.includes(lineupId)) return fail(409, "NEEDS_CONFIRM", `Saved lineup ${lineupId} holds a man who is not on the board; confirm it or leave it out; nothing was changed.`);
     }
-    if (!Object.hasOwn(next, spot) && Object.keys(next).length >= MAX_SPOTS) return fail(400, "TOO_MANY", `At most ${MAX_SPOTS} spots for one slate; nothing was changed.`);
+    if (!hasRoomFor(Object.keys(next), spot)) return fail(400, "TOO_MANY", `At most ${MAX_SPOTS} spots besides Cash (${MAX_TOTAL_SPOTS} in all) for one slate; nothing was changed.`);
     next[spot] = { lineup_id: String(l.id), slots: [...l.slots], assigned_at: now };
   }
   return { ok: true, spots: next };

@@ -204,7 +204,7 @@ ${v ? lsNotesHtml(P, c, v) + ovStaleHtml(lsRes, c) + picksStaleHtml(lsRes, c) + 
 // import this file back.
 // A full working lineup is saved in late-swap order, the rule a build's lineups follow, so every saved lineup is in one order.
 const workOrder = (men) => lateSwapOrder(men);
-const own = { render, post, loadSlots, showSlots, downloadSaved, loadSaved: (X, l) => { if (loadSaved(X, l, own)) { if (l.swapped) { X.P.loaded = null; render(X); } /* a swap not yet saved is not "saved already": the working lineup can be saved */ showSlots(X); X.onView("list"); } }, readSpots: (X) => readSpotsFor(X, X.ctx().name, own), notesHtml, savedRefusal, lateSwapSeat, dkCsv, saveFile, lateSwapFrom: (X, men) => toggleLateSwap(X, null, men), saveIds: (X) => saveIds(X.P, X.ctx(), workOrder) };
+const own = { render, post, loadSlots, showSlots, downloadSaved, loadSaved: (X, l) => { if (loadSaved(X, l, own)) { if (l.swapped) { X.P.loaded = null; render(X); } /* a swap not yet saved is not "saved already": the working lineup can be saved */ showSlots(X); X.onView("list"); } }, readSpots: (X) => readSpotsFor(X, X.ctx().name, own), notesHtml, savedRefusal, lateSwapSeat, dkCsv, saveFile, lateSwapFrom: (X, men) => toggleLateSwap(X, null, men), lateSwapOff: (X) => (X.P.ls ? toggleLateSwap(X) : null), saveIds: (X) => saveIds(X.P, X.ctx(), workOrder) };
 
 /** After a Load (A12): the page comes back to the slots, unless their sticky band is on screen already. */
 function showSlots(X) {

@@ -49,6 +49,18 @@ export function saveUpload(slate, text, name, nowMs = Date.now()) {
   return { file, at: new Date(at).toISOString() };
 }
 
+/** Keeps an exported upload file on this machine (data/cache/lateswap/<slate>.exports/, never overwritten: a clash gets a number) and returns its
+ *  full path, so the screen can say exactly where it is. The browser's own download goes wherever its downloads folder is, which the app cannot see. */
+export function saveExport(slate, text, fileName) {
+  const dirPath = path.resolve(dir(), `${slate}.exports`);
+  fs.mkdirSync(dirPath, { recursive: true });
+  const base = safeName(fileName).replace(/\.csv$/i, "");
+  let file = path.join(dirPath, `${base}.csv`);
+  for (let n = 2; fs.existsSync(file); n++) file = path.join(dirPath, `${base}_${n}.csv`);
+  writeFileAtomic(file, text);
+  return file;
+}
+
 /** The slate's kept uploads, newest first: [{ file, name, at }]. */
 export function listUploads(slate) {
   if (!fs.existsSync(uploadsDir(slate))) return [];

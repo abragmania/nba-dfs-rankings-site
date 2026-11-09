@@ -70,16 +70,25 @@ function visibleSpots(M, L) {
   return M.spots;
 }
 
-function exposure(M) {
+/** The two by-spot tables have a column per spot, so a slate with 151 spots is shown PAGE spots at a time (L.spotPage): no horizontal page scroll. */
+export const SPOT_PAGE = 12;
+export function spotPageOf(M, L) {
+  const pages = Math.max(1, Math.ceil(M.spots.length / SPOT_PAGE)), p = Math.min(Math.max(Number(L.spotPage) || 0, 0), pages - 1);
+  return { spots: M.spots.slice(p * SPOT_PAGE, (p + 1) * SPOT_PAGE), p, pages, total: M.spots.length, all: M.spots.length > SPOT_PAGE };
+}
+const pager = (pg) => (pg.all ? `<span class="pgr"><button class="ol sm" data-lsw="spotPage" data-dir="-1"${pg.p ? "" : " disabled"}>‹ Prev</button><span class="muted">spots ${pg.p * SPOT_PAGE + 1} to ${pg.p * SPOT_PAGE + pg.spots.length} of ${pg.total}</span><button class="ol sm" data-lsw="spotPage" data-dir="1"${pg.p < pg.pages - 1 ? "" : " disabled"}>Next ›</button></span>` : "");
+
+function exposure(M, L) {
   const rows = menInSpots(M).sort((a, b) => b.entries - a.entries || a.man.name.localeCompare(b.man.name));
   const total = M.spots.reduce((t, s) => t + s.nEntries, 0);
-  const cols = `style="--n:${M.spots.length}"`;
-  return `<section class="mapcol"><div class="mh"><span class="t">Exposure by spot</span></div>
-<div class="mx hd" ${cols}><span>Player</span>${M.spots.map((s) => `<span class="c" style="color:${spotColour(s.name, M.spots)}">${esc(s.name)}</span>`).join("")}<span class="c">Entries</span></div>
-${rows.map((r) => `<div class="mx${r.man.started ? " stl" : ""}" ${cols} data-man="${esc(r.man.dk_id)}"><span class="mxn">${r.man.team ? logo(r.man.team, "xs") : ""}<span>${esc(r.man.name)}</span>${outChip(r.man)}${r.man.started ? `<span class="lkd">${ICON_LOCK}</span>` : ""}</span>${M.spots.map((s) => `<span class="c">${r.spots.includes(s.name) ? `<i class="dt" style="background:${spotColour(s.name, M.spots)}"></i>` : '<i class="z">·</i>'}</span>`).join("")}<span class="c"><b>${r.entries}</b> of ${total}</span></div>`).join("")}</section>`;
+  const pg = spotPageOf(M, L), shownSpots = pg.spots;
+  const cols = `style="--n:${shownSpots.length}"`;
+  return `<section class="mapcol"><div class="mh"><span class="t">Exposure by spot</span><span class="grow"></span>${pager(pg)}</div>
+<div class="mx hd" ${cols}><span>Player</span>${shownSpots.map((s) => `<span class="c" style="color:${spotColour(s.name, M.spots)}">${esc(s.name)}</span>`).join("")}<span class="c">Entries</span></div>
+${rows.map((r) => `<div class="mx${r.man.started ? " stl" : ""}" ${cols} data-man="${esc(r.man.dk_id)}"><span class="mxn">${r.man.team ? logo(r.man.team, "xs") : ""}<span>${esc(r.man.name)}</span>${outChip(r.man)}${r.man.started ? `<span class="lkd">${ICON_LOCK}</span>` : ""}</span>${shownSpots.map((s) => `<span class="c">${r.spots.includes(s.name) ? `<i class="dt" style="background:${spotColour(s.name, M.spots)}"></i>` : '<i class="z">·</i>'}</span>`).join("")}<span class="c"><b>${r.entries}</b> of ${total}</span></div>`).join("")}</section>`;
 }
 
-function entriesBySpot(M) {
+function entriesBySpot(M, L) {
   const by = new Map();
   for (const e of M.entries) {
     if (!by.has(e.contestName)) by.set(e.contestName, new Map());
@@ -87,11 +96,11 @@ function entriesBySpot(M) {
     by.get(e.contestName).set(k, (by.get(e.contestName).get(k) ?? 0) + 1);
   }
   const hasNone = M.entries.some((e) => e.noSpot);
-  const cols = `style="--n:${M.spots.length + (hasNone ? 1 : 0)}"`;
+  const pg = spotPageOf(M, L), cols = `style="--n:${pg.spots.length + (hasNone ? 1 : 0)}"`;
   const cell = (n, cls = "") => `<span class="c ${cls}">${n ? `<b>${n}</b>` : '<i class="z">·</i>'}</span>`;
-  return `<section class="mapcol"><div class="mh"><span class="t">Entries by spot</span><span class="grow"></span><span class="muted">${M.entries.length} entries, ${by.size} contests</span></div>
-<div class="mx eb hd" ${cols}><span>Contest</span>${M.spots.map((s) => `<span class="c" style="color:${spotColour(s.name, M.spots)}">${esc(s.name)}</span>`).join("")}${hasNone ? '<span class="c red">No lineup</span>' : ""}</div>
-${[...by].map(([n, m]) => `<div class="mx eb" ${cols}><span>${esc(n)}</span>${M.spots.map((s) => cell(m.get(s.name))).join("")}${hasNone ? cell(m.get("__none"), "red") : ""}</div>`).join("")}</section>`;
+  return `<section class="mapcol"><div class="mh"><span class="t">Entries by spot</span><span class="grow"></span>${pager(pg)}<span class="muted">${M.entries.length} entries, ${by.size} contests</span></div>
+<div class="mx eb hd" ${cols}><span>Contest</span>${pg.spots.map((s) => `<span class="c" style="color:${spotColour(s.name, M.spots)}">${esc(s.name)}</span>`).join("")}${hasNone ? '<span class="c red">No lineup</span>' : ""}</div>
+${[...by].map(([n, m]) => `<div class="mx eb" ${cols}><span>${esc(n)}</span>${pg.spots.map((s) => cell(m.get(s.name))).join("")}${hasNone ? cell(m.get("__none"), "red") : ""}</div>`).join("")}</section>`;
 }
 
 export function allHtml(M, L) {
@@ -102,7 +111,7 @@ export function allHtml(M, L) {
   return `${bluntBar(M, L)}${filterChips(M, L)}
 ${L.filter === "Unassigned" ? unassignedList(un) : `<div class="cards" style="--cols:${Math.min(Math.max(vis.length, 1), 3)}">${vis.map((s) => spotCardHtml(s, M, outBy.get(s.name))).join("") || '<div class="rs">Nothing matches this filter.</div>'}</div>`}
 ${un.length && L.filter !== "Unassigned" ? `<div class="newbar red"><b>${un.length}</b> ${un.length === 1 ? "entry has" : "entries have"} no lineup assigned and ${un.length === 1 ? "is" : "are"} never edited or exported. <button class="ol red" data-lsw="goMaps">Give them a spot</button></div>` : ""}
-<div class="two">${exposure(M)}${entriesBySpot(M)}</div>`;
+<div class="two">${exposure(M, L)}${entriesBySpot(M, L)}</div>`;
 }
 
 function unassignedList(un) {

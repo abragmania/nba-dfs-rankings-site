@@ -47,7 +47,8 @@ export function buildModel(state, { slate, nowMs, spotsFile = {}, meta = {} }) {
   const { ctx, error } = contextFor(state, slate, nowMs);
   if (error) return { ok: false, error };
   const names = orderSpots(spotNames(state));
-  const exp = { changed: exportChanged(state, { slate, nowMs }), all: exportAll(state, { slate, nowMs }) };
+  const hold = (meta.pendingSpots ?? []).filter((p) => p.takenBack).map((p) => p.spot); // spots whose lineup the Lineups tab took back stay out of both files until answered
+  const exp = { changed: exportChanged(state, { slate, nowMs, hold }), all: exportAll(state, { slate, nowMs, hold }) };
   const spots = names.map((name) => {
     const entries = spotEntries(state, name), view = spotView(state, name, ctx), lineup = lineupOf(state, name);
     const known = entries.concat();

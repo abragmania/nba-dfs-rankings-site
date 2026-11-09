@@ -159,7 +159,7 @@ const range = (vals, f) => {
 export function summaryCells(list, { view }) {
   const n = list.length;
   const avg = n && list.every((e) => e.t.own != null) ? `${Math.round(list.reduce((t, e) => t + e.t.own, 0) / n)}%` : null;
-  const cells = [["Lineups", String(n)], ["Projection", range(list.map((e) => e.t.projection), (v) => v.toFixed(1))], ["Salary", range(list.map((e) => e.t.salary), money)], ["Avg lineup ownership", avg]];
+  const cells = [["Lineups", String(n)], ["Projection", range(list.map((e) => e.t.projection), (v) => v.toFixed(1))], ["Salary", range(list.map((e) => e.t.salary), money)], ["Avg total ownership (8 men)", avg]];
   if (view === "build") {
     const latest = Math.max(...list.map((e) => e.builtAt).filter(Number.isFinite));
     return [...cells, ["Builds", String(new Set(list.map((e) => e.bid)).size)], ["Modes", [...new Set(list.map((e) => e.mode))].join(", ") || null], ["Latest", Number.isFinite(latest) ? isoToEastern(new Date(latest).toISOString()) : null]];
@@ -272,7 +272,7 @@ function filterChipsHtml(men, figures, shownN, totalN) {
 export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
   const { lists, view, all, inMode, shown } = viewModel(P, c, seat);
   const run = P.running ? (() => { const m = buildMessage(P.build); return `<div class="lt-run lt-build"><span class="gomsg${m.err ? " err" : ""}">${esc(m.text)}</span>${P.build?.shown ? `<button class="ol stop" data-op="stop"${P.build.stopping ? " disabled" : ""}>Stop</button>` : ""}</div>`; })() : "";
-  if (P.ls) return `${run}<div class="lt-empty">Late swap mode is on; its lineups are on the Player list tab. <button class="ol sm" data-view="list">Back to the player list</button></div>`;
+  if (P.ls) return `${run}<div class="lt-empty">Late swap mode is on; its lineups are on the Player list tab. <button class="ol sm" data-op="lsoff" title="Leave late swap mode (the same as the Pin slots button in the header)">Turn late swap mode off</button><button class="ol sm" data-view="list">Back to the player list</button></div>`;
   const savedSet = savedKeys((P.saved ?? []).filter((l) => !l.swapped));
   const tab = (v, label, n) => `<button class="${v === view ? "on" : ""}" data-op="ltview" data-v="${v}">${label} <b>${n}</b></button>`;
   const readErr = view === "saved" && (P.savedError || !P.savedReady);
@@ -288,7 +288,7 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
         + `<span class="lt-sort lt-order"><button class="on-order" data-op="assignorder" title="Give the saved lineups shown, in this order, the GPP spots in turn (GPP #1, GPP #2 ...); Cash is left alone">Assign in order</button><label title="Also give spots that already hold a lineup, and place lineups that already hold a spot"><input type="checkbox" data-op="orderreplace"${P.lt.replace ? " checked" : ""}> Replace current</label></span>`
       : `<span class="lt-sw${P.spotsError ? " ill" : ""}">${P.spotsError ? `Could not read the spots: ${esc(P.spotsError)}. Click anywhere here to try again.` : "Reading the spots"}</span>`) : "")
     + `</div>`;
-  const dl = `<button class="ol lt-dl" data-op="ltcsv"${shown.length ? "" : " disabled"} title="Download the lineups shown, in this order, for DraftKings">Download CSV for DraftKings${shown.length ? ` (${shown.length})` : ""}</button>`;
+  const dl = `<button class="ol lt-dl" data-op="ltcsv"${shown.length ? "" : " disabled"} title="A plain CSV of player ids in the slots, in this order, with no entry ids. DraftKings cannot use it to change entries already entered; for that, use Export on the Late swap screen.">Download player IDs only${shown.length ? ` (${shown.length})` : ""}</button>`;
   // Save all (Recently generated only): every lineup shown, in one save; the ones already saved are counted, not saved twice.
   const nNew = view === "build" ? shown.filter((e) => !savedSet.has(savedKey(e.mode, e.ids))).length : 0;
   const saveAll = view === "build" ? `<button class="ol lt-dl lt-saveall" data-op="saveall"${nNew ? "" : " disabled"} title="${nNew ? "Save every lineup shown (the ones already saved are skipped)" : "Every lineup shown is already saved"}">Save all${nNew ? ` (${nNew})` : ""}</button>` : "";

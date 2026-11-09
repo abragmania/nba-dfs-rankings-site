@@ -1,7 +1,7 @@
 // Screen 4, Export (entries late swap): Export changed, Export all (only the changed ones edited), Export this spot, and several spots at
 // once. An entry that differs from its spot is simply corrected and shown as changed. A row that fails a real check (a started man, legality,
 // an unknown man) stays out of the file with its reason shown. Entries with no lineup are named: they are in no file.
-import { esc, money, f1, signed, spotColour, feeText, outFlag, isOutMan, outChip } from "./lsw-common.js";
+import { esc, money, f1, signed, spotColour, feeText, outFlag, isOutMan, outChip, livePicks } from "./lsw-common.js";
 import { logo } from "./board-util.js";
 
 const delta = (moves) => (moves.every((m) => Number.isFinite(m.in?.proj) && Number.isFinite(m.out?.proj)) ? moves.reduce((t, m) => t + m.in.proj - m.out.proj, 0) : null);
@@ -15,7 +15,7 @@ const outBanner = (M) => {
 export function exportHtml(M, L) {
   const E = M.exports, chg = E.changed.written, held = E.changed.heldBack, left = E.changed.leftOut;
   const allN = E.all.written;
-  const picked = [...L.exportPick].filter((n) => M.spots.some((s) => s.name === n));
+  const picked = livePicks(L.exportPick, M.spots);
   const order = new Map(M.spots.map((s, i) => [s.name, i]));
   const rows = M.entries.filter((e) => e.changed || e.held).sort((a, b) => (order.get(a.spot) ?? 99) - (order.get(b.spot) ?? 99));
   const putsOut = (e) => e.moves.some((m) => isOutMan(m.in)); // a changed row that writes a man who is Out: never "passed", always flagged
@@ -25,8 +25,8 @@ export function exportHtml(M, L) {
   const one = picked.length === 1 ? picked[0] : null;
   const nPicked = picked.reduce((t, n) => t + spotChanged(n), 0);
   return `<div class="tiles">
-<button class="tile am" data-lsw="exportChanged"${chg ? "" : " disabled"}><h2>Export changed (${chg})</h2><p>${chg ? `Only the ${chg} edited ${chg === 1 ? "entry" : "entries"} across ${new Set(M.entries.filter((e) => e.changed && !e.held).map((e) => e.spot)).size} spots, ready for DraftKings.` : "Nothing is changed from the upload yet."}</p></button>
-<button class="tile am2" data-lsw="exportAll"${allN ? "" : " disabled"}><h2>Export all (${allN})</h2><p>Whole entries file, only changed edited: ${E.all.unchanged.length} ${E.all.unchanged.length === 1 ? "entry" : "entries"} byte for byte as uploaded, ${chg} edited.</p></button>
+<button class="tile am" data-lsw="exportChanged"${chg ? "" : " disabled"}><h2>Export changed entries only (${chg})</h2><p>${chg ? `Only the ${chg} edited ${chg === 1 ? "entry" : "entries"} across ${new Set(M.entries.filter((e) => e.changed && !e.held).map((e) => e.spot)).size} spots, ready for DraftKings.` : "Nothing is changed from the upload yet."}</p></button>
+<button class="tile am2" data-lsw="exportAll"${allN ? "" : " disabled"}><h2>Export all assigned entries (${allN})</h2><p>Every assigned entry in the file, only the changed ones edited: ${E.all.unchanged.length} ${E.all.unchanged.length === 1 ? "entry" : "entries"} byte for byte as uploaded, ${chg} edited.</p></button>
 <div class="tile gr"><h2>Export this spot</h2><div class="spp">${M.spots.map((s) => `<button class="fc${L.exportPick.has(s.name) ? " on" : ""}" style="--sc:${spotColour(s.name, M.spots)}" data-lsw="pickSpot" data-spot="${esc(s.name)}">${esc(s.name)} <b>${s.nEntries}</b></button>`).join("")}</div>
 <button class="go" data-lsw="exportSpots"${nPicked ? "" : " disabled"}>${picked.length ? `Export ${picked.join(" + ")}${nPicked ? ` (${nPicked})` : ""}` : "Pick one or more spots"}</button><small class="muted">${picked.length > 1 ? "Several spots in one file." : "Changed entries of just that spot."}</small></div>
 <div class="checks"><div class="ck ${held.length ? "" : "ok"}">${held.length ? "✗" : "✓"} ${passes} changed ${passes === 1 ? "entry passes" : "entries pass"} every check (legal, under the $50,000 cap, no started man moved)</div>

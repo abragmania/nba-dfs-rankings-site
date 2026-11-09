@@ -30,7 +30,7 @@ export function uploadHtml(L) {
 <h2>Drop your DraftKings entries file here</h2>
 <p>The CSV from DraftKings, Upload Lineups page. Every entry row is read, then matched to a spot, then each spot to a lineup.</p>
 <div class="dbtn"><button class="go" data-lsw="chooseFile">Choose file</button>${last ? `<button class="go ol" data-lsw="useUpload" data-file="last">Use last upload: ${esc(stampET(last.at))}${last.entries != null ? `, ${last.entries} entries` : ""}</button>` : ""}</div>
-<small>${esc(L.upName ?? "DKEntries.csv")} · the file is saved on this machine, so your spots and edits are still here after a reload</small>
+<small>${esc(L.upName ?? "DKEntries.csv")} · ${L.upMsg ? "this file was refused, so it was not saved" : "the file is saved on this machine, so your spots and edits are still here after a reload"}</small>
 ${L.upMsg ? `<div class="msg err">${esc(L.upMsg)}</div>` : ""}
 </section>
 <aside class="how">

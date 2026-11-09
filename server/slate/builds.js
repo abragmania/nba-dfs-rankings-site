@@ -11,7 +11,7 @@ import { dataRoot } from "./store.js";
 import { writeFileAtomic } from "../../site/shim/atomic.js";
 import { SLOTS, MAX_COUNT } from "../board/slots.js";
 
-import { ROW_KEYS, KEEP_BUILDS } from "../board/recent-builds.js";
+import { ROW_KEYS, KEEP_BUILDS, keepRecent } from "../board/recent-builds.js";
 
 export { KEEP_BUILDS };
 export const MAX_LINEUPS_PER_BUILD = MAX_COUNT;
@@ -74,7 +74,7 @@ export function readBuilds(slate) {
   if (!fs.existsSync(file)) return { slate, builds: [] };
   const saved = JSON.parse(fs.readFileSync(file, "utf8"));
   if (!plain(saved) || !Array.isArray(saved.builds)) throw new Error(`cache/builds/${slate}.json has no builds list`);
-  const builds = saved.builds.slice(0, KEEP_BUILDS);
+  const builds = keepRecent(saved.builds);
   for (const b of builds) { const c = checkBuild(b); if (!c.ok) throw new Error(`cache/builds/${slate}.json: ${c.message}`); }
   return { slate, builds };
 }
@@ -89,7 +89,7 @@ export function checkBuildsBody(body) {
   return c.ok ? { ok: true, kind: "put", build: c.build } : c;
 }
 
-/** The builds after one change, newest first and no more than KEEP_BUILDS (one: a new build replaces the last). A put whose id is
+/** The builds after one change, newest first and the latest of each mode (a new build replaces the last of its own mode). A put whose id is
  *  held replaces that build where it stands (a discard or a swap on it). A put of a build older than the one held is refused, so a
  *  swap made on an old build in another window never brings it back over the newer one. Returns { ok, builds } or
  *  { ok: false, status, code, message }. */
@@ -99,9 +99,9 @@ export function applyBuilds(current, checked) {
     return { ok: true, builds: current.filter((b) => b.id !== checked.id) };
   }
   const held = current.some((b) => b.id === checked.build.id);
-  if (!held && current.some((b) => b.built_at > checked.build.built_at)) return { ok: false, status: 409, code: "NEWER_BUILD", message: "A newer build has replaced this one." };
+  if (!held && current.some((b) => b.mode === checked.build.mode && b.built_at > checked.build.built_at)) return { ok: false, status: 409, code: "NEWER_BUILD", message: "A newer build has replaced this one." };
   const next = held ? current.map((b) => (b.id === checked.build.id ? checked.build : b)) : [checked.build, ...current];
-  return { ok: true, builds: next.slice(0, KEEP_BUILDS) };
+  return { ok: true, builds: keepRecent(next) };
 }
 
 /** Writes the slate's builds (atomically) and returns what a GET answers. */

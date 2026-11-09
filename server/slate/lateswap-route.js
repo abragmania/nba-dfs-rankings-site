@@ -12,7 +12,7 @@
 import { refuseCrossSiteRead } from "../lib/origin.js";
 import { error } from "../../site/shim/log.js";
 import { SLATE_NAME, readLineups, readSlate } from "./store.js";
-import { readSaved, writeSaved, saveUpload, listUploads, readUpload } from "./lateswap-store.js";
+import { readSaved, writeSaved, saveUpload, saveExport, listUploads, readUpload } from "./lateswap-store.js";
 import { readSpotsShown, applySpots, writeSpots } from "./spots.js";
 import { applyOp, uploadText, syncSpots, exportFile, slateFor } from "../lateswap/screen-ops.js";
 import { buildModel } from "../lateswap/screen-model.js";
@@ -34,6 +34,7 @@ function giveSpotLineup(slate, spot, lineupId, lineups) {
   writeSpots(slate, w.spots);
   return { stamp: w.spots[spot].assigned_at };
 }
+const BOOT = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`; // this server start: the count below begins again at 1 with each, and the page must know
 let revision = 0; // counts the answers in the order the server made them (one request is handled whole at a time), so the page can tell a newer state from an older one
 
 /** The route for /api/slate/<slate>/lateswap, or null for another path. */
@@ -83,7 +84,7 @@ function respond(res, ctx, slate, slateData, saved, extra, t0) {
   const model = modelFor(res, ctx, slate, slateData, saved, extra);
   if (!model) return;
   const { pendingSpots: _p, ...rest } = extra;
-  ctx.send(res, 200, { has: true, model, ...rest, rev: ++revision, injected: ctx.injected ?? false, ms: Date.now() - t0 });
+  ctx.send(res, 200, { has: true, model, ...rest, rev: ++revision, boot: BOOT, injected: ctx.injected ?? false, ms: Date.now() - t0 });
 }
 
 const hhmm = (ms) => new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "America/New_York" }).replace(":", "");
@@ -114,7 +115,7 @@ async function handle(req, res, slate, ctx) {
     if (body?.op === "upload" || body?.op === "useUpload") return upload(res, ctx, slate, slateData, saved, body, t0);
     if (!saved) {
       if (req.method === "POST") return ctx.fail(res, 409, "NO_UPLOAD", "Upload the entries file first.");
-      return ctx.send(res, 200, { has: false, slate, uploads: uploadsView(slate), nowMs: ctx.now(), rev: ++revision, ms: Date.now() - t0 });
+      return ctx.send(res, 200, { has: false, slate, uploads: uploadsView(slate), nowMs: ctx.now(), rev: ++revision, boot: BOOT, ms: Date.now() - t0 });
     }
     const sl = slateNow(res, ctx, slate, slateData);
     if (!sl) return;
@@ -165,12 +166,16 @@ function exportOp(res, ctx, slate, slateData, saved, body, { sl, nowMs, dirty, e
   if (!model) return;
   if (typeof body.fp !== "string") return ctx.fail(res, 400, "BAD_EXPORT", "Send the fingerprint of the screen the export was asked from (fp).");
   if (body.fp !== model.fp) { if (dirty) writeSaved(slate, saved); return ctx.send(res, 200, { stale: true, has: true, model, injected: ctx.injected ?? false, ms: Date.now() - t0 }); }
-  const r = exportFile(saved, body, { slate: sl, nowMs });
+  const r = exportFile(saved, body, { slate: sl, nowMs, hold: (extra.pendingSpots ?? []).filter((p) => p.takenBack).map((p) => p.spot) });
   if (!r.ok) return ctx.fail(res, 400, "BAD_EXPORT", r.error);
   if (r.text) writeSaved(slate, { ...saved, exportedAt: new Date(nowMs).toISOString() });
   else if (dirty) writeSaved(slate, saved);
   const names = (list) => list.map((x) => ({ entryId: x.entryId, contestName: x.contestName }));
-  return ctx.send(res, 200, { export: { ...r, heldBackNames: names(r.heldBack), leftOutNames: names(r.leftOut), oddIds: saved.state.file.oddIds, fileName: `DKEntries_late_swap_${slate}_${body.kind}${body.spots ? `_${body.spots.length}spots` : ""}_${hhmm(nowMs)}ET.csv` }, ms: Date.now() - t0 });
+  const fileName = `DKEntries_late_swap_${slate}_${body.kind}${body.spots ? `_${body.spots.length}spots` : ""}_${hhmm(nowMs)}ET.csv`;
+  // A copy is kept on this machine at a path the screen can name; the browser's own download goes to its downloads folder, which the app cannot see.
+  let savedPath = null, saveError = null;
+  if (r.text) { try { savedPath = saveExport(slate, r.text, fileName); } catch (e) { saveError = e.message; error("export copy not kept", { slate, message: e.message }); } }
+  return ctx.send(res, 200, { export: { ...r, heldBackNames: names(r.heldBack), leftOutNames: names(r.leftOut), oddIds: saved.state.file.oddIds, fileName, savedPath, saveError }, ms: Date.now() - t0 });
 }
 
 function upload(res, ctx, slate, slateData, saved, body, t0) {

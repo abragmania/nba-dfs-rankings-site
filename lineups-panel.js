@@ -9,7 +9,7 @@ import { savedCall, saveBatch, savedClick, savedNameInput } from "./saved-panel.
 import { cleanSpotName } from "./spot-name.js";
 import { planInOrder, orderSummary } from "./assign-order.js";
 import { compareClick, freshCompare } from "./lineups-compare.js";
-import { KEEP_BUILDS, compactRow, toRecord, fromRecord, mergeBuilds, withoutLineup } from "./recent-builds.js";
+import { keepRecent, compactRow, toRecord, fromRecord, mergeBuilds, withoutLineup } from "./recent-builds.js";
 
 /** Draws the tab (nothing when the page has no tab element, as in the panel's own tests). */
 export function renderTab(X, c, own) {
@@ -246,10 +246,10 @@ function sendBuild(X, slate, body, own) {
   });
 }
 
-/** A finished build replaces the build on the page (KEEP_BUILDS is one: nothing of the last build stays) and on the server. It never
+/** A finished build replaces the build on the page (the latest of each mode stays: Cash and GPP builds never wipe each other) and on the server. It never
  *  touches the saved lineups: only Save does (savedClick). */
 export function keepBuild(X, b, own) {
-  X.P.builds = [b, ...(X.P.builds ?? []).filter((x) => x.id !== b.id)].slice(0, KEEP_BUILDS);
+  X.P.builds = keepRecent([b, ...(X.P.builds ?? []).filter((x) => x.id !== b.id)]);
   sendBuild(X, X.ctx().name, { put: toRecord(b) }, own);
 }
 function updateBuild(X, b, own) {
@@ -267,7 +267,7 @@ function dropBuild(X, id, own) {
 export async function readSpotsFor(X, name, own) {
   const { P } = X;
   const read = X.api(`/api/slate/${encodeURIComponent(name)}/spots`)
-    .then((out) => { if (name === X.ctx().name) { Object.assign(P, { spots: out.spots ?? {}, spotsReady: true, spotsError: null }); own.render(X); } })
+    .then((out) => { if (name === X.ctx().name) { Object.assign(P, { spots: out.spots ?? {}, uploaded: out.uploaded ?? null, uploadEntries: out.entries ?? null, spotsReady: true, spotsError: null }); own.render(X); } })
     .catch((e) => { if (name === X.ctx().name) { Object.assign(P, { spotsReady: false, spotsError: e.message }); own.render(X); } })
     .finally(() => { if (P.spotsReading === read) P.spotsReading = null; });
   P.spotsReading = read;
@@ -311,20 +311,31 @@ function sendSpot(X, slate, body, own, { onOk = null } = {}) {
 function orderPlan(X, own, skip = new Set()) {
   const { P } = X, m = viewModel(P, X.ctx(), (men) => own.lateSwapSeat(men));
   if (m.view !== "saved") return null;
-  return { plan: planInOrder({ lineups: m.shown.map((e) => ({ id: e.id, swapped: e.swapped })), spots: P.spots, replace: P.lt.replace, skip }), byId: new Map(m.shown.map((e) => [String(e.id), e])) };
+  return { plan: planInOrder({ lineups: m.shown.map((e) => ({ id: e.id, swapped: e.swapped, mode: e.mode })), spots: P.spots, replace: P.lt.replace, skip, uploaded: P.uploaded ?? [] }), byId: new Map(m.shown.map((e) => [String(e.id), e])) };
 }
 
 /** Assign in order (Adam, 2026-11-04): the saved lineups shown take the GPP spots in turn, in one all-or-nothing call, with Undo.
  *  A lineup holding a man who is Out or off the board stops it before anything is sent: the alert lists them, and Adam assigns
  *  anyway or skips those. `confirmedAll`: he said assign anyway. */
-function assignInOrder(X, own, { skip = new Set(), confirmedAll = false } = {}) {
-  const { P } = X;
-  const got = P.spotsReady ? orderPlan(X, own, skip) : null;
+async function assignInOrder(X, own, { skip = new Set(), confirmedAll = false } = {}) {
+  const { P } = X, slate = X.ctx().name;
+  if (!P.spotsReady) return;
+  // The spots are read again first, behind every change still on its way, so the plan is made on what the server holds now (Cash set a moment ago, a
+  // spot the late swap screen holds): never on a list the page read earlier.
+  try { await P.spotQueue; } catch (e) { console.warn("A spot change failed before Assign in order:", e.message); } // its own failure was already said by sendSpot
+  await readSpotsFor(X, slate, own);
+  if (slate !== X.ctx().name || !P.spotsReady) return;
+  if (P.uploaded === null) { X.toast("Assign in order waited: the late swap screen's state could not be read, so the spots holding the uploaded lineups are unknown.", "err"); return; }
+  const got = orderPlan(X, own, skip);
   if (!got) return;
   const { plan, byId } = got;
   P.orderWarn = null;
   if (!plan.assignments.length) {
-    X.toast(plan.skippedSwapped.length && !plan.assignments.length ? "Nothing to assign: a swapped lineup must be saved first." : "Nothing to assign: every lineup shown holds a spot, or no GPP spot is free (tick Replace current to give them anyway).");
+    const words = plan.skippedSwapped.length ? "a swapped lineup must be saved first."
+      : plan.cashLeft.length && plan.cashLeft.length === got.byId.size ? "the lineups shown are Cash lineups, and Cash lineups are never put on GPP spots."
+        : plan.keptUploaded.length ? `${plan.keptUploaded.join(", ")} still ${plan.keptUploaded.length === 1 ? "holds" : "hold"} the lineup from the uploaded DraftKings file; tick Replace current to give ${plan.keptUploaded.length === 1 ? "it" : "them"} a saved lineup.`
+          : "every lineup shown already holds a spot, or no GPP spot is free (tick Replace current to give them anyway).";
+    X.toast(`Nothing to assign: ${words} Save lineups first on the Recently generated tab, or upload your DraftKings entries file on the Late swap screen to get spots.`);
     return own.render(X);
   }
   const bad = plan.assignments.map((a) => ({ id: a.lineupId, e: byId.get(a.lineupId) })).map(({ id, e }) => ({ id, label: labelOf(X, e), men: unavailableMen(e.men) })).filter((b) => b.men.length);
@@ -333,7 +344,7 @@ function assignInOrder(X, own, { skip = new Set(), confirmedAll = false } = {}) 
   P.spotUndo = null; P.spotMenu = null; P.spotWarn = null;
   const body = { bulk: { assignments: plan.assignments.map((a) => ({ spot: a.spot, lineup_id: a.lineupId })), expect: Object.fromEntries(plan.assignments.map((a) => [a.spot, before[a.spot]?.lineup_id ?? null])), confirmed: bad.map((b) => b.id) } };
   // The banner (with Undo) says what was done, so no message repeats it.
-  sendSpot(X, X.ctx().name, body, own, { onOk: (out) => { P.spotUndo = { before, after: out.spots, text: orderSummary(plan) }; own.render(X); } });
+  sendSpot(X, X.ctx().name, body, own, { onOk: (out) => { P.spotUndo = { before, after: out.spots, text: orderSummary(plan, { entries: P.uploadEntries ?? null, spotCount: Object.keys(out.spots).filter((n) => !/^cash/i.test(n)).length }) }; own.render(X); } });
   own.render(X);
 }
 
@@ -367,9 +378,13 @@ function spotSet(X, id, spot, own, { force = false, confirmed = false } = {}) {
   P.spotMenu = null;
   P.spotText = null;
   P.spotUndo = null; // a single change ends the offer to undo the last Assign in order
+  // Taking a spot another lineup holds says so and can be undone with the same Undo bar Assign in order uses.
+  const prior = !mine && before[spot]?.lineup_id != null && before[spot].lineup_id !== String(id) ? P.saved.find((x) => String(x.id) === before[spot].lineup_id) : null;
+  const tookFrom = prior ? savedLabel(prior, P.svNames, P.saved) : before[spot]?.lineup_id != null && !mine && before[spot].lineup_id !== String(id) ? "a deleted lineup" : null;
   P.spots = { ...before, [spot]: mine ? { ...EMPTY_SPOT } : { lineup_id: String(id), slots: [...l.slots], assigned_at: new Date().toISOString() } };
   own.render(X);
-  sendSpot(X, slate, mine ? { release: spot, lineup_id: String(id) } : { assign: { spot, lineup_id: String(id), ...(warned ? { confirmed: true } : {}) } }, own);
+  const body = mine ? { release: spot, lineup_id: String(id) } : { assign: { spot, lineup_id: String(id), ...(warned ? { confirmed: true } : {}) } };
+  sendSpot(X, slate, body, own, tookFrom ? { onOk: (out) => { P.spotUndo = { before, after: out.spots, text: `${spot} was ${tookFrom}'s; it now holds ${savedLabel(l, P.svNames, P.saved)}, and ${tookFrom} has no spot there.` }; own.render(X); } } : {});
 }
 
 /** Save on a swapped saved card: the swap becomes a new saved lineup and the old card goes back to its saved men. A spot the old
@@ -391,22 +406,28 @@ async function saveSwapped(X, id, own) {
   own.render(X);
 }
 
+/** Assign in order from a click: a failure is said, never left as an unhandled promise. */
+function runOrder(X, own, opts) {
+  assignInOrder(X, own, opts).catch((e) => { console.warn("Assign in order failed:", e.message); X.toast(`Assign in order failed: ${e.message}`, "err"); });
+}
+
 /** True when the click was one of the tab's. */
 export function tabClick(X, d, own) {
   const { P } = X;
   const redraw = () => own.render(X);
   switch (d.op) {
-    case "assignorder": assignInOrder(X, own); return true;
+    case "assignorder": runOrder(X, own); return true;
     case "orderreplace": P.lt.replace = !P.lt.replace; redraw(); return true;
-    case "orderforce": assignInOrder(X, own, { confirmedAll: true }); return true;
-    case "orderskip": assignInOrder(X, own, { skip: new Set((P.orderWarn?.bad ?? []).map((b) => b.id)) }); return true;
+    case "orderforce": runOrder(X, own, { confirmedAll: true }); return true;
+    case "orderskip": runOrder(X, own, { skip: new Set((P.orderWarn?.bad ?? []).map((b) => b.id)) }); return true;
     case "ordercancel": P.orderWarn = null; redraw(); return true;
+    case "lsoff": own.lateSwapOff(X); return true; // the way out of late swap mode, where the message says the tab is hidden
     case "orderokay": P.spotUndo = null; redraw(); return true;
     case "orderundo": {
       const u = P.spotUndo;
       if (!u) return true;
       P.spotUndo = null;
-      sendSpot(X, X.ctx().name, { restore: { spots: u.before, expect: u.after } }, own, { onOk: () => X.toast("Undone: the spots are back as they were.") });
+      sendSpot(X, X.ctx().name, { restore: { spots: u.before, expect: u.after } }, own, { onOk: () => X.toast("Undone on the Lineups tab: its spots are back as they were. The Late swap screen asks before it takes anything back.") });
       redraw();
       return true;
     }

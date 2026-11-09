@@ -96,7 +96,23 @@ export function syncSpots(saved, spotsFile, { slate, nowMs, dry = false }) {
     if (it.kind === "refused") { notes.push(`${spot}: saved lineup ${row.lineup_id} was not applied: ${it.why}`); continue; }
     if (it.kind === "apply") { cur = { ...cur, state: it.state }; notes.push(appliedNote(spot, row, it.outcome)); }
   }
+  // A lineup the Lineups tab gave a spot and then took back (Undo, release, a deleted saved lineup): its row no longer holds one, but the lineup it
+  // gave is still in this spot. That is asked about, never undone behind Adam's back, and the spot stays out of the export until it is answered
+  // (Reset to upload, or Keep it). A spot already back at its upload, or blank, has nothing to ask: its old stamp is simply let go.
+  for (const spot of names) {
+    if (!Object.hasOwn(spotSync, spot) || Object.hasOwn(spotsFile, spot)) continue;
+    const lineup = lineupOf(cur.state, spot), up = Object.hasOwn(cur.state.spots, spot) ? cur.state.spots[spot].atUpload : null;
+    if (lineup.every((id) => id == null) || (up && sameLineup(lineup, up))) { if (!dry) { delete spotSync[spot]; delete pendingSync[spot]; } continue; }
+    pending.push({ spot, lineupId: null, takenBack: true, alert: null, back: [], holds: lineup.filter((id) => id != null).map((id) => ({ dk_id: id, name: nameFor(cur, id, probe.ctx) })), canReset: Boolean(up) });
+  }
   return { saved: dry ? saved : { ...cur, spotSync, pendingSync }, notes: dry ? [] : notes, pending };
+}
+
+/** Lets a taken-back lineup stay: the spot keeps what it holds and the Lineups tab's old stamp is dropped, so the spot is Adam's own again. */
+function keepTakenBack(saved, spot, spotsFile) {
+  if (!Object.hasOwn(saved.spotSync ?? {}, spot) || Object.hasOwn(spotsFile, spot)) return refused(saved, `The Lineups tab has not taken a lineup back from ${spot}.`);
+  const { [spot]: _s, ...spotSync } = saved.spotSync, { [spot]: _p, ...pendingSync } = saved.pendingSync ?? {};
+  return { saved: { ...saved, spotSync, pendingSync }, outcomes: [], error: null };
 }
 
 /** An action on a spot ends the wait of a lineup the Lineups tab had given it: the stamp is used up, so no later read applies it. A spot given
@@ -235,6 +251,7 @@ function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {} 
       if (r.error || r.outcomes[0]?.status === "flagged") return refused(saved, r.error ?? r.outcomes[0].reason);
       return { saved: { ...saved, state: r.state, spotSync: { ...saved.spotSync, [body.spot]: row.assigned_at }, pendingSync: Object.fromEntries(Object.entries(saved.pendingSync ?? {}).filter(([k]) => k !== body.spot)) }, outcomes: r.outcomes, error: null, notes: [appliedNote(body.spot, row, r.outcomes[0])] };
     }
+    case "keepTakenBack": return keepTakenBack(saved, body.spot, spotsFile);
     case "confirmMan": {
       const r = confirmOutMan(s, { spot: body.spot, man: body.man });
       return r.error ? refused(saved, r.error) : { saved: { ...saved, state: r.state }, outcomes: [], error: null };
@@ -272,9 +289,9 @@ function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {} 
 }
 
 /** The upload file: the engine's export result. kind "changed" | "all"; spots (optional) narrows either to those spots. */
-export function exportFile(saved, body, { slate, nowMs }) {
+export function exportFile(saved, body, { slate, nowMs, hold = [] }) {
   if (body.kind !== "all" && body.kind !== "changed") return { ok: false, error: "Say what to export: changed or all." };
   if (body.spots != null && (!Array.isArray(body.spots) || !body.spots.length)) return { ok: false, error: "Pick at least one spot." };
-  const args = { slate, nowMs, spots: body.spots ?? null };
+  const args = { slate, nowMs, spots: body.spots ?? null, hold };
   return body.kind === "all" ? exportAll(saved.state, args) : exportChanged(saved.state, args);
 }

@@ -21,6 +21,8 @@ import {
   checkWorking, readWorking, saveWorking,
 } from "./slate/store.js";
 import { readSpots, readSpotsShown, writeSpots, checkSpotsBody, applySpots, vacateSpots } from "./slate/spots.js";
+import { readSaved } from "./slate/lateswap-store.js";
+import { heldSpotNames } from "./lateswap/maps.js";
 import { readBuilds, writeBuilds, checkBuildsBody, applyBuilds } from "./slate/builds.js";
 import { readOverrides, writeOverrides, checkChanges, applyChanges, resetPlayer, resetAll, mergeOverrides, publicOverrides } from "./slate/overrides.js";
 import { consoleHandler } from "./slate/console-route.js";
@@ -245,7 +247,10 @@ async function handleLineups(req, res, slate) {
 async function handleSpots(req, res, slate) {
   const slateData = openSlate(req, res, slate, "Spots");
   if (!slateData) return;
-  if (req.method === "GET") return send(res, 200, readSpotsShown(slate));
+  if (req.method === "GET") { // plus the spots the late swap screen holds a lineup for (the uploaded one): Assign in order treats them as held; null when that state cannot be read
+    const kept = readSaved(slate);
+    return send(res, 200, { ...readSpotsShown(slate), uploaded: !kept.ok ? null : kept.saved ? heldSpotNames(kept.saved.state) : [], entries: kept.ok && kept.saved ? kept.saved.state.entries.length : null });
+  }
   const read = await readJson(req, res, MAX_SPOTS_BODY);
   if (!read) return;
   const checked = checkSpotsBody(read.body);

@@ -35,6 +35,11 @@ export function spotEntries(state, spot) {
   return state.entries.filter((e) => state.entrySpots[e.entryId] === spot);
 }
 
+/** The spots that hold a lineup in this state (the uploaded one, or one given since): their names. The Lineups tab's Assign in order treats them as held. */
+export function heldSpotNames(state) {
+  return spotNames(state).filter((s) => !isBlank(lineupOf(state, s)));
+}
+
 /** Every spot name in either map: map 2's order, then any only map 1 names. */
 export function spotNames(state) {
   return [...new Set([...Object.keys(state.spots), ...Object.values(state.entrySpots).filter((s) => s != null)])];

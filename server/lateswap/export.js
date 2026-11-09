@@ -7,7 +7,7 @@ import { contextFor, entryStatus, outAlert } from "./entry-state.js";
 import { entryRow } from "./entries-csv.js";
 
 function buildFile(state, args, includeUnchanged) {
-  const { slate, nowMs, spots = null } = args ?? {};
+  const { slate, nowMs, spots = null, hold = [] } = args ?? {};
   const empty = { text: null, written: 0, changed: [], unchanged: [], heldBack: [], leftOut: [], alerts: [] };
   const { ctx, error } = contextFor(state, slate, nowMs);
   if (error) return { ok: false, error, ...empty };
@@ -26,6 +26,7 @@ function buildFile(state, args, includeUnchanged) {
     }
     if (spots && !spots.includes(spot)) continue;
     inScope.add(spot);
+    if (hold.includes(spot)) { heldBack.push({ entryId: entry.entryId, contestName: entry.contestName, spot, amber: true, reasons: ["The Lineups tab took this spot's lineup back; answer that on the Late swap screen before this entry goes in a file."] }); continue; }
     const { status, reasons } = entryStatus(entry, lineup, ctx, Object.hasOwn(state.spots, spot) ? state.spots[spot].confirmedOut : []);
     if (status === "held") heldBack.push({ entryId: entry.entryId, contestName: entry.contestName, spot, amber: true, reasons });
     else if (status === "changed") { rows.push(entryRow(entry, lineup, cellOf)); changed.push(entry.entryId); } else if (includeUnchanged) { rows.push(entry.rowText); unchanged.push(entry.entryId); }
@@ -35,8 +36,8 @@ function buildFile(state, args, includeUnchanged) {
   return { ok: true, error: null, text: rows.length ? [headerText, ...rows].join(eol) + eol : null, written: rows.length, changed, unchanged, heldBack, leftOut, alerts };
 }
 
-/** Entries whose spot's lineup differs from that entry's row in the file. args { slate, nowMs, spots? }: spots narrows it to those
- *  spots, so ["Cash"] is just Cash. { ok, error, text, written, changed, unchanged: [], heldBack: [{ entryId, contestName, spot, amber,
+/** Entries whose spot's lineup differs from that entry's row in the file. args { slate, nowMs, spots?, hold? }: spots narrows it to those
+ *  spots, so ["Cash"] is just Cash; hold names spots whose entries are held back whatever they hold (a lineup the Lineups tab took back). { ok, error, text, written, changed, unchanged: [], heldBack: [{ entryId, contestName, spot, amber,
  *  reasons }], leftOut: [{ entryId, contestName, contestId, entryFee, reservation }], alerts: [{ spot, alert }] }. text is null when no row
  *  can go. leftOut is every entry with no spot, in any export; written never counts it. alerts names the spots in this export holding a
  *  man who is Out or gone from the board and has not started (outAlert); they do not stop a row. */

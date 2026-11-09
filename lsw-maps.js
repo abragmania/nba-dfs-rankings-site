@@ -5,6 +5,10 @@
 // or exported.
 import { esc, money, f1, spotColour, outFlag, outChip } from "./lsw-common.js";
 import { logo } from "./board-util.js";
+import { savedLabel } from "./lineups-tab.js";
+
+/** A saved lineup by the name the Lineups tab gives it (the name Adam typed, else Lineup A, B, C by its place saved); L.svNames are read in lsw-main.js. */
+export const lineupName = (l, L) => savedLabel(l, L.svNames, L.saved);
 
 /** The entries grouped by contest, in file order: [{ key, name, entries: [row] }]. */
 export function contestGroups(M) {
@@ -45,11 +49,11 @@ export function numberInOrder(rowIds, spotNames, start) {
 
 /** The one-line status of each tab, { text, bad }: red when something is empty. */
 export function tabStatus(M) {
-  const nEnt = M.entries.filter((e) => !e.noSpot).length, nSpot = M.spots.filter((s) => !s.blank).length;
+  const nEnt = M.entries.filter((e) => !e.noSpot).length, nSpot = M.spots.filter((s) => !s.blank).length, nUp = M.spots.filter((s) => !s.blank && s.source?.kind === "upload").length;
   const chg = M.exports.changed;
   return {
     entries: { text: `${nEnt} of ${M.entries.length} entries have a spot`, bad: nEnt < M.entries.length },
-    lineups: { text: `${nSpot} of ${M.spots.length} spots have a lineup`, bad: nSpot < M.spots.length },
+    lineups: { text: nUp ? `${nSpot - nUp} of ${M.spots.length} spots have a lineup from the Lineups tab; ${nUp} still hold the uploaded DraftKings lineup` : `${nSpot} of ${M.spots.length} spots have a lineup`, bad: nSpot < M.spots.length },
     swap: { text: chg.changed.length || chg.heldBack.length ? `${chg.changed.length} changed${chg.heldBack.length ? `, ${chg.heldBack.length} left out` : ""}` : "nothing changed yet", bad: chg.heldBack.length > 0 },
   };
 }
@@ -68,7 +72,7 @@ function entryRow(e, k, n, M, L) {
   const c = e.spot ? spotColour(e.spot, M.spots) : null;
   const isNew = L.newIds?.has(e.entryId), on = L.sel.has(e.entryId);
   const back = L.backIn?.get(e.entryId);
-  const note = e.noSpot || e.noLineup ? '<span class="noteR">No lineup assigned</span>' : back ? `<span class="noteA">Back in ${esc(back)}</span>` : e.proposedSpot ? `<span class="noteA">matches ${esc(e.proposedSpot)}</span>` : isNew ? '<span class="noteA">new in this upload</span>' : L.moved?.has(e.entryId) ? '<span class="muted">changed by you</span>' : '<span class="muted">from last time</span>';
+  const note = e.noSpot || e.noLineup ? '<span class="noteR">No lineup assigned</span>' : back ? `<span class="noteA">Back in ${esc(back)}</span>` : e.proposedSpot ? `<span class="noteA">matches ${esc(e.proposedSpot)}</span>` : isNew ? '<span class="noteA">new in this upload</span>' : L.moved?.has(e.entryId) ? '<span class="muted">changed by you</span>' : `<span class="muted">${(L.uploads ?? []).length > 1 ? "from last time" : "set by Auto-fill"}</span>`; // on a first upload there is no last time
   return `<div class="er${e.noSpot ? " nolu" : ""}${on ? " sel" : ""}" data-entry="${esc(e.entryId)}">
 <span class="cb${on ? " on" : ""}" data-lsw="pick" data-id="${esc(e.entryId)}" role="checkbox" aria-checked="${on}" tabindex="0"></span>
 <span class="cn">Entry ${k} of ${n}${isNew ? ' <i class="newb">NEW</i>' : ""}${e.flags.length ? ` <i class="flb" title="${esc(e.flags.join(" "))}">CHECK</i>` : ""}</span>
@@ -108,8 +112,14 @@ export function lineupOptions(s, M, L, all = true) {
   const byId = new Map(M.pool.map((p) => [p.dk_id, p]));
   const held = s.source?.lineupId;
   const saved = (L.saved ?? []).slice().reverse().filter((l) => all || (held != null && String(l.id) === String(held)));
-  return `<option value="">${s.blank ? "Pick a saved lineup…" : "Change lineup…"}</option>` + saved.map((l) => `<option value="${esc(l.id)}"${held === String(l.id) ? " selected" : ""}>Saved ${esc(l.id)} · ${esc(l.mode)} · ${f1(sumOfLineup(l, byId, "proj"))} · ${money(sumOfLineup(l, byId, "salary"))}</option>`).join("");
+  return `<option value="">${s.blank ? "Pick a saved lineup…" : "Change lineup…"}</option>` + saved.map((l) => `<option value="${esc(l.id)}"${held === String(l.id) ? " selected" : ""}>${esc(lineupName(l, L))} · ${esc(l.mode)} · ${f1(sumOfLineup(l, byId, "proj"))} · ${money(sumOfLineup(l, byId, "salary"))}</option>`).join("");
 }
+
+/** What a spot lineup is, in words: a saved one by its Lineups tab name, the uploaded one as such. */
+const sourceLabel = (s, L) => {
+  const saved = s.source.kind === "saved" ? (L.saved ?? []).find((l) => String(l.id) === String(s.source.lineupId)) : null;
+  return saved ? lineupName(saved, L) : s.source.kind === "upload" ? "Still the lineup from your uploaded DraftKings file" : s.source.label;
+};
 
 function spotRow(s, M, L) {
   const c = spotColour(s.name, M.spots);
@@ -118,9 +128,9 @@ function spotRow(s, M, L) {
   const men = s.blank ? '<span class="noteR">No lineup assigned: pick one from the list.</span>' : s.slots.map((x) => (x.man ? `<span class="mm">${x.man.team ? logo(x.man.team, "xs") : ""}${esc(x.man.name)}${outChip(x.man)}</span>` : "")).join("");
   return `<div class="lrow${s.alert ? " outc" : ""}${s.blank ? " nolu" : ""}" style="--sc:${c}">
 <span class="sc plain" style="--sc:${c}">${esc(s.name)}</span>
-<div class="lmid"><div class="lname">${esc(s.blank ? "" : s.source.label)}</div><div class="lmen">${men}</div></div>
+<div class="lmid"><div class="lname">${esc(s.blank ? "" : sourceLabel(s, L))}</div><div class="lmen">${men}</div></div>
 <span class="pj">${f1(s.projection)}<small>proj</small></span><span class="le"><b>${s.nEntries}</b> ${s.nEntries === 1 ? "entry" : "entries"}</span>
-<select class="lpick" data-lsw-sel="lineupPick" data-spot="${esc(s.name)}" title="Give ${esc(s.name)} one of your saved lineups" data-lazy="lineup">${lineupOptions(s, M, L, false)}</select>
+<select class="lpick" data-lsw-sel="lineupPick" data-spot="${esc(s.name)}" title="Give ${esc(s.name)} one of your saved lineups">${lineupOptions(s, M, L, true)}</select>
 ${s.alert ? outFlag(s) : ""}${ask ? `<div class="alert"><b>${esc(ask.confirms[0].spot)}:</b> ${esc(ask.confirms[0].alert.text)} <button class="go red2" data-lsw="useLineup" data-id="${esc(ask.body.lineupId)}"${wait ? " disabled" : ""}>Use anyway</button> <button class="ol" data-lsw="askCancel">Cancel</button></div>` : ""}</div>`;
 }
 

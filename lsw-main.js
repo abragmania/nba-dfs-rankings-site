@@ -3,14 +3,15 @@
 // here: every action is a request to the engine through the route, and the screen draws what comes back. The server reads the slate fresh on
 // every request, so a refreshed board shows here on the next one (the screen asks again every 20 seconds while it is open). A reply that
 // belongs to another slate, or is older than one already drawn, is thrown away.
-import { esc, money, outcomeLine, chipTime, replyVerdict, tidyReasons } from "./lsw-common.js";
+import { esc, money, outcomeLine, chipTime, replyVerdict, tidyReasons, livePicks } from "./lsw-common.js";
 import { uploadHtml } from "./lsw-upload.js";
 import { allHtml, backupLabels, scopeFor } from "./lsw-all.js";
 import { spotHtml } from "./lsw-spot.js";
-import { entrySpotOptions, lineupOptions, entriesHtml, lineupsHtml, tabStatus, rangeBetween, numberInOrder, screenOrder, emptyRowIds, contestGroups } from "./lsw-maps.js";
+import { lineupName, entrySpotOptions, lineupOptions, entriesHtml, lineupsHtml, tabStatus, rangeBetween, numberInOrder, screenOrder, emptyRowIds, contestGroups } from "./lsw-maps.js";
 import { exportHtml } from "./lsw-export.js";
 import { logo, shortTime, slateRefMs, topStamps, centralToMs, keepFocus } from "./board-util.js";
 import { showActive } from "./lineups-panel.js";
+import { loadSavedNames } from "./saved-panel.js";
 
 const POLL_MS = 20000;
 const $ = (id) => document.getElementById(id);
@@ -19,7 +20,7 @@ const fresh = () => ({ slate: null, loaded: false, has: false, M: null, uploads:
   exportPick: new Set(), upMsg: null, upName: null, boardMs: null, boardLabel: null, clockOffset: 0, injected: false, lastMs: null, lastFile: null, banner: null, ask: null, exportAsk: null, dirty: false });
 let L = fresh();
 let root = null, fileInput = null, open = false, poll = null, tick = null;
-let epoch = 0, appliedRev = 0; // epoch changes with the slate; appliedRev is the newest server revision drawn
+let epoch = 0, appliedRev = 0, appliedBoot = null; // epoch changes with the slate; appliedRev is the newest server revision drawn, appliedBoot the server start it counted in
 
 const slateName = () => $("slateSel")?.value ?? new URLSearchParams(location.search).get("slate");
 const fmtClock = (ms) => `${new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })} ET`;
@@ -39,9 +40,10 @@ async function request(body) {
   if (j.has === false && j.slate && j.slate !== L.slate) return { discarded: true };
   // The server numbers its answers in the order it made them. A read older than one already drawn is dropped; an action's answer never is
   // (a poll that lands during an action must not swallow the action's own result, which is what put no message on screen once).
-  const v = replyVerdict(appliedRev, j.rev, body != null);
+  const v = replyVerdict(appliedRev, j.rev, body != null, { seen: appliedBoot, now: j.boot ?? null });
   if (!v.use) return { discarded: true };
   appliedRev = v.applied;
+  if (j.boot != null) appliedBoot = j.boot;
   if (!v.takeModel) j.olderModel = true;
   return j;
 }
@@ -123,21 +125,35 @@ function barHtml() {
 <div class="bst"><small>ENTRIES</small><b>${M.entries.length}</b> <span>${nAssigned} in ${M.spots.length} spots</span></div>
 <div class="bst"><small>CHANGED</small><b class="${chg.changed.length ? "pk" : ""}">${nSpotsChanged ? `${nSpotsChanged} spot${nSpotsChanged === 1 ? "" : "s"}` : "0"}</b> <span>${chg.changed.length} ${chg.changed.length === 1 ? "entry" : "entries"}${nHeld ? `, ${nHeld} left out` : ""}</span></div></div>
 <div class="gms"><span class="gl">TIPS, ET</span>${M.games.map((g) => `<span class="gc${g.started ? " stl" : ""}" title="${esc(g.game)} ${esc(shortTime(g.tip, M.refMs) ?? "")}">${logo(g.away, "xs")}<i>@</i>${logo(g.home, "xs")}<small>${esc(chipTime(g.tip, M.refMs))}</small></span>`).join("")}</div></div>
-<div class="barx"><button class="ol" data-lsw="chooseFile" title="Drop a fresh DraftKings file anywhere on this screen, or choose one here">New DK file</button><button class="ol" data-lsw="go" data-s="upload" title="Recent uploads and the last file">Files</button><button class="go" data-lsw="exportChanged"${chg.written ? "" : " disabled"}>Export changed (${chg.written})</button><button class="go ol2" data-lsw="exportAll"${M.exports.all.written ? "" : " disabled"}>Export all (${M.exports.all.written})</button></div></div>`;
+<div class="barx"><button class="ol" data-lsw="chooseFile" title="Drop a fresh DraftKings file anywhere on this screen, or choose one here">New DK file</button><button class="ol" data-lsw="go" data-s="upload" title="Recent uploads and the last file">Files</button><button class="go" data-lsw="exportChanged"${chg.written ? "" : " disabled"}>Export changed entries only (${chg.written})</button><button class="go ol2" data-lsw="exportAll"${M.exports.all.written ? "" : " disabled"}>Export all assigned entries (${M.exports.all.written})</button></div></div>`;
 }
 
 const idsOfAlert = (c) => [...(c.alert?.men ?? []).map((m) => m.dk_id), ...(c.back ?? []).map((m) => m.dk_id)];
+
+/** A saved lineup by the name the Lineups tab shows it under (Lineup A, B, C), else by its id. */
+const savedNameOf = (id) => { const l = (L.saved ?? []).find((x) => String(x.id) === String(id)); return l ? lineupName(l, L) : `saved lineup ${id}`; };
 
 function bannerHtml() {
   const parts = [];
   if (L.msg) parts.push(`<div class="msg ${L.msg.kind}">${esc(L.msg.text)}<button data-lsw="dismissMsg">✕</button></div>`);
   const M = L.M;
-  for (const n of M?.syncNotes ?? []) parts.push(`<div class="msg warn">${esc(n)}</div>`);
-  if (M?.syncNotes?.length) parts.push('<div class="msg warn"><button data-lsw="dismissNotes">Dismiss these notes about the Lineups tab</button></div>');
+  const notes = M?.syncNotes ?? [];
+  if (notes.length > 3) { // Assign in order can give 150 spots a lineup at once: one summary line, the notes behind it, one Dismiss
+    const held = notes.filter((n) => /now holds saved lineup/.test(n)).length;
+    const words = held === notes.length ? `${notes.length} spots now hold lineups from the Lineups tab` : `${notes.length} notes about the Lineups tab (${held} spots now hold lineups from it)`;
+    parts.push(`<div class="msg warn"><details><summary>${esc(words)}. Show the notes</summary>${notes.map((n) => `<div>${esc(n)}</div>`).join("")}</details><button data-lsw="dismissNotes">Dismiss</button></div>`);
+  } else {
+    for (const n of notes) parts.push(`<div class="msg warn">${esc(n)}</div>`);
+    if (notes.length) parts.push('<div class="msg warn"><button data-lsw="dismissNotes">Dismiss these notes about the Lineups tab</button></div>');
+  }
   for (const p of M?.pendingSpots ?? []) {
     const why = [p.alert?.text, p.back?.length ? `It holds ${p.back.map((b) => b.name).join(", ")}, taken out of ${p.spot} earlier.` : "", p.held ? "It waited for your go-ahead before and still does, so it is never applied behind your back." : ""].filter(Boolean).join(" ");
-    if (p.incomplete) { parts.push(`<div class="alert"><b>${esc(p.spot)}:</b> the Lineups tab gave it saved lineup ${esc(p.lineupId)}, which does not hold 8 men, so it cannot be used. Pick another on the Lineups tab.</div>`); continue; }
-    parts.push(`<div class="alert"><b>${esc(p.spot)}:</b> the Lineups tab gave it saved lineup ${esc(p.lineupId)}, which is not applied yet. ${esc(why)} <button class="go red2" data-lsw="syncGo" data-spot="${esc(p.spot)}">Use anyway</button></div>`);
+    if (p.takenBack) {
+      parts.push(`<div class="alert"><b>${esc(p.spot)}:</b> the Lineups tab took this lineup back, but ${esc(p.spot)} still holds ${esc(p.holds.map((h) => h.name).join(", "))}. Its entries stay out of the upload file until you answer. ${p.canReset ? `<button class="go red2" data-lsw="resetSpot" data-spot="${esc(p.spot)}">Reset to upload</button> ` : ""}<button class="ol" data-lsw="keepTaken" data-spot="${esc(p.spot)}">Keep it</button></div>`);
+      continue;
+    }
+    if (p.incomplete) { parts.push(`<div class="alert"><b>${esc(p.spot)}:</b> the Lineups tab gave it ${esc(savedNameOf(p.lineupId))}, which does not hold 8 men, so it cannot be used. Pick another on the Lineups tab.</div>`); continue; }
+    parts.push(`<div class="alert"><b>${esc(p.spot)}:</b> the Lineups tab gave it ${esc(savedNameOf(p.lineupId))}, which is not applied yet. ${esc(why)} <button class="go red2" data-lsw="syncGo" data-spot="${esc(p.spot)}">Use anyway</button></div>`);
   }
   if (L.ask && L.ask.body.op !== "setLineup") {
     const armed = Date.now() - L.ask.armedAt >= 500;
@@ -268,7 +284,8 @@ async function doExport(kind, spots = null, { confirmed = false } = {}) {
     if (!x.text) L.msg = { kind: "warn", text: `Nothing to export: ${x.heldBack.length ? `${x.heldBack.length} changed ${x.heldBack.length === 1 ? "entry" : "entries"} failed a check.` : "no entry differs from the upload."}` };
     else {
       L.lastFile = x.fileName; download(x.text, x.fileName);
-      const parts = [`${x.written} ${x.written === 1 ? "entry" : "entries"} written to ${x.fileName}`];
+      const where = x.savedPath ? `saved on this machine at ${x.savedPath}; your browser also downloaded it to its own downloads folder` : `your browser downloaded it to its own downloads folder${x.saveError ? ` (a copy could not be kept on this machine: ${x.saveError})` : ""}`;
+      const parts = [`${x.written} ${x.written === 1 ? "entry" : "entries"} written to ${x.fileName}, ${where}`];
       if (x.heldBack.length) parts.push(`${x.heldBack.length} left out for failing a check: ${namesOf(x.heldBackNames)}`);
       if (x.leftOut.length) parts.push(`${x.leftOut.length} left out for having no lineup: ${namesOf(x.leftOutNames)}`);
       if (x.alerts?.length) parts.push(`${x.alerts.map((a) => `${a.spot}: ${a.alert.text}`).join(" ")}`);
@@ -339,7 +356,8 @@ async function loadSaved() {
     saved = j.lineups ?? [];
   } catch (e) { err = `The saved lineups could not be read: ${e.message}`; }
   if (mine !== epoch) return;
-  L.saved = saved; L.savedErr = err; L.savedLoaded = true;
+  L.saved = saved; L.savedErr = err;
+  try { L.svNames = loadSavedNames((fn) => fn(), slate); } catch (e) { console.warn("Saved lineup names unreadable here:", e.message); L.svNames = null; } // the names the Lineups tab shows (Lineup A, B, C or what Adam typed) L.savedLoaded = true;
 }
 
 const scopeOf = (b, M) => scopeFor(M, b);
@@ -387,6 +405,7 @@ async function onClick(e) {
     case "askGo": return void (await askGo());
     case "askCancel": L.ask = null; return render();
     case "syncGo": { const p = M.pendingSpots.find((x) => x.spot === d.spot); if (!p) return; return void (await act({ op: "syncConfirm", spot: d.spot, confirmOut: true, confirmMen: idsOfAlert(p) }, { label: `Lineups tab lineup for ${d.spot}` })); }
+    case "keepTaken": return void (await act({ op: "keepTakenBack", spot: d.spot }, { label: `Keep ${d.spot} as it is` }));
     case "confirmMan": return void (await act({ op: "confirmMan", spot: d.spot, man: d.man }));
     case "reload": return load();
     case "pick": {
@@ -439,6 +458,7 @@ async function onClick(e) {
     }
     case "scope": L.blunt.scope = d.scope; return render();
     case "filter": L.filter = d.f; return render();
+    case "spotPage": L.spotPage = Math.max(0, (L.spotPage ?? 0) + Number(d.dir)); return render(); // the by-spot tables show 12 spots at a time (lsw-all.js)
     case "remove": case "removeBackup": {
       const scope = scopeOf(L.blunt, M);
       if (!scope) { L.msg = { kind: "warn", text: "No spot on the screen holds that man now; pick him again." }; return render(); }
@@ -459,7 +479,7 @@ async function onClick(e) {
     case "exportChanged": return doExport("changed");
     case "exportAll": return doExport("all");
     case "pickSpot": L.exportPick.has(d.spot) ? L.exportPick.delete(d.spot) : L.exportPick.add(d.spot); return render();
-    case "exportSpots": return doExport("changed", [...L.exportPick]);
+    case "exportSpots": { const live = livePicks(L.exportPick, L.M.spots); L.exportPick = new Set(live); if (!live.length) { L.msg = { kind: "warn", text: "Pick a spot that is still on the screen." }; return render(); } return doExport("changed", live); } // a spot removed since it was picked is not sent
     case "exportGo": { const x = L.exportAsk; if (x && Date.now() - x.armedAt >= 500) return doExport(x.kind, x.spots, { confirmed: true }); return; } // armed half a second, like the other go-aheads
     case "exportCancel": L.exportAsk = null; return render();
     default:
@@ -505,6 +525,8 @@ export function mountLateSwap() {
   document.body.append(fileInput);
   fileInput.addEventListener("change", () => { const f = fileInput.files?.[0]; fileInput.value = ""; readFile(f); });
   root.addEventListener("click", onClick); root.addEventListener("change", onChange); root.addEventListener("input", onInput);
+  // The boxes are role=checkbox spans with a tab stop: Space and Enter press them like a click (Shift+Space selects a range).
+  root.addEventListener("keydown", (e) => { const box = e.target.closest?.("[role=checkbox][data-lsw]"); if (box && (e.key === " " || e.key === "Enter")) { e.preventDefault(); onClick({ target: box, shiftKey: e.shiftKey }); } });
   root.addEventListener("pointerdown", fillChoices, true); root.addEventListener("focusin", fillChoices);
   root.addEventListener("focusout", () => setTimeout(() => { if (L.dirty && !focusedInput()) render(); }, 0)); // a redraw that waited for the keyboard happens now
   // A press holds redraws back until its click is done, so a poll cannot take a button away between the press and the release.
@@ -524,7 +546,7 @@ export function mountLateSwap() {
   for (const ev of ["dragover", "drop"]) document.addEventListener(ev, (e) => { if (open && e.dataTransfer?.types?.includes("Files") && !root.contains(e.target)) { e.preventDefault(); if (ev === "drop") readFile(e.dataTransfer.files?.[0]); } });
   // The tab lives in the page's header, which the board redraws; it is put back each time, and any other view's own buttons close this one.
   document.addEventListener("click", (e) => {
-    if (e.target.closest("[data-lswtab]")) return setOpen(!open);
+    if (e.target.closest("[data-lswtab]")) return setOpen(true); // the tab already on show stays on show (the other tabs are the way out)
     if (open && e.target.closest("[data-view],[data-lsw-list],#csBtn,#lsBtn")) setOpen(false);
   });
   const top = $("top");

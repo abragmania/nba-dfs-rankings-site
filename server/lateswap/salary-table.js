@@ -29,7 +29,8 @@ function manFromCells(get) {
   const who = name || id || "A row";
   if (!/^\d+$/.test(id)) return { error: `the ID column for ${who} is ${JSON.stringify(id)}` };
   if (!name) return { error: `the Name column for ${id} is empty` };
-  const nameId = get("Name + ID");
+  const raw = get("Name + ID");
+  const nameId = raw.replace(/ \(LOCKED\)$/, ""); // a file downloaded after first tip marks the locked men: "Jayson Tatum (44818429) (LOCKED)"
   if (!nameId.endsWith(`(${id})`)) return { error: `the Name + ID column for ${name} is ${JSON.stringify(nameId)}` };
   const salary = Number(get("Salary"));
   if (!/^\d+$/.test(get("Salary")) || !isSalary(salary)) return { error: `the Salary column for ${name} is ${JSON.stringify(get("Salary"))}` };
@@ -57,22 +58,22 @@ export function readSalaryTable(text) {
   const cellsOf = (row) => columns.slice(ENTRY_COLUMNS.length).map((c) => (row[c] ?? "").trim());
   const matched = (row) => REQUIRED.filter((c) => cellsOf(row).includes(c));
   const at = rows.findIndex((row) => matched(row).length >= 3);
-  if (at < 0) return fail(`The entries file has no salary table: no row names its columns (${REQUIRED.join(", ")}).`);
+  if (at < 0) return fail(`The entries file has no player list from DraftKings: no row names its columns (${REQUIRED.join(", ")}).`);
   const missing = REQUIRED.filter((c) => !matched(rows[at]).includes(c));
-  if (missing.length) return fail(`The salary table is missing column${missing.length === 1 ? "" : "s"} ${missing.join(", ")}.`);
+  if (missing.length) return fail(`The player list in the entries file is missing column${missing.length === 1 ? "" : "s"} ${missing.join(", ")}.`);
   const head = cellsOf(rows[at]);
   const men = [], seen = new Set();
   for (const row of rows.slice(at + 1)) {
     const cells = cellsOf(row);
     if (!REQUIRED.some((c) => cells[head.indexOf(c)])) continue; // an entry row below the table's end, or a blank one
     const read = manFromCells((c) => cells[head.indexOf(c)]);
-    if (read.error) return fail(`The salary table is malformed: ${read.error}.`);
-    if (seen.has(read.man.dk_id)) return fail(`The salary table lists ID ${read.man.dk_id} twice.`);
+    if (read.error) return fail(`The player list in the entries file is malformed: ${read.error}.`);
+    if (seen.has(read.man.dk_id)) return fail(`The player list lists ID ${read.man.dk_id} twice.`);
     seen.add(read.man.dk_id);
     men.push(read.man);
   }
-  if (!men.length) return fail("The salary table lists no men.");
-  if (!men.some((p) => p.tip != null)) return fail("The salary table's Game Info column is malformed: no man has a readable tip.");
+  if (!men.length) return fail("The player list lists no men.");
+  if (!men.some((p) => p.tip != null)) return fail("The player list's Game Info column is malformed: no man has a readable tip.");
   return { ok: true, men };
 }
 
