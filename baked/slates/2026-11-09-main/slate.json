@@ -2,17 +2,17 @@
   "slate": "2026-11-09-main",
   "date": "2026-11-09",
   "label": "TwoGun nba_projections row (slate group 156358)",
-  "built_from": "slates/2026-11-09-main/raw/2026-11-09T172117-0500",
+  "built_from": "slates/2026-11-09-main/raw/2026-11-09T173204-0500",
   "as_of": {
-    "board_updated": "Mon, Nov 9, 4:18 PM CT",
-    "injury_report": "Mon, Nov 9, 4:15 PM CT (row meta.report)",
-    "pull_started": "2026-11-09T17:21:17-05:00",
+    "board_updated": "Mon, Nov 9, 4:31 PM CT",
+    "injury_report": "Mon, Nov 9, 4:30 PM CT (row meta.report)",
+    "pull_started": "2026-11-09T17:32:04-05:00",
     "page_updated": null
   },
   "as_of_by_source": {
     "twogun_row": {
-      "updated": "Mon, Nov 9, 4:18 PM CT",
-      "injury_report": "Mon, Nov 9, 4:15 PM CT"
+      "updated": "Mon, Nov 9, 4:31 PM CT",
+      "injury_report": "Mon, Nov 9, 4:30 PM CT"
     }
   },
   "lock": "Mon, Nov 9, 6:00 PM CT",
