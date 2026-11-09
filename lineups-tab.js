@@ -24,8 +24,16 @@ export const freshLt = () => ({ view: null, show: "cards", q: "", sort: "proj", 
 
 // ---- spots (Adam's contest entries; spots.json on the server): a saved lineup holds none, one or several ----
 const SPOT_COLOURS = ["#7ee787", "#79c0ff", "#d2a8ff", "#f778ba", "#56d4dd", "#b6e354", "#9ea8ff", "#e6edf3"]; // eight, so a card's spots never share one
-const spotNames = (spots) => Object.keys(spots ?? {}).sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
-const spotColour = (name, spots) => SPOT_COLOURS[Math.max(0, spotNames(spots).indexOf(name)) % SPOT_COLOURS.length];
+// A spots object is replaced, never changed in place, so its sorted names and each name's place are worked out once per object.
+const byName = new Intl.Collator("en", { numeric: true }).compare, sortedCache = new WeakMap();
+const sortedOf = (spots) => {
+  if (!spots || typeof spots !== "object") return { names: [], at: new Map() };
+  let s = sortedCache.get(spots);
+  if (!s) { const names = Object.keys(spots).sort(byName); s = { names, at: new Map(names.map((n, i) => [n, i])) }; sortedCache.set(spots, s); }
+  return s;
+};
+const spotNames = (spots) => sortedOf(spots).names;
+const spotColour = (name, spots) => SPOT_COLOURS[(sortedOf(spots).at.get(name) ?? 0) % SPOT_COLOURS.length];
 /** The spots a saved lineup holds, in name order. */
 export const heldSpots = (spots, id) => spotNames(spots).filter((n) => spots[n]?.lineup_id === String(id));
 /** The next unused "GPP #n". */
@@ -75,7 +83,7 @@ function spotMenuHtml(e, { spots, saved, names, warn, text }) {
   // The list scrolls inside the menu; the ways to make a new spot stay under it, always in view (lineups-panel.js placeSpotMenu). At
   // MAX_SPOTS the slate holds as many spots as the server takes, so no new one is offered, only a line saying so.
   const full = Object.keys(spots ?? {}).length >= MAX_SPOTS, gpp = nextGppName(spots);
-  const add = full ? `<div class="spnone spfull">This slate has ${MAX_SPOTS} spots, the most it can hold; remove an empty one to add another.</div>`
+  const add = full ? `<div class="spnone spfull">Spot limit reached (${MAX_SPOTS}). Remove an empty spot to add one.</div>`
     : `<button class="spm new" data-op="spotset" data-id="${id}" data-spot="${esc(gpp)}">+ new <b>${esc(gpp)}</b></button>`
       + (Object.hasOwn(spots, "Cash") ? "" : `<button class="spm new" data-op="spotset" data-id="${id}" data-spot="Cash">+ new <b>Cash</b></button>`)
       + `<div class="spadd"><input data-spotname="${id}" maxlength="40" placeholder="or type a name" value="${esc(text?.id === String(e.id) ? text.text : "")}" autocomplete="off"><button data-op="spotadd" data-id="${id}">Add</button></div>`;
@@ -275,7 +283,7 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
     + ((P.lt.show ?? "cards") === "compare" ? "" : `<span class="lt-sort"><em>Sort</em>${SORTS.map(([k, l, t]) => `<button class="${P.lt.sort === k ? "on" : ""}" data-op="ltsort" data-s="${k}" title="${esc(t)}">${l}</button>`).join("")}</span>`)
     + `<span class="lt-sort"><em>Mode</em>${MODE_FILTERS.map((m) => `<button class="${P.lt.mode === m ? "on" : ""}" data-op="ltmode" data-m="${m}">${m}</button>`).join("")}</span>`
     + (view === "saved" ? (P.spotsReady
-      ? `<span class="lt-sort"><em>Spot</em>${[["All", "All"], ["None", "Unassigned"], ...spotNames(P.spots).map((n) => [n, n])].map(([k, l]) => `<button class="${P.lt.spot === k ? "on" : ""}" data-op="ltspot" data-s="${esc(k)}">${esc(l)}</button>`).join("")}</span>`
+      ? `<span class="lt-sort lt-spotf"><em>Spot</em><span class="lt-spotbtns">${[["All", "All"], ["None", "Unassigned"], ...spotNames(P.spots).map((n) => [n, n])].map(([k, l]) => `<button class="${P.lt.spot === k ? "on" : ""}" data-op="ltspot" data-s="${esc(k)}">${esc(l)}</button>`).join("")}</span><span class="lt-spotn" aria-hidden="true"></span></span>`
         + `<span class="lt-sort lt-order"><button class="on-order" data-op="assignorder" title="Give the saved lineups shown, in this order, the GPP spots in turn (GPP #1, GPP #2 ...); Cash is left alone">Assign in order</button><label title="Also give spots that already hold a lineup, and place lineups that already hold a spot"><input type="checkbox" data-op="orderreplace"${P.lt.replace ? " checked" : ""}> Replace current</label></span>`
       : `<span class="lt-sw${P.spotsError ? " ill" : ""}">${P.spotsError ? `Could not read the spots: ${esc(P.spotsError)}. Click anywhere here to try again.` : "Reading the spots"}</span>`) : "")
     + `</div>`;

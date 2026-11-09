@@ -56,6 +56,14 @@ export function tabStatus(M) {
 
 const spotOptions = (M, sel) => `<option value="">Choose a spot</option>${M.spots.map((s) => `<option${s.name === sel ? " selected" : ""}>${esc(s.name)}</option>`).join("")}<option value="__new">+ New spot…</option>`;
 
+/** The options of one entry's spot menu. `all` false: only what the entry holds now (the menu fills in the rest when it is opened,
+ *  lsw-main.js fillChoices: 150 entries by 150 spots is 22,500 options, which took the browser about half a second to draw). */
+export function entrySpotOptions(M, e, all = true) {
+  const head = e.noSpot ? '<option value="">No lineup assigned</option>' : '<option value="">Unassign</option>';
+  const names = all ? M.spots.map((s) => s.name) : e.spot ? [e.spot] : [];
+  return `${head}${names.map((name) => `<option${name === e.spot ? " selected" : ""}>${esc(name)}</option>`).join("")}<option value="__new">+ New spot…</option>`;
+}
+
 function entryRow(e, k, n, M, L) {
   const c = e.spot ? spotColour(e.spot, M.spots) : null;
   const isNew = L.newIds?.has(e.entryId), on = L.sel.has(e.entryId);
@@ -65,7 +73,7 @@ function entryRow(e, k, n, M, L) {
 <span class="cb${on ? " on" : ""}" data-lsw="pick" data-id="${esc(e.entryId)}" role="checkbox" aria-checked="${on}" tabindex="0"></span>
 <span class="cn">Entry ${k} of ${n}${isNew ? ' <i class="newb">NEW</i>' : ""}${e.flags.length ? ` <i class="flb" title="${esc(e.flags.join(" "))}">CHECK</i>` : ""}</span>
 <span class="fe">${esc(e.entryFee)}</span><span class="id">${esc(e.entryId)}</span>
-<select class="spsel${e.noSpot ? " un" : ""}" data-lsw-sel="entrySpot" data-id="${esc(e.entryId)}" ${c ? `style="--sc:${c}"` : ""}>${e.noSpot ? '<option value="">No lineup assigned</option>' : '<option value="">Unassign</option>'}${M.spots.map((s) => `<option${s.name === e.spot ? " selected" : ""}>${esc(s.name)}</option>`).join("")}<option value="__new">+ New spot…</option></select>
+<select class="spsel${e.noSpot ? " un" : ""}" data-lsw-sel="entrySpot" data-id="${esc(e.entryId)}" ${c ? `style="--sc:${c}"` : ""} data-lazy="entry">${entrySpotOptions(M, e, false)}</select>
 ${note}</div>`;
 }
 
@@ -95,18 +103,24 @@ ${un.length ? `<div class="newbar red"><b>${un.length}</b> ${un.length === 1 ? "
 
 const sumOfLineup = (l, byId, k) => (l.slots.every((id) => Number.isFinite(byId.get(id)?.[k])) ? l.slots.reduce((t, id) => t + byId.get(id)[k], 0) : null);
 
+/** The options of one spot's saved-lineup menu; `all` false: only the lineup it holds now (filled in on opening, as entrySpotOptions). */
+export function lineupOptions(s, M, L, all = true) {
+  const byId = new Map(M.pool.map((p) => [p.dk_id, p]));
+  const held = s.source?.lineupId;
+  const saved = (L.saved ?? []).slice().reverse().filter((l) => all || (held != null && String(l.id) === String(held)));
+  return `<option value="">${s.blank ? "Pick a saved lineup…" : "Change lineup…"}</option>` + saved.map((l) => `<option value="${esc(l.id)}"${held === String(l.id) ? " selected" : ""}>Saved ${esc(l.id)} · ${esc(l.mode)} · ${f1(sumOfLineup(l, byId, "proj"))} · ${money(sumOfLineup(l, byId, "salary"))}</option>`).join("");
+}
+
 function spotRow(s, M, L) {
-  const c = spotColour(s.name, M.spots), byId = new Map(M.pool.map((p) => [p.dk_id, p]));
-  const saved = (L.saved ?? []).slice().reverse();
+  const c = spotColour(s.name, M.spots);
   const ask = L.ask?.body.op === "setLineup" && L.ask.body.spot === s.name ? L.ask : null;
   const wait = ask && Date.now() - ask.armedAt < 500;
   const men = s.blank ? '<span class="noteR">No lineup assigned: pick one from the list.</span>' : s.slots.map((x) => (x.man ? `<span class="mm">${x.man.team ? logo(x.man.team, "xs") : ""}${esc(x.man.name)}${outChip(x.man)}</span>` : "")).join("");
-  const opts = saved.map((l) => `<option value="${esc(l.id)}"${s.source.lineupId === String(l.id) ? " selected" : ""}>Saved ${esc(l.id)} · ${esc(l.mode)} · ${f1(sumOfLineup(l, byId, "proj"))} · ${money(sumOfLineup(l, byId, "salary"))}</option>`).join("");
   return `<div class="lrow${s.alert ? " outc" : ""}${s.blank ? " nolu" : ""}" style="--sc:${c}">
 <span class="sc plain" style="--sc:${c}">${esc(s.name)}</span>
 <div class="lmid"><div class="lname">${esc(s.blank ? "" : s.source.label)}</div><div class="lmen">${men}</div></div>
 <span class="pj">${f1(s.projection)}<small>proj</small></span><span class="le"><b>${s.nEntries}</b> ${s.nEntries === 1 ? "entry" : "entries"}</span>
-<select class="lpick" data-lsw-sel="lineupPick" data-spot="${esc(s.name)}" title="Give ${esc(s.name)} one of your saved lineups"><option value="">${s.blank ? "Pick a saved lineup…" : "Change lineup…"}</option>${opts}</select>
+<select class="lpick" data-lsw-sel="lineupPick" data-spot="${esc(s.name)}" title="Give ${esc(s.name)} one of your saved lineups" data-lazy="lineup">${lineupOptions(s, M, L, false)}</select>
 ${s.alert ? outFlag(s) : ""}${ask ? `<div class="alert"><b>${esc(ask.confirms[0].spot)}:</b> ${esc(ask.confirms[0].alert.text)} <button class="go red2" data-lsw="useLineup" data-id="${esc(ask.body.lineupId)}"${wait ? " disabled" : ""}>Use anyway</button> <button class="ol" data-lsw="askCancel">Cancel</button></div>` : ""}</div>`;
 }
 

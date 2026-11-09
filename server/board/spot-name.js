@@ -1,7 +1,7 @@
 // A lineup spot's name (Adam's contest entry: Cash, GPP #1 ...). The one rule, shared by the page and the server (slate/spots.js).
 export const SPOT_NAME_MAX = 40;
-/** Spots for one slate: a guard on the file's size, far above a night's use (the page plans Assign in order within it too). */
-export const MAX_SPOTS = 40;
+/** The most spots one slate holds: one for each contest entry Adam can put a lineup in (the page plans Assign in order within it too). */
+export const MAX_SPOTS = 150;
 const FORBIDDEN = new Set(["__proto__", "constructor", "prototype"]);
 
 /** A spot name as typed: trimmed text of 1 to 40 characters with no control characters, not a name an object cannot hold safely; else null. */

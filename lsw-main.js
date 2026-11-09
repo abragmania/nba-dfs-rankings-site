@@ -7,9 +7,10 @@ import { esc, money, outcomeLine, chipTime, replyVerdict, tidyReasons } from "./
 import { uploadHtml } from "./lsw-upload.js";
 import { allHtml, backupLabels, scopeFor } from "./lsw-all.js";
 import { spotHtml } from "./lsw-spot.js";
-import { entriesHtml, lineupsHtml, tabStatus, rangeBetween, numberInOrder, screenOrder, emptyRowIds, contestGroups } from "./lsw-maps.js";
+import { entrySpotOptions, lineupOptions, entriesHtml, lineupsHtml, tabStatus, rangeBetween, numberInOrder, screenOrder, emptyRowIds, contestGroups } from "./lsw-maps.js";
 import { exportHtml } from "./lsw-export.js";
 import { logo, shortTime, slateRefMs, topStamps, centralToMs, keepFocus } from "./board-util.js";
+import { showActive } from "./lineups-panel.js";
 
 const POLL_MS = 20000;
 const $ = (id) => document.getElementById(id);
@@ -151,6 +152,21 @@ function bannerHtml() {
   return parts.join("");
 }
 
+// The spot buttons (lsw.css .spotbtns, .spp) scroll inside their own box: a redraw keeps where each was; a new screen starts with its
+// active button in view.
+const HELD_BOXES = ".spotbtns,.spp";
+
+/** A spot menu drawn with only what it holds (lsw-maps.js) takes its whole list when it is first focused or pressed. */
+function fillChoices(e) {
+  const sel = e.target?.closest?.("select[data-lazy]");
+  if (!sel || !L.M) return;
+  const kind = sel.dataset.lazy;
+  delete sel.dataset.lazy;
+  if (kind === "entry") { const row = L.M.entries.find((x) => x.entryId === sel.dataset.id); if (row) sel.innerHTML = entrySpotOptions(L.M, row); }
+  else { const sp = L.M.spots.find((x) => x.name === sel.dataset.spot); if (sp) sel.innerHTML = lineupOptions(sp, L.M, L); }
+}
+let drawnScreen = null;
+
 function render() {
   if (!root || !open) return;
   L.dirty = false;
@@ -165,7 +181,10 @@ function render() {
           : L.screen === "export" ? exportHtml(L.M, L) : allHtml(L.M, L);
   const y = window.scrollY;
   const sub = L.has && ["all", "spot", "export"].includes(L.screen) ? `<div class="subtabs"><button class="${L.screen === "export" ? "" : "on"}" data-lsw="go" data-s="all">Swap</button><button class="${L.screen === "export" ? "on" : ""}" data-lsw="go" data-s="export">Export</button></div>` : "";
+  const kept = drawnScreen === L.screen ? [...root.querySelectorAll(HELD_BOXES)].map((b) => b.scrollTop) : null;
   keepFocus(root, () => { root.innerHTML = `${barHtml()}<div class="body${L.busy ? " busy" : ""}">${bannerHtml()}${sub}${body}</div>`; });
+  root.querySelectorAll(HELD_BOXES).forEach((b, i) => { if (!kept) showActive(b); else if (kept[i]) b.scrollTop = kept[i]; });
+  drawnScreen = L.screen;
   window.scrollTo(0, y);
 }
 
@@ -486,6 +505,7 @@ export function mountLateSwap() {
   document.body.append(fileInput);
   fileInput.addEventListener("change", () => { const f = fileInput.files?.[0]; fileInput.value = ""; readFile(f); });
   root.addEventListener("click", onClick); root.addEventListener("change", onChange); root.addEventListener("input", onInput);
+  root.addEventListener("pointerdown", fillChoices, true); root.addEventListener("focusin", fillChoices);
   root.addEventListener("focusout", () => setTimeout(() => { if (L.dirty && !focusedInput()) render(); }, 0)); // a redraw that waited for the keyboard happens now
   // A press holds redraws back until its click is done, so a poll cannot take a button away between the press and the release.
   // A press on a menu is not counted (its native popup can take the release, and a menu acts on change, not on click), and any other press

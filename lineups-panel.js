@@ -21,9 +21,11 @@ export function renderTab(X, c, own) {
   keepScroll(el, X.tabScrollKey === key, () => keepFocus(el, () => { el.innerHTML = lineupsTabHtml(X.P, c, { dash: X.dash, seat, swapCtx: swapContext(c, own.lateSwapSeat), notes: own.notesHtml(X.P, c) }); sizeBoxes(el); }));
   X.tabScrollKey = key;
   placeSpotMenu(el);
+  spotCount(el);
+  if (el.addEventListener && !countHooked.has(el)) { countHooked.add(el); el.addEventListener("scroll", (e) => { if (e.target?.classList?.contains("lt-spotbtns")) spotCount(el); }, true); }
   refit(el);
   sized.add(el);
-  if (!resizeHooked && typeof window !== "undefined" && window.addEventListener) { resizeHooked = true; window.addEventListener("resize", () => sized.forEach((x) => { sizeBoxes(x); placeSpotMenu(x); })); }
+  if (!resizeHooked && typeof window !== "undefined" && window.addEventListener) { resizeHooked = true; window.addEventListener("resize", () => sized.forEach((x) => { sizeBoxes(x); placeSpotMenu(x); spotCount(x); })); }
 }
 const sized = new Set(); // the tab elements drawn, sized again when the window changes size
 let resizeHooked = false;
@@ -31,6 +33,31 @@ let resizeHooked = false;
 /** The tab's own scrolling boxes (the cards, the exposure table and Compare's tables, lineups.css): a redraw (a swap, a Save, a
  *  refresh) keeps where each was, as the player card does (card.js); `same` false (another view) starts them at the top. */
 const SCROLL_BOXES = [".lt-cards", ".lt-ex", ".cp-scroll"];
+/** Scrolling boxes with a height of their own (lineups.css; sizeBoxes must not set one): a redraw keeps where each was, and another
+ *  view starts each with its active button in view (showActive). The Spot filter's two rows of buttons. */
+const HELD_BOXES = [".lt-spotbtns"];
+
+/** Scrolls a held box, inside itself only, so its active (.on) button is in view. Browser only. */
+export function showActive(box) {
+  const on = box?.querySelector?.("button.on");
+  if (!on?.getBoundingClientRect || !box.getBoundingClientRect) return;
+  const b = box.getBoundingClientRect(), o = on.getBoundingClientRect();
+  if (o.top < b.top || o.bottom > b.bottom) box.scrollTop += o.top - b.top - Math.max(0, (b.height - o.height) / 2);
+}
+
+/** The Spot filter's count beside its box: how many of the spots' buttons are in view from the top down to the last one fully shown
+ *  ("63 of 150"), nothing when they all fit, so a cue shows that more sit below without a scrollbar. Browser only. */
+export function spotCount(el) {
+  for (const box of el.querySelectorAll?.(".lt-spotbtns") ?? []) {
+    const note = box.parentElement?.querySelector(".lt-spotn");
+    if (!note || !box.getBoundingClientRect) continue;
+    const btns = [...box.querySelectorAll("button")].slice(2); // All and Unassigned are not spots
+    const edge = box.getBoundingClientRect().bottom + 1;
+    const seen = btns.filter((x) => x.getBoundingClientRect().bottom <= edge).length;
+    note.textContent = box.scrollHeight > box.clientHeight + 1 ? `${seen} of ${btns.length}` : "";
+  }
+}
+const countHooked = new WeakSet();
 
 /** The most height a scrolling box may take, its top `docTop` px down the page on a screen `viewH` px tall: the room left below its
  *  top, so at the top of the page the whole box is on screen. A box so far down that less than `least` is left (Compare's lower
@@ -69,11 +96,15 @@ export function placeSpotMenu(el) {
   const p = menuPlacement({ anchorTop: a.top, anchorBottom: a.bottom, roomTop: Math.max(0, box?.top ?? 0), roomBottom: Math.min(window.innerHeight, box?.bottom ?? window.innerHeight), need: m.getBoundingClientRect().height });
   m.classList.toggle("up", p.up);
   m.style.maxHeight = `${p.maxHeight}px`;
+  // The list opens at the card's own spot, scrolled inside the list only.
+  const list = m.querySelector(".splist"), mine = list?.querySelector(".spm.mine");
+  if (mine && list.getBoundingClientRect) list.scrollTop = Math.max(0, mine.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop - 4);
   m.scrollIntoView?.({ block: "nearest" });
 }
 export function keepScroll(el, same, draw) {
-  const held = SCROLL_BOXES.map((s) => el.querySelector?.(s)?.scrollTop ?? 0);
+  const held = SCROLL_BOXES.map((s) => el.querySelector?.(s)?.scrollTop ?? 0), kept = HELD_BOXES.map((s) => el.querySelector?.(s)?.scrollTop ?? 0);
   draw();
+  HELD_BOXES.forEach((s, i) => { const box = el.querySelector?.(s); if (!box) return; if (!same) showActive(box); else if (kept[i]) box.scrollTop = kept[i]; });
   if (!same) return;
   SCROLL_BOXES.forEach((s, i) => { const box = el.querySelector?.(s); if (box && held[i]) box.scrollTop = held[i]; });
 }

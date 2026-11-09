@@ -34,6 +34,7 @@ const MAX_BODY = 64 * 1024;
 // A kept build of 150 lineups measured about 36 KB on the 2026-11-07 slate; a bigger slate's skipped list can pass 64 KB, so the
 // builds route alone takes more. checkBuild (slate/builds.js) still bounds every part of it.
 const MAX_BUILD_BODY = 256 * 1024;
+const MAX_SPOTS_BODY = 128 * 1024; // 150 spots in a restore (spots plus expect) come to about 50 KB
 const TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -117,7 +118,7 @@ function openSlate(req, res, slate, what, { getOk = true } = {}) {
   return slateData;
 }
 
-/** Reads a POST's JSON body (64 KB at most). Returns { body }, or null when a 413 or 400 has already been sent. */
+/** Reads a POST's JSON body (64 KB at most unless the route passes its own limit). Returns { body }, or null when a 413 or 400 has already been sent. */
 async function readJson(req, res, max = MAX_BODY) {
   const text = await readBody(req, max);
   if (text === null) {
@@ -239,7 +240,7 @@ async function handleSpots(req, res, slate) {
   const slateData = openSlate(req, res, slate, "Spots");
   if (!slateData) return;
   if (req.method === "GET") return send(res, 200, readSpots(slate));
-  const read = await readJson(req, res);
+  const read = await readJson(req, res, MAX_SPOTS_BODY);
   if (!read) return;
   const checked = checkSpotsBody(read.body);
   if (!checked.ok) return fail(res, 400, "BAD_SPOT", checked.message);
