@@ -60,6 +60,7 @@ export function cardApi(c, ensure) {
         const marks = {
           out: S.outs.filter((id) => !tonight.has(id) && !byNews.out.has(id)), s: flips(["starter"]), typed: [...new Set([...Object.keys(mine.m ?? {}), ...Object.keys(mine.d ?? {})])],
           in: [...tonight].filter((id) => !S.outs.includes(id)), benched: flips(["bench_plus", "bench", "oor"]), // a man he put back in; a man he sent to the bench or out of the rotation
+          typedMin: { ...(mine.m ?? {}) }, typedRate: { ...(mine.d ?? {}) }, // which he typed, and the number: minutes (m) or DK per minute (d); `typed` above is both
         };
         view[code] = { outs: [...outs], roles: Object.fromEntries(rows.map((r) => [r.id, r.role])), min: Object.fromEntries(rows.filter((r) => typeof r.min === "number").map((r) => [r.id, r.min])), marks, news: structuredClone(S.news ?? {}) };
       }

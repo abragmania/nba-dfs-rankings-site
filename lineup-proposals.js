@@ -30,10 +30,10 @@ const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 /** A source's block for a team that can be used: it says ok and carries a men list. A block without one counts as missing. */
 const okBlock = (b) => b?.state === "ok" && Array.isArray(b.men);
 /** TwoGun's own minutes for a man: a board row carries his typed minutes in `minutes` and TwoGun's in `base_minutes`. */
-const tgMin = (p) => (isNum(p?.base_minutes) ? p.base_minutes : p?.minutes);
+export const tgMin = (p) => (p && "base_minutes" in p ? p.base_minutes : p?.minutes); // a typed row carries his number in minutes and TwoGun's in base_minutes, null when TwoGun gave none: never his number as TwoGun's (player-table.js minOtherOf reads it the same way)
 /** A short stable hash (djb2, base 36): a start proposal's id is the sources' five alone, so a changed five is new news and the same five from another source is not (Adam, 11-07). */
 export const hashOf = (text) => { let h = 5381; for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0; return h.toString(36); };
-const mins = (v) => (isNum(v) ? `${Math.round(v * 10) / 10}` : "?");
+const mins = (v) => (isNum(v) ? `${Math.round(v * 10) / 10}` : "—");
 
 const sourceTime = (latest, key) => (key === "monster_news" ? latest.monster_news?.fetched_at : latest.sources?.[key]?.fetched_at) ?? null;
 const labelsOf = (sources) => [...new Set(sources.map((s) => LABEL[s.key]))].join(" + ");
@@ -42,7 +42,7 @@ const unknownStatus = (m) => String(m.status ?? "").startsWith("UNKNOWN");
 export const statusWords = (s) => String(s ?? "").replace(/^UNKNOWN\((.*)\)$/, "$1").replace(/\s*#[0-9A-Fa-f]{3,8}\b/g, "").replace(/\s+/g, " ").trim() || "unreadable";
 
 /** The Out claims and the in-five claims on one team, by man id: { out: Map(id -> [claim]), five: Map(id -> [claim]) }. A claim is { key, at, lineup, detail, name, near }. */
-function claimsFor(latest, team) {
+export function claimsFor(latest, team) {
   const out = new Map(), five = new Map();
   const add = (map, m, claim) => { if (m.id != null) map.set(m.id, [...(map.get(m.id) ?? []), { ...claim, name: m.name, near: m.match === "near" }]); };
   const block = latest.teams?.[team] ?? {};

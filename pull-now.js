@@ -251,7 +251,7 @@ function panelHtml(s) {
 /** The status summary line and, when open, its panel. Always drawn (its box is reserved), so a header redraw keeps it. Pure. */
 export function statHtml(s) {
   const v = statusView(s);
-  return `<span id="pullNowStat" class="pnstat${v.cls ? ` ${v.cls}` : ""}"><button type="button" class="pnsum" data-pn-toggle aria-expanded="${s.open ? "true" : "false"}"${v.title ? ` title="${esc(v.title)}"` : ""}><i class="pndot"></i><span class="pnsumtext">${dayHtml(v.summary)}</span><span class="pncaret">${s.open ? "▴" : "▾"}</span></button>${s.open ? panelHtml(s) : ""}</span>`;
+  return `<span id="pullNowStat" class="pnstat${v.cls ? ` ${v.cls}` : ""}"><button type="button" class="pnsum" data-pn-toggle aria-expanded="${s.open ? "true" : "false"}"${v.title ? ` title="${esc(v.title)}"` : ""}><i class="pndot"></i><span class="pnsumtext">${dayHtml(v.summary)}</span><span class="pncaret"></span></button>${s.open ? panelHtml(s) : ""}</span>`;
 }
 
 /** The button and its status and line for the header, from the module's state, so a header redraw keeps all three. Pure. */

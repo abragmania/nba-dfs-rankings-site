@@ -178,17 +178,6 @@ export function loadOverrides(tryStore, slate) {
   return Object.fromEntries(Object.entries(saved).filter(([, o]) => o && typeof o === "object" && ok(o.min) && ok(o.max)));
 }
 
-/** A suggested GPP variance range (± %) for a slate of this many games, or null when the count is 0 or unknown.
- *  The lead's starting estimate: bigger slates take more variance. Meant to be tuned; not from data. */
-export function varianceGuide(gameCount) {
-  const n = Number(gameCount);
-  if (!Number.isFinite(n) || n < 1) return null;
-  if (n <= 3) return { lo: 3, hi: 6 };
-  if (n <= 6) return { lo: 6, hi: 10 };
-  if (n <= 9) return { lo: 10, hi: 15 };
-  return { lo: 15, hi: 20 };
-}
-
 /** The Lineups count box on its own (it sits beside Build on the player list; settingsHtml leaves it out there). */
 export function countHtml(P, games = []) {
   const raw = P.raw[P.mode], { bad } = readSettings(raw, P.mode, liveOverrides(P.overrides, games));
@@ -214,8 +203,7 @@ export function settingsHtml(P, teams, games = [], { count = true } = {}) {
   // A stored game limit the slate has lost: said in the block, one line per bound, each with × to remove it.
   const gone = staleGames(P.overrides, games).sort().flatMap((g) => ["min", "max"].filter((b) => P.overrides[g][b] != null).map((b) => `<div class="teams"><span class="ovs"><span class="ovc">${esc(g)} ${b} ${P.overrides[g][b]} ignored: that game is no longer on this slate<button data-op="ovdel" data-team="${esc(g)}" data-b="${b}" title="Remove ${esc(g)} ${b} ${P.overrides[g][b]}">×</button></span></span></div>`)).join("");
   const varOn = raw.varOn === "1";
-  const vg = varianceGuide(games?.length ?? 0), guide = vg ? `<span class="vguide" title="Suggested range for this ${games.length}-game slate; type any value">Guide ±${vg.lo}–${vg.hi}%</span>` : "";
-  const variance = `<div class="teams"><span class="tl" title="Each lineup is searched on every player's projection varied at random; the numbers shown stay the real ones">Variance:</span><div class="seg">${[["", "Off"], ["1", "On"]].map(([v, w]) => `<button data-op="varsw" data-v="${v}" class="${(raw.varOn ?? "") === v ? "on" : ""}">${w}</button>`).join("")}</div><span class="tl">± <input data-f="varPct" value="${esc(raw.varPct ?? "")}" inputmode="decimal" autocomplete="off"${varOn ? "" : " disabled"}${varOn && bad.varPct ? ` class="bad" title="${esc(bad.varPct)}"` : ""}> % on all players</span>${guide}</div>`;
+  const variance = `<div class="teams"><span class="tl" title="Each lineup is searched on every player's projection varied at random; the numbers shown stay the real ones">Variance:</span><div class="seg">${[["", "Off"], ["1", "On"]].map(([v, w]) => `<button data-op="varsw" data-v="${v}" class="${(raw.varOn ?? "") === v ? "on" : ""}">${w}</button>`).join("")}</div><span class="tl">± <input data-f="varPct" value="${esc(raw.varPct ?? "")}" inputmode="decimal" autocomplete="off"${varOn ? "" : " disabled"}${varOn && bad.varPct ? ` class="bad" title="${esc(bad.varPct)}"` : ""}> % on all players</span></div>`;
   return `<div class="sec sethd">Settings</div><div class="set${count ? "" : " two"}">${count ? `<label>Lineups${input("count")}</label>` : ""}<label>Min unique${input("minUnique")}</label>`
     + (gpp ? `<label>Max total own${input("maxTotalOwn", "none")}</label>` : `<label title="Ownership limits are GPP settings">Max total own<input disabled placeholder="GPP only"></label>`) + `</div>`
     + (gpp ? lowOwnedHtml(raw.lowRules ?? [], { open: P.lrOpen, msg: P.lrMsg, typed: P.lrForm ?? {} }) + variance : "")

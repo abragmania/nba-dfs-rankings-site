@@ -2,7 +2,7 @@
 // Every figure is read from the slate file or its route as given; a missing one is shown as an em dash with a title, never zero.
 import { paletteOf, teamColors } from "./teams.js";
 import { assignColours } from "./colours.js";
-import { esc, warningText, logo, tipWhen, isoToEastern, ICON, topStamps, keepFocus } from "./board-util.js";
+import { esc, warningText, logo, tipWhen, tipMs, slateRefMs, shortTime, isoToEastern, ICON, topStamps, keepFocus } from "./board-util.js";
 import { createPanel, fullScreenPref } from "./panel.js";
 import { tiers, notes } from "./highlight.js";
 import { initCard, figureSource } from "./card.js";
@@ -92,7 +92,7 @@ const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: 
 // The console's word on each row (board-marks.js): the S chip, and his typed Min and DK/m TON with their undo chips; those cells write through the console.
 const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, onChange: () => { if (S.slate) renderRows(); }, noteEl: $("pullnote").insertAdjacentElement("afterend", Object.assign(document.createElement("div"), { hidden: true })) });
 // The lineup bar above the list (lineup-bar.js): an Out or a confirmed start from the Monster and RotoWire pages applies itself through the console, with an undo X; a projected start is words only.
-const lineupBar = createLineupBar({ el: $("lineupbar"), api, slate: () => S.name, players: () => S.players, console: scenarioConsole, toast, tryStore, onLabel: (l) => { S.news = l; renderTop(); } });
+const lineupBar = createLineupBar({ el: $("lineupbar"), api, slate: () => S.name, players: () => S.players, slateData: () => S.slate, tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; }, console: scenarioConsole, toast, tryStore, tick: true, onLabel: (l) => { S.news = l; renderTop(); } });
 // Full screen (Player list header): hides the optimizer panel so the table takes the width. Remembered per viewer; under 900 px
 // wide with nothing stored it starts on. Pin slots (late swap) needs the panel, so the button and the hiding step aside then.
 const FS_KEY = "nbaboard.fullscreen";
@@ -519,6 +519,7 @@ function applyPlayers(players) {
   S.held = new Map([...S.held].map(([id, row]) => [id, row && withAnswer(row)])); // a row waiting on his box takes the answer too
   S.byId = new Map(S.players.map((p) => [p.dk_id, p]));
   renderRows(); renderPick();
+  lineupBar.redraw(); // the News tab shows his applied minutes at once (it reads S.players, which this just updated)
 }
 // The typed Proj and Own boxes (cell-editor.js, standard A3).
 const editors = createEditors({
