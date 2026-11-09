@@ -1,33 +1,34 @@
 {
  "slate": "2026-11-09-main",
- "generated_at": "2026-11-09T23:35:48.509Z",
+ "generated_at": "2026-11-09T23:38:43.289Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-09-main/raw/2026-11-09T183541-0500",
+ "slate_built_from": "slates/2026-11-09-main/raw/2026-11-09T183835-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-09T23:35:44.413Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-09T183544-0500.html.gz",
-   "saved_at": "2026-11-09T23:35:44.413Z",
-   "parsed_sha": "cf68d8191a57b1074b551dd3788e40bba119c23acc6e8ea11c554d194453edfa",
-   "sha256": "fd0692c09f59e007ae3fb0b9a67cd6c3625f9da01e2d893b9ebda475d3a77c9a"
+   "fetched_at": "2026-11-09T23:38:39.176Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-09T183839-0500.html.gz",
+   "saved_at": "2026-11-09T23:38:39.176Z",
+   "parsed_sha": "0c9871eb1a0cf949c5fc8374ab128d3d3da4de00a45d280035f5b413ba1a94f2",
+   "sha256": "1a7a1be254246881ff4577bd2eed3674a6ce1d2f7a4ae1f5d1be0a432929aeb2"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-09T23:35:48.483Z",
+   "fetched_at": "2026-11-09T23:38:43.258Z",
    "saved_as": "news/lineups/pages/rotowire-2026-11-09T183548-0500.html.gz",
    "saved_at": "2026-11-09T23:35:48.483Z",
+   "unchanged_since": "2026-11-09T23:35:48.483Z",
    "parsed_sha": "47cd63affcb1400f7666c6b63c97bae39667dd696d4cfb8d41ca54fba9b42669",
-   "sha256": "105d65a406b83e2566510056443046df6681b2a92e1129828ba33533172f984b"
+   "sha256": "74e152241a5f2ee40d3b0384f4b8e8ba5dc25bfeadd68a5369ca0e38f7f040e0"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-09T23:35:41.216Z",
-  "changed_at": "2026-11-09T18:35:41-05:00",
-  "saved_as": "news/bbm/2026-11-09T183541-0500.html",
+  "fetched_at": "2026-11-09T23:38:35.494Z",
+  "changed_at": "2026-11-09T18:38:35-05:00",
+  "saved_as": "news/bbm/2026-11-09T183835-0500.html",
   "out": [
    {
     "name": "Isaiah Joe",
@@ -296,6 +297,20 @@
   ],
   "cards": [
    {
+    "id": "182137",
+    "name": "Sion James",
+    "team": "CHA",
+    "dk_id": "44847351",
+    "match": "exact",
+    "word": "Starting",
+    "label": "Starting",
+    "body": null,
+    "words_at": "2026-11-09T183835-0500",
+    "at": "2026-11-09T23:36:35.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
     "id": "182135",
     "name": "Ziaire Williams",
     "team": "LAL",
@@ -304,8 +319,8 @@
     "word": "Starting",
     "label": "Starting",
     "body": null,
-    "words_at": "2026-11-09T183541-0500",
-    "at": "2026-11-09T23:34:41.000Z",
+    "words_at": "2026-11-09T183835-0500",
+    "at": "2026-11-09T23:34:35.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -318,7 +333,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "right knee contusion",
-    "words_at": "2026-11-09T183541-0500",
+    "words_at": "2026-11-09T183835-0500",
     "at": "2026-11-09T23:11:41.000Z",
     "precision": "minute",
     "out_as": null
@@ -332,7 +347,7 @@
     "word": "Out",
     "label": "Out",
     "body": "left shin/tibia contusion",
-    "words_at": "2026-11-09T183541-0500",
+    "words_at": "2026-11-09T183835-0500",
     "at": "2026-11-09T23:05:54.000Z",
     "precision": "minute",
     "out_as": "Morez Johnson"
@@ -346,7 +361,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "g league twoway",
-    "words_at": "2026-11-09T183541-0500",
+    "words_at": "2026-11-09T183835-0500",
     "at": "2026-11-09T23:01:16.000Z",
     "precision": "minute",
     "out_as": null
@@ -360,7 +375,7 @@
     "word": "Out",
     "label": "Out",
     "body": "left hand soreness",
-    "words_at": "2026-11-09T183541-0500",
+    "words_at": "2026-11-09T183835-0500",
     "at": "2026-11-09T23:01:16.000Z",
     "precision": "minute",
     "out_as": "Bilal Coulibaly"
@@ -374,7 +389,7 @@
     "word": "Off Injury Report",
     "label": "UNKNOWN(Off Injury Report #00cc44)",
     "body": null,
-    "words_at": "2026-11-09T183541-0500",
+    "words_at": "2026-11-09T183835-0500",
     "at": "2026-11-09T23:01:16.000Z",
     "precision": "minute",
     "out_as": null
@@ -388,7 +403,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "right ankle sprain",
-    "words_at": "2026-11-09T183541-0500",
+    "words_at": "2026-11-09T183835-0500",
     "at": "2026-11-09T23:00:54.000Z",
     "precision": "minute",
     "out_as": null
@@ -402,7 +417,7 @@
     "word": "Probable",
     "label": "Probable",
     "body": "right wrist sprain",
-    "words_at": "2026-11-09T183541-0500",
+    "words_at": "2026-11-09T183835-0500",
     "at": "2026-11-09T23:00:41.000Z",
     "precision": "minute",
     "out_as": null
@@ -416,7 +431,7 @@
     "word": "Off Injury Report",
     "label": "UNKNOWN(Off Injury Report #00cc44)",
     "body": null,
-    "words_at": "2026-11-09T183541-0500",
+    "words_at": "2026-11-09T183835-0500",
     "at": "2026-11-09T23:00:41.000Z",
     "precision": "minute",
     "out_as": null
@@ -430,7 +445,7 @@
     "word": "Out",
     "label": "Out",
     "body": "right hamstring tightness / soreness",
-    "words_at": "2026-11-09T183541-0500",
+    "words_at": "2026-11-09T183835-0500",
     "at": "2026-11-09T22:49:23.000Z",
     "precision": "minute",
     "out_as": "Immanuel Quickley"
@@ -444,7 +459,7 @@
     "word": "Out",
     "label": "Out",
     "body": "left adductor / groin soreness tightness",
-    "words_at": "2026-11-09T183541-0500",
+    "words_at": "2026-11-09T183835-0500",
     "at": "2026-11-09T22:49:16.000Z",
     "precision": "minute",
     "out_as": "Scottie Barnes"
@@ -458,7 +473,7 @@
     "word": "Out",
     "label": "Out",
     "body": "illness",
-    "words_at": "2026-11-09T183541-0500",
+    "words_at": "2026-11-09T183835-0500",
     "at": "2026-11-09T22:48:54.000Z",
     "precision": "minute",
     "out_as": "Collin Murray-Boyles"
@@ -472,7 +487,7 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "left hand soreness",
-    "words_at": "2026-11-09T183541-0500",
+    "words_at": "2026-11-09T183835-0500",
     "at": "2026-11-09T22:36:30.000Z",
     "precision": "minute",
     "out_as": "Bilal Coulibaly"
@@ -486,7 +501,7 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "right ankle sprain",
-    "words_at": "2026-11-09T183541-0500",
+    "words_at": "2026-11-09T183835-0500",
     "at": "2026-11-09T22:36:23.000Z",
     "precision": "minute",
     "out_as": null
@@ -924,7 +939,8 @@
    "2026-11-09T181054-0500.html",
    "2026-11-09T181630-0500.html",
    "2026-11-09T183323-0500.html",
-   "2026-11-09T183541-0500.html"
+   "2026-11-09T183541-0500.html",
+   "2026-11-09T183835-0500.html"
   ],
   "unreadable_age": 0
  },
@@ -1352,7 +1368,7 @@
    "game": "LAL@ATL",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Kingston Flemings",
@@ -1361,7 +1377,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44847327",
       "match": "exact"
      },
@@ -1372,7 +1388,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44847137",
       "match": "exact"
      },
@@ -1383,7 +1399,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44847177",
       "match": "exact"
      },
@@ -1394,7 +1410,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44847058",
       "match": "exact"
      },
@@ -1405,7 +1421,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44847169",
       "match": "exact"
      }
@@ -1653,8 +1669,19 @@
     "confirmed": false,
     "men": [
      {
-      "name": "Cade Cunningham",
+      "name": "Daniss Jenkins",
       "pos": "PG",
+      "bmId": "7076",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44847406",
+      "match": "exact"
+     },
+     {
+      "name": "Cade Cunningham",
+      "pos": "SG",
       "bmId": "6275",
       "flag": null,
       "word": null,
@@ -1665,7 +1692,7 @@
      },
      {
       "name": "Duncan Robinson",
-      "pos": "SG",
+      "pos": "SF",
       "bmId": "5752",
       "flag": null,
       "word": null,
@@ -1676,7 +1703,7 @@
      },
      {
       "name": "Ausar Thompson",
-      "pos": "SF",
+      "pos": "PF",
       "bmId": "6733",
       "flag": null,
       "word": null,
@@ -1687,24 +1714,13 @@
      },
      {
       "name": "John Collins",
-      "pos": "PF",
+      "pos": "C",
       "bmId": "5465",
       "flag": null,
       "word": null,
       "status": null,
       "verified": false,
       "id": "44847281",
-      "match": "exact"
-     },
-     {
-      "name": "Paul Reed",
-      "pos": "C",
-      "bmId": "6193",
-      "flag": null,
-      "word": null,
-      "status": null,
-      "verified": false,
-      "id": "44847185",
       "match": "exact"
      }
     ]
