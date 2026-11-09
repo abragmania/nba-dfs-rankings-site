@@ -141,16 +141,19 @@ export const ownStarterMpg = (row) => (row && row.g > 0 && startedSeason(row) ? 
 /**
  * The league figures from last season's rows [{ team, pos, g, gs, mp }]: { group: { G, F, C }, ladder: [6th .. 10th] }.
  *   group: the average MPG of starters by the rule, by their first listed position.
- *   ladder: per team, among men with STARTER_MIN_GAMES+ games on that team (a traded man's combined "TOT" row belongs to no team), the five with
- *   the most starts are its starters and the rest are ranked by MPG; each rung is the average over the teams that have a man on it.
+ *   ladder: per team, among men with STARTER_MIN_GAMES+ games on that team (a traded man's combined "TOT" row belongs to no team; his per-team rows,
+ *   `teamRows`, count on each team he played for, by his games, starts and minutes there), the five with
+ *   the most starts are its starters and the rest are ranked by MPG, but a man past the five who is a starter by the rule (25+ games, 75%+ started) is a
+ *   starter and not a bench man, so he takes no rung (Adam 11-09); each rung is the average over the teams that have a man on it.
  */
-export function seasonMinuteFigures(players) {
+export function seasonMinuteFigures(players, teamRows = []) {
   const group = {};
   for (const g of ["G", "F", "C"]) { const m = mean(players.filter((r) => startedSeason(r) && bbrGroup(r.pos) === g).map((r) => r.mp / r.g)); group[g] = m === null ? null : r3(m); }
   const rungs = Array.from({ length: LADDER_RUNGS }, () => []);
-  for (const team of new Set(players.map((r) => r.team).filter((t) => t !== "TOT"))) {
-    const men = players.filter((r) => r.team === team && r.g >= STARTER_MIN_GAMES).sort((a, b) => b.gs - a.gs || b.mp - a.mp || String(a.bbrId).localeCompare(String(b.bbrId)));
-    men.slice(5).map((r) => r.mp / r.g).sort((a, b) => b - a).slice(0, LADDER_RUNGS).forEach((v, i) => rungs[i].push(v));
+  const onTeams = [...players.filter((r) => r.team !== "TOT"), ...teamRows];
+  for (const team of new Set(onTeams.map((r) => r.team))) {
+    const men = onTeams.filter((r) => r.team === team && r.g >= STARTER_MIN_GAMES).sort((a, b) => b.gs - a.gs || b.mp - a.mp || String(a.bbrId).localeCompare(String(b.bbrId)));
+    men.slice(5).filter((r) => !startedSeason(r)).map((r) => r.mp / r.g).sort((a, b) => b - a).slice(0, LADDER_RUNGS).forEach((v, i) => rungs[i].push(v));
   }
   return { group, ladder: rungs.map((v) => { const m = mean(v); return m === null ? null : r3(m); }) };
 }
