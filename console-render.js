@@ -1,8 +1,8 @@
-// The console's HTML: the team picker, scenario bar, team table with its compare block, slate sweep, side readout and Apply box.
+// The console's HTML: the team table with its compare block, slate sweep and side readout. There is no picker bar or Apply box: each change sends itself (console-auto.js).
 // Strings only; console.js puts them on the page. A missing figure is the one mark saying why, never zero.
 import { esc, isoToEastern } from "./board-util.js";
 import { keyOf, outsOf, handoutShares, teamFor, TEAM_USAGE } from "./console-engine.js";
-import { calc, chipName, dcls, f1, fullLabel, hasPins, label, savedFor, sgn, tableName, tonightMin, tonightProj, tonightUsg, usualMin, usualProj, pinsOf } from "./console-model.js";
+import { calc, chipName, dcls, f1, fullLabel, label, savedFor, sgn, tableName, tonightMin, tonightProj, tonightUsg, usualMin, usualProj } from "./console-model.js";
 import { FN, fmtv } from "./console-cmd.js";
 import { isNum as num } from "./figures.js";
 import { MINUTE_SOURCES, SOURCE_LABEL } from "./depth-chart.js";
@@ -217,32 +217,6 @@ export function sideHtml(model, G, colourOf) {
     + `<h4>History <span class="mu">${G.hi} of ${G.hist.length - 1}  (Ctrl+Z / Ctrl+Y)</span></h4><div class="hist">${hist}</div><div class="helpl">Also: Alt+Up/Down steps a cell, Alt+Shift a big step; Shift+Del clears all his pins.</div></div>`;
 }
 
-export function pickerHtml(model, G, colourOf, games) {
-  const codes = Object.keys(model.TEAMS);
-  const tile = (c, opp, home) => {
-    const T = model.TEAMS[c], outs = model.ST[c].outs, names = outs.map((x) => T.byId[x]).filter(Boolean).map((p) => chipName(T, p));
-    const i = codes.indexOf(c);
-    return `<button class="pk${c === G.cur && G.view === "team" ? " on" : ""}" data-t="${esc(c)}" style="--t1:${colourOf(c)}"${names.length > 1 ? ` title="${esc(names.join(", "))} out"` : ""}>${i < 9 ? `<kbd>${i + 1}</kbd>` : ""}<b>${esc(c)}</b><span>${home ? "vs" : "@"} ${esc(opp)}</span><em>${names.length === 1 ? `${esc(names[0])} out` : names.length ? `${names.length} out` : ""}</em></button>`;
-  };
-  const tiles = games.map((g) => `<span class="gm">${tile(g.away, g.home, false)}${tile(g.home, g.away, true)}</span>`).join("");
-  return `<div class="pks">${tiles}</div><div class="pkb"><button class="vw${G.view === "slate" ? " on" : ""}" id="vslate"><kbd>S</kbd>Slate sweep</button><button class="vw" id="vapply"><kbd>A</kbd>Apply</button></div>`;
-}
-
-/** What an Apply or a Reverse moved, in words: projections and minutes counted apart, since a man may have either or both. */
-export function countsText(proj, min) {
-  const part = (n, one, many) => (n ? `${n} ${n === 1 ? `man's ${one}` : `men's ${many}`}` : "");
-  return [part(proj, "projection", "projections"), part(min, "minutes", "minutes")].filter(Boolean).join(" and ") || "no man's figures";
-}
-
-export function barHtml(model, G, applied) {
-  const stamp = applied ? `<span class="appl" title="Press R or type reverse to take back what it set">Applied ${esc(isoToEastern(applied.at) ?? applied.at)}: ${countsText(applied.count, applied.min_count)} <button class="rst" id="vreverse"><kbd>R</kbd>Reverse</button></span>` : `<span class="mu appl">Board has none of this until Apply</span>`;
-  if (G.view === "slate") return `<div class="row"><span class="lbl">Slate</span><span class="mu">Each team shows its own current scenario; edit any cell in place. Switch to a team (Alt+1-9, &lt; &gt;, or type its code) to change who is out.</span><div class="grow"></div>${stamp}</div>`;
-  const T = model.TEAMS[G.cur], S = model.ST[G.cur], key = keyOf(S.outs), list = savedFor(T, S);
-  const pinCount = hasPins(S.pins[key]) ? Object.values(pinsOf(S, key)).reduce((s, o) => s + Object.keys(o).length, 0) : 0;
-  return `<div class="row"><span class="lbl">Scenario</span>${list.map((k) => `<button class="sv${k === key ? " on" : ""}" data-key="${esc(k)}" title="${esc(fullLabel(T, k))}">${esc(label(T, k))}</button>`).join("")}<button class="sv add" id="save"${list.includes(key) ? " disabled" : ""}>+ Save current</button><span class="lay" title="How the team shows: a table, or lanes to drag men between roles. Remembered on this browser.">${[["a", "A Table"], ["b", "B Lanes"]].map(([k, t]) => `<button class="sv${G.layout === k ? " on" : ""}" data-lay="${k}">${t}</button>`).join("")}</span><div class="grow"></div>${stamp}<span class="mu pc">pins here: ${pinCount}</span><button class="rst" id="reset">Reset scenario</button></div>`
-    + `<div class="row"><span class="lbl">Who is out</span><div class="chips2">${T.pl.map((p) => `<button class="chip${S.outs.includes(p.id) ? " out" : ""}" data-o="${esc(p.id)}" data-team="${esc(G.cur)}" title="${esc(p.name)}"><span class="cn">${esc(chipName(T, p))}</span><i>${num(usualMin(p)) ? f1(usualMin(p)) : MISS}</i></button>`).join("")}</div></div>`;
-}
-
 /** A pull's folder stamp as its time in Eastern, "7:00 PM ET"; the stamp itself when it is not one. */
 export function pullTime(stamp) {
   const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})(\d{2})(\d{2})([+-]\d{2})(\d{2})$/.exec(String(stamp));
@@ -256,40 +230,4 @@ export function sourceHtml(inputs) {
   const usage = u.state === "ready" ? `<span>Usage <b>${esc(u.source ?? "league table")}</b> ${esc(isoToEastern(u.as_of) ?? "")}</span>` : `<span class="dn" title="${esc(u.message ?? "")}">Usage missing</span>`;
   const notes = inputs.notes?.length ? `<span class="dn" title="${esc(inputs.notes.join(" "))}">${inputs.notes.length} note${inputs.notes.length === 1 ? "" : "s"}</span>` : "";
   return `<span title="Tonight is this pull's board, exactly">Minutes <b>${basis}</b> ${inputs.basis.pull ? esc(pullTime(inputs.basis.pull)) : "no pull"}</span>${usage}${notes}`;
-}
-
-function planNotes(plan) {
-  const line = (n, what, names) => (n ? `<div class="mis">${what}${names ? `: ${esc(names)}` : ""}.</div>` : "");
-  return plan.refused.map((t) => `<div class="mis"><b>${esc(t.team)} refused, nothing sent for it:</b> ${esc(t.name)}. ${esc(t.why)}</div>`).join("")
-    + line(plan.kept.length, `${plan.kept.length} men keep the number you typed on the board, no pin here`, plan.kept.map((k) => `${k.name} ${k.typed}`).join(", "))
-    + line(plan.clamped.length, `${plan.clamped.length} men's rate held at the end of its range`, plan.clamped.map((k) => k.name).join(", "))
-    + line(plan.back_on_zero.length, `Back on 0 minutes; pin his minutes`, plan.back_on_zero.map((m) => m.name).join(", "))
-    + line(plan.back_in?.length, `Out tonight, but this scenario has them playing; mark them out if that is not your choice`, plan.back_in?.map((m) => m.name).join(", "))
-    + line(plan.missing.length, `${plan.missing.length} men on the board have no projection here and stay as they are`, plan.missing.map((m) => m.name).join(", "))
-    + line(plan.orphaned_pins.length, `Pins not sent, on scenarios that are not on show`, plan.orphaned_pins.map((o) => `${o.team} ${o.key || "Healthy"} (${o.count})`).join(", "))
-    + (plan.usage?.state === "ready" ? "" : `<div class="mis">Usage is missing (${esc(plan.usage?.message ?? "not read")}), so rates did not move with usage.</div>`);
-}
-
-export function applyHtml(plan, name) {
-  const up = plan.changes.filter((c) => c.move > 0).length, dn = plan.changes.filter((c) => c.move < 0).length;
-  const total = plan.changes.reduce((s, c) => s + Math.abs(c.move ?? 0), 0);
-  const noProj = !plan.changes.length, nothing = noProj && !plan.min_moves;
-  const minNote = plan.min_moves ? `<div class="sum">${plan.min_moves} men's minutes on the board move to their scenarios.</div>` : "";
-  const cell = (v, text, cls, why) => `<td${cls ? ` class="${cls}"` : ""}>${num(v) ? text(v) : dash(why)}</td>`;
-  const rate = (v) => v.toFixed(2);
-  const moves = plan.rows.map((c) => `<tr><td class="nm" title="${esc(c.name)}"><span class="tc2">${esc(c.team)}</span> ${esc(c.short)}</td>`
-    + cell(c.min_from, f1, "mu", "no minutes on the board") + cell(c.min_to, f1, "", "no minutes after Apply")
-    + cell(c.rate_from, rate, "mu gs", "no DK/min Tonight") + cell(c.rate_to, rate, "", "no DK/min in this scenario")
-    + cell(c.proj_from, rate, "mu gs", "no projection on the board") + cell(c.proj_to, rate, "", "no projection after Apply")
-    + cell(c.move, (v) => `${v > 0 ? "+" : ""}${v.toFixed(2)}`, dcls(c.move ?? 0), "no figure to compare") + `</tr>`).join("");
-  const teams = plan.teams.filter((t) => t.moves > 0 || t.min_moves > 0).map((t) => `<span class="tp"><b>${esc(t.team)}</b> ${esc(t.name)} <i>${t.moves} move${t.moves === 1 ? "" : "s"}</i>${num(t.min_total) ? ` <em class="mu" title="The team's minutes, for reference only">${f1(t.min_total)} min</em>` : ""}</span>`).join("");
-  return `<div class="box"><div class="ph" style="--t1:var(--gr)"><b>Apply to the board</b><span class="mu">${esc(name)}</span></div>`
-    + `<div class="sum">${nothing ? "<b>No man changes.</b> Teams on Tonight with no pins send nothing." : noProj ? "<b>No man's projection changes.</b>" : `<b>${plan.changes.length} men change</b> by ${f1(total / plan.changes.length)} points on average: ${up} up, ${dn} down.`}</div>${minNote}${teams ? `<div class="tps">${teams}</div>` : ""}${planNotes(plan)}`
-    + (plan.rows.length ? `<div class="movesx"><table class="ts2"><thead><tr><th>Moves</th><th title="Minutes the board holds now">Min now</th><th>Min after</th><th class="gs" title="Tonight's DK points per minute: the board holds no scenario rate, so this is Tonight's even after an earlier Apply">DK/min Tonight</th><th>DK/min after</th><th class="gs" title="Projection the board holds now">Proj now</th><th>Proj after</th><th>Move</th></tr></thead><tbody>${moves}</tbody></table></div>` : "")
-    + `<div class="cacts">${nothing ? "" : `<button class="sv on" id="applyGo"><kbd>Enter</kbd>Apply</button>`}<button class="sv" id="applyNo"><kbd>Esc</kbd>${nothing ? "Close" : "Cancel"}</button></div></div>`;
-}
-
-export function reverseHtml(rev, name) {
-  const kept = rev.kept.length ? `<div class="mis">${rev.kept.length} men keep the number you typed since: ${esc(rev.kept.join(", "))}.</div>` : "";
-  return `<div class="box"><div class="ph" style="--t1:var(--am)"><b>Reverse the last Apply</b><span class="mu">${esc(name)}</span></div><div class="sum">Reverse takes back <b>${countsText(rev.restored, rev.restored_min)}</b>, as held before Apply (${esc(isoToEastern(rev.at) ?? rev.at)}).</div>${kept}<div class="cacts"><button class="sv on" id="applyGo"><kbd>Enter</kbd>Reverse</button><button class="sv" id="applyNo"><kbd>Esc</kbd>Cancel</button></div></div>`;
 }

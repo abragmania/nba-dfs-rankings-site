@@ -10,7 +10,7 @@
 // it. Pure file access and checks; the route is in server.js. Nothing else reads the file yet (the late swap screen will).
 import fs from "../../site/shim/fs.js";
 import path from "../../site/shim/path.js";
-import { dataRoot } from "./store.js";
+import { dataRoot, hiddenIdAliases } from "./store.js";
 import { writeFileAtomic } from "../../site/shim/atomic.js";
 import { SLOTS } from "../board/slots.js";
 import { cleanSpotName, SPOT_NAME_MAX, MAX_SPOTS } from "../board/spot-name.js";
@@ -46,6 +46,16 @@ export function readSpots(slate) {
     if (why) throw new Error(`cache/spots/${slate}.json: ${why}`);
   }
   return { slate, spots: saved.spots };
+}
+
+/** The slate's spots as the screens should see them: a spot holding the id of an older-file copy the Saved list hides reads as holding
+ *  the shown lineup of the same mode and men. Only the reading changes; the saved lineups file is never rewritten, and a later write of
+ *  the spots stores the shown id. */
+export function readSpotsShown(slate) {
+  const { spots } = readSpots(slate);
+  const alias = hiddenIdAliases(slate);
+  if (!alias.size) return { slate, spots };
+  return { slate, spots: Object.fromEntries(Object.entries(spots).map(([n, e]) => [n, e.lineup_id !== null && alias.has(e.lineup_id) ? { ...e, lineup_id: alias.get(e.lineup_id) } : e])) };
 }
 
 /** A spots map with its keys in order, as text: two maps are the same exactly when this is. */
@@ -165,11 +175,12 @@ export function writeSpots(slate, spots) {
   return { slate, spots };
 }
 
-/** A saved lineup is being deleted: every spot it holds is emptied (the one empty shape) and what it held is kept under `last`.
+/** A saved lineup (or a list of ids: it and its hidden copies) is being deleted: every spot it holds is emptied (the one empty shape) and what it held is kept under `last`.
  *  Called before the lineup is removed, so a failed write leaves the lineup in place. Returns the names emptied. */
 export function vacateSpots(slate, lineupId, now = new Date().toISOString()) {
   const { spots } = readSpots(slate);
-  const held = Object.keys(spots).filter((n) => spots[n].lineup_id === String(lineupId));
+  const ids = new Set((Array.isArray(lineupId) ? lineupId : [lineupId]).map(String)); // one write for all the ids (a lineup and its hidden copies)
+  const held = Object.keys(spots).filter((n) => ids.has(spots[n].lineup_id));
   if (!held.length) return [];
   const next = { ...spots };
   for (const n of held) next[n] = { ...EMPTY, last: { lineup_id: spots[n].lineup_id, slots: spots[n].slots, assigned_at: spots[n].assigned_at, vacated_at: now, why: "the saved lineup was deleted" } };

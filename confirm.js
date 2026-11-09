@@ -4,7 +4,7 @@
 
 /** The standard's wordings. */
 export const CONFIRM = {
-  resetAll: "Clear every typed projection, typed ownership, bump and applied minutes? Stars and notes stay.",
+  resetAll: "Clear every typed projection, typed ownership, bump and minutes set in the console? Stars stay.",
   deleteSaved: "Delete this saved lineup?",
   clearLineup: "Clear the lineup?",
 };

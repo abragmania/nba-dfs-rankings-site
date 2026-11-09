@@ -304,7 +304,8 @@ export function lsClick(X, d, own) {
     case "lspage": lsPage(X, +d.i); redraw(); return true;
     case "lsprev": lsPage(X, ls.res.idx - 1); redraw(); return true;
     case "lsnext": lsPage(X, ls.res.idx + 1); redraw(); return true;
-    case "save": savedCall(X, { slots: ls.slots, mode: ls.res.mode }, "save the lineup", own); return true;
+    // The pins go with it (a started man keeps his slot when the server seats the saved lineup), so choosing it later is not refused.
+    case "save": savedCall(X, { slots: ls.slots, mode: ls.res.mode, pinned: lsView(P, X.ctx()).pinned }, "save the lineup", own); return true;
     case "load": {
       // Seated for late swap first, as on the way in, so the frozen slots match the DraftKings entry the CSV wrote.
       const l = P.saved.find((x) => x.id === d.id);

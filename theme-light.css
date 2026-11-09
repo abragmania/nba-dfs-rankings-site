@@ -5,6 +5,7 @@ body.light .opt .slot.pick:hover{background-color:#0000000a}
 body.light td{border-bottom-color:#e3e3dd}
 body.light tbody tr:hover td{background:#00000008}
 body.light tr.team:hover td{background:color-mix(in srgb,var(--t1) 10%,transparent)}
+body.light tr.team:hover td.gp,body.light tbody tr:hover td.gp{background-image:linear-gradient(var(--gpt),var(--gpt))}
 body.light tr.inl td{background-color:#9a5b0012}
 body.light tr.inl:hover td{background-color:#9a5b001f}
 /* Buttons that rest in a dark edge. */
@@ -19,8 +20,8 @@ body.light .ip.t-solo,body.light .tot b.t-solo{color:color-mix(in srgb,var(--tc)
 body.light .ip.t-lit,body.light .tot b.t-lit{color:color-mix(in srgb,var(--tc) 45%,#000);text-shadow:none}
 body.light .ip.t-soft,body.light .tot b.t-soft{color:color-mix(in srgb,var(--tc) 45%,#000)}
 body.light .game.sel{background:linear-gradient(180deg,#fff3d6,var(--p))}
-body.light td.bar .b,body.light .capbar{background:#00000012}
-body.light td.val .b i,body.light td.own .b i,body.light .capbar i{box-shadow:none}
+body.light .capbar{background:#00000012}
+body.light .capbar i{box-shadow:none}
 body.light .logo{filter:drop-shadow(0 0 1px #00000059)}
 body.light .chipx{background:#0000000f}
 /* Tints written at dark strength. */
@@ -50,7 +51,7 @@ body.light .st,body.light .crow.locked .sl,body.light .lsw.on,body.light .lslot.
 body.light .go:disabled{background:#00000014;color:var(--dim)}
 body.light .opt .act .gorun .go:disabled{color:var(--tx)}
 /* Over-page shadows and the player card. */
-body.light .notes .list,body.light .colpop,body.light .cfm-box,body.light .nt-in{box-shadow:0 12px 40px #00000033}
+body.light .notes .list,body.light .colpop,body.light .cfm-box{box-shadow:0 12px 40px #00000033}
 body.light .cardbg{background:#00000059}
 body.light .cfm{background:#00000059}
 body.light .card{box-shadow:inset 0 2px 0 var(--am),0 12px 40px #00000040}

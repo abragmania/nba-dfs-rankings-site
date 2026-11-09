@@ -17,16 +17,17 @@ import { OPTIMIZE_CEILING_MS, APP_MAX_STEPS, ANSWER_START_MS, ANSWER_KEEPALIVE_M
 
 export const LATE_ONE_GAME_NOTE = "Only one game left unstarted; DraftKings needs players from at least two games, so pin or keep a started man.";
 import {
-  SLATE_NAME, MAX_SAVED, listSlates, readSlate, readPicks, checkPicks, savePicks, readLineups, checkLineupBody, addLineup, removeLineup,
+  SLATE_NAME, MAX_SAVED, listSlates, readSlate, readPicks, checkPicks, savePicks, readLineups, checkLineupBody, addLineups, removeLineup, idsRemovedWith,
   checkWorking, readWorking, saveWorking,
 } from "./slate/store.js";
-import { readSpots, writeSpots, checkSpotsBody, applySpots, vacateSpots } from "./slate/spots.js";
+import { readSpots, readSpotsShown, writeSpots, checkSpotsBody, applySpots, vacateSpots } from "./slate/spots.js";
 import { readBuilds, writeBuilds, checkBuildsBody, applyBuilds } from "./slate/builds.js";
-import { readOverrides, writeOverrides, checkChanges, applyChanges, resetPlayer, resetAll, mergeOverrides } from "./slate/overrides.js";
+import { readOverrides, writeOverrides, checkChanges, applyChanges, resetPlayer, resetAll, mergeOverrides, publicOverrides } from "./slate/overrides.js";
 import { consoleHandler } from "./slate/console-route.js";
 import { depthHandler } from "./slate/depth-store.js";
 import { readNewsLineups } from "./slate/news-lineups.js";
 import { withUsualMinutes } from "../site/shim/app-only.js";
+import { withOurMinutes } from "./slate/our-minutes.js";
 import { pullStamp, withPullMoves } from "../site/shim/pull-moves.js";
 import { lateswapHandler } from "./slate/lateswap-route.js";
 
@@ -163,7 +164,7 @@ function effectivePlayers(res, slate, slateData) {
   }
 }
 
-/** GET { slate, overrides }; POST a change ({ proj, own, bump, stars, notes }), { reset: dk_id } or { resetAll: true }.
+/** GET { slate, overrides }; POST a change ({ proj, own, bump, stars }), { reset: dk_id } or { resetAll: true }.
  *  A POST answers { overrides, players } with the players' effective figures, so the page redraws from the saved file. */
 async function handleOverrides(req, res, slate) {
   const slateData = openSlate(req, res, slate, "Overrides");
@@ -180,7 +181,7 @@ async function handleOverrides(req, res, slate) {
   };
   if (req.method === "GET") {
     const current = readCurrent();
-    return current && send(res, 200, { slate, overrides: current });
+    return current && send(res, 200, { slate, overrides: publicOverrides(current) });
   }
   const read = await readJson(req, res);
   if (!read) return;
@@ -198,10 +199,11 @@ async function handleOverrides(req, res, slate) {
     return fail(res, 400, e.code, e.message);
   }
   const written = writeOverrides(slate, next);
-  send(res, 200, { overrides: written, players: mergeOverrides(slateData.players ?? [], written) });
+  send(res, 200, { overrides: publicOverrides(written), players: mergeOverrides(slateData.players ?? [], written) });
 }
 
-/** GET the slate's saved lineups; POST { slots, mode } saves one (checked by the one validator), POST { remove: id } drops one. */
+/** GET the slate's saved lineups; POST { slots, mode } saves one, POST { batch: [{ slots, mode }] } saves many (Save all), each checked
+ *  by the one validator and skipped when already saved; POST { remove: id } drops one. */
 async function handleLineups(req, res, slate) {
   const slateData = openSlate(req, res, slate, "Lineups");
   if (!slateData) return;
@@ -217,7 +219,7 @@ async function handleLineups(req, res, slate) {
     try {
       if (!readLineups(slate, slateData).lineups.some((l) => String(l.id) === String(checked.remove))) return fail(res, 404, "NO_LINEUP", "No saved lineup with that id.");
       before = readSpots(slate).spots;
-      vacateSpots(slate, checked.remove);
+      vacateSpots(slate, idsRemovedWith(slate, checked.remove)); // a hidden copy of the lineup goes with it, so its spot is emptied too, all in one write
     } catch (e) { error("spots could not be updated before a delete", { slate, message: e.message }); return fail(res, 500, "SPOTS_FAILED", "its spots could not be updated, so nothing was deleted."); }
     let out;
     try { out = removeLineup(slate, checked.remove, slateData); } catch (e) {
@@ -227,8 +229,11 @@ async function handleLineups(req, res, slate) {
     }
     return out ? send(res, 200, out) : fail(res, 404, "NO_LINEUP", "No saved lineup with that id.");
   }
-  const out = addLineup(slate, checked.slots, checked.mode, slateData);
-  return out ? send(res, 200, out) : fail(res, 400, "TOO_MANY", `At most ${MAX_SAVED} lineups can be saved for one slate.`);
+  // The file is read and written in one step with nothing awaited (store.js addLineups), so overlapping saves cannot both land.
+  // The answer is the shown list plus { saved, already }: a lineup with the same mode and men as a saved one is skipped, not saved twice.
+  const out = addLineups(slate, checked.items, slateData);
+  if (out.over) return fail(res, 400, "TOO_MANY", `At most ${MAX_SAVED} lineups can be saved for one slate; ${out.room} more would fit${out.room === 0 ? " (delete some first)" : `, and this save has more than that`}.`);
+  return send(res, 200, out);
 }
 
 /** GET the slate's lineup spots (slate/spots.js); POST { assign: { spot, lineup_id, confirmed? } } gives a spot a saved lineup (the
@@ -240,13 +245,13 @@ async function handleLineups(req, res, slate) {
 async function handleSpots(req, res, slate) {
   const slateData = openSlate(req, res, slate, "Spots");
   if (!slateData) return;
-  if (req.method === "GET") return send(res, 200, readSpots(slate));
+  if (req.method === "GET") return send(res, 200, readSpotsShown(slate));
   const read = await readJson(req, res, MAX_SPOTS_BODY);
   if (!read) return;
   const checked = checkSpotsBody(read.body);
   if (!checked.ok) return fail(res, 400, "BAD_SPOT", checked.message);
   // Read only now, after the body has arrived, so two overlapping POSTs each apply onto the other's saved result.
-  const next = applySpots(readSpots(slate).spots, checked, readLineups(slate, slateData).lineups);
+  const next = applySpots(readSpotsShown(slate).spots, checked, readLineups(slate, slateData).lineups);
   if (!next.ok) return fail(res, next.status, next.code, next.message);
   send(res, 200, writeSpots(slate, next.spots));
 }
@@ -523,7 +528,7 @@ async function route(req, res, opts) {
     const players = effectivePlayers(res, slate, data); // the board shows the effective figures, each with its base
     if (!players) return;
     const usual = withUsualMinutes(slate, { ...data, players }, { nowMs: opts.now() }); // each man's usual minutes, the console's figure
-    const merged = withPullMoves(slate, usual, { nowMs: opts.now() }); // who the newest pull moved against the one before it
+    const merged = withPullMoves(slate, withOurMinutes(slate, usual), { nowMs: opts.now() }); // who the newest pull moved against the one before it
     return send(res, 200, opts.seasonFigures ? await opts.seasonFigures(merged) : merged);
   }
   if (p.startsWith("/api/")) return fail(res, 404, "NOT_FOUND", "Not found.");

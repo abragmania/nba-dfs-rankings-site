@@ -69,6 +69,9 @@ table{border-collapse:collapse}
 .tbl table{min-width:100%}#thead th:last-child,#tbody td:last-child{width:100%}
 th{font-size:10.5px;letter-spacing:0;text-transform:none;color:var(--mu);font-weight:700;text-align:right;padding:6px 12px;border-bottom:1px solid var(--ln);background:var(--p2);cursor:pointer;user-select:none;white-space:nowrap}
 thead tr{background:var(--p2)}th.pl{text-align:left}th.s{color:var(--am)}th.ctl{cursor:default}
+/* The sort arrow hangs after the label and takes no width (its negative margin cancels it), so a sort moves no column and the label stays over its numbers; the sorted header sits one layer up so the arrow shows over the next header's padding. */
+th[data-sort]::after{content:"▾";display:inline-block;width:8px;margin:0 -10px 0 2px;font-size:8px;text-align:left;visibility:hidden}th.s::after{visibility:visible}th.s.up::after{content:"▴"}
+#thead th.s{z-index:2}
 td{padding:2px 12px;border-bottom:1px solid #18181c;text-align:right;white-space:nowrap}
 tbody tr:hover td{background:#ffffff0d}
 tr.team:hover td{background:color-mix(in srgb,var(--t1) 7%,transparent)}
@@ -91,40 +94,50 @@ td.pl{text-align:left;padding-left:6px;padding-right:20px}
 .l2{font-size:11px;line-height:13px;color:var(--dim);margin-top:0}
 td.num{min-width:58px}
 td.num,th.num{padding-left:7px;padding-right:7px}
-td.chg.up{color:var(--gr);font-weight:700}td.chg.dn{color:var(--rd);font-weight:700}td.chg.dim{color:var(--mu)}
+td.chg.up{color:color-mix(in srgb,var(--gr) 55%,var(--mu))}td.chg.dn{color:color-mix(in srgb,var(--rd) 55%,var(--mu))}td.chg.dim{color:var(--mu)} /* Chg is in the quiet stats family: its sign shows in a muted green or red, not the loud colour of a TON arrow */
+td.alt{color:var(--mu);font-weight:400}td.alt.dim{color:var(--dim)} /* Ours beside Min (player-table.js min_other): the other source, so a shade quieter than Min; blank and dimmer with no figure */
 td.sal{color:var(--mu)}
-td.fig{color:var(--mu)}
+/* Two groups of figures (player-table.js famOf). Projections (Proj, Val, Own, Min, Ours, DK/m TON): tonight's numbers, one tinted band down header and rows,
+   one size, text colour, weight 500, right-aligned; Proj alone is bold as the headline. Stats (DK/m SZN, Usg, Usual, Chg): what happened, untinted, muted, weight 400, one right edge with room for the LY/1g/2g marker.
+   Colour is kept only for meaning: the TON arrow and Chg's sign (green up, red down), a typed number's amber box, the amber LY marker. A thin divider opens each group. */
+.tbl{--gpt:color-mix(in srgb,var(--am) 8%,transparent);--gph:color-mix(in srgb,var(--am) 15%,transparent)}
+td.gp{background-image:linear-gradient(var(--gpt),var(--gpt))}
+th.gp{background-image:linear-gradient(var(--gph),var(--gph))}
+tbody tr:hover td.gp{background-image:linear-gradient(var(--gpt),var(--gpt))}
+td.gd,th.gd{border-left:1px solid color-mix(in srgb,var(--mu) 38%,var(--ln))}
+td.gp{font-weight:500;color:var(--tx)}td.gp.alt{font-weight:400;color:var(--mu)}td.gp.alt.dim{color:var(--dim)}
+td.fig{color:var(--mu);font-weight:400}
 /* The LY/1g/2g marker hangs after the number (absolute), so the cell and its header keep room for it on the right. */
 td.fig,th.fig{padding-right:18px}
 td.fig .tg{position:absolute;margin-left:2px;font:700 9px "JetBrains Mono",monospace;color:var(--mu);transform:translateY(-4px)}
 td.fig .tg.ly{color:var(--am)}
-td.proj{font-weight:800;font-size:15px;color:var(--am)}
-/* DK/m TON: Proj's amber, tonight's family; DK/m SZN stays the muted td.fig. The arrow is against the season figure. */
-td.ton{font-weight:800;color:var(--am)}
-th.ton{color:var(--am)}
+td.gp.proj{font-weight:700}
+/* DK/m TON: the arrow is against the season figure (DK/m SZN, its neighbour). */
 .ton-arr{font-style:normal;font-size:9px;margin-right:4px;vertical-align:1px}
 .ton-arr.up{color:var(--gr)}.ton-arr.dn{color:var(--rd)}
 /* Changed since the last pull: the row's mark, its line and each figure's tag. */
 tr.team.moved td:first-child{box-shadow:inset 3px 0 var(--am)}
 tr.team.moved{background-image:linear-gradient(90deg,#ffb00014 0,transparent 55%)}
 .l2.why{color:var(--am)}.l2.why b{color:var(--tx);font-weight:600}
-/* Every row of Proj, Min and DK/m TON holds the slot, empty when unmoved, so the numbers share one right edge; the header steps in by the same width to sit over them. */
-.tagslot{display:inline-block;width:38px;text-align:left;vertical-align:middle}
-td.num:has(>.tagslot){padding-right:0}
-th[data-sort="projection"],th[data-sort="minutes"],th[data-sort="dk_tonight"]{padding-right:38px}
-.dtag{font:700 11px "Space Grotesk",sans-serif;font-variant-numeric:tabular-nums;margin-left:3px;padding:0 1px}
+/* A move since the last pull (Proj, Min, DK/m TON) hangs over the right end of the figure, in the row's spare height, so no column keeps an empty slot and the numbers sit evenly; the tag is no wider than a figure, so it never reaches a neighbour. */
+td.num:has(>.tagslot){position:relative}
+.tagslot{position:absolute;right:4px;top:0;white-space:nowrap;line-height:1}
+.dtag{display:block;font:700 8.5px "Space Grotesk",sans-serif;font-variant-numeric:tabular-nums;line-height:10px;padding:0 2px}
 /* A laptop's window: tighter figure cells, so table and panel still fit beside each other (the LY marker's room stays on the season figures). */
 @media (max-width:2199px){
-  #chips .chip{white-space:nowrap}
+  #chips .chip{white-space:nowrap;padding:4px 6px} /* with the narrower search box, keeps Columns on the toolbar's first row at 1920 beside the optimizer */
   .tabs button{padding:4px 8px}
-  .search{width:145px}
+  .search{width:138px;padding:4px 6px}
   .cnt{margin-left:0;min-width:0}
   td.num{min-width:46px}
   td.num,th.num{padding-left:4px}
-  td.num:not(.fig):not(:has(>.tagslot)),th.num:not(.fig){padding-right:4px}
-  th.num[data-sort="projection"],th.num[data-sort="minutes"],th.num[data-sort="dk_tonight"]{padding-right:38px} /* the header steps in over the delta slot here too (the rule above would give it 4px) */
+  td.num:not(.fig),th.num:not(.fig){padding-right:4px}
   td.fig,th.fig{padding-right:14px}
   td.pl{padding-right:8px}
+  /* Ours beside Min and the Min % / Max % boxes give back 24px so the table fits its box beside the panel at 1920 with season figures and their markers filled in. The Player column is left alone. */
+  #tbody td.num.alt,#thead th.num.alt{min-width:36px;padding-left:2px;padding-right:2px}
+  #tbody td.lim,#thead th.lim{width:43px;padding:0 2px}
+  #tbody .limb{width:37px;padding:0 3px}
 }
 .dtag.up{background:#39e58c1f;color:var(--gr)}.dtag.dn{background:#ff4d5e1f;color:var(--rd)}
 .pullnote:not([hidden]){display:flex;align-items:center;gap:16px}
@@ -190,14 +203,9 @@ th[data-sort="projection"],th[data-sort="minutes"],th[data-sort="dk_tonight"]{pa
 .chip.movedchip{margin-left:6px;border-color:var(--am);color:var(--am)}.chip.movedchip b{color:var(--am)}
 .chip.movedchip:disabled{cursor:default}
 .chip.movedchip.on{background:var(--am);color:#000}.chip.movedchip.on b{color:#000}
-td.bar .b{display:inline-block;vertical-align:middle;width:48px;height:4px;background:#ffffff0d;margin-right:10px}
-td.bar .b i{display:block;height:100%}
-td.val .b i{background:var(--gr);box-shadow:0 0 8px #39e58c88}td.own .b i{background:var(--bl);box-shadow:0 0 8px #6aa8ff88}
-td.bar .v{display:inline-block;min-width:44px;vertical-align:middle}
-td.val .v{color:var(--gr)}
+td.val .v,td.own .v{display:inline-block}
+td.val,td.own{min-width:44px} /* Val and Own are plain figures: no bar, so no room kept for one */
 .miss{color:var(--dim);text-decoration:underline dotted;text-underline-offset:3px}
-td.bar .b.off{visibility:hidden}
-td.val .b{display:none}td.own .b{width:28px} /* Adam 5:40 PM ET: no Value bar, a shorter Own bar */
 tr.locked:not(.team) td{background:#39e58c0c}tr.locked:not(.team) td.ctl{box-shadow:inset 3px 0 var(--gr)}tr.locked .name{color:var(--gr)}
 tr.team.locked{background:linear-gradient(#39e58c0a,#39e58c0a),linear-gradient(90deg,color-mix(in srgb,var(--t1) 3%,transparent) 0,transparent 120px)}
 tr.excl td{opacity:.3}tr.excl .name{text-decoration:line-through}
@@ -279,8 +287,19 @@ tr.excl td{opacity:.3}tr.excl .name{text-decoration:line-through}
 .lu.wk .cap .capt .overcap b{color:var(--rd)}
 .lu.wk .cap .capt .perop{grid-column:3;justify-self:start;align-items:flex-start}
 .lu.wk .capt .none,.lu.wk .capt .none b{font-size:12.5px;font-weight:400;color:var(--dim)}
-/* At about 1920 the optimizer's footer columns are too tight for "Per open slot" beside "Salary used": tighter labels keep them apart. */
-@media (min-width:901px) and (max-width:2100px){.opt .lu.wk .cap .capt{font-size:10px;letter-spacing:.3px}.opt .lu.wk .cap .capt b{font-size:20px}.opt .lu.wk .cap .capt .perop{white-space:normal;max-width:60px;line-height:1.15}}
+/* At about 1920 six footer figures do not fit on one row of the narrow panel ("$9,900$40,100184.3"): they take two rows of three, money above, scores below, each figure keeping its own room. */
+@media (min-width:901px) and (max-width:2100px){
+  .opt .lu.wk .cap .capt{font-size:10px;letter-spacing:.3px;grid-template-columns:repeat(3,minmax(0,1fr));row-gap:12px;column-gap:10px}
+  .opt .lu.wk .cap .capt b{font-size:20px}
+  .opt .lu.wk .cap .capt span{grid-row:auto;justify-self:start;align-items:flex-start}
+  .opt .lu.wk .cap .capt span:nth-child(2){grid-column:1;grid-row:1}
+  .opt .lu.wk .cap .capt .perop{grid-column:2;grid-row:1;white-space:nowrap;max-width:none;line-height:1.15}
+  .opt .lu.wk .cap .capt span:nth-child(1){grid-column:3;grid-row:1;justify-self:end;align-items:flex-end}
+  .opt .lu.wk .cap .capt span:nth-child(3){grid-column:1;grid-row:2}
+  .opt .lu.wk .cap .capt .tval{grid-column:2;grid-row:2}
+  .opt .lu.wk .cap .capt span:nth-child(4){grid-column:3;grid-row:2;justify-self:end;align-items:flex-end}
+  .opt .lu.wk .cap .capt .of{position:static;margin-top:0}
+}
 /* A narrow optimizer panel (the 1920 laptop, about 530px): tighter columns, no position badge, and a long name (over 20 letters) shows its first name as an initial, so the last name and "Empty" always show. */
 .lu.wk{container-type:inline-size}
 @container (max-width:640px){
@@ -592,17 +611,13 @@ td.proj,td.own{position:relative}
 .ovt{display:inline-flex;gap:3px;margin-left:auto;padding-left:8px}
 .ovt button{width:24px;height:24px;border:1px solid #2a2a30;background:var(--p2);color:var(--mu);display:inline-grid;place-items:center;padding:0;font-size:12px;line-height:1}
 .ovt button:hover:not(:disabled){color:var(--tx);border-color:var(--am)}
-.ovt .nt.on{border-color:var(--bl);color:var(--bl);background:#6aa8ff18}
 .ovt .rs{color:var(--am);border-color:#ffb00066}
 .ovt .rs.off{visibility:hidden}
-.nt-in{position:absolute;right:0;top:calc(100% + 2px);z-index:4;width:280px;background:var(--p2);border:1px solid var(--bl);color:var(--tx);padding:4px 6px;font-size:12px;box-shadow:0 8px 24px #000c}
-.nt-in:focus{outline:none}
 /* The line under an open box (cell-editor.js, standard A3), which sets where a number box's sits. It never takes a click. */
 .ed-hint{position:absolute;z-index:4;padding:1px 6px;background:var(--p2);border:1px solid var(--ln);color:var(--mu);font:500 10.5px "JetBrains Mono",monospace;white-space:nowrap;pointer-events:none}
-.ed-hint.nt{right:0;top:calc(100% + 32px)}
 .ed-hint.bad{border-color:var(--rd);color:var(--rd)}
 /* A greyed or excluded cell's opacity makes a stacking context, which would dim an open box and let the next row cover it. */
-#tbody td:has(.ov-in,.nt-in){opacity:1;position:relative;z-index:5}
+#tbody td:has(.ov-in){opacity:1;position:relative;z-index:5}
 /* The one confirm (confirm.js), over everything; centred by the box itself. */
 .cfm{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:#000a}
 .cfm-box{width:min(440px,90vw);background:var(--p2);border:1px solid var(--am);padding:16px 18px;box-shadow:0 12px 40px #000c}
@@ -668,7 +683,9 @@ tr.inl:hover td{background-color:#ffb00014}
 tr.blk{cursor:not-allowed}
 tr.blk td{opacity:.42}tr.blk td.ctl,tr.blk td.bmp{opacity:.75}
 tr.blk .logo{filter:grayscale(1)}
-tr.team.blk:hover td{background:none}
+tr.team.blk:hover td{background-color:transparent}
+/* A locked man is a pick, not a disabled row: no dimming (an excluded man stays at 30%). */
+tr.blk.locked:not(.excl) td,tr.blk.locked:not(.excl) td.ctl,tr.blk.locked:not(.excl) td.bmp,tr.blk.locked:not(.excl) td.lim{opacity:1}
 tr.excl.blk td{opacity:.3}
 .opt .slot.pick{cursor:pointer}
 .opt .slot.pick:hover{background-color:#ffffff0f}
@@ -724,6 +741,12 @@ body.fs-list #thead th:last-child,body.fs-list #tbody td:last-child{width:auto} 
   #tbody td.pl{background-color:var(--p)}#thead th.pl{background-color:var(--p2);z-index:3}
   #tbody td.ctl:first-child,#thead th.ctl:first-child{position:sticky;left:0;z-index:1;background-color:var(--p)}
   #thead th.ctl:first-child{background-color:var(--p2);z-index:3}
+  /* A dimmed row dims what is in the sticky star and name cells, not the cells: a see-through cell would show the figures sliding under it. */
+  #tbody tr.blk td.pl,#tbody tr.blk td.ctl:first-child,#tbody tr.excl td.pl,#tbody tr.excl td.ctl:first-child,#tbody tr.started td.pl,#tbody tr.started td.ctl:first-child{opacity:1}
+  #tbody tr.blk td.pl>*{opacity:.42}#tbody tr.blk td.ctl:first-child>*{opacity:.75}
+  #tbody tr.started td.pl>*{opacity:.55}#tbody tr.started td.ctl:first-child>*{opacity:.32}
+  #tbody tr.excl td.pl>*,#tbody tr.excl td.ctl:first-child>*{opacity:.3}
+  #tbody tr.blk.locked:not(.excl) td.pl>*,#tbody tr.blk.locked:not(.excl) td.ctl:first-child>*{opacity:1}
 }
 @media (max-width:900px){
   .tabs button,.tchip,.top .themes button,.top .vtabs button{min-height:32px}
@@ -734,6 +757,23 @@ body.fs-list #thead th:last-child,body.fs-list #tbody td:last-child{width:auto} 
   .top .lsw,.top .vtabs button,.top .themes button,.tabs button{min-height:36px}
   .fbar{position:static}
   .tbl{top:0;max-height:calc(100dvh - 12px)}
+  /* The sticky Player column was 348px in a 333px box and covered every figure. On a phone it holds only the logo and a shortened name (the star column beside it is sticky too), about 130px; the position tag and game line are left off here. */
+  #tbody td.pl,#thead th.pl{width:128px;min-width:0;max-width:128px;padding-right:4px}
+  #tbody .who{gap:6px}
+  #tbody .who .nm{min-width:0;flex:1;overflow:hidden}
+  #tbody .l1{overflow:hidden}
+  #tbody .l1 .name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #tbody .l1 .pos,#tbody .l2{display:none}
+  /* The row's note and reset buttons drop to a second line under the name, inside the same 128px sticky cell, so no figure column is pushed. */
+  #tbody .who{flex-wrap:wrap;row-gap:2px}
+  #tbody .ovt{flex-basis:100%;margin-left:28px;padding-left:0}
+  #tbody .ovt button{width:36px;height:36px}
+  #tbody .ovt:has(.rs.off){display:none} /* a row with nothing to reset keeps its short height; the reset takes its own line only when it has work */
+  /* Touch targets: 36px square on every row control, like the rest of the phone view. */
+  #tbody .ctl button,#tbody .bump-btn{width:36px;height:36px;min-width:36px}
+  #tbody .bump-ctl{width:auto;gap:2px}
+  #tbody .limb{width:37px;height:36px}
+  #tbody td.ctl:first-child,#thead th.ctl:first-child{padding-left:6px}
 }
 
 /* On a phone the moved-since-last-pull note stacks: the text full width, then its two buttons in one row of 36px. */

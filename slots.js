@@ -11,6 +11,9 @@ export const DEFAULT_COUNT = 5;
  *  the server's kept build all read it. */
 export const MAX_COUNT = 150;
 
+/** A key for a set of men whatever the slot order: the one copy, used by the Saved cards' tick and the server's refusal of a second save. */
+export const setKey = (ids) => [...ids].map(String).sort().join("|");
+
 /** Bit i set when the man may fill SLOTS[i]; 0 when he has no roster_positions. */
 export function slotMask(player) {
   let m = 0;

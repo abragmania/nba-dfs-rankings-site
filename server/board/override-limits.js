@@ -10,8 +10,6 @@ export const BUMP_MAX_STEPS = 10;
 export const PROJ_MAX = 200;
 /** A typed projected ownership is 0 to 100 percent. */
 export const OWN_MAX = 100;
-/** A note is 1 to 300 characters. */
-export const NOTE_MAX = 300;
 /** The console's pins: minutes, usage, DK points per minute and projection, each from 0 to this. */
 export const PIN_MAX = { m: 48, u: 100, d: 9, p: PROJ_MAX };
 /** A hand-out edit is a percent; a combination table's gain is at most a team's minutes. */

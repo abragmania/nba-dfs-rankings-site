@@ -1,11 +1,7 @@
-// The optimizer panel's saved lineups (panel.js draws them under its actions): each a card on the shared lineup row with its
-// Cash or GPP mark (optimizer standard A5, A12), Load, Delete and a tick for Download DK CSV, and the read of a slate's saved
-// list from the server. The panel's own render, POST helper and CSV step come in as `own`, so this file never imports panel.js back.
+// The saved lineups' page side (the cards are drawn by lineups-tab.js): the not-legal tag, Load, Delete and the tick for Download DK
+// CSV, a card's name and letter, and the read of a slate's saved list from the server. The panel's own render, POST helper and CSV step come in as `own`, so this file never imports panel.js back.
 import { esc, isoToEastern } from "./board-util.js";
-import { SLOTS } from "./slots.js";
-import { cardRowHtml, capLine } from "./card-row.js";
 import { CONFIRM } from "./confirm.js";
-import { HINT } from "./cell-editor.js";
 
 /** A saved lineup the server judged not legal against tonight's slate file (its `legal` and `reasons`); "" when legal. */
 export function illegalTag(l) {
@@ -42,13 +38,6 @@ export const savedLetterOf = (l, saved) => savedLetter(/^[1-9]\d*$/.test(String(
 export function keepSwaps(prev, next) {
   const swapped = new Map((prev ?? []).filter((l) => l.swapped).map((l) => [String(l.id), l]));
   return next.map((l) => (swapped.has(String(l.id)) ? { ...l, slots: swapped.get(String(l.id)).slots, orig: swapped.get(String(l.id)).orig, swapped: true } : l));
-}
-
-function nameRow(l, letter, P) {
-  const name = P.svNames?.[l.id] ?? `Lineup ${letter}`;
-  const tag = `<span class="svl" title="In the order saved">${letter}</span>`;
-  if (P.svEdit?.id === l.id) return `<div class="svn">${tag}<input data-svname="${esc(l.id)}" maxlength="${NAME_MAX}" value="${esc(P.svEdit.text)}" placeholder="Lineup ${letter}" aria-label="Name this lineup" autocomplete="off"><span class="ed-hint">${HINT}</span></div>`;
-  return `<div class="svn">${tag}<span>${esc(name)}</span><button data-op="svrename" data-id="${esc(l.id)}">Rename</button></div>`;
 }
 
 /** Closes the name box: "save" keeps what was typed (an empty box goes back to the plain name), anything else drops it. */
@@ -100,44 +89,49 @@ function pruneNames(X, lineups) {
   X.tryStore(() => localStorage.setItem(namesKey(X.ctx().name), JSON.stringify(next)));
 }
 
-function savedCard(l, P, { byId, dash, seat, colourOf, knownName = null, tagOf = () => null }) {
-  // Seated as the CSV writes them; a man off the slate leaves the lineup as stored, named when this page has held him. A saved card always shows the latest figures (Adam, 11-04).
-  const men = seat(l.slots.map((id) => byId.get(id) ?? { dk_id: id, stale: true, name: knownName?.(id) ?? null })).men;
-  const at = isoToEastern(l.saved_at);
-  // From the server's id, never reused, so a delete moves no other card's letter.
-  const letter = savedLetterOf(l, P.saved);
-  return `<div class="lc svc">${nameRow(l, letter, P)}<div class="lch"><label class="svt" title="Tick for Download DK CSV"><input type="checkbox" data-op="svpick" data-id="${esc(l.id)}"${P.savedPick?.has(l.id) ? " checked" : ""}><span class="md${l.mode === "Cash" ? " cash" : ""}">${esc(l.mode)}</span><span class="t">${at ? esc(at) : dash("no time on this saved lineup")}</span></label>${illegalTag(l)}`
-    + `<span class="lcb"><button class="sm${P.loaded?.id === l.id ? " on" : ""}" data-op="load" data-id="${esc(l.id)}">Load</button><button class="sm x" data-op="del" data-id="${esc(l.id)}">Delete</button></span></div>`
-    + SLOTS.map((s, k) => { const tag = tagOf(men[k]); return cardRowHtml({ slot: s, p: men[k], dash, colourOf, cls: `lr${tag ? " gonetag" : ""}`, note: tag ?? "" }); }).join("")
-    + capLine(men.map((p) => (p?.stale ? null : p)), { dash }) + `</div>`;
-}
-
 /** A saved lineup in a message, by what its card shows. */
 export const savedName = (l) => `${l.mode} saved ${isoToEastern(l.saved_at) ?? "at an unknown time"}`;
 
-/** The Saved section: until the list has been read it is not known, so a read out or failed is never "no saved lineups". */
-export function savedHtml(P, byId, { dash, seat, colourOf = null, knownName = null, tagOf = () => null }) {
-  if (P.savedError) return `<div class="sec">Saved</div><div class="saved"><span class="none">Could not read the saved lineups: ${esc(P.savedError)}. Click in the panel to try again.</span></div>`;
-  if (!P.savedReady) return `<div class="sec">Saved</div><div class="saved"><span class="none">Reading the saved lineups</span></div>`;
-  if (!P.saved.length) return `<div class="sec">Saved</div><div class="saved"><span class="none">No saved lineups for this slate yet.</span></div>`;
-  const n = pickedSaved(P).length;
-  const off = P.ls ? ` disabled title="Leave late swap mode to download saved lineups: a started man must keep his slot"` : n ? "" : ` disabled title="Tick the saved lineups to download"`;
-  const head = `<div class="sec svh"><span>Saved</span><button class="ol sm" data-op="svcsv"${off}>Download DK CSV${n ? ` (${n})` : ""}</button></div>`;
-  return `${head}<div class="lcs">${[...P.saved].reverse().map((l) => savedCard(l, P, { byId, dash, seat, colourOf, knownName, tagOf })).join("")}</div>`;
-}
-
 /** Sends a save or delete to the server and shows the saved list it answers with (for the slate still on show). `done` runs
- *  only when the server took it, so a failed delete changes nothing on the page. */
+ *  only when the server took it, so a failed delete changes nothing on the page. Answers true when the server took it. */
 export async function savedCall(X, body, what, { render, post }, done = null) {
   const name = X.ctx().name;
   try {
     const out = await post(X, "lineups", body);
-    if (name !== X.ctx().name) return;
+    if (name !== X.ctx().name) return false;
     done?.();
     Object.assign(X.P, { saved: keepSwaps(X.P.saved, out.lineups), savedError: null, savedReady: true });
     pruneNames(X, out.lineups);
     render(X);
-  } catch (e) { X.toast(`Could not ${what}: ${e.message}`, "err"); }
+    if (out.already > 0) X.toast(`${out.saved} saved, ${out.already} already saved`); // the default toast is the amber one
+    return true;
+  } catch (e) { X.toast(`Could not ${what}: ${e.message}`, "err"); return false; }
+}
+
+export const SAVE_BATCH = 150; // the server's most lineups in one batch (store.js MAX_BATCH)
+
+/** Save all: `items` [{ slots, mode }] sent in batches of SAVE_BATCH, then one message: how many saved and how many were already
+ *  saved. A batch the server refuses stops the rest and says what had been saved before it. True when every batch was taken. */
+export async function saveBatch(X, items, { render, post }) {
+  const name = X.ctx().name;
+  let saved = 0, already = 0;
+  try {
+    for (let i = 0; i < items.length; i += SAVE_BATCH) {
+      const out = await post(X, "lineups", { batch: items.slice(i, i + SAVE_BATCH) });
+      if (name !== X.ctx().name) return false;
+      saved += out.saved;
+      already += out.already;
+      Object.assign(X.P, { saved: keepSwaps(X.P.saved, out.lineups), savedError: null, savedReady: true });
+      pruneNames(X, out.lineups);
+    }
+    render(X);
+    X.toast(already > 0 ? `${saved} saved, ${already} already saved` : `${saved} saved`);
+    return true;
+  } catch (e) {
+    render(X);
+    X.toast(`Could not save all the lineups: ${e.message}${saved || already ? ` (${saved} saved, ${already} already saved before that)` : ""}`, "err");
+    return false;
+  }
 }
 
 /** A delete, once Adam has said yes. */

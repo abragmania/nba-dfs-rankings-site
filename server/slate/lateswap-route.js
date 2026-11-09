@@ -13,7 +13,7 @@ import { refuseCrossSiteRead } from "../lib/origin.js";
 import { error } from "../../site/shim/log.js";
 import { SLATE_NAME, readLineups, readSlate } from "./store.js";
 import { readSaved, writeSaved, saveUpload, listUploads, readUpload } from "./lateswap-store.js";
-import { readSpots, applySpots, writeSpots } from "./spots.js";
+import { readSpotsShown, applySpots, writeSpots } from "./spots.js";
 import { applyOp, uploadText, syncSpots, exportFile, slateFor } from "../lateswap/screen-ops.js";
 import { buildModel } from "../lateswap/screen-model.js";
 import { readEntries } from "../lateswap/entries-csv.js";
@@ -24,12 +24,12 @@ export const MAX_UPLOAD = 4 * 1024 * 1024; // an entries file is about 50 KB; th
 
 /** The Lineups tab's spots that hold a lineup, { name: { lineup_id, slots, assigned_at } }: its own code (spots.js) reads them, an emptied spot
  *  ({ lineup_id: null }) holds none. An unreadable file throws, never an empty map. */
-const heldSpots = (slate) => Object.fromEntries(Object.entries(readSpots(slate).spots).filter(([, r]) => r.lineup_id !== null));
+const heldSpots = (slate) => Object.fromEntries(Object.entries(readSpotsShown(slate).spots).filter(([, r]) => r.lineup_id !== null));
 
 /** Gives a spot a saved lineup through the Lineups tab's own rules and file code; the engine has already had Adam's go-ahead for any Out or
  *  gone man, so the off-the-board confirmation is given. Returns the stamp, or { fail } with the refusal. */
 function giveSpotLineup(slate, spot, lineupId, lineups) {
-  const w = applySpots(readSpots(slate).spots, { kind: "assign", spot, lineupId, confirmed: true }, lineups);
+  const w = applySpots(readSpotsShown(slate).spots, { kind: "assign", spot, lineupId, confirmed: true }, lineups);
   if (!w.ok) return { fail: w };
   writeSpots(slate, w.spots);
   return { stamp: w.spots[spot].assigned_at };

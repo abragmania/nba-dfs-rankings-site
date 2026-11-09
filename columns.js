@@ -8,34 +8,39 @@ export const COLUMNS = [
   { key: "star", label: "Star" },
   { key: "name", label: "Player", required: true },
   { key: "salary", label: "Sal" },
+  // Tonight's projections, one tinted band (player-table.js famOf): Proj, Val, Own, Min, Ours, DK/m TON.
   { key: "projection", label: "Proj" },
-  { key: "proj_own", label: "Own" },
   { key: "value", label: "Val" },
+  { key: "proj_own", label: "Own" },
   { key: "minutes", label: "Min" },
+  { key: "min_other", label: "Ours / TG" },
   { key: "dk_tonight", label: "DK/m TON" },
+  // Stats, what happened; DK/m SZN meets DK/m TON at the family boundary.
+  { key: "dk_per_min", label: "DK/m SZN" },
+  { key: "usage", label: "Usg" },
+  { key: "min_usual", label: "Usual" },
+  { key: "min_chg", label: "Chg" },
+  // Controls, one block at the far right.
   { key: "thumbs", label: "Thumbs" },
   { key: "lock", label: "Lock" },
   { key: "exclude", label: "Exclude" },
   { key: "min_pct", label: "Min %" },
   { key: "max_pct", label: "Max %" },
-  { key: "min_usual", label: "Usual" },
-  { key: "min_chg", label: "Chg" },
-  { key: "dk_per_min", label: "DK/m SZN" },
-  { key: "usage", label: "Usg" },
 ];
 const BY_KEY = new Map(COLUMNS.map((c) => [c.key, c]));
 const STANDARD = COLUMNS.map((c) => c.key);
 
-/** The remembered state's version. 2 (Adam, 11-07): Min and DK/m TON sit right after Val, the two halves of the projection beside it. */
-export const COLUMNS_VERSION = 2;
-const BESIDE_VAL = ["minutes", "dk_tonight"];
+/** The remembered state's version. 3 (Adam, 11-09): projections, then stats, then the controls; a state from before 3 takes the standard's
+ *  order once (its ticks kept, so what he hid stays hidden) and can be reordered from the Columns list afterwards. 2 (11-07) put Min and DK/m TON beside Val. */
+export const COLUMNS_VERSION = 3;
+const BESIDE_VAL = ["minutes", "min_other", "dk_tonight"];
 
 /** The standard's order with every column ticked. */
 export const defaultColumns = () => ({ v: COLUMNS_VERSION, order: [...STANDARD], hidden: [] });
 
 /** A remembered state made safe: unknown and repeated keys dropped, a column it does not know put back after its standard
- *  neighbour, a required column never hidden. A state from before version 2 has Min and DK/m TON moved right after Val and ticked,
- *  once, so the new order shows without a reset. Anything that is not a state gives the standard's. */
+ *  neighbour, a required column never hidden. A state from before version 3 takes the standard's order, once, with its ticks kept
+ *  (before version 2 Min and DK/m TON were also ticked on). Anything that is not a state gives the standard's. */
 export function cleanColumns(saved) {
   if (!saved || typeof saved !== "object" || !Array.isArray(saved.order)) return defaultColumns();
   let order = [...new Set(saved.order)].filter((k) => BY_KEY.has(k));
@@ -44,12 +49,9 @@ export function cleanColumns(saved) {
     const prev = i === 0 ? -1 : order.indexOf(STANDARD[i - 1]);
     order.splice(prev + 1, 0, k);
   });
-  const old = !(saved.v >= COLUMNS_VERSION);
-  if (old) {
-    order = order.filter((k) => !BESIDE_VAL.includes(k));
-    order.splice(order.indexOf("value") + 1, 0, ...BESIDE_VAL);
-  }
-  const hidden = Array.isArray(saved.hidden) ? [...new Set(saved.hidden)].filter((k) => BY_KEY.has(k) && !BY_KEY.get(k).required && !(old && BESIDE_VAL.includes(k))) : [];
+  if (!(saved.v >= COLUMNS_VERSION)) order = [...STANDARD];
+  const showBeside = !(saved.v >= 2);
+  const hidden = Array.isArray(saved.hidden) ? [...new Set(saved.hidden)].filter((k) => BY_KEY.has(k) && !BY_KEY.get(k).required && !(showBeside && BESIDE_VAL.includes(k))) : [];
   return { v: COLUMNS_VERSION, order, hidden };
 }
 

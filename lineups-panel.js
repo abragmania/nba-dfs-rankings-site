@@ -5,7 +5,7 @@ import { keepFocus } from "./board-util.js";
 import { lineupRefusals, isOutNow } from "./card-row.js";
 import { lineupsTabHtml, viewModel, builtAtText, viewOf, entriesOf, unavailableMen, unavailableLabel, savedLabel, heldSpots, outNamesOfCtx, SORTS, MODE_FILTERS } from "./lineups-tab.js";
 import { swapContext, swapOptions, swapIds } from "./swap-list.js";
-import { savedCall, savedClick, savedNameInput } from "./saved-panel.js";
+import { savedCall, saveBatch, savedClick, savedNameInput } from "./saved-panel.js";
 import { cleanSpotName } from "./spot-name.js";
 import { planInOrder, orderSummary } from "./assign-order.js";
 import { compareClick, freshCompare } from "./lineups-compare.js";
@@ -378,12 +378,13 @@ async function saveSwapped(X, id, own) {
   const { P } = X, l = P.saved.find((x) => String(x.id) === String(id)), slate = X.ctx().name;
   if (!l) return;
   const had = new Set(P.saved.map((x) => String(x.id))), held = heldSpots(P.spots, l.id);
-  await savedCall(X, { slots: l.slots, mode: l.mode }, "save the lineup", own);
-  if (X.ctx().name !== slate) return; // the page moved to another slate while the save was out: nothing here belongs to the new one
+  const took = await savedCall(X, { slots: l.slots, mode: l.mode }, "save the lineup", own);
+  if (!took || X.ctx().name !== slate) return; // a refused save leaves the swap as it is; the page moved to another slate while the save was out: nothing here belongs to the new one
   const made = P.saved.find((x) => !had.has(String(x.id)));
-  if (!made) return;
+  if (!P.saved.some((x) => String(x.id) === String(l.id))) return; // the old card is gone from the list
+  // Nothing new was stored (the swap equals a lineup already saved, as the toast said): the card goes back to the men it has saved, so it agrees with the file.
   P.saved = P.saved.map((x) => (String(x.id) === String(l.id) ? { ...x, slots: x.orig ?? x.slots, orig: undefined, swapped: false } : x));
-  if (held.length) {
+  if (made && held.length) {
     P.spotMove = { fromId: String(l.id), toId: String(made.id), spots: held };
     X.toast(`${held.join(", ")} ${held.length === 1 ? "is" : "are"} still on the old lineup.`);
   }
@@ -477,6 +478,11 @@ export function tabClick(X, d, own) {
     case "ltcsv": { const m = viewModel(P, X.ctx(), (men) => own.lateSwapSeat(men)); download(X, m.shown, own); return true; }
     case "ltdl": { const m = viewModel(P, X.ctx(), (men) => own.lateSwapSeat(men)); const e = m.all.find((x) => x.key === d.k); if (e) download(X, [e], own); return true; }
     case "savesw": saveSwapped(X, d.id, own); return true;
+    case "saveall": {
+      const items = viewModel(P, X.ctx(), (men) => own.lateSwapSeat(men)).shown.filter((e) => e.kind === "build").map((e) => ({ slots: e.ids, mode: e.mode }));
+      if (items.length) saveBatch(X, items, own);
+      return true;
+    }
     case "lssaved": {
       const l = P.saved.find((x) => String(x.id) === d.id), c = X.ctx();
       if (l) inModeOf(X, l.mode);

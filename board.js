@@ -11,7 +11,7 @@ import { bumpPatch, delegateBumpClicks } from "./bump-control.js";
 import { createEditors } from "./cell-editor.js";
 import { askConfirm, CONFIRM } from "./confirm.js";
 import { columnsControl, sortNote } from "./columns.js";
-import { headHtml, rowHtml, SORT_KEYS, comparePlayers, hasResettable } from "./player-table.js";
+import { headHtml, rowHtml, SORT_KEYS, comparePlayers, hasResettable, minSourceOf } from "./player-table.js";
 import { pullChipHtml, pullNoteHtml } from "./pull-note.js";
 import { CHECK_MS, applyHeld, createRefresher, mergeFresh, outNamesOf, overrideKey, picksOnBoard, pullOf, rememberRows, rosterCleanup, statusLine } from "./slate-refresh.js";
 import { pressSettle } from "./press-settle.js";
@@ -87,7 +87,7 @@ const panel = createPanel({ el: $("opt"), lineupsEl: $("lineups"), onView: (v) =
 // The table's own columns, ticked and ordered by Adam per mode (columns.js); the list's and the table's redraws keep each other.
 const columns = columnsControl({ btn: $("colsBtn"), pop: $("colPop"), mode: panel.mode, tryStore, onChange: () => { if (S.slate) { renderHead(); fixTableWidth(); } } });
 const shownCols = () => columns.keys({ lateSwap: Boolean(panel.lateSwap()) });
-// The scenario console (console.js), the page's other view; Apply hands back the players' effective figures, as an override save does.
+// The scenario console (console.js), the page's other view; each change there hands back the players' effective figures, as an override save does.
 const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: (t) => colourOf(t).t1, onPlayers: (players) => applyPlayers(players), onWork: () => { boardMarks.refresh({ news: false }); lineupBar.newsOnly(); } });
 // The console's word on each row (board-marks.js): the S chip, and his typed Min and DK/m TON with their undo chips; those cells write through the console.
 const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, onChange: () => { if (S.slate) renderRows(); }, noteEl: $("lineupbar").insertAdjacentElement("beforebegin", Object.assign(document.createElement("div"), { hidden: true })) });
@@ -112,6 +112,7 @@ fsBtn.addEventListener("click", () => {
   fullScreen = !fullScreen;
   tryStore(() => localStorage.setItem(FS_KEY, fullScreen ? "1" : "0"));
   applyFullScreen();
+  fixTableWidth(); // the table's held width is the other layout's until measured again
 });
 applyFullScreen();
 /** Shows the console or the board. The board's table holds a measured width, so it is measured again on the way back. */
@@ -266,7 +267,7 @@ function slateLabel(name) {
 }
 function noteLists() {
   const f = (x) => (typeof x === "string" ? x : JSON.stringify(x));
-  return { conflicts: (S.slate.conflicts ?? []).map(f), missing: (S.slate.missing ?? []).map(f) };
+  return { conflicts: (S.slate.conflicts ?? []).map(f), missing: [...(S.slate.missing ?? []).map(f), ...(S.slate.min_ours_problem ? [S.slate.min_ours_problem] : [])] };
 }
 function renderTop() {
   const s = S.slate; if (!s) return;
@@ -325,9 +326,9 @@ const posTag = (p) => {
 };
 function visible() {
   const rows = filterPlayers(S.players, S, S.picks);
-  return rows.sort((a, b) => comparePlayers(a, b, S.sort));
+  return rows.sort((a, b) => comparePlayers(a, b, S.sort, minSourceOf(S.slate)));
 }
-function renderHead() { $("thead").innerHTML = headHtml(shownCols(), S.sort, headTitle); }
+function renderHead() { $("thead").innerHTML = headHtml(shownCols(), S.sort, headTitle, minSourceOf(S.slate)); }
 /** A season-figure column's tooltip: its basis, then this season's as-of time (and last season's when an LY figure shows). */
 function headTitle(c) {
   const f = S.slate?.season_figures?.[c.key];
@@ -339,9 +340,6 @@ function headTitle(c) {
 }
 function renderRows() {
   const rows = visible();
-  const mx = (k) => Math.max(0, ...S.players.map((p) => p[k]).filter((v) => typeof v === "number"));
-  const mn = (k) => Math.min(...S.players.map((p) => p[k]).filter((v) => typeof v === "number"));
-  const vmin = mn("value"), vmax = mx("value"), omax = mx("proj_own");
   const lock = new Set(S.picks.locked), ex = new Set(S.picks.excluded);
   const keys = shownCols();
   // Late swap mode: each row's slot picker takes the lock button's place; a started man outside the working lineup cannot
@@ -357,7 +355,7 @@ function renderRows() {
   $("cnt").textContent = `${rows.length} player${rows.length === 1 ? "" : "s"}${sortNote(keys, S.sort)}`;
   // A keyboard user keeps his place, and an open box what he typed: the rows redraw on every pick, save and answer from the server.
   editors.around(() => keepFocus($("tbody"), () => {
-    $("tbody").innerHTML = rows.length ? rows.map((p) => rowHtml(p, keys, { dash, when, colourOf, tag: posTag(p), lock, ex, L, inl, blocks, vmin, vmax, omax, limits: panel.limits(), marks: boardMarks.of })).join("") : `<tr><td colspan="${keys.length}" class="nores">No players match.</td></tr>`;
+    $("tbody").innerHTML = rows.length ? rows.map((p) => rowHtml(p, keys, { minSource: minSourceOf(S.slate), dash, when, colourOf, tag: posTag(p), lock, ex, L, inl, blocks, limits: panel.limits(), marks: boardMarks.of })).join("") : `<tr><td colspan="${keys.length}" class="nores">No players match.</td></tr>`;
   }));
 }
 // The table is only as wide as its content, so its width would follow the visible rows and the optimizer beside it would
@@ -407,13 +405,13 @@ function renderFilterMarks() {
 }
 function renderTabs() { $("tabs").innerHTML = TABS.map((t) => `<button data-tab="${t}" class="${t === S.tab ? "on" : ""}">${t}</button>`).join(""); }
 // Locked / Excluded / Starred filter chips with their counts (only men still on the slate are counted); 0 is dim but
-// clickable. Then "Reset all overrides" (A6): it clears typed numbers, bumps and applied minutes, never stars or notes (NFL D72), so it is
+// clickable. Then "Reset all overrides" (A6): it clears typed numbers, bumps and console minutes, never stars (NFL D72), so it is
 // disabled while no row has any, and it asks first (the click below).
 function renderChips() {
   const n = (k) => (k === "starred" ? S.players.filter((p) => p.starred).length : S.picks[k].filter((id) => S.byId.has(id)).length);
   const nOvr = S.players.filter(hasResettable).length;
   $("chips").innerHTML = [["locked", "Locked"], ["excluded", "Excluded"], ["starred", "Starred"]].map(([k, label]) => `<button data-chip="${k}" class="chip ${k}${S.pickFilter === k ? " on" : ""}${n(k) ? "" : " zero"}" title="${S.pickFilter === k ? "Show everyone again" : `Show only ${label.toLowerCase()} players`}">${label} <b>${n(k)}</b></button>`).join("")
-    + `<button id="ovReset" class="chip ovr${nOvr ? "" : " zero"}"${nOvr ? ` title="${nOvr} ${nOvr === 1 ? "man has" : "men have"} a typed number, a bump or applied minutes on this slate"` : ` disabled title="No typed numbers, bumps or applied minutes on this slate"`}>Reset all overrides</button>`
+    + `<button id="ovReset" class="chip ovr${nOvr ? "" : " zero"}"${nOvr ? ` title="${nOvr} ${nOvr === 1 ? "man has" : "men have"} a typed number, a bump or minutes set in the console on this slate"` : ` disabled title="No typed numbers, bumps or console minutes on this slate"`}>Reset all overrides</button>`
     + pullChipHtml(S.slate?.pull_changes, S.players, S.pickFilter === "changed");
   renderPullNote();
 }
@@ -477,7 +475,7 @@ function toggle(id, kind) {
 // out when the request is sent (a star toggle reads the star the previous answer left, so a double-click toggles twice).
 let ovQueue = Promise.resolve();
 let ovSaves = 0; // moves with every override write and its answer, so a refresh fetched across one is not drawn over it
-const OV_KEYS = ["projection", "value", "proj_own", "base", "ovr", "starred", "note", "minutes", "base_minutes"];
+const OV_KEYS = ["projection", "value", "proj_own", "base", "ovr", "starred", "minutes", "base_minutes"];
 function saveOverride(body, what) {
   const name = S.name;
   ovSaves++;
@@ -500,7 +498,7 @@ function saveOverride(body, what) {
   return run;
 }
 /** The figures a build scores from Adam's overrides, as one string: the panel compares it before and after a build to say
- *  "built before your last projection or ownership change" (stars and notes leave it unchanged). */
+ *  "built before your last projection or ownership change" (stars leave it unchanged). */
 function ovKeyOf() {
   return overrideKey(S.players);
 }
@@ -520,16 +518,16 @@ function applyPlayers(players) {
   S.byId = new Map(S.players.map((p) => [p.dk_id, p]));
   renderRows(); renderPick();
 }
-// The typed Proj and Own boxes and the note box (cell-editor.js, standard A3).
+// The typed Proj and Own boxes (cell-editor.js, standard A3).
 const editors = createEditors({
   root: $("tbody"), rowOf: (id) => S.byId.get(id), toast, onClosed: () => press(() => setTimeout(flushHeld, 0)), limits: { current: (kind, id) => panel.limits()[id]?.[kind] ?? null, outcome: (kind, id, text) => panel.limitOutcome(kind, id, text) },
-  save: (kind, id, v, settle) => (kind === "min" || kind === "max" ? (limitPatch($("tbody"), kind, id, v), panel.setLimit(kind, id, v, settle)) : kind === "cmin" || kind === "crate" ? boardMarks.setPin(id, kind === "cmin" ? "m" : "d", v) : kind === "note" ? saveOverride({ notes: { [id]: v } }, "the note") : saveOverride({ [kind]: { [id]: v } }, kind === "proj" ? "the projection" : "the ownership")),
+  save: (kind, id, v, settle) => (kind === "min" || kind === "max" ? (limitPatch($("tbody"), kind, id, v), panel.setLimit(kind, id, v, settle)) : kind === "cmin" || kind === "crate" ? boardMarks.setPin(id, kind === "cmin" ? "m" : "d", v) : saveOverride({ [kind]: { [id]: v } }, kind === "proj" ? "the projection" : "the ownership")),
 });
 // The thumbs pairs are redrawn with the rows, so one listener on the table body serves them all (bump-control.js).
 delegateBumpClicks($("tbody"), { rowOf: (id) => S.byId.get(id), onBump: (id, stepsAt) => saveOverride(() => bumpPatch(id, stepsAt()), "the projection bump") });
 
 // A click on a player row (Adam, 5:34 PM ET 2026-10-29): the man goes into the working lineup, or out when he is in it.
-// Never on a control: the star, lock and exclude cells, the name (it opens his card), the note and reset, the thumbs cell, an
+// Never on a control: the star, lock and exclude cells, the name (it opens his card), the reset, the thumbs cell, an
 // editable figure, or an open editor. Not on a greyed row (A18), and not on the press that closed an editor (it only closes
 // it). In late swap mode a row click does nothing new (the mode's slot pickers pin men).
 const ROW_CONTROLS = "td.ctl, td.bmp, td.lim, button, input, select, a, [data-edit], .ovt, .bump-ctl";
@@ -541,7 +539,7 @@ $("tbody").addEventListener("click", (e) => {
 
 // ---------- events ----------
 document.addEventListener("click", (e) => {
-  const t = e.target.closest("[data-sort],[data-tab],[data-game],[data-dk-id],[data-out-i],[data-lock],[data-excl],[data-unpick],[data-chip],[data-view],[data-theme],[data-star],[data-note],[data-reset],[data-edit],[data-unmark],[data-fteam],[data-shade],#ovReset,#clearF,#notesBtn,#lsBtn,#csBtn,#outTog,#pullDismiss");
+  const t = e.target.closest("[data-sort],[data-tab],[data-game],[data-dk-id],[data-out-i],[data-lock],[data-excl],[data-unpick],[data-chip],[data-view],[data-theme],[data-star],[data-reset],[data-edit],[data-unmark],[data-fteam],[data-shade],#ovReset,#clearF,#notesBtn,#lsBtn,#csBtn,#outTog,#pullDismiss");
   if (!t) { const l = $("notesList"); if (l && !e.target.closest(".notes")) l.hidden = true; return; }
   const d = t.dataset;
   if (t.id === "notesBtn") { const l = $("notesList"); l.hidden = !l.hidden; }
@@ -564,7 +562,6 @@ document.addEventListener("click", (e) => {
   else if (d.chip) { S.pickFilter = S.pickFilter === d.chip ? null : d.chip; renderRows(); }
   else if (d.theme) setTheme({ dark: d.theme });
   else if (d.star) { const id = d.star; saveOverride(() => ({ stars: { [id]: !S.byId.get(id)?.starred } }), "the star"); }
-  else if (d.note) editors.openNote(t);
   else if (d.reset) saveOverride({ reset: d.reset }, "the reset");
   else if (d.unmark) boardMarks.drop(d.id, d.unmark);
   else if (d.edit) editors.openNumber(t);

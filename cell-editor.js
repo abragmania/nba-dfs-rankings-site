@@ -1,9 +1,9 @@
-// The typed Proj, Own, Min and DK/m TON boxes and the note box on a player row (optimizer standard A3): click-away saves, Enter saves, Esc
+// The typed Proj, Own, Min and DK/m TON boxes on a player row (optimizer standard A3): click-away saves, Enter saves, Esc
 // cancels, with the hint under the box. The rows redraw on every pick, save and answer from the server, so an open box is
 // lifted out and put back around each redraw: the same element, with what was typed, its caret and its listeners. The box is
 // laid over the figure, right-aligned to it, while the figure keeps its place hidden, so no column moves. The outcomes are
 // pure and tested in node; the rest is tested on a stand-in page.
-import { PROJ_MAX, OWN_MAX, NOTE_MAX, BUMP_STEP_PCT, PIN_MAX } from "./override-limits.js";
+import { PROJ_MAX, OWN_MAX, BUMP_STEP_PCT, PIN_MAX } from "./override-limits.js";
 import { tonightRate } from "./figures.js";
 import { pressSettle } from "./press-settle.js";
 
@@ -22,13 +22,6 @@ export function numberOutcome(text, { cur, max, what }) {
   return { act: "save", value: v };
 }
 
-/** What closing a note box does: unchanged cancels; an empty box removes the note (null). */
-export function noteOutcome(text, old) {
-  const t = String(text).trim();
-  if (t === (old ?? "")) return { act: "cancel" };
-  return { act: "save", value: t === "" ? null : t };
-}
-
 /** The number a Proj or Own box starts from: the typed one when there is one, else the slate's own, never the bumped one
  *  (a bump stays on top of whatever is typed). A Min (cmin) or DK/m TON (crate) box starts from the figure the board shows. */
 export function typedBase(p, kind) {
@@ -41,25 +34,23 @@ const NUMBER_BOX = { proj: [PROJ_MAX, "Projection"], own: [OWN_MAX, "Ownership"]
 
 /**
  * The one editor at a time. deps: root (the table body), rowOf(id) (the player as the board holds him now), save(kind, id,
- * value) ("proj", "own", "note", "min" or "max"; a note's or a limit's null removes it), toast(msg, kind) for a click-away that
+ * value) ("proj", "own", "min" or "max"; a limit's null removes it), toast(msg, kind) for a click-away that
  * cannot save, limits: { current(kind, id), outcome(kind, id, text) } for the Min % and Max % boxes (row-limits.js).
  */
 export function createEditors({ root, rowOf, save, toast, limits = null, onClosed = null }) {
   let ed = null, closedMark = null;
   const isLimit = (kind) => kind === "min" || kind === "max";
-  // A press that closes a box only closes it: the row under it does not also take the man, and the note's own pencil does not
-  // open it again. Pressing first clears the mark, and a blur from that press sets it.
+  // A press that closes a box only closes it: the row under it does not also take the man. Pressing first clears the mark, and a blur from that press sets it.
   document.addEventListener("pointerdown", () => { closedMark = null; }, true);
   // A press that closes a limit's box must still click what is under it: a redraw before the click ends would remove its target.
   const settle = pressSettle(document);
 
-  const anchor = (e) => root.querySelector(e.kind === "note" ? `[data-note="${CSS.escape(e.id)}"]` : `[data-edit="${e.kind}"][data-id="${CSS.escape(e.id)}"]`);
+  const anchor = (e) => root.querySelector(`[data-edit="${e.kind}"][data-id="${CSS.escape(e.id)}"]`);
 
   /** Puts the box and its hint at the anchor of a fresh draw; false when the row is gone. */
   function mount(e) {
     const at = anchor(e);
     if (!at) return false;
-    if (e.kind === "note") { at.parentElement.append(e.input, e.hint); return true; }
     const td = at.closest("td");
     // The wide-screen body zoom scales the rectangles but not these style lengths, so they are divided back by it.
     const sr = at.getBoundingClientRect(), tr = td.getBoundingClientRect(), z = td.offsetWidth ? tr.width / td.offsetWidth : 1;
@@ -79,7 +70,7 @@ export function createEditors({ root, rowOf, save, toast, limits = null, onClose
     e.input.remove();
     e.hint.remove();
     const at = anchor(e);
-    if (at && e.kind !== "note") at.style.visibility = "";
+    if (at) at.style.visibility = "";
     onClosed?.();
     return at;
   }
@@ -89,13 +80,12 @@ export function createEditors({ root, rowOf, save, toast, limits = null, onClose
   const outcome = (e) => {
     const p = rowOf(e.id);
     if (!p || e.input.value === e.start) return { act: "cancel" };
-    if (e.kind === "note") return noteOutcome(e.input.value, p.note);
     if (isLimit(e.kind)) return limits.outcome(e.kind, e.id, e.input.value);
     const [max, what] = NUMBER_BOX[e.kind];
     return numberOutcome(e.input.value, { cur: typedBase(p, e.kind), max, what });
   };
 
-  /** Enter: a bad number keeps the box open, marked, with the reason in the hint line. A note box hands the keyboard back to its button. */
+  /** Enter: a bad number keeps the box open, marked, with the reason in the hint line. */
   function enter(e) {
     const out = outcome(e);
     if (out.act === "bad") {
@@ -104,9 +94,8 @@ export function createEditors({ root, rowOf, save, toast, limits = null, onClose
       e.hint.textContent = out.msg;
       return;
     }
-    const at = close(e);
+    close(e);
     if (out.act === "save") save(e.kind, e.id, out.value);
-    if (e.kind === "note") at?.focus({ preventScroll: true });
   }
 
   /** Click-away, or the row gone from under the box: there is nowhere left to correct a bad number, so it says why it did not save. */
@@ -119,14 +108,13 @@ export function createEditors({ root, rowOf, save, toast, limits = null, onClose
   }
 
   function cancel(e) {
-    const at = close(e);
-    if (e.kind === "note") at?.focus({ preventScroll: true });
+    close(e);
   }
 
   function open(kind, id, input) {
     if (ed) leave(ed);
     const hint = document.createElement("span");
-    hint.className = `ed-hint${kind === "note" ? " nt" : ""}`;
+    hint.className = "ed-hint";
     hint.textContent = HINT;
     const e = { kind, id, input, hint, start: input.value, done: false, moving: false };
     input.autocomplete = "off";
@@ -168,16 +156,6 @@ export function createEditors({ root, rowOf, save, toast, limits = null, onClose
       const steps = kind === "proj" ? p.ovr?.steps ?? 0 : 0;
       input.title = `${HINT}${steps ? `. The ${steps > 0 ? "+" : "−"}${Math.abs(steps) * BUMP_STEP_PCT}% bump stays on top of the number you type` : ""}`;
       open(kind, id, input);
-    },
-    openNote(btn) {
-      const id = btn.dataset.note, p = rowOf(id);
-      if (!p || justClosed("note", id)) return;
-      const input = document.createElement("input");
-      input.className = "nt-in";
-      input.maxLength = NOTE_MAX;
-      input.value = p.note ?? "";
-      input.placeholder = "Note";
-      open("note", id, input);
     },
     /** Runs a redraw of the rows with the open box, if any, lifted out and put back as it was. */
     around(draw) {

@@ -4,7 +4,8 @@ import fs from "../../site/shim/fs.js";
 import path from "../../site/shim/path.js";
 import { dataDir } from "../../site/shim/log.js";
 import { writeFileAtomic } from "../../site/shim/atomic.js";
-import { SLOTS, checkLineup } from "../board/slots.js";
+import { SLOTS, checkLineup, setKey, arrangeForLateSwap } from "../board/slots.js";
+import { slateRefMs } from "../board/board-util.js";
 
 export const SLATE_NAME = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+$/;
 export const MAX_LOCKED = 8; // DraftKings classic has eight roster slots
@@ -144,7 +145,7 @@ export function saveWorking(slate, slots) {
 }
 
 // ---------- saved lineups: cache/lineups/<slate>.json, { slate, next_id, lineups: [{ id, mode, slots, names, saved_at }] } ----------
-export const MAX_SAVED = 200; // per slate; a guard on the file's size, far above a night's use
+export const MAX_SAVED = 300; // per slate (shown lineups, copies in an older file not counted); room for two full builds of 150
 const MODES = ["Cash", "GPP"];
 const lineupsFile = (slate) => path.join(dataRoot(), "cache", "lineups", `${slate}.json`);
 
@@ -167,7 +168,8 @@ export function readLineups(slate, slateData) {
   const { lineups } = readLineupsFile(slate);
   return {
     slate,
-    lineups: lineups.map((l) => {
+    // Each mode-and-men set shows once, even in a file that holds copies (older saves); the file itself is never rewritten for it.
+    lineups: dedupeSaved(lineups).map((l) => {
       const ids = Array.isArray(l.slots) ? l.slots.map(String) : [];
       const gone = ids.filter((id) => !byId.has(id));
       const check = checkLineup(ids.map((id) => byId.get(id) ?? null));
@@ -178,17 +180,10 @@ export function readLineups(slate, slateData) {
   };
 }
 
-/**
- * Checks a lineups body. { remove: id } → { ok, remove }; { slots: [8 dk_ids in SLOTS order], mode } → { ok, slots, mode }
- * when the lineup is legal under the one validator (checkLineup); otherwise { ok: false, message, reasons }.
- */
-export function checkLineupBody(body, slateData) {
+/** One lineup { slots: [8 dk_ids], mode } checked by the one validator: { ok, slots, mode } or { ok: false, message, reasons }. */
+function checkOne(body, slateData) {
   const bad = (message, reasons = []) => ({ ok: false, message, reasons });
   if (!body || typeof body !== "object" || Array.isArray(body)) return bad("Body must be a JSON object.");
-  if ("remove" in body) {
-    if (typeof body.remove !== "string" || !body.remove || body.remove.length > 40) return bad('"remove" must be a saved lineup id.');
-    return { ok: true, remove: body.remove };
-  }
   if (!MODES.includes(body.mode)) return bad('"mode" must be "Cash" or "GPP".');
   const { slots } = body;
   if (!Array.isArray(slots) || slots.length !== SLOTS.length || slots.some((id) => typeof id !== "string")) {
@@ -199,25 +194,127 @@ export function checkLineupBody(body, slateData) {
   if (unknown.length) return bad(`Unknown player id: ${unknown.map((id) => id.slice(0, 40)).join(", ")}`, [`Not in this slate: ${unknown.map((id) => id.slice(0, 40)).join(", ")}.`]);
   const check = checkLineup(slots.map((id) => byId.get(id)));
   if (!check.ok) return bad(`This lineup is not legal: ${check.reasons.join(" ")}`, check.reasons);
-  return { ok: true, slots, mode: body.mode };
+  // Late swap's pins (a started man keeps his slot): each must be a man of this lineup, at the slot the lineup gives him.
+  let pinned = null;
+  if (body.pinned !== undefined && body.pinned !== null) {
+    const pins = body.pinned;
+    if (typeof pins !== "object" || Array.isArray(pins)) return bad('"pinned" must be an object of player id to slot.');
+    for (const [id, slot] of Object.entries(pins)) {
+      if (slots.indexOf(id) < 0 || SLOTS[slots.indexOf(id)] !== slot) return bad(`"pinned" must match the lineup: ${id.slice(0, 40)} is not at ${String(slot).slice(0, 10)}.`);
+    }
+    pinned = Object.keys(pins).length ? pins : null;
+  }
+  return { ok: true, slots, mode: body.mode, pinned };
 }
 
-/** Appends a checked lineup; null when the slate already holds MAX_SAVED. */
-export function addLineup(slate, slots, mode, slateData) {
+export const MAX_BATCH = 150; // lineups in one Save all call: a DraftKings contest's most entries
+
+/**
+ * Checks a lineups body. { remove: id } → { ok, remove }. { slots: [8 dk_ids], mode } or { batch: [{ slots, mode }, ...] } (Save
+ * all) → { ok, items: [{ slots, mode }] } when every lineup is legal under the one validator (checkLineup); otherwise
+ * { ok: false, message, reasons }. A batch is all or nothing: one bad lineup refuses it.
+ */
+export function checkLineupBody(body, slateData) {
+  const bad = (message, reasons = []) => ({ ok: false, message, reasons });
+  if (!body || typeof body !== "object" || Array.isArray(body)) return bad("Body must be a JSON object.");
+  if ("remove" in body) {
+    if (typeof body.remove !== "string" || !body.remove || body.remove.length > 40) return bad('"remove" must be a saved lineup id.');
+    return { ok: true, remove: body.remove };
+  }
+  if ("batch" in body) {
+    if (!Array.isArray(body.batch) || !body.batch.length || body.batch.length > MAX_BATCH) return bad(`"batch" must be a list of 1 to ${MAX_BATCH} lineups.`);
+    const items = [];
+    for (const [i, one] of body.batch.entries()) {
+      const c = checkOne(one, slateData);
+      if (!c.ok) return { ...c, message: `Lineup ${i + 1}: ${c.message}` };
+      items.push({ slots: c.slots, mode: c.mode, pinned: c.pinned });
+    }
+    return { ok: true, items };
+  }
+  const c = checkOne(body, slateData);
+  return c.ok ? { ok: true, items: [{ slots: c.slots, mode: c.mode, pinned: c.pinned }] } : c;
+}
+
+/** A saved lineup's identity: its mode and its set of men, whatever the slot order (Adam, 2026-11-09: never saved twice). */
+const identity = (l) => `${l.mode}#${setKey(Array.isArray(l.slots) ? l.slots : [])}`;
+
+/** The list with each identity once, the first saved kept, order kept. A lineup with no slots list is never merged. Pure; the file on disk is not touched. */
+export function dedupeSaved(lineups) {
+  const seen = new Set();
+  return lineups.filter((l) => {
+    if (!Array.isArray(l.slots)) return true;
+    const k = identity(l);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+/** The 8 men in late-swap order (later tips in the more flexible slots), the order every built lineup is made in; as given when a tip is unreadable.
+ *  `pinned` (dk_id -> slot) keeps a started man in the slot he holds; only the others are re-seated around him. */
+function seated(slate, slots, byPlayer, pinned = null) {
+  const a = arrangeForLateSwap(slots.map((id) => byPlayer.get(id)), { refMs: slateRefMs(slate) ?? Date.now(), pinned });
+  return a.arranged ? a.slots.map((p) => String(p.dk_id)) : slots;
+}
+
+/**
+ * Saves checked lineups [{ slots, mode }] in one read-and-write with nothing awaited in between, so two overlapping saves cannot
+ * both land: a lineup whose mode and men equal one already saved (or earlier in this call) is skipped. Each saved one is stored
+ * in late-swap order. Answers { lineups: the list as readLineups gives it, saved, already }; { over: true, room } when the new ones would take the
+ * slate past MAX_SAVED (nothing is written), room being how many more would fit.
+ */
+export function addLineups(slate, items, slateData) {
   const file = readLineupsFile(slate);
-  if (file.lineups.length >= MAX_SAVED) return null;
-  // The men's names are kept with the lineup: a man who is Out leaves the slate's players, and his name is all that is left to say who he was.
-  const byId = new Map((slateData?.players ?? []).map((p) => [String(p.dk_id), p.name ?? null]));
-  const lineups = [...file.lineups, { id: String(file.next_id), mode, slots, names: slots.map((id) => byId.get(id) ?? null), saved_at: new Date().toISOString() }];
-  writeFileAtomic(lineupsFile(slate), JSON.stringify({ slate, next_id: file.next_id + 1, lineups }, null, 1) + "\n");
-  return readLineups(slate, slateData);
+  const byPlayer = new Map((slateData?.players ?? []).map((p) => [String(p.dk_id), p]));
+  const have = new Set(file.lineups.map(identity));
+  const fresh = [];
+  for (const it of items) {
+    const k = identity(it);
+    if (have.has(k)) continue;
+    have.add(k);
+    fresh.push(it);
+  }
+  // The cap counts what the Saved list shows: hidden copies in an older file take no room.
+  const room = Math.max(0, MAX_SAVED - dedupeSaved(file.lineups).length);
+  if (fresh.length > room) return { over: true, room };
+  if (fresh.length) {
+    const now = new Date().toISOString();
+    // The men's names are kept with the lineup: a man who is Out leaves the slate's players, and his name is all that is left to say who he was.
+    const added = fresh.map((it, i) => {
+      const slots = seated(slate, it.slots, byPlayer, it.pinned ?? null);
+      return { id: String(file.next_id + i), mode: it.mode, slots, names: slots.map((id) => byPlayer.get(id)?.name ?? null), saved_at: now };
+    });
+    writeFileAtomic(lineupsFile(slate), JSON.stringify({ slate, next_id: file.next_id + fresh.length, lineups: [...file.lineups, ...added] }, null, 1) + "\n");
+  }
+  return { ...readLineups(slate, slateData), saved: fresh.length, already: items.length - fresh.length };
 }
 
-/** Removes one saved lineup by id; null when no lineup has that id. */
+/** Hidden id -> shown id for each older-file copy the Saved list hides (same mode, same men as the first saved). Read only; the file is not touched. */
+export function hiddenIdAliases(slate) {
+  const first = new Map(), out = new Map();
+  for (const l of readLineupsFile(slate).lineups) {
+    if (!Array.isArray(l.slots)) continue;
+    const k = identity(l);
+    if (!first.has(k)) first.set(k, String(l.id));
+    else out.set(String(l.id), first.get(k));
+  }
+  return out;
+}
+
+/** The ids a delete of lineup `id` takes: itself and any older-file copies of it hidden by the Saved list (same mode, same men); [] when no lineup has that id. */
+export function idsRemovedWith(slate, id) {
+  const { lineups } = readLineupsFile(slate);
+  const target = lineups.find((l) => String(l.id) === id);
+  if (!target) return [];
+  return lineups.filter((l) => String(l.id) === id || (Array.isArray(target.slots) && Array.isArray(l.slots) && identity(l) === identity(target))).map((l) => String(l.id));
+}
+
+/** Removes one saved lineup by id, with its hidden copies (idsRemovedWith), so a copy never surfaces in its place; null when no lineup has that id. */
 export function removeLineup(slate, id, slateData) {
   const file = readLineupsFile(slate);
-  if (!file.lineups.some((l) => String(l.id) === id)) return null;
-  const lineups = file.lineups.filter((l) => String(l.id) !== id);
+  const gone = new Set(idsRemovedWith(slate, id));
+  if (!gone.size) return null;
+  const lineups = file.lineups.filter((l) => !gone.has(String(l.id)));
   writeFileAtomic(lineupsFile(slate), JSON.stringify({ slate, next_id: file.next_id, lineups }, null, 1) + "\n");
   return readLineups(slate, slateData);
 }

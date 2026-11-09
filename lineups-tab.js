@@ -8,7 +8,7 @@ import { esc, money, isoToEastern } from "./board-util.js";
 import { SLOTS } from "./slots.js";
 import { cardRowHtml, capLine, totals, lineupTag, isOutNow } from "./card-row.js";
 import { gameStacks } from "./corr.js";
-import { exposureRows, exposureHtml, setKey, savedKeys, builtFigures } from "./lineups-list.js";
+import { exposureRows, exposureHtml, setKey, savedKey, savedKeys, builtFigures } from "./lineups-list.js";
 import { swapButtonHtml, swapPanelHtml, swapOptions, lineupStarted } from "./swap-list.js";
 import { buildMessage } from "./build-progress.js";
 import { compareHtml, freshCompare } from "./lineups-compare.js";
@@ -185,7 +185,7 @@ function cardHtml(e, { byId, dash, colourOf, swap, locked, savedSet, names, edit
   }).join("");
   const foot = capLine(e.men.map((p) => (p?.stale ? null : p)), { dash, short: true });
   if (e.kind === "build") {
-    const isSaved = savedSet.has(setKey(e.ids));
+    const isSaved = savedSet.has(savedKey(e.mode, e.ids));
     const at = `data-b="${esc(e.bid)}" data-i="${e.i}"`;
     const btns = `<button class="sm" data-op="lscard" ${at} title="Start late swap from this lineup">Late swap</button>${isSaved ? `<button class="sm on" disabled>Saved ✓</button>` : `<button class="sm" data-op="savecard" ${at}>Save</button>`}<button class="sm x" data-op="discard" ${at} title="Take this lineup off the list">Discard</button>`;
     return `<div class="lc${isSaved ? " savedc" : ""}"><div class="lch"><span>Lineup ${e.n}${sameTag(e)}</span><span class="lcb">${btns}</span></div>${badTag(bannerMen)}${rows}${foot}</div>`;
@@ -273,6 +273,7 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
   const { lists, view, all, inMode, shown } = viewModel(P, c, seat);
   const run = P.running ? (() => { const m = buildMessage(P.build); return `<div class="lt-run lt-build"><span class="gomsg${m.err ? " err" : ""}">${esc(m.text)}</span>${P.build?.shown ? `<button class="ol stop" data-op="stop"${P.build.stopping ? " disabled" : ""}>Stop</button>` : ""}</div>`; })() : "";
   if (P.ls) return `${run}<div class="lt-empty">Late swap mode is on; its lineups are on the Player list tab. <button class="ol sm" data-view="list">Back to the player list</button></div>`;
+  const savedSet = savedKeys((P.saved ?? []).filter((l) => !l.swapped));
   const tab = (v, label, n) => `<button class="${v === view ? "on" : ""}" data-op="ltview" data-v="${v}">${label} <b>${n}</b></button>`;
   const readErr = view === "saved" && (P.savedError || !P.savedReady);
   const showBtn = (v, label) => `<button class="${(P.lt.show ?? "cards") === v ? "on" : ""}" data-op="ltshow" data-v="${v}">${label}</button>`;
@@ -288,6 +289,9 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
       : `<span class="lt-sw${P.spotsError ? " ill" : ""}">${P.spotsError ? `Could not read the spots: ${esc(P.spotsError)}. Click anywhere here to try again.` : "Reading the spots"}</span>`) : "")
     + `</div>`;
   const dl = `<button class="ol lt-dl" data-op="ltcsv"${shown.length ? "" : " disabled"} title="Download the lineups shown, in this order, for DraftKings">Download CSV for DraftKings${shown.length ? ` (${shown.length})` : ""}</button>`;
+  // Save all (Recently generated only): every lineup shown, in one save; the ones already saved are counted, not saved twice.
+  const nNew = view === "build" ? shown.filter((e) => !savedSet.has(savedKey(e.mode, e.ids))).length : 0;
+  const saveAll = view === "build" ? `<button class="ol lt-dl lt-saveall" data-op="saveall"${nNew ? "" : " disabled"} title="${nNew ? "Save every lineup shown (the ones already saved are skipped)" : "Every lineup shown is already saved"}">Save all${nNew ? ` (${nNew})` : ""}</button>` : "";
   const strip = summaryHtml(summaryCells(inMode, { view }), dash);
   let body;
   // A failed read beside builds made on this page says so: the list may be missing builds the server holds.
@@ -308,7 +312,7 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
     const sort = shown.length === 1 && P.expSort.key === "diff" ? { key: "pct", dir: -1 } : P.expSort;
     // You vs field and Diff are GPP figures: a list of Cash lineups alone does not show them.
     const ex = shown.length ? exposureHtml(rows, sort, dash, men, P.expPos, shown.length > 1 && shown.some((e) => e.mode === "GPP")) : "";
-    const ctx = { byId: figures, live: c.byId, tagOf, spotText: P.spotText ?? null, dash, colourOf: c.colourOf, swap: { ctx: swapCtx, open: P.swap ?? null }, locked: new Set(c.picks.locked), savedSet: savedKeys((P.saved ?? []).filter((l) => !l.swapped)), names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true };
+    const ctx = { byId: figures, live: c.byId, tagOf, spotText: P.spotText ?? null, dash, colourOf: c.colourOf, swap: { ctx: swapCtx, open: P.swap ?? null }, locked: new Set(c.picks.locked), savedSet, names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true };
     const counted = men.length ? `${shown.length} of ${inMode.length} lineup${inMode.length === 1 ? "" : "s"} holding all ${men.length === 1 ? "of him" : `${men.length} men`}` : `${inMode.length} lineup${inMode.length === 1 ? "" : "s"}`;
     const none = men.length
       ? `<div class="lt-empty">No lineup holds all of ${men.map((id) => esc(figures.get(id)?.name ?? id)).join(", ")}. <button class="ol sm lt-clear" data-op="menclear">Clear all</button></div>`
@@ -341,5 +345,5 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
   const undo = view === "saved" && P.spotUndo ? `<div class="lt-run"><span>${esc(P.spotUndo.text)}</span><button class="ol sm" data-op="orderundo">Undo</button><button class="ol sm" data-op="orderokay">Keep</button></div>` : "";
   // The panel's notes and stale warnings belong to the last build made on this page in the panel's mode, not to every build below.
   const noted = notes ? `<div class="lt-notes"><em>The last ${esc(P.mode)} build made on this page:</em>${notes}</div>` : "";
-  return `${run}${view === "build" ? readNote + noted : ow + undo + mv}<div class="lt-top">${strip}${dl}</div>${top}${body}`;
+  return `${run}${view === "build" ? readNote + noted : ow + undo + mv}<div class="lt-top">${strip}<span class="lt-acts">${saveAll}${dl}</span></div>${top}${body}`;
 }

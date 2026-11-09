@@ -1,7 +1,7 @@
 // The lineup row and the totals block (optimizer standard A5, A11, A19, A20): every result card and late swap mode draw their
 // slots through cardRowHtml and their totals through capLine. The working lineup on the Player list passes `wk` and draws its
 // own roster-card row (wkRowHtml: Salary, Proj, Value, Own under a header row) and its own totals layout, over the same capLine.
-// A card row is the slot, the team logo, the name (it opens the player card), the position, the injury letter, then Sal, Proj, Own.
+// A card row is the slot (boxed, first at the left, every path), the team logo, the name (it opens the player card), the injury letter, then Sal, Proj, Own.
 // A missing figure is the board's dash with a reason, never zero (RULES R1). Pure: no DOM, tested in node.
 import { esc, money, dec1, logo, injBadge } from "./board-util.js";
 import { SALARY_CAP } from "./slots.js";
@@ -102,10 +102,9 @@ function wkRowHtml({ slot, p, dash, colourOf, cls, attrs, ctl, note, emptyLabel,
  */
 export function cardRowHtml({ slot, p, dash, colourOf = null, cls = "", attrs = "", ctl = null, note = "", emptyLabel = "Empty", lead = "slot", corr = null, wk = false, when = null }) {
   if (wk) return wkRowHtml({ slot, p, dash, colourOf, cls, attrs, ctl, note, emptyLabel, when });
-  // lead "logo" (the Lineups tab's cards): no boxed slot at the left; the logo leads and the slot is small muted text after the name.
+  // lead "logo" (the Lineups tab's cards): the same boxed slot first, then the logo; the compact grid and hidden position/matchup are lineups.css.
   const logoLead = lead === "logo";
-  const row = (extra, style, body) => `<div class="crow${logoLead ? " lead" : ""}${ctl == null ? " noctl" : ""}${cls ? ` ${cls}` : ""}${extra}"${attrs}${style}>${logoLead ? "" : `<span class="sl">${esc(slot)}</span>`}${body}</div>`;
-  const slotTxt = logoLead ? `<span class="slt" title="Roster slot ${esc(slot)}">${esc(slot)}</span>` : "";
+  const row = (extra, style, body) => `<div class="crow${logoLead ? " lead" : ""}${ctl == null ? " noctl" : ""}${cls ? ` ${cls}` : ""}${extra}"${attrs}${style}><span class="sl">${esc(slot)}</span>${body}</div>`;
   const chip = corr ? `<span class="corr" style="--cc:${esc(corr.colour)}" title="Game stack: men from both sides of this game are in the lineup">CORR</span>` : "";
   if (p === undefined) return row(" empty", "", `<span></span><div class="sn"><b>${esc(emptyLabel)}</b></div>`);
   const ctlCell = ctl == null ? "" : ctl === "" ? "<span></span>" : ctl;
@@ -115,7 +114,7 @@ export function cardRowHtml({ slot, p, dash, colourOf = null, cls = "", attrs = 
     return row(" stale", "", `<span></span><div class="sn"><b>${p?.name ? `${esc(p.name)} · ${esc(note || "off the slate")}` : "Not on this slate"}</b>${id}</div>${ctlCell}${fig("ss", "Sal", gone)}${fig("sp", "Proj", gone)}${fig("so", "Own", gone)}`);
   }
   const matchup = p.oppText ? esc(p.oppText) : dash("no opponent in this slate file");
-  return row(colourOf ? " tm" : "", teamAttr(p.team, colourOf), `${logo(p.team, "sm")}<div class="sn"><div class="sn1">${nameLink(p, "", shortName(p.name))}${p.positions?.length ? `<span class="pos">${esc(p.positions.join("/"))}</span>` : ""}${injBadge(p.injury_status)}${chip}${slotTxt}</div><small>${esc(p.team)} ${matchup}${note ? ` · ${esc(note)}` : ""}</small></div>${ctlCell}`
+  return row(colourOf ? " tm" : "", teamAttr(p.team, colourOf), `${logo(p.team, "sm")}<div class="sn"><div class="sn1">${nameLink(p, "", shortName(p.name))}${p.positions?.length ? `<span class="pos">${esc(p.positions.join("/"))}</span>` : ""}${injBadge(p.injury_status)}${chip}</div><small>${esc(p.team)} ${matchup}${note ? ` · ${esc(note)}` : ""}</small></div>${ctlCell}`
     + fig("ss", "Sal", p.salary == null ? dash("no salary in this slate file") : money(p.salary))
     + fig("sp", "Proj", p.projection == null ? dash("no projection in this pull") : p.projection.toFixed(1))
     + fig("so", "Own", p.proj_own == null ? dash("no projected ownership in this pull") : p.proj_own.toFixed(1) + "%"));

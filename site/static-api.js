@@ -44,7 +44,7 @@ const figuresOf = (slate) => seedBaked(`slates/${slate}/figures.json`, `${DATA}/
 async function bakedFigures(slate) {
   const f = await figuresOf(slate.slate);
   const missing = "Basketball-Reference season figures were not published with this slate";
-  const blank = { dk_per_min: null, dk_per_min_note: missing, dk_per_min_tag: null, usage: null, usage_note: missing, usage_tag: null, min_usual_note: "usual minutes were not published with this slate" };
+  const blank = { dk_per_min: null, dk_per_min_note: missing, dk_per_min_tag: null, usage: null, usage_note: missing, usage_tag: null, min_usual_note: "usual minutes were not published with this slate", min_ours_note: "our own minutes were not published with this slate" };
   // The slate-level half of the usual minutes (figures.json's `usual`) was applied by the shim's withUsualMinutes, at the app's step.
   return { ...slate, players: slate.players.map((p) => ({ ...p, ...(f?.players?.[p.dk_id] ?? blank) })), ...(f?.season_figures ? { season_figures: f.season_figures } : {}) };
 }
