@@ -1,33 +1,35 @@
 {
  "slate": "2026-11-09-main",
- "generated_at": "2026-11-09T22:54:11.957Z",
+ "generated_at": "2026-11-09T22:59:48.421Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-09-main/raw/2026-11-09T175404-0500",
+ "slate_built_from": "slates/2026-11-09-main/raw/2026-11-09T175940-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-09T22:54:07.853Z",
+   "fetched_at": "2026-11-09T22:59:44.285Z",
    "saved_as": "news/lineups/pages/monster-2026-11-09T175407-0500.html.gz",
    "saved_at": "2026-11-09T22:54:07.853Z",
+   "unchanged_since": "2026-11-09T22:54:07.853Z",
    "parsed_sha": "1e02cc6cfb1163c017fe85876bbc9c46269149a2e93d273fc56f275f6881ef2c",
-   "sha256": "dd6acfe9117d2763a40960ff09b67a815c574c8d7adeb8d0f1f6d4ee958adb25"
+   "sha256": "9e6b23f974d36fbb241dcfca036cde11592a769dd61365a9cf15cd99f8185d1a"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-09T22:54:11.934Z",
+   "fetched_at": "2026-11-09T22:59:48.386Z",
    "saved_as": "news/lineups/pages/rotowire-2026-11-09T175411-0500.html.gz",
    "saved_at": "2026-11-09T22:54:11.934Z",
+   "unchanged_since": "2026-11-09T22:54:11.934Z",
    "parsed_sha": "368ec4e7df1682d3573f1357a9237599644ae187f88de3fbff1176e5dfcc59bb",
-   "sha256": "484102ef5f2172155d73a2cfc80261570d27764e17b678732caa14f0b0c17441"
+   "sha256": "986f5258cc6680e70db82f06414a28ad82224afb8176cefcc1599bd81b32b46f"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-09T22:54:04.587Z",
-  "changed_at": "2026-11-09T17:54:04-05:00",
-  "saved_as": "news/bbm/2026-11-09T175404-0500.html",
+  "fetched_at": "2026-11-09T22:59:40.672Z",
+  "changed_at": "2026-11-09T17:59:40-05:00",
+  "saved_as": "news/bbm/2026-11-09T175940-0500.html",
   "out": [
    {
     "name": "Isaiah Joe",
@@ -168,16 +170,16 @@
    {
     "name": "Collin Murray-Boyles",
     "team": "TOR",
-    "id": "44847224",
-    "match": "exact",
+    "id": null,
+    "match": null,
     "status": "Out",
-    "detail": "Out (Illness) - Est. Return 11/11"
+    "detail": "illness - Est. Return 11/11"
    },
    {
     "name": "Immanuel Quickley",
     "team": "TOR",
-    "id": "44847164",
-    "match": "exact",
+    "id": null,
+    "match": null,
     "status": "Out",
     "detail": "right hamstring tightness / soreness - Est. Return 11/11"
    },
@@ -283,15 +285,15 @@
     "id": "182123",
     "name": "Immanuel Quickley",
     "team": "TOR",
-    "dk_id": "44847164",
-    "match": "exact",
+    "dk_id": null,
+    "match": null,
     "word": "Out",
     "label": "Out",
     "body": "right hamstring tightness / soreness",
-    "words_at": "2026-11-09T175404-0500",
-    "at": "2026-11-09T22:50:04.000Z",
+    "words_at": "2026-11-09T175940-0500",
+    "at": "2026-11-09T22:49:40.000Z",
     "precision": "minute",
-    "out_as": null
+    "out_as": "Immanuel Quickley"
    },
    {
     "id": "182122",
@@ -302,8 +304,8 @@
     "word": "Out",
     "label": "Out",
     "body": "left adductor / groin soreness tightness",
-    "words_at": "2026-11-09T175404-0500",
-    "at": "2026-11-09T22:50:04.000Z",
+    "words_at": "2026-11-09T175940-0500",
+    "at": "2026-11-09T22:49:40.000Z",
     "precision": "minute",
     "out_as": "Scottie Barnes"
    },
@@ -311,15 +313,15 @@
     "id": "182121",
     "name": "Collin Murray-Boyles",
     "team": "TOR",
-    "dk_id": "44847224",
-    "match": "exact",
+    "dk_id": null,
+    "match": null,
     "word": "Out",
     "label": "Out",
-    "body": null,
-    "words_at": "2026-11-09T175404-0500",
+    "body": "illness",
+    "words_at": "2026-11-09T175940-0500",
     "at": "2026-11-09T22:49:04.000Z",
     "precision": "minute",
-    "out_as": null
+    "out_as": "Collin Murray-Boyles"
    },
    {
     "id": "182120",
@@ -330,8 +332,8 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "left hand soreness",
-    "words_at": "2026-11-09T175404-0500",
-    "at": "2026-11-09T22:36:41.000Z",
+    "words_at": "2026-11-09T175940-0500",
+    "at": "2026-11-09T22:36:40.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -344,8 +346,8 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "right ankle sprain",
-    "words_at": "2026-11-09T175404-0500",
-    "at": "2026-11-09T22:36:41.000Z",
+    "words_at": "2026-11-09T175940-0500",
+    "at": "2026-11-09T22:36:40.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -358,7 +360,7 @@
     "word": "Out",
     "label": "Out",
     "body": "illness",
-    "words_at": "2026-11-09T175404-0500",
+    "words_at": "2026-11-09T175940-0500",
     "at": "2026-11-09T22:31:04.000Z",
     "precision": "minute",
     "out_as": "Austin Reaves"
@@ -372,7 +374,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "g league twoway",
-    "words_at": "2026-11-09T175404-0500",
+    "words_at": "2026-11-09T175940-0500",
     "at": "2026-11-09T22:15:06.000Z",
     "precision": "minute",
     "out_as": null
@@ -386,7 +388,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "g league twoway",
-    "words_at": "2026-11-09T175404-0500",
+    "words_at": "2026-11-09T175940-0500",
     "at": "2026-11-09T22:15:06.000Z",
     "precision": "minute",
     "out_as": null
@@ -400,7 +402,7 @@
     "word": "Off Injury Report",
     "label": "UNKNOWN(Off Injury Report #00cc44)",
     "body": null,
-    "words_at": "2026-11-09T175404-0500",
+    "words_at": "2026-11-09T175940-0500",
     "at": "2026-11-09T22:15:06.000Z",
     "precision": "minute",
     "out_as": null
@@ -414,7 +416,7 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "right contusion",
-    "words_at": "2026-11-09T175404-0500",
+    "words_at": "2026-11-09T175940-0500",
     "at": "2026-11-09T22:15:06.000Z",
     "precision": "minute",
     "out_as": null
@@ -428,7 +430,7 @@
     "word": "Out",
     "label": "Out",
     "body": "right quadriceps tendinopathy",
-    "words_at": "2026-11-09T175404-0500",
+    "words_at": "2026-11-09T175940-0500",
     "at": "2026-11-09T22:15:06.000Z",
     "precision": "minute",
     "out_as": "Moussa Diabate"
@@ -442,8 +444,8 @@
     "word": "Out",
     "label": "Out",
     "body": "cervical spine sprain",
-    "words_at": "2026-11-09T175404-0500",
-    "at": "2026-11-09T22:00:41.000Z",
+    "words_at": "2026-11-09T175940-0500",
+    "at": "2026-11-09T22:00:40.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -456,8 +458,8 @@
     "word": "Playing",
     "label": "Playing",
     "body": "left hip strain",
-    "words_at": "2026-11-09T175404-0500",
-    "at": "2026-11-09T22:00:41.000Z",
+    "words_at": "2026-11-09T175940-0500",
+    "at": "2026-11-09T22:00:40.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -470,8 +472,8 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "right ankle soreness",
-    "words_at": "2026-11-09T175404-0500",
-    "at": "2026-11-09T22:00:41.000Z",
+    "words_at": "2026-11-09T175940-0500",
+    "at": "2026-11-09T22:00:40.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -484,7 +486,7 @@
     "word": "Out",
     "label": "Out",
     "body": "rest",
-    "words_at": "2026-11-09T175404-0500",
+    "words_at": "2026-11-09T175940-0500",
     "at": "2026-11-09T21:45:41.000Z",
     "precision": "minute",
     "out_as": null
@@ -498,8 +500,8 @@
     "word": "Playing",
     "label": "Playing",
     "body": "g league twoway",
-    "words_at": "2026-11-09T175404-0500",
-    "at": "2026-11-09T21:30:04.000Z",
+    "words_at": "2026-11-09T175940-0500",
+    "at": "2026-11-09T21:29:40.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -512,8 +514,8 @@
     "word": "Off Injury Report",
     "label": "UNKNOWN(Off Injury Report #00cc44)",
     "body": null,
-    "words_at": "2026-11-09T175404-0500",
-    "at": "2026-11-09T21:30:04.000Z",
+    "words_at": "2026-11-09T175940-0500",
+    "at": "2026-11-09T21:29:40.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -526,8 +528,8 @@
     "word": "Off Injury Report",
     "label": "UNKNOWN(Off Injury Report #00cc44)",
     "body": null,
-    "words_at": "2026-11-09T175404-0500",
-    "at": "2026-11-09T21:30:04.000Z",
+    "words_at": "2026-11-09T175940-0500",
+    "at": "2026-11-09T21:29:40.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -540,8 +542,8 @@
     "word": "Injured",
     "label": "Out",
     "body": "right knee bone bruise - Suggs is \"progressing positively\" in his rehab and his return will depend on how he responds to increased court work.",
-    "words_at": "2026-11-09T175404-0500",
-    "at": "2026-11-09T21:06:04.000Z",
+    "words_at": "2026-11-09T175940-0500",
+    "at": "2026-11-09T21:05:40.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -554,7 +556,7 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "g league twoway",
-    "words_at": "2026-11-09T175404-0500",
+    "words_at": "2026-11-09T175940-0500",
     "at": "2026-11-09T20:58:06.000Z",
     "precision": "minute",
     "out_as": null
@@ -776,7 +778,8 @@
    "2026-11-09T171606-0500.html",
    "2026-11-09T173204-0500.html",
    "2026-11-09T173741-0500.html",
-   "2026-11-09T175404-0500.html"
+   "2026-11-09T175404-0500.html",
+   "2026-11-09T175940-0500.html"
   ],
   "unreadable_age": 0
  },
@@ -1911,16 +1914,16 @@
       "pos": "F",
       "flag": "Out",
       "status": "Out",
-      "id": "44847224",
-      "match": "exact"
+      "id": null,
+      "match": null
      },
      {
       "name": "Immanuel Quickley",
       "pos": "G",
       "flag": "Out",
       "status": "Out",
-      "id": "44847164",
-      "match": "exact"
+      "id": null,
+      "match": null
      }
     ]
    }
