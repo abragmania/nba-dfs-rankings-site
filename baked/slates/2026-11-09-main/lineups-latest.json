@@ -1,35 +1,33 @@
 {
  "slate": "2026-11-09-main",
- "generated_at": "2026-11-09T22:59:48.421Z",
+ "generated_at": "2026-11-09T23:05:26.310Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-09-main/raw/2026-11-09T175940-0500",
+ "slate_built_from": "slates/2026-11-09-main/raw/2026-11-09T180516-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-09T22:59:44.285Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-09T175407-0500.html.gz",
-   "saved_at": "2026-11-09T22:54:07.853Z",
-   "unchanged_since": "2026-11-09T22:54:07.853Z",
-   "parsed_sha": "1e02cc6cfb1163c017fe85876bbc9c46269149a2e93d273fc56f275f6881ef2c",
-   "sha256": "9e6b23f974d36fbb241dcfca036cde11592a769dd61365a9cf15cd99f8185d1a"
+   "fetched_at": "2026-11-09T23:05:22.220Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-09T180522-0500.html.gz",
+   "saved_at": "2026-11-09T23:05:22.220Z",
+   "parsed_sha": "2d0c6e84be75fee934d0e6b257d826bda5253c817bd371f06f4ebf15cb194f95",
+   "sha256": "2078af57c774dba8ba197d7957cd1b536dc9c505f502c9ca4765f8c02e00ebe4"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-09T22:59:48.386Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-09T175411-0500.html.gz",
-   "saved_at": "2026-11-09T22:54:11.934Z",
-   "unchanged_since": "2026-11-09T22:54:11.934Z",
-   "parsed_sha": "368ec4e7df1682d3573f1357a9237599644ae187f88de3fbff1176e5dfcc59bb",
-   "sha256": "986f5258cc6680e70db82f06414a28ad82224afb8176cefcc1599bd81b32b46f"
+   "fetched_at": "2026-11-09T23:05:26.291Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-09T180526-0500.html.gz",
+   "saved_at": "2026-11-09T23:05:26.291Z",
+   "parsed_sha": "a1bba1412b9c0e85eb4c12187d61c2c8724dcf456af285ba4d32bb6ec58df003",
+   "sha256": "b99339d41950e6e9f826d74aefe6b3bc8e132f1ae4800100bdc4906bf593aed9"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-09T22:59:40.672Z",
-  "changed_at": "2026-11-09T17:59:40-05:00",
-  "saved_as": "news/bbm/2026-11-09T175940-0500.html",
+  "fetched_at": "2026-11-09T23:05:16.740Z",
+  "changed_at": "2026-11-09T18:05:16-05:00",
+  "saved_as": "news/bbm/2026-11-09T180516-0500.html",
   "out": [
    {
     "name": "Isaiah Joe",
@@ -38,6 +36,14 @@
     "match": null,
     "status": "Out",
     "detail": "right hip contusion - Est. Return 11/12"
+   },
+   {
+    "name": "Bilal Coulibaly",
+    "team": "WAS",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "left hand soreness - Est. Return 11/11"
    },
    {
     "name": "Tristan Vukcevic",
@@ -282,6 +288,90 @@
   ],
   "cards": [
    {
+    "id": "182129",
+    "name": "Isaac Jones",
+    "team": "DET",
+    "dk_id": "44847718",
+    "match": "exact",
+    "word": "Playing",
+    "label": "Playing",
+    "body": "g league twoway",
+    "words_at": "2026-11-09T180516-0500",
+    "at": "2026-11-09T23:01:16.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182128",
+    "name": "Bilal Coulibaly",
+    "team": "WAS",
+    "dk_id": null,
+    "match": null,
+    "word": "Out",
+    "label": "Out",
+    "body": "left hand soreness",
+    "words_at": "2026-11-09T180516-0500",
+    "at": "2026-11-09T23:01:16.000Z",
+    "precision": "minute",
+    "out_as": "Bilal Coulibaly"
+   },
+   {
+    "id": "182127",
+    "name": "Anthony Black",
+    "team": "ORL",
+    "dk_id": null,
+    "match": null,
+    "word": "Off Injury Report",
+    "label": "UNKNOWN(Off Injury Report #00cc44)",
+    "body": null,
+    "words_at": "2026-11-09T180516-0500",
+    "at": "2026-11-09T23:01:16.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182126",
+    "name": "Anthony Davis",
+    "team": "WAS",
+    "dk_id": "44847073",
+    "match": "exact",
+    "word": "Playing",
+    "label": "Playing",
+    "body": "right ankle sprain",
+    "words_at": "2026-11-09T180516-0500",
+    "at": "2026-11-09T23:01:16.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182125",
+    "name": "Giannis Antetokounmpo",
+    "team": "MIA",
+    "dk_id": null,
+    "match": null,
+    "word": "Probable",
+    "label": "Probable",
+    "body": "right wrist sprain",
+    "words_at": "2026-11-09T180516-0500",
+    "at": "2026-11-09T23:01:16.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182124",
+    "name": "Desmond Bane",
+    "team": "ORL",
+    "dk_id": null,
+    "match": null,
+    "word": "Off Injury Report",
+    "label": "UNKNOWN(Off Injury Report #00cc44)",
+    "body": null,
+    "words_at": "2026-11-09T180516-0500",
+    "at": "2026-11-09T23:01:16.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
     "id": "182123",
     "name": "Immanuel Quickley",
     "team": "TOR",
@@ -290,7 +380,7 @@
     "word": "Out",
     "label": "Out",
     "body": "right hamstring tightness / soreness",
-    "words_at": "2026-11-09T175940-0500",
+    "words_at": "2026-11-09T180516-0500",
     "at": "2026-11-09T22:49:40.000Z",
     "precision": "minute",
     "out_as": "Immanuel Quickley"
@@ -304,8 +394,8 @@
     "word": "Out",
     "label": "Out",
     "body": "left adductor / groin soreness tightness",
-    "words_at": "2026-11-09T175940-0500",
-    "at": "2026-11-09T22:49:40.000Z",
+    "words_at": "2026-11-09T180516-0500",
+    "at": "2026-11-09T22:49:16.000Z",
     "precision": "minute",
     "out_as": "Scottie Barnes"
    },
@@ -318,7 +408,7 @@
     "word": "Out",
     "label": "Out",
     "body": "illness",
-    "words_at": "2026-11-09T175940-0500",
+    "words_at": "2026-11-09T180516-0500",
     "at": "2026-11-09T22:49:04.000Z",
     "precision": "minute",
     "out_as": "Collin Murray-Boyles"
@@ -327,15 +417,15 @@
     "id": "182120",
     "name": "Bilal Coulibaly",
     "team": "WAS",
-    "dk_id": "44847445",
-    "match": "exact",
+    "dk_id": null,
+    "match": null,
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "left hand soreness",
-    "words_at": "2026-11-09T175940-0500",
+    "words_at": "2026-11-09T180516-0500",
     "at": "2026-11-09T22:36:40.000Z",
     "precision": "minute",
-    "out_as": null
+    "out_as": "Bilal Coulibaly"
    },
    {
     "id": "182119",
@@ -346,7 +436,7 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "right ankle sprain",
-    "words_at": "2026-11-09T175940-0500",
+    "words_at": "2026-11-09T180516-0500",
     "at": "2026-11-09T22:36:40.000Z",
     "precision": "minute",
     "out_as": null
@@ -360,7 +450,7 @@
     "word": "Out",
     "label": "Out",
     "body": "illness",
-    "words_at": "2026-11-09T175940-0500",
+    "words_at": "2026-11-09T180516-0500",
     "at": "2026-11-09T22:31:04.000Z",
     "precision": "minute",
     "out_as": "Austin Reaves"
@@ -374,7 +464,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "g league twoway",
-    "words_at": "2026-11-09T175940-0500",
+    "words_at": "2026-11-09T180516-0500",
     "at": "2026-11-09T22:15:06.000Z",
     "precision": "minute",
     "out_as": null
@@ -388,7 +478,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "g league twoway",
-    "words_at": "2026-11-09T175940-0500",
+    "words_at": "2026-11-09T180516-0500",
     "at": "2026-11-09T22:15:06.000Z",
     "precision": "minute",
     "out_as": null
@@ -402,7 +492,7 @@
     "word": "Off Injury Report",
     "label": "UNKNOWN(Off Injury Report #00cc44)",
     "body": null,
-    "words_at": "2026-11-09T175940-0500",
+    "words_at": "2026-11-09T180516-0500",
     "at": "2026-11-09T22:15:06.000Z",
     "precision": "minute",
     "out_as": null
@@ -416,7 +506,7 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "right contusion",
-    "words_at": "2026-11-09T175940-0500",
+    "words_at": "2026-11-09T180516-0500",
     "at": "2026-11-09T22:15:06.000Z",
     "precision": "minute",
     "out_as": null
@@ -430,7 +520,7 @@
     "word": "Out",
     "label": "Out",
     "body": "right quadriceps tendinopathy",
-    "words_at": "2026-11-09T175940-0500",
+    "words_at": "2026-11-09T180516-0500",
     "at": "2026-11-09T22:15:06.000Z",
     "precision": "minute",
     "out_as": "Moussa Diabate"
@@ -444,8 +534,8 @@
     "word": "Out",
     "label": "Out",
     "body": "cervical spine sprain",
-    "words_at": "2026-11-09T175940-0500",
-    "at": "2026-11-09T22:00:40.000Z",
+    "words_at": "2026-11-09T180516-0500",
+    "at": "2026-11-09T21:59:16.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -458,8 +548,8 @@
     "word": "Playing",
     "label": "Playing",
     "body": "left hip strain",
-    "words_at": "2026-11-09T175940-0500",
-    "at": "2026-11-09T22:00:40.000Z",
+    "words_at": "2026-11-09T180516-0500",
+    "at": "2026-11-09T21:59:16.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -472,8 +562,8 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "right ankle soreness",
-    "words_at": "2026-11-09T175940-0500",
-    "at": "2026-11-09T22:00:40.000Z",
+    "words_at": "2026-11-09T180516-0500",
+    "at": "2026-11-09T21:59:16.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -705,15 +795,15 @@
     "id": "182093",
     "name": "EJ Harkless",
     "team": "DET",
-    "dk_id": "44847781",
-    "match": "exact",
+    "dk_id": null,
+    "match": null,
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "g league twoway",
     "words_at": "2026-11-09T170514-0500",
     "at": "2026-11-09T18:43:47.000Z",
     "precision": "minute",
-    "out_as": null
+    "out_as": "EJ Harkless"
    },
    {
     "id": "182092",
@@ -779,7 +869,8 @@
    "2026-11-09T173204-0500.html",
    "2026-11-09T173741-0500.html",
    "2026-11-09T175404-0500.html",
-   "2026-11-09T175940-0500.html"
+   "2026-11-09T175940-0500.html",
+   "2026-11-09T180516-0500.html"
   ],
   "unreadable_age": 0
  },
@@ -1399,9 +1490,9 @@
       "name": "Anthony Davis",
       "pos": "PF",
       "bmId": "3640",
-      "flag": "Q",
-      "word": "Questionable",
-      "status": "Questionable (undetermined)",
+      "flag": "IN",
+      "word": "Playing",
+      "status": "Playing",
       "verified": false,
       "id": "44847073",
       "match": "exact"
@@ -1450,8 +1541,8 @@
      {
       "name": "Anthony Davis",
       "pos": "PF",
-      "flag": "Ques",
-      "status": "Questionable",
+      "flag": null,
+      "status": null,
       "id": "44847073",
       "match": "exact"
      },
@@ -1467,22 +1558,6 @@
     "label": "Expected Lineup",
     "may_not_play": [
      {
-      "name": "Bilal Coulibaly",
-      "pos": "F",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44847445",
-      "match": "exact"
-     },
-     {
-      "name": "Anthony Davis",
-      "pos": "C",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44847073",
-      "match": "exact"
-     },
-     {
       "name": "Reece Beekman",
       "pos": "G",
       "flag": "Out",
@@ -1492,6 +1567,14 @@
      },
      {
       "name": "Justin Champagnie",
+      "pos": "F",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Bilal Coulibaly",
       "pos": "F",
       "flag": "Out",
       "status": "Out",
