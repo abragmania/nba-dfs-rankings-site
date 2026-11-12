@@ -3,7 +3,7 @@
 // CSV writer, the seat, late swap, the build notes) come in as `own`, so this file never imports panel.js back.
 import { keepFocus } from "./board-util.js";
 import { lineupRefusals, isOutNow } from "./card-row.js";
-import { lineupsTabHtml, viewModel, builtAtText, viewOf, entriesOf, unavailableMen, unavailableLabel, savedLabel, heldSpots, outNamesOfCtx, SORTS, MODE_FILTERS, nextLtSort } from "./lineups-tab.js";
+import { lineupsTabHtml, viewModel, builtAtText, viewOf, entriesOf, unavailableMen, unavailableLabel, savedLabel, heldSpots, outNamesOfCtx, SORTS,nextLtSort } from "./lineups-tab.js";
 import { swapContext, swapOptions, swapIds } from "./swap-list.js";
 import { savedCall, saveBatch, savedClick, savedNameInput } from "./saved-panel.js";
 import { cleanSpotName } from "./spot-name.js";
@@ -246,7 +246,7 @@ function sendBuild(X, slate, body, own) {
   });
 }
 
-/** A finished build replaces the build on the page (the latest of each mode stays: Cash and GPP builds never wipe each other) and on the server. It never
+/** A finished build replaces the build on the page (one build per slate, either mode) and on the server. It never
  *  touches the saved lineups: only Save does (savedClick). */
 export function keepBuild(X, b, own) {
   X.P.builds = keepRecent([b, ...(X.P.builds ?? []).filter((x) => x.id !== b.id)]);
@@ -311,7 +311,8 @@ function sendSpot(X, slate, body, own, { onOk = null } = {}) {
 function orderPlan(X, own, skip = new Set()) {
   const { P } = X, m = viewModel(P, X.ctx(), (men) => own.lateSwapSeat(men));
   if (m.view !== "saved") return null;
-  return { plan: planInOrder({ lineups: m.shown.map((e) => ({ id: e.id, swapped: e.swapped, mode: e.mode })), spots: P.spots, replace: P.lt.replace, skip, uploaded: P.uploaded ?? [] }), byId: new Map(m.shown.map((e) => [String(e.id), e])) };
+  const every = [...m.shown, ...m.others.flatMap((g) => g.shown)]; // the other mode's saved lineups (collapsed below) are still saved lineups: nothing is filtered out of the order
+  return { plan: planInOrder({ lineups: every.map((e) => ({ id: e.id, swapped: e.swapped, mode: e.mode })), spots: P.spots, replace: P.lt.replace, skip, uploaded: P.uploaded ?? [] }), byId: new Map(every.map((e) => [String(e.id), e])) };
 }
 
 /** Assign in order (Adam, 2026-11-04): the saved lineups shown take the GPP spots in turn, in one all-or-nothing call, with Undo.
@@ -417,6 +418,7 @@ export function tabClick(X, d, own) {
   const redraw = () => own.render(X);
   switch (d.op) {
     case "assignorder": runOrder(X, own); return true;
+    case "ogtoggle": P.lt.openOther = (P.lt.openOther ?? []).includes(d.og) ? P.lt.openOther.filter((k) => k !== d.og) : [...(P.lt.openOther ?? []), d.og]; return true; // the native details toggles itself; the list keeps it open through a redraw
     case "orderreplace": P.lt.replace = !P.lt.replace; redraw(); return true;
     case "orderforce": runOrder(X, own, { confirmedAll: true }); return true;
     case "orderskip": runOrder(X, own, { skip: new Set((P.orderWarn?.bad ?? []).map((b) => b.id)) }); return true;
@@ -492,13 +494,12 @@ export function tabClick(X, d, own) {
     case "ltgray": P.lt.gray = P.lt.gray !== true; redraw(); return true; // quick on/off, off on reload (Adam, 11-11)
     case "menclear": P.lt.men = []; redraw(); return true;
     case "ltsort": if (SORTS.some(([k]) => k === d.s)) Object.assign(P.lt, nextLtSort(P.lt, d.s)); redraw(); return true;
-    case "ltmode": if (MODE_FILTERS.includes(d.m)) P.lt.mode = d.m; redraw(); return true;
     // Each Filter click adds a man (only lineups holding all of them show); clicking a filtered man again takes him out.
     case "expfilter": P.lt.men = (P.lt.men ?? []).includes(d.man) ? P.lt.men.filter((x) => x !== d.man) : [...(P.lt.men ?? []), d.man]; redraw(); return true;
     case "swap": P.swap = P.swap?.key === d.k && P.swap.id === d.id ? null : { key: d.k, id: d.id }; redraw(); return true;
     case "swapuse": swapUse(X, d.k, d.in, own); return true;
     case "ltcsv": { const m = viewModel(P, X.ctx(), (men) => own.lateSwapSeat(men)); download(X, m.shown, own); return true; }
-    case "ltdl": { const m = viewModel(P, X.ctx(), (men) => own.lateSwapSeat(men)); const e = m.all.find((x) => x.key === d.k); if (e) download(X, [e], own); return true; }
+    case "ltdl": { const m = viewModel(P, X.ctx(), (men) => own.lateSwapSeat(men)); const e = [...m.all, ...m.others.flatMap((g) => g.shown)].find((x) => x.key === d.k); if (e) download(X, [e], own); return true; }
     case "savesw": saveSwapped(X, d.id, own); return true;
     case "saveall": {
       const items = viewModel(P, X.ctx(), (men) => own.lateSwapSeat(men)).shown.filter((e) => e.kind === "build").map((e) => ({ slots: e.ids, mode: e.mode }));

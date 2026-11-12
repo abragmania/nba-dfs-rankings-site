@@ -19,10 +19,9 @@ import { MAX_SPOTS } from "./spot-name.js";
 export const SORTS = [["proj", "Projection", "Most projected points first"], ["sal", "Salary", "Most salary used first"], ["own", "Ownership", "Lowest total ownership first"], ["new", "Newest", "Newest first (a build's own order)"]];
 /** The arrow on the sort in force: up is low to high, down is high to low (Projection and Salary start down, Ownership starts up). */
 export const sortArrow = (key, rev) => ((key === "own") !== !!rev ? "▲" : "▼");
-export const MODE_FILTERS = ["All", "Cash", "GPP"];
 
 /** The tab's own state: view null means "this build when there is one, else saved". */
-export const freshLt = () => ({ view: null, show: "cards", q: "", sort: "proj", rev: false, mode: "All", men: [], spot: "All", replace: false });
+export const freshLt = () => ({ view: null, show: "cards", q: "", sort: "proj", rev: false, men: [], spot: "All", replace: false, openOther: [] });
 
 // ---- spots (Adam's contest entries; spots.json on the server): a saved lineup holds none, one or several ----
 const SPOT_COLOURS = ["#7ee787", "#79c0ff", "#d2a8ff", "#f778ba", "#56d4dd", "#b6e354", "#9ea8ff", "#e6edf3"]; // eight, so a card's spots never share one
@@ -112,15 +111,25 @@ const stampET = (iso) => {
 /** The two lists the tab switches between, each entry { key, kind, ids, mode, ... } (key "b:<index>" or "s:<saved id>"). */
 export function entriesOf(P) {
   // The slate's latest build (P.builds holds one: a new build replaces the last); a lineup's key names its build and its place in it.
-  const build = (P.builds ?? []).flatMap((b) => b.lineups.map((l, i) => ({ key: `b:${b.id}:${i}`, kind: "build", bid: b.id, b, i, n: i + 1, total: b.lineups.length, ids: l.ids, mode: b.mode, builtAt: b.built_at })));
-  const saved = [...(P.saved ?? [])].reverse().map((l) => {
+  // The board's mode is the filter (Adam, 11-12): a held build of the other mode is not listed; `buildOther` says it is there.
+  const cur = P.mode === "Cash" || P.mode === "GPP" ? P.mode : null;
+  const held = (P.builds ?? []).filter((b) => cur == null || b.mode === cur), away = (P.builds ?? []).find((b) => cur != null && b.mode !== cur);
+  const buildOther = away ? { mode: away.mode, n: away.lineups.length } : null;
+  const build = held.flatMap((b) => b.lineups.map((l, i) => ({ key: `b:${b.id}:${i}`, kind: "build", bid: b.id, b, i, n: i + 1, total: b.lineups.length, ids: l.ids, mode: b.mode, builtAt: b.built_at })));
+  // Saved lineups split by mode (Adam, 11-12): the board's mode is the list; the other mode, and any lineup with no mode, go in `other` and are never dropped.
+  const entry = (l) => {
     const base = l.orig ?? l.slots; // the men as saved: the names kept with the lineup line up with these ids
     return { key: `s:${l.id}`, kind: "saved", id: l.id, n: l.id, l, ids: l.slots, nameById: new Map(base.map((id, i) => [id, l.names?.[i] ?? null])), mode: l.mode, savedAt: l.saved_at, swapped: l.swapped === true, stale: l.stale === true, legal: l.legal, reasons: l.reasons };
-  });
-  return { build, saved };
+  };
+  const all = [...(P.saved ?? [])].reverse();
+  const other = { Cash: [], GPP: [], none: [] };
+  for (const l of all) if (cur != null && l.mode !== cur) other[l.mode === "Cash" || l.mode === "GPP" ? l.mode : "none"].push(entry(l));
+  return { build, saved: all.filter((l) => cur == null || l.mode === cur).map(entry), other, buildOther };
 }
 
-export const viewOf = (P, lists) => P.lt.view ?? (lists.build.length ? "build" : "saved");
+const spotOf = (P, view) => (view === "saved" && P.spotsReady ? P.lt.spot : "All");
+
+export const viewOf =(P, lists) => P.lt.view ?? (lists.build.length ? "build" : "saved");
 
 /** Seats an entry's men as the card draws them and takes its totals. men[k] is a slate player or a { dk_id, stale } stub. */
 export function prep(e, { byId, seat, outNames = new Set(), knownName = null }) {
@@ -256,12 +265,14 @@ export function viewModel(P, c, seat) {
     const x = all.find((y) => y.mode === "Cash" && setKey(y.ids) === setKey(e.ids));
     if (x) e.same = x.kind === "build" ? `Cash ${x.n}` : `Cash ${savedLabel(x.l, P.svNames, P.saved)}`;
   }
-  const inMode = bySpot(filterEntries(all, { mode: P.lt.mode }, true), P.spots, view === "saved" && P.spotsReady ? P.lt.spot : "All");
+  const inMode = bySpot(all, P.spots, spotOf(P, view));
   const sorted = sortEntries(filterEntries(inMode, { q: P.lt.q, men: P.lt.men ?? [] }, false), P.lt.sort, P.lt.rev);
   // Builds stay newest first whatever the sort: the sort orders the lineups inside each build.
   const at = new Map((P.builds ?? []).map((b, i) => [b.id, i]));
   const shown = view === "build" ? [...sorted].sort((a, b) => at.get(a.bid) - at.get(b.bid)) : sorted;
-  return { lists, view, all, inMode, shown };
+  // The other mode's saved lineups (and any with no mode), drawn collapsed below the saved list; the spot filter, player filter and sort apply as in the list.
+  const others = view !== "saved" ? [] : Object.entries(lists.other).filter(([, list]) => list.length).map(([key, list]) => ({ key, n: list.length, shown: sortEntries(filterEntries(bySpot(list.map((e) => prep(e, { byId: c.byId, seat, outNames, knownName: c.knownName })), P.spots, spotOf(P, view)), { q: P.lt.q, men: P.lt.men ?? [] }, false), P.lt.sort, P.lt.rev) }));
+  return { lists, view, all, inMode, shown, others };
 }
 
 /** Compare mode (Adam, 11-11): a held man's row is dimmed so only the men who differ stand out. `held` is the dimmed set, or null when off. */
@@ -274,12 +285,19 @@ function filterChipsHtml(men, figures, shownN, totalN, gray = null) {
   return `<div class="lt-chips"><em>Holding all of</em>${chips}<span class="lt-count">${shownN} of ${totalN} lineup${totalN === 1 ? "" : "s"}</span>${gray === null ? "" : `<button class="ol sm lt-gray${gray ? " on" : ""}" data-op="ltgray" aria-pressed="${gray}" title="${gray ? "Turn off: show the held men in normal type again" : "Gray out the men held by the filter, so only the men who differ stand out"}">Compare</button>`}<button class="ol sm lt-clear" data-op="menclear">Clear all</button></div>`;
 }
 
+const OTHER_LABEL = { Cash: "Cash saved", GPP: "GPP saved", none: "Saved, no mode" };
+
+/** The saved lineups of the board's other mode (and those with no mode), each group collapsed under its own label; `open` lists the groups left open (a redraw keeps them). */
+function otherSavedHtml(groups, ctx, open) {
+  return `<div class="lt-other">${groups.map((g) => `<details data-og="${g.key}"${open.includes(g.key) ? " open" : ""}><summary data-op="ogtoggle" data-og="${g.key}">${OTHER_LABEL[g.key]} (${g.n})${g.shown.length === g.n ? "" : ` · ${g.shown.length} match the filter`}</summary><div class="lt-ocards">${g.shown.map((e) => cardHtml(e, ctx)).join("")}</div></details>`).join("")}</div>`;
+}
+
 /**
  * The whole tab. P: the panel state (results, saved, lt, mode, expSort, expPos, swap, running, build, ls, svNames).
  * c: { byId, picks, colourOf, name }; env: { dash, seat, swapCtx }.
  */
 export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
-  const { lists, view, all, inMode, shown } = viewModel(P, c, seat);
+  const { lists, view, all, inMode, shown, others } = viewModel(P, c, seat);
   const run = P.running ? (() => { const m = buildMessage(P.build); return `<div class="lt-run lt-build"><span class="gomsg${m.err ? " err" : ""}">${esc(m.text)}</span>${P.build?.shown ? `<button class="ol stop" data-op="stop"${P.build.stopping ? " disabled" : ""}>Stop</button>` : ""}</div>`; })() : "";
   if (P.ls) return `${run}<div class="lt-empty">Late swap mode is on; its lineups are on the Player list tab. <button class="ol sm" data-op="lsoff" title="Leave late swap mode (the same as the Pin slots button in the header)">Turn late swap mode off</button><button class="ol sm" data-view="list">Back to the player list</button></div>`;
   const savedSet = savedKeys((P.saved ?? []).filter((l) => !l.swapped));
@@ -291,7 +309,6 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
     + `<input class="search lt-q" data-lt="q" placeholder="Filter by player..." value="${esc(P.lt.q)}" autocomplete="off" aria-label="Filter lineups by player">`
     // Compare has its own sort (every heading); the cards' sort buttons are not drawn there, so there is one set of sort controls.
     + ((P.lt.show ?? "cards") === "compare" ? "" : `<span class="lt-sort"><em>Sort</em>${SORTS.map(([k, l, t]) => `<button class="${P.lt.sort === k ? "on" : ""}" data-op="ltsort" data-s="${k}" title="${esc(t)}${P.lt.sort === k ? "; click again to reverse" : ""}">${l}${P.lt.sort === k ? ` <i class="arr">${sortArrow(k, P.lt.rev)}</i>` : ""}</button>`).join("")}</span>`)
-    + `<span class="lt-sort"><em>Mode</em>${MODE_FILTERS.map((m) => `<button class="${P.lt.mode === m ? "on" : ""}" data-op="ltmode" data-m="${m}">${m}</button>`).join("")}</span>`
     + (view === "saved" ? (P.spotsReady
       ? `<span class="lt-sort lt-spotf"><em>Spot</em><span class="lt-spotbtns">${[["All", "All"], ["None", "Unassigned"], ...spotNames(P.spots).map((n) => [n, n])].map(([k, l]) => `<button class="${P.lt.spot === k ? "on" : ""}" data-op="ltspot" data-s="${esc(k)}">${esc(l)}</button>`).join("")}</span><span class="lt-spotn" aria-hidden="true"></span></span>`
         + `<span class="lt-sort lt-order"><button class="on-order" data-op="assignorder" title="Give the saved lineups shown, in this order, the GPP spots in turn (GPP #1, GPP #2 ...); Cash is left alone">Assign in order</button><label title="Also give spots that already hold a lineup, and place lineups that already hold a spot"><input type="checkbox" data-op="orderreplace"${P.lt.replace ? " checked" : ""}> Replace current</label></span>`
@@ -308,7 +325,7 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
   const buildsErr = view === "build" && (P.buildsError || !P.buildsReady) && !all.length;
   if (readErr) body = `<div class="lt-empty">${P.savedError ? `Could not read the saved lineups: ${esc(P.savedError)}. Click anywhere here to try again.` : "Reading the saved lineups"}</div>`;
   else if (buildsErr) body = `<div class="lt-empty">${P.buildsError ? `Could not read the recently generated lineups: ${esc(P.buildsError)}. Click anywhere here to try again.` : "Reading the recently generated lineups"}</div>`;
-  else if (!all.length) body = `<div class="lt-empty">${view === "build" ? "No lineups generated yet on this slate. Build from the Player list tab." : "No saved lineups for this slate yet."}</div>`;
+  else if (!all.length) body = `<div class="lt-empty">${view === "build" ? "No lineups generated yet on this slate. Build from the Player list tab." : others.length ? `No ${esc(P.mode)} saved lineups on this slate yet.` : "No saved lineups for this slate yet."}</div>`;
   else {
     const figures = figuresOf(P, c, view);
     // What has become of a man since: the live board decides. A built card holds his earlier row, so "now Out" means he was not
@@ -355,5 +372,7 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
   const undo = view === "saved" && P.spotUndo ? `<div class="lt-run"><span>${esc(P.spotUndo.text)}</span><button class="ol sm" data-op="orderundo">Undo</button><button class="ol sm" data-op="orderokay">Keep</button></div>` : "";
   // The panel's notes and stale warnings belong to the last build made on this page in the panel's mode, not to every build below.
   const noted = notes ? `<div class="lt-notes"><em>The last ${esc(P.mode)} build made on this page:</em>${notes}</div>` : "";
-  return `${run}${view === "build" ? readNote + noted : ow + undo + mv}<div class="lt-top">${strip}<span class="lt-acts">${saveAll}${dl}</span></div>${top}${body}`;
+  const otherHtml = others.length && !readErr ? otherSavedHtml(others, { byId: c.byId, live: c.byId, tagOf: (kind, p) => (isOutNow(p) ? "now Out" : lineupTag(p, c.byId, c.outNames)), spotText: P.spotText ?? null, dash, colourOf: c.colourOf, swap: { ctx: swapCtx, open: P.swap ?? null }, locked: new Set(c.picks.locked), savedSet, names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true, held: null }, P.lt.openOther ?? []) : "";
+  const away = lists.buildOther ? `<div class="lt-away">The last build is ${esc(lists.buildOther.mode)} (${lists.buildOther.n} lineup${lists.buildOther.n === 1 ? "" : "s"}); switch the board to ${esc(lists.buildOther.mode)} to see it.</div>` : "";
+  return `${run}${view === "build" ? readNote + noted : ow + undo + mv}<div class="lt-top">${strip}<span class="lt-acts">${saveAll}${dl}</span></div>${top}${body}${otherHtml}${away}`;
 }

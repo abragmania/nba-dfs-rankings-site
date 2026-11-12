@@ -402,7 +402,7 @@ function onClick(X, e) {
   if (tabClick(X, d, own)) return; // the Lineups tab's own clicks (lineups-panel.js)
   switch (d.op) {
     case "setopen": return set({ setOpen: !P.setOpen });
-    // Each mode has its own built lineups; the working lineup is shared by both.
+    // One build per slate (a new build of either mode replaces it); the board's mode picks which build and saved lineups the Lineups tab lists; the working lineup is shared by both.
     case "mode": set({ mode: d.m, showSkipped: false, swap: null }); return X.onWork();
     case "build": return build(X);
     case "stop": return stopBuild(X);

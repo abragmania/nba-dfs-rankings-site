@@ -59,6 +59,11 @@ body.lineups-on{padding-bottom:0} /* the tab ends at its scrolling boxes, sized 
 #lineups .lt-ex .ext .ex-bar{width:40px}
 #lineups .lt-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(350px,1fr));gap:10px;align-items:start}
 #lineups .lt-ex .ext td,#lineups .lt-ex .ext th{padding-right:4px}
+#lineups .lt-away{margin:10px 2px;color:var(--dim);font-size:12px}
+#lineups .lt-other{margin:14px 0 8px}
+#lineups .lt-other details{border-top:1px solid var(--ln);padding:6px 2px}
+#lineups .lt-other summary{cursor:pointer;color:var(--dim);font:700 12px "Space Grotesk",sans-serif;padding:4px 0}
+#lineups .lt-ocards{display:grid;grid-template-columns:repeat(auto-fill,minmax(350px,1fr));gap:10px;align-items:start;margin-top:8px}
 #lineups .lt-ex .ext .xf{padding:0 6px}
 #lineups .crow.lead .pn{font-size:13px}
 #lineups .crow.lead .sn1{gap:4px}
