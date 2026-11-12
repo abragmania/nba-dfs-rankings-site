@@ -452,7 +452,7 @@ async function handlePlayerLog(req, res, url) {
   res.on("close", () => { if (!res.writableFinished) gone.abort(); });
   try {
     // taken: his DK teammates on the newest slate, so a near-name match never lands on a teammate's row (none readable: no near match).
-    const { cardTeammates } = await import("../site/shim/app-only.js");
+    const { cardTeammates } = await routeModule("usage");
     return send(res, 200, await getPlayerLog(q.name, q.team, { signal: gone.signal, taken: cardTeammates(q.name, q.team) }));
   } catch (e) {
     if (!(e instanceof PlayerLogError)) throw e;
@@ -460,6 +460,32 @@ async function handlePlayerLog(req, res, url) {
     error("player log failed", { name: q.name, team: q.team, message: e.message });
     return fail(res, e.status, "NO_LOG", e.message);
   }
+}
+
+/** The lazily imported route modules (R: startup check). Loaded once at startup by loadRouteModules; after that a request uses
+ *  the copy loaded then, so an edit on disk reaches the running app only with a restart. Tests that build a server without
+ *  the startup load fall back to a plain import on first use. */
+// The site build does not shim these; static-api.js and site-pull.js answer these routes on the site. The worker and cycle child read code from disk, which is safe because the live app runs from a clean copy nobody edits.
+// newsApply has no route of its own: Pull now imports it lazily (pullnow/route.js), and loading it here puts it in the module cache.
+const ROUTE_FILES = { usage: "usage/route.js", pullnow: "pullnow/route.js", newsApply: "slate/news-apply.js" };
+const routeMods = {};
+function routeModule(key) {
+  return routeMods[key] ? Promise.resolve(routeMods[key]) : import(`./${ROUTE_FILES[key]}`);
+}
+
+/** Imports every lazily loaded route module before the server listens. Returns { ok: true, mods } (key -> module; the caller
+ *  keeps it, so a test's own map never leaks into routeMods) or { ok: false, file, message, stack } for the first file that
+ *  would not load. `files` is the key -> relative path map. */
+export async function loadRouteModules(files = ROUTE_FILES, base = import.meta.url) {
+  const mods = {};
+  for (const [key, rel] of Object.entries(files)) {
+    try {
+      mods[key] = await import(new URL(rel, base).href);
+    } catch (e) {
+      return { ok: false, file: `server/${rel}`, message: e?.message ?? String(e), stack: String(e?.stack ?? "").split("\n").slice(0, 5).join("\n") };
+    }
+  }
+  return { ok: true, mods };
 }
 
 /** Decodes a path segment; a malformed escape (%E0) comes back as "" so the slate-name check refuses it with 400. */
@@ -490,9 +516,9 @@ async function route(req, res, opts) {
     if (refused) return fail(res, refused.status, refused.code, refused.message);
     return send(res, 200, readBoxFreshness({ nowMs: opts.now() }));
   }
-  if (p === "/api/player-usage") return (await import("../site/shim/app-only.js")).handlePlayerUsage(req, res, url, { send, fail, readJson }); // the card's usage data
-  if (p === "/api/pull-now") return (await import("../site/shim/app-only.js")).handlePullNow(req, res, { send, fail, readJson, state: opts.pullNow, deps: opts.pullNowDeps }); // the header's Pull now button
-  if (p === "/api/pull-status") return (await import("../site/shim/app-only.js")).handlePullStatus(req, res, { send, fail, state: opts.pullNow, deps: opts.pullNowDeps, url }); // the Pull now status block
+  if (p === "/api/player-usage") return (await routeModule("usage")).handlePlayerUsage(req, res, url, { send, fail, readJson }); // the card's usage data
+  if (p === "/api/pull-now") return (await routeModule("pullnow")).handlePullNow(req, res, { send, fail, readJson, state: opts.pullNow, deps: opts.pullNowDeps }); // the header's Pull now button
+  if (p === "/api/pull-status") return (await routeModule("pullnow")).handlePullStatus(req, res, { send, fail, state: opts.pullNow, deps: opts.pullNowDeps, url }); // the Pull now status block
   // A machine with no league totals yet fetches them once (capped) before a board or minutes read, so a cold start is not a board of missing projections (minutes/inputs.js primeTotals).
   // Reads only: a write, a build or late swap never waits on Basketball-Reference.
   const primeFor = req.method === "GET" ? /^\/api\/(?:slate|minutes)\/([^/]+)(?:\/team\/[A-Z]{2,4})?$/.exec(p) : null;
@@ -589,6 +615,9 @@ export function makeServer({ optimizeTimeoutMs = OPTIMIZE_CEILING_MS, optimizeUr
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const loaded = await loadRouteModules(); // refuse to start on a route file that will not load, before anything else starts
+  if (!loaded.ok) { error(`${loaded.file} (or a file it imports) would not load; not starting.`, { file: loaded.file, message: loaded.message, stack: loaded.stack }); process.exit(1); }
+  Object.assign(routeMods, loaded.mods);
   startStandingsWatch();
   const port = Number(process.env.PORT) || 8693;
   startUsageWarm({ port });
@@ -601,6 +630,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   makeServer({ seasonFigures: withSeasonFigures, usageTable: seasonUsageTable, nowMs: now.ms, pullNowState, ourProjection: withOurProjection, primeTotals }).listen(port, "127.0.0.1", () => {
     info(`NBA board on http://127.0.0.1:${port}`);
     startSnapshotRefresh({ now: () => now.ms ?? Date.now() }); // keeps each team's figures saved for its tip (minutes/refresh.js)
-    import("../site/shim/app-only.js").then(({ startLightCheckIfAllowed }) => startLightCheckIfAllowed({ state: pullNowState, port })).catch((e) => error("the light check could not start", { error: e.message })); // only in the real app: the default data folder on port 8693
+    routeModule("pullnow").then(({ startLightCheckIfAllowed }) => startLightCheckIfAllowed({ state: pullNowState, port })).catch((e) => error("the light check could not start", { error: e.message })); // only in the real app: the default data folder on port 8693
   });
 }
