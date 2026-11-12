@@ -7,7 +7,7 @@ import { createSitePull, askPanel } from "./site-pull.js";
 installApi();
 document.documentElement.classList.add("is-site");
 // The header's Pull now runs the cloud job through GitHub here (site-pull.js); board.js reads this before it draws the header.
-globalThis.nbadfsSitePull = createSitePull({ ask: askPanel(document), slateOnShow: () => new URLSearchParams(location.search).get("slate") });
+globalThis.nbadfsSitePull = createSitePull({ ask: askPanel(document), slateOnShow: () => document.getElementById("slateSel")?.value || new URLSearchParams(location.search).get("slate") });
 
 const eastern = (iso) => {
   const d = new Date(iso);

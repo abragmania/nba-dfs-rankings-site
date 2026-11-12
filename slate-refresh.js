@@ -7,6 +7,34 @@ import { goneSlots } from "./lateswap.js";
 
 export const CHECK_MS = 60_000;
 
+/** The newest slate's name in a list of { slate } (names sort by date), or null for none. Pure. */
+export const newestSlate = (slates) => (Array.isArray(slates) && slates.length ? slates.map((x) => String(x.slate)).reduce((a, b) => (b > a ? b : a)) : null);
+
+/** The slate to open: the one a `?slate=` names when it is a real slate (a deliberate older pick), else the newest. Pure. */
+export const pickSlate = (slates, want) => (slates.some((x) => x.slate === want) ? want : newestSlate(slates));
+
+/** The address bar's query for the slate on show: no `?slate=` for the newest (a refresh on a later day opens that day's), `?slate=` for an older one; the console view rides along. Pure. */
+export function slateQuery(name, slates, consoleOn = false, path = "/") {
+  const q = new URLSearchParams();
+  if (name !== newestSlate(slates)) q.set("slate", name);
+  if (consoleOn) q.set("view", "console");
+  const s = q.toString();
+  return s ? `?${s}` : path;
+}
+
+/**
+ * What a fresh slate list means for the page. before: the list the page knew; fresh: the list just read; showing: the slate on show.
+ * { slates, switchTo }: switchTo is the new newest slate when one appeared and he was on the previous newest; null otherwise (an older pick stays, the menu still gains the new slate).
+ * An unreadable or empty fresh list changes nothing. Pure.
+ */
+export function followNewest({ before, fresh, showing }) {
+  if (!Array.isArray(fresh) || !fresh.length) return { slates: before, switchTo: null };
+  if (JSON.stringify(fresh) === JSON.stringify(before)) return { slates: before, switchTo: null }; // nothing changed: the same list object, so no redraw
+  const was = newestSlate(before), now = newestSlate(fresh);
+  if (!fresh.some((x) => x.slate === showing)) return { slates: fresh, switchTo: now }; // the slate on show left the list: the newest
+  return { slates: fresh, switchTo: was !== null && now > was && showing === was ? now : null };
+}
+
 /** What a check's stamp asks for. "none": nothing new. "wait": new, but a build is running, so the next check takes it. "fetch": get the slate. */
 export function decideCheck({ stamp, lastStamp, busy }) {
   if (stamp === lastStamp) return "none";

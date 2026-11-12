@@ -15,7 +15,7 @@ import { columnsControl, sortNote } from "./columns.js";
 import { headHtml, rowHtml, SORT_KEYS, comparePlayers, hasResettable, minSourceOf, gapChipHtml } from "./player-table.js";
 import { pullChipHtml, pullNoteHtml } from "./pull-note.js";
 import { boxNote, noteLists as dataNotes, warningCount, freshBoxes } from "./box-note.js";
-import { CHECK_MS, applyHeld, createRefresher, mergeFresh, outNamesOf, overrideKey, picksOnBoard, pullOf, rememberRows, rosterCleanup, statusLine } from "./slate-refresh.js";
+import { CHECK_MS, applyHeld, createRefresher, followNewest, mergeFresh, outNamesOf, pickSlate, slateQuery, overrideKey, picksOnBoard, pullOf, rememberRows, rosterCleanup, statusLine } from "./slate-refresh.js";
 import { pressSettle } from "./press-settle.js";
 import { createPullNow, firstTipOf } from "./pull-now.js";
 import { noFilters, filtersOn, filterPlayers, salaryRange, teamsOf } from "./filters.js";
@@ -166,9 +166,17 @@ function boardRows(slate) {
   const home = new Map(slate.games.map((g) => [g.game, g.home]));
   return slate.players.map((p) => ({ ...p, oppText: p.opponent ? (home.get(p.game) === p.team ? "vs " : "@ ") + p.opponent : null }));
 }
-async function loadSlate(name) {
+let loadGen = 0, loadsOpen = 0; // the newest load wins: an older one that comes back late is dropped; no refresh check runs while one is in flight
+async function loadSlate(name, slates = null) {
+  const gen = ++loadGen;
+  loadsOpen++;
+  try { await loadSlateNow(name, slates, gen); } finally { loadsOpen--; }
+}
+async function loadSlateNow(name, slates, gen) {
   await refresher.baseline(name);
   const [slate, picks] = await Promise.all([api(`/api/slate/${encodeURIComponent(name)}`), api(`/api/slate/${encodeURIComponent(name)}/picks`)]);
+  if (gen !== loadGen) return; // superseded by a later pick
+  if (slates) S.slates = slates; // the list is taken only once the slate it brings is in hand
   card.close();
   editors.drop();
   S.name = name; S.slate = slate; S.picks = { locked: picks.locked, excluded: picks.excluded }; S.dropped = picks.dropped ?? []; S.rosterDropped = [];
@@ -182,7 +190,7 @@ async function loadSlate(name) {
   // One colour per team for this slate, chosen so no two teams' shades look alike (colours.js).
   const onSlate = [...S.players.map((p) => p.team), ...slate.games.flatMap((g) => [g.away, g.home])].filter(Boolean);
   S.colours = assignColours(onSlate, Object.fromEntries(onSlate.map((t) => [t, paletteOf(t)])));
-  history.replaceState(null, "", `?slate=${encodeURIComponent(name)}${scenarioConsole.isOn() ? "&view=console" : ""}`);
+  history.replaceState(null, "", slateQuery(name, S.slates, scenarioConsole.isOn(), location.pathname));
   panel.setSlate(name, view);
   scenarioConsole.setSlate(name);
   renderAll();
@@ -287,7 +295,26 @@ const refresher = createRefresher({
   onNews: () => Promise.all([lineupBar.refresh(), boardMarks.refresh()]), // a lineup-only update: the News tab and the S chips; the rows redraw for the chips only, and wait while a form has focus (boardMarks' onChange)
 });
 document.addEventListener("focusout", () => setTimeout(() => { if (S.rowsLater && S.slate && !formHasFocus()) { S.rowsLater = false; renderRows(); } }, 0)); // the redraw that waited for him to leave the form
-const pullNow = createPullNow({ reload: () => refresher.tick(), runner: globalThis.nbadfsSitePull ?? null, firstTipMs: () => firstTipOf(S.players, slateRefMs(S.name) ?? Date.now()) }); // the header's Pull now (pull-now.js); new numbers land through the refresh above
+/** Re-reads the slate list: a slate that appeared joins the menu, and the board moves to it when he was on the previous newest (slate-refresh.js followNewest); an older pick stays. */
+let syncing = false;
+async function syncSlates() {
+  if (syncing || loadsOpen || !S.name) return;
+  syncing = true;
+  let what = "the slate list could not be read";
+  try {
+    const r = followNewest({ before: S.slates, fresh: (await api("/api/slates")).slates, showing: S.name });
+    if (r.slates === S.slates) return;
+    if (r.switchTo) {
+      // Held while a build runs, a form or the slate menu has focus, late swap or the console is open; the list is kept as it was, so the next check tries again.
+      if (panel.running() || formHasFocus() || document.activeElement?.id === "slateSel" || panel.lateSwap() || scenarioConsole.isOn()) return;
+      what = `could not open ${r.switchTo}`;
+      await loadSlate(r.switchTo, r.slates);
+    } else { S.slates = r.slates; drawTop(); }
+  } catch (e) { S.upd = { ...S.upd, failed: { ms: Date.now(), reason: `${what} (${e.message})` } }; renderUpdLine(); }
+  finally { syncing = false; }
+}
+const checkAll = async () => { await syncSlates(); if (!loadsOpen) await refresher.tick(); };
+const pullNow = createPullNow({ reload: () => checkAll(),runner: globalThis.nbadfsSitePull ?? null, firstTipMs: () => firstTipOf(S.players, slateRefMs(S.name) ?? Date.now()) }); // the header's Pull now (pull-now.js); new numbers land through the refresh above
 
 // ---------- header ----------
 function slateLabel(name) {
@@ -635,8 +662,8 @@ const fail = (e) => { document.querySelector(".work").innerHTML = `<div class="f
     S.slates = (await api("/api/slates")).slates;
     if (!S.slates.length) throw new Error("No slates in the archive yet.");
     const query = new URLSearchParams(location.search), want = query.get("slate"), openConsole = query.get("view") === "console";
-    await loadSlate(S.slates.some((x) => x.slate === want) ? want : S.slates[0].slate);
+    await loadSlate(pickSlate(S.slates, want));
     if (openConsole) setConsole(true);
-    setInterval(() => refresher.tick(), CHECK_MS);
+    setInterval(() => checkAll(), CHECK_MS);
   } catch (e) { fail(e); }
 })();

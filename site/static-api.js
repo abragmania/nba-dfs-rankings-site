@@ -105,6 +105,25 @@ async function freshStamp(slate) {
   return text;
 }
 
+const newestIn = (text) => { try { const l = JSON.parse(text)?.slates; return Array.isArray(l) && l.length ? l.map((x) => String(x.slate)).reduce((a, b) => (b > a ? b : a)) : ""; } catch { return ""; } };
+/**
+ * The slate list, read afresh on every ask so the board's once-a-minute check sees a slate published after the page opened (the new day's). A list adopted
+ * by Pull now stands until Pages' list reaches the same newest slate or a later one; a Pages list that is missing or unreadable keeps what is held.
+ */
+async function freshSlates() {
+  const rel = "slates.json", file = `${DATA}/manifest.json`;
+  const pages = await readBaked(rel);
+  if (adopted.has(rel)) {
+    const mine = adopted.get(rel);
+    if (pages === null || newestIn(pages) < newestIn(mine)) return mine;
+    adopted.delete(rel);
+  }
+  if (pages === null) return once.has(rel) ? once.get(rel) : null;
+  once.set(rel, Promise.resolve(pages));
+  seed(file, pages);
+  return pages;
+}
+
 /** The lineup read (baked lineups-latest.json), read again on every ask rather than once per page, so the proposals bar sees a newer publish. */
 async function freshLineups(slate) {
   const text = await readBaked(`slates/${slate}/lineups-latest.json`);
@@ -116,7 +135,7 @@ async function freshLineups(slate) {
 
 /** The published files a path needs, in memory before the app's handler reads them. */
 async function loadFor(pathname) {
-  if (pathname === "/api/slates") return seedBaked("slates.json", `${DATA}/manifest.json`);
+  if (pathname === "/api/slates") return freshSlates();
   const m = /^\/api\/slate\/([^/]+)(\/.*)?$/.exec(pathname);
   if (!m) return null;
   let slate;

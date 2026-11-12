@@ -182,7 +182,9 @@ export function createSitePull({ fetchImpl = (...a) => fetch(...a), store = keyS
     if (site !== "published") {
       return { state: "saved", line: `Cloud pull done at ${etNow(now())}: saved; whether the site published is unknown (no new board, no site key and a publish that did not go through all look the same from here).` };
     }
-    const slate = slateOnShow?.();
+    // The slate to take: the one on show, or the publish's newest when that is a later day (the board then switches to it, so it needs its files).
+    const shown = slateOnShow?.() || null, latest = typeof after?.latest?.slate === "string" ? after.latest.slate : null;
+    const slate = latest && (!shown || latest > shown) ? latest : shown;
     const rels = slate ? [...slateFiles(slate), "slates.json"] : [];
     try {
       if (!slate) throw new Error("no slate is on show");
