@@ -10,9 +10,7 @@
 //     bench: [keys], oor: [keys], injured: [keys], positions: { PG: [keys], SG, SF, PF, C } }
 // Starters (chartFive) are a set: the chart's five who are playing and not flipped away, plus every man marked S; marking never moves
 // anyone else. An Out starter's named backup starts only while fewer than five are marked. Six or more marked all start, with a note.
-// Minutes (chartMinutes, Adam 11-07): last season's figures only, never this season's or the chart's usual. Each starter gets his own
-// last-season starter MPG, else his position group's starter average; the rest of the 240 trickles down the bench ladder in rotation
-// order (a named starter he flipped to the bench first, then Bench+, then the chart's bench order). Usual stays on the chart as information and feeds no minutes figure.
+// Minutes: none are worked here any more (Adam 11-12, one minutes model): the minutes engine's three-tier model (server/board/tiers.js) gives every figure. Usual stays on the chart as information and feeds no minutes figure.
 import { isNum } from "./figures.js";
 
 export const DEPTH_SCHEMA = 1;
@@ -118,95 +116,6 @@ export function badChart(chart) {
   return null;
 }
 
-// ---- chart minutes: the figures (Adam, 11-07) ----
-// Every figure is worked by seasonMinuteFigures from last season's Basketball-Reference totals (data/seasons/bbr-<end year>-totals.json,
-// tools/fetch_season_totals.mjs), the season before the slate's; nothing here is a hard-coded minutes figure.
-export const TEAM_MINUTES = 240;        // a regulation game: five men on the floor for 48 minutes
-export const STARTER_MIN_GAMES = 25;    // a starter figure (his own, or his group's average) needs 25+ games last season (Adam, 11-07)
-export const STARTER_MIN_SHARE = 0.75;  // ... starting at least 75% of them (Adam, 11-07)
-export const BENCH_FLOOR = 40;          // the bench keeps at least 40 of the 240: starters past 200 are scaled down (Adam, 11-07)
-export const LADDER_RUNGS = 5;          // the bench ladder: 6th to 10th man (Adam, 11-07); men past the 10th get 0
-/** A position's starter-average group (Adam, 11-07: guards play more than forwards, forwards more than bigs). */
-export const POS_GROUP = { PG: "G", SG: "G", SF: "F", PF: "F", C: "C" };
-
-/** A Basketball-Reference row's first position ("SG-PG" -> SG) as G, F or C; null when it has none. */
-const bbrGroup = (pos) => POS_GROUP[String(pos ?? "").split("-")[0].trim()] ?? null;
-/** Whether a season row is a starter's: STARTER_MIN_GAMES+ games, starting STARTER_MIN_SHARE+ of them. */
-const startedSeason = (r) => r.g >= STARTER_MIN_GAMES && r.gs / r.g >= STARTER_MIN_SHARE;
-const mean = (v) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : null);
-
-/** His own last-season starter MPG from his season row (a traded man's row is his combined one), or null when he was not a starter by the rule. */
-export const ownStarterMpg = (row) => (row && row.g > 0 && startedSeason(row) ? r3(row.mp / row.g) : null);
-
-/**
- * The league figures from last season's rows [{ team, pos, g, gs, mp }]: { group: { G, F, C }, ladder: [6th .. 10th] }.
- *   group: the average MPG of starters by the rule, by their first listed position.
- *   ladder: per team, among men with STARTER_MIN_GAMES+ games on that team (a traded man's combined "TOT" row belongs to no team; his per-team rows,
- *   `teamRows`, count on each team he played for, by his games, starts and minutes there), the five with
- *   the most starts are its starters and the rest are ranked by MPG, but a man past the five who is a starter by the rule (25+ games, 75%+ started) is a
- *   starter and not a bench man, so he takes no rung (Adam 11-09); each rung is the average over the teams that have a man on it.
- */
-export function seasonMinuteFigures(players, teamRows = []) {
-  const group = {};
-  for (const g of ["G", "F", "C"]) { const m = mean(players.filter((r) => startedSeason(r) && bbrGroup(r.pos) === g).map((r) => r.mp / r.g)); group[g] = m === null ? null : r3(m); }
-  const rungs = Array.from({ length: LADDER_RUNGS }, () => []);
-  const onTeams = [...players.filter((r) => r.team !== "TOT"), ...teamRows];
-  for (const team of new Set(onTeams.map((r) => r.team))) {
-    const men = onTeams.filter((r) => r.team === team && r.g >= STARTER_MIN_GAMES).sort((a, b) => b.gs - a.gs || b.mp - a.mp || String(a.bbrId).localeCompare(String(b.bbrId)));
-    men.slice(5).filter((r) => !startedSeason(r)).map((r) => r.mp / r.g).sort((a, b) => b - a).slice(0, LADDER_RUNGS).forEach((v, i) => rungs[i].push(v));
-  }
-  return { group, ladder: rungs.map((v) => { const m = mean(v); return m === null ? null : r3(m); }) };
-}
-
-const ORD = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
-
-/** A starter's figure: { min, basis, median }. His own last-season starter MPG, else his first listed position's group average (median: a group figure, not his own). */
-export function starterFigure(fig, key, pos0) {
-  const own = fig.own?.[key];
-  if (isNum(own)) return { min: own, basis: `starter, own ${fig.season} starter MPG ${f1(own)}`, median: false };
-  const g = POS_GROUP[pos0], avg = g ? fig.group?.[g] : null, why = fig.why?.[key] ? ` (${fig.why[key]})` : "";
-  if (isNum(avg)) return { min: avg, basis: `starter, ${g} average ${f1(avg)}${why}`, median: true };
-  return { min: null, basis: `${g ? `starter, no ${g} average in the ${fig.season} table` : "starter, no position to take a group average from"}${why}`, median: false };
-}
-
-/**
- * The 240 shared out (Adam, 11-07): { key: { min, how } } for the untyped starters and bench men, one algorithm whether or not anyone is typed, on room = 240 minus
- * the typed sum. starters: [{ key, min }] (untyped, with a figure); bench: [keys], the whole ladder in order; typedOn: { key: minutes } for the ladder men who are typed. A typed
- * man keeps his place on the ladder and his minutes count toward the bench, so typing a man's current figure moves nobody. Pure.
- *   Starters past room: every untyped man is scaled by one factor. Otherwise, if the starters leave the bench under BENCH_FLOOR they are scaled down to leave it exactly that;
- *   each bench man then takes his rung until the rest runs out (the last takes what is left, the men after him 0); when the rest is more than the rungs hold, every rung is raised in proportion.
- *   This function alone is not a no-op for a typed man's own figure once scale-all is on (typing a scaled figure can drop the starters back under room and turn it off); chartMinutes
- *   therefore drops a typed figure equal to the man's own before calling it (settleTyped), which is what makes typing a current figure move nobody.
- */
-export function shareMinutes(starters, bench, ladder, typed = 0, typedOn = {}) {
-  const out = {}, room = Math.max(0, TEAM_MINUTES - typed);
-  const S = starters.reduce((s, x) => s + x.min, 0);
-  const rungAt = (i) => (i < ladder.length && isNum(ladder[i]) ? ladder[i] : 0);
-  const open = bench.map((k, i) => ({ k, i })).filter((x) => !Object.hasOwn(typedOn, x.k)), R = open.reduce((a, x) => a + rungAt(x.i), 0);
-  const need = Math.max(0, BENCH_FLOOR - Object.values(typedOn).reduce((a, b) => a + b, 0)); // what the untyped bench must keep: typed bench minutes count toward the floor
-  const scaleAll = S > room;
-  const f = scaleAll ? room / (S + R) : open.length && S > 0 && room - S < need ? Math.max(0, room - need) / S : 1;
-  for (const x of starters) out[x.key] = { min: x.min * f, how: f < 1 ? (scaleAll ? `scaled by ${f.toFixed(2)} with every untyped man to fit your typed minutes` : `scaled to ${f1(x.min * f)} so the bench keeps ${BENCH_FLOOR}`) : null };
-  let pool = room - S * f;
-  const byRung = !scaleAll && pool >= R; // the rest is more than the rungs hold: raised in proportion, not trickled
-  open.forEach(({ k, i }) => {
-    const label = `${ORD(6 + i)} man`;
-    if (i >= ladder.length) { out[k] = { min: 0, how: `${label}, past the ${ORD(5 + ladder.length)}-man ladder` }; return; }
-    if (!isNum(ladder[i])) { out[k] = { min: 0, how: `${label}, no ladder figure for this rung` }; return; }
-    const rung = ladder[i], base = `${label}, ladder ${f1(rung)}`;
-    if (scaleAll) out[k] = { min: rung * f, how: `${base}, scaled by ${f.toFixed(2)} with every untyped man to fit your typed minutes` };
-    else if (byRung) {
-      const v = R > 0 ? (rung * pool) / R : 0;
-      out[k] = { min: v, how: Math.abs(v - rung) < 0.05 ? base : `${base}, raised to ${f1(v)} (more minutes left than the ladder holds, shared by rung)` };
-    } else {
-      const take = Math.max(0, Math.min(rung, pool));
-      pool -= take;
-      out[k] = { min: take, how: take >= rung - 1e-9 ? base : take > 0 ? `${base}; takes the ${f1(take)} left` : `${base}; nothing left of the ${TEAM_MINUTES}` };
-    }
-  });
-  return out;
-}
-
 /**
  * The men who start, as a set (Adam, 11-07): { five: [keys, any count], why: { key: { for, how } }, notes }. The chart's named starters who are playing and
  * not flipped away; every man marked S, on the chart (`flips`) or off it (`extraIns`: [{ key }], a key of the caller's own); then, while fewer than five,
@@ -229,62 +138,8 @@ export function chartFive(chart, active, flips, extraIns = []) {
 }
 
 /**
- * Each man's minutes off the chart (Adam, 11-07): { minutes: { key: { min, basis, median } }, starters: [keys], total, notes: [text] }. `state`:
- *   figures: { season: "2025-26", group: { G, F, C }, ladder: [..], own: { key: his own starter MPG or null } } from the server (depth-figures.js),
- *     or { missing: reason }; without them no man has a figure, and the basis says why.
- *   extraIns: [{ key, pos0, role }] men off the chart Adam flipped to Starter (a starter like anyone) or Bench+ / Bench (the end of that group's order);
- *   outs, absent (chart men not on tonight's board), flips: { key: role }, typed: { key: minutes }; a key on neither the chart nor extraIns is ignored.
- * Starters (chartFive) take starterFigure; the bench in ladder order (Bench+ first, then the chart's bench order, then anyone else on the chart in chart
- * order, then the men off it) shares the rest of TEAM_MINUTES by shareMinutes; Out of rotation and the injured list play 0. min is null with no figure.
- */
-export function chartMinutes(chart, state = {}) {
-  if (!state.settled && Object.keys(state.typed ?? {}).length) { // a typed figure that is what the sharing gives him anyway is no edit: it moves nobody (settleTyped)
-    const edits = settleTyped(state.typed, (rest) => Object.fromEntries(Object.entries(chartMinutes(chart, { ...state, typed: rest, settled: true }).minutes).map(([k, v]) => [k, v.min])));
-    return chartMinutes(chart, { ...state, typed: edits, echo: Object.fromEntries(Object.entries(state.typed).filter(([k]) => !(k in edits))), settled: true });
-  }
-  const men = chart.men, extra = (state.extraIns ?? []).filter((e) => e && typeof e.key === "string" && !men[e.key]);
-  const extraOf = Object.fromEntries(extra.map((e) => [e.key, { ...e, role: e.role ?? "starter" }]));
-  const keys = [...Object.keys(men), ...Object.keys(extraOf)];
-  const asked = Object.fromEntries(Object.entries(state.flips ?? {}).filter(([k, r]) => men[k] && DEPTH_ROLES.includes(r)));
-  const typed = Object.fromEntries(Object.entries(state.typed ?? {}).filter(([k, v]) => (men[k] || extraOf[k]) && isNum(v)));
-  const outSet = new Set((state.outs ?? []).filter((k) => men[k])), absent = new Set((state.absent ?? []).filter((k) => men[k]));
-  const down = (k) => !extraOf[k] && (outSet.has(k) || absent.has(k) || (men[k].role === "injured" && asked[k] === undefined));
-  const active = (k) => !down(k);
-  const { five, why } = chartFive(chart, (k) => Boolean(men[k]) && active(k), asked, extra.filter((e) => extraOf[e.key].role === "starter"));
-  const roleOf = (k) => (five.includes(k) ? "starter" : extraOf[k] ? extraOf[k].role : asked[k] ?? (men[k].role === "starter" ? "bench" : men[k].role));
-  const order = [...new Set([...chart.bench, ...chart.starters.map((s) => s.key), ...chart.oor, ...chart.injured])];
-  const benchOf = (role) => [...order.filter((k) => active(k) && roleOf(k) === role), ...Object.keys(extraOf).filter((k) => roleOf(k) === role)];
-  const benched = chart.starters.map((s) => s.key).filter((k) => active(k) && !five.includes(k) && (asked[k] === "bench" || asked[k] === "bench_plus")); // a starter he flipped to the bench is its 6th man (Adam, 11-07)
-  const ladder = [...new Set([...benched, ...benchOf("bench_plus"), ...benchOf("bench")])];
-  const fig = state.figures ?? { missing: "no season figures were read" };
-  const minutes = {};
-  const set = (k, min, basis, median = false) => { minutes[k] = { min: min === null ? null : r3(min), basis, median }; };
-  const pos0 = (k) => men[k]?.positions[0] ?? extraOf[k]?.pos0;
-  const starts = five.filter((k) => !(k in typed)).map((k) => ({ key: k, ...(fig.missing ? { min: null, basis: `no season figures (${fig.missing})` } : starterFigure(fig, k, pos0(k))) }));
-  const typedSum = Object.entries(typed).filter(([k]) => active(k)).reduce((s, [, v]) => s + v, 0);
-  const nameOf = (k) => men[k]?.name ?? extraOf[k]?.name ?? k;
-  const blank = fig.missing ? null : starts.find((x) => !isNum(x.min)) ?? null; // a starter with no figure: the bench waits on him, never raised over a blank
-  const share = fig.missing || blank ? {} : shareMinutes(starts, ladder, fig.ladder ?? [], typedSum, Object.fromEntries(ladder.filter((k) => k in typed).map((k) => [k, typed[k]])));
-  const startsFor = (k) => (why[k] ? (why[k].for ? `starts for ${men[why[k].for].name} (${why[k].how})` : why[k].how) : null);
-  for (const k of keys) {
-    if (down(k)) { set(k, 0, absent.has(k) ? "not on tonight's board" : "out"); continue; }
-    if (k in typed) { set(k, typed[k], "typed by you"); continue; }
-    if (isNum(state.echo?.[k])) { set(k, state.echo[k], "typed by you"); continue; } // typed at his own figure: shown as typed, shared as if untyped
-    const s = starts.find((x) => x.key === k);
-    if (s) { const sh = share[k]; set(k, sh ? sh.min : s.min, [s.basis, sh?.how, startsFor(k)].filter(Boolean).join("; "), s.median === true); continue; }
-    if (share[k]) { set(k, share[k].min, share[k].how); continue; }
-    if (fig.missing && ladder.includes(k)) { set(k, null, `no season figures (${fig.missing})`); continue; }
-    if (blank && ladder.includes(k)) { set(k, null, `waiting on ${nameOf(blank.key)}'s starter figure (${blank.basis})`); continue; }
-    set(k, 0, roleOf(k) === "injured" ? "injured" : "out of rotation");
-  }
-  const total = Object.values(minutes).reduce((s, v) => (isNum(v.min) ? s + v.min : s), 0);
-  const totalNote = totalMissNote(total, typedSum, fig, blank && nameOf(blank.key));
-  return { minutes, starters: five, total: r3(total), total_note: totalNote, notes: [...fiveNotes(chart, five, (k) => Boolean(men[k]) && active(k), why, asked), ...(totalNote ? [totalNote] : [])] };
-}
-
-/**
  * The typed minutes that are real edits: { key: minutes } without the men typed at the figure the sharing gives them untyped (within SAME_MIN, a thousandth kept).
- * Such a man is no edit, so he is shared as if untyped and nobody moves; this is the one place that rule lives, for Ours here and the TwoGun source in console-engine.js.
+ * Such a man is no edit, so he is shared as if untyped and nobody moves; this is the one place that rule lives, for the TwoGun source in console-engine.js.
  * `minutesWith(edits)`: { key: minutes } for everyone when only `edits` is typed. The no-edits are the largest set of typed men who each get exactly their typed figure when all of them
  * are left untyped together (two men typed at their own figures are judged together, and so is a man typed beside a real edit, whatever order they are listed in). More than SETTLE_MAX
  * typed men are all kept as edits, the old rule.
@@ -301,15 +156,6 @@ export function settleTyped(typed, minutesWith) {
     if (keys.every((k, i) => !((mask >> i) & 1) || (isNum(got?.[k]) && Math.abs(got[k] - typed[k]) <= SAME_MIN))) return kept(mask);
   }
   return typed;
-}
-
-/** Why the team's minutes are not 240, naming the cause; null when they are, within 0.05. */
-function totalMissNote(total, typedSum, fig, waitingOn) {
-  if (Math.abs(total - TEAM_MINUTES) <= 0.05) return null;
-  if (fig.missing) return `The ${TEAM_MINUTES} is not shared: no season figures (${fig.missing}).`;
-  if (waitingOn) return `The ${TEAM_MINUTES} is not shared: waiting on ${waitingOn}'s starter figure.`;
-  if (typedSum > TEAM_MINUTES) return `Typed minutes are ${f1(typedSum - TEAM_MINUTES)} over the ${TEAM_MINUTES}.`;
-  return total < TEAM_MINUTES ? `No bench men left to take the remaining ${f1(TEAM_MINUTES - total)} of the ${TEAM_MINUTES}.` : `The team's minutes total ${f1(total)}, not ${TEAM_MINUTES}.`;
 }
 
 /** The roles note when the starters are not five: six or more marked, or fewer than five, naming each starter out and why nobody stepped in: no named backup playing, or a backup he flipped (`flips`: { key: role }). */
