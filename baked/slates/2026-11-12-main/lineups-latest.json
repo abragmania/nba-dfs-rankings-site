@@ -1,32 +1,31 @@
 {
  "slate": "2026-11-12-main",
- "generated_at": "2026-11-12T18:45:28.524Z",
+ "generated_at": "2026-11-12T19:00:28.768Z",
  "status": "ok",
  "slate_built_from": "slates/2026-11-12-main/raw/2026-11-12T130031-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-12T18:45:20.285Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-12T134520-0500.html.gz",
-   "saved_at": "2026-11-12T18:45:20.285Z",
-   "parsed_sha": "d0dab49b98e788b5cbaac91d54cdc4ab4407a17c34e6408d202797fafa842f70",
-   "sha256": "34d307fdad372f57f39c5722a2cfd93a9e7482ecd4494610e33a5779f5712570"
+   "fetched_at": "2026-11-12T19:00:20.530Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-12T140020-0500.html.gz",
+   "saved_at": "2026-11-12T19:00:20.530Z",
+   "parsed_sha": "86f0736a51c925e6b60d3d3efd2936a687757f6eb7ef882b21307a32950728c5",
+   "sha256": "bebbc8219e8ab3403ec4304f14ff1184636d8516fac23f705f8b6e6ced999b21"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-12T18:45:24.365Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-12T131524-0500.html.gz",
-   "saved_at": "2026-11-12T18:15:24.317Z",
-   "unchanged_since": "2026-11-12T18:15:24.317Z",
-   "parsed_sha": "4d39ce01c09a5a5563c06c9e5eceabd714e013e38149113987e5b2b18e70ee78",
-   "sha256": "dde5ae029a527e49e7cc2ba228b307baca3b5c44c642de00ceea69ba7d241e53"
+   "fetched_at": "2026-11-12T19:00:24.602Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-12T140024-0500.html.gz",
+   "saved_at": "2026-11-12T19:00:24.602Z",
+   "parsed_sha": "d5e557b6c1120886de5a38fec32c3a507446617f478543959e1e74221b537d36",
+   "sha256": "aeab87b6f5970091d7b961e9fd6b1add90b4e9cc7ccee8d7bb0d71f3a4c86d14"
   },
   "rotogrinders": {
    "url": "https://rotogrinders.com/lineups/nba?site=draftkings",
    "status": "ok",
-   "fetched_at": "2026-11-12T18:45:28.496Z",
+   "fetched_at": "2026-11-12T19:00:28.732Z",
    "saved_as": "news/lineups/pages/rotogrinders-2026-11-12T131528-0500.html.gz",
    "saved_at": "2026-11-12T18:15:28.444Z",
    "unchanged_since": "2026-11-12T18:15:28.444Z",
@@ -1565,9 +1564,9 @@
       "name": "Moussa Diabate",
       "pos": "C",
       "bmId": "6567",
-      "flag": "P",
-      "word": "Probable",
-      "status": "Probable",
+      "flag": "IN",
+      "word": "Playing",
+      "status": "Playing",
       "verified": false,
       "id": "44887812",
       "match": "exact"
@@ -1613,30 +1612,14 @@
      {
       "name": "Moussa Diabate",
       "pos": "C",
-      "flag": "Prob",
-      "status": "Probable",
+      "flag": null,
+      "status": null,
       "id": "44887812",
       "match": "exact"
      }
     ],
     "label": "Expected Lineup",
     "may_not_play": [
-     {
-      "name": "Moussa Diabate",
-      "pos": "C",
-      "flag": "Prob",
-      "status": "Probable",
-      "id": "44887812",
-      "match": "exact"
-     },
-     {
-      "name": "Grant Williams",
-      "pos": "F",
-      "flag": "Prob",
-      "status": "Probable",
-      "id": "44888130",
-      "match": "exact"
-     },
      {
       "name": "Kon Knueppel",
       "pos": "F",
