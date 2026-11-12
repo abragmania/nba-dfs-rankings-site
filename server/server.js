@@ -24,13 +24,18 @@ import { readSpots, readSpotsShown, writeSpots, checkSpotsBody, applySpots, vaca
 import { readSaved } from "./slate/lateswap-store.js";
 import { heldSpotNames } from "./lateswap/maps.js";
 import { readBuilds, writeBuilds, checkBuildsBody, applyBuilds } from "./slate/builds.js";
-import { readOverrides, writeOverrides, checkChanges, applyChanges, resetPlayer, resetAll, mergeOverrides, publicOverrides } from "./slate/overrides.js";
+import { readOverrides, writeOverrides, checkChanges, applyChanges, resetPlayer, resetAll, mergeOverrides, minutesBase, publicOverrides } from "./slate/overrides.js";
 import { consoleHandler } from "./slate/console-route.js";
 import { depthHandler } from "./slate/depth-store.js";
+import { minutesHandler, consoleBenchPlus } from "../site/shim/app-only.js";
+import { withOurProjection, primeTotals, startSnapshotRefresh } from "../site/shim/app-only.js";
 import { readNewsLineups } from "./slate/news-lineups.js";
 import { withUsualMinutes } from "../site/shim/app-only.js";
 import { withOurMinutes } from "./slate/our-minutes.js";
 import { pullStamp, withPullMoves } from "../site/shim/pull-moves.js";
+import { withRest } from "../site/shim/back-to-back.js";
+import { withBoxFreshness, readBoxFreshness } from "../site/shim/app-only.js";
+import { withStatusSince } from "../site/shim/status-since.js";
 import { lateswapHandler } from "./slate/lateswap-route.js";
 
 const BOARD_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "board");
@@ -155,9 +160,9 @@ async function handlePicks(req, res, slate) {
  * ownership every reader uses. Returns null after sending a 500 when the overrides file cannot be read (never the base
  * figures in its place: a build or a board on the wrong numbers would be worse than none).
  */
-function effectivePlayers(res, slate, slateData) {
+function effectivePlayers(res, slate, slateData, opts = null) {
   try {
-    return mergeOverrides(slateData.players ?? [], readOverrides(slate));
+    return mergeOverrides(withOurs(slate, slateData, opts).players ?? [], readOverrides(slate));
   } catch (e) {
     if (!e?.code?.startsWith?.("OVERRIDES_")) throw e;
     error("overrides unreadable", { slate, message: e.message });
@@ -166,9 +171,12 @@ function effectivePlayers(res, slate, slateData) {
   }
 }
 
+/** The slate with our minutes engine's figures (server/minutes/board.js) when the server has it wired (opts.ourProjection; the app does, the tests and the site do not); otherwise as built. */
+const withOurs = (slate, slateData, opts) => (opts?.ourProjection ? opts.ourProjection(slate, slateData, { nowMs: opts.now() }) : slateData);
+
 /** GET { slate, overrides }; POST a change ({ proj, own, bump, stars }), { reset: dk_id } or { resetAll: true }.
  *  A POST answers { overrides, players } with the players' effective figures, so the page redraws from the saved file. */
-async function handleOverrides(req, res, slate) {
+async function handleOverrides(req, res, slate, opts) {
   const slateData = openSlate(req, res, slate, "Overrides");
   if (!slateData) return;
   const readCurrent = () => {
@@ -193,15 +201,16 @@ async function handleOverrides(req, res, slate) {
   // each apply onto the other's saved result and neither change is lost.
   const current = readCurrent();
   if (!current) return;
+  const base = withOurs(slate, slateData, opts); // the projections a bump scales and the answer shows: ours or TwoGun's, as the board reads them
   let next;
   try {
-    next = checked.kind === "resetAll" ? resetAll(current) : checked.kind === "reset" ? resetPlayer(current, checked.id) : applyChanges(current, checked.changes, slateData.players ?? []);
+    next = checked.kind === "resetAll" ? resetAll(current) : checked.kind === "reset" ? resetPlayer(current, checked.id) : applyChanges(current, checked.changes, minutesBase(base.players ?? [], current));
   } catch (e) {
     if (e?.code !== "BUMP_NO_PROJECTION") throw e;
     return fail(res, 400, e.code, e.message);
   }
   const written = writeOverrides(slate, next);
-  send(res, 200, { overrides: publicOverrides(written), players: mergeOverrides(slateData.players ?? [], written) });
+  send(res, 200, { overrides: publicOverrides(written), players: mergeOverrides(base.players ?? [], written) });
 }
 
 /** GET the slate's saved lineups; POST { slots, mode } saves one, POST { batch: [{ slots, mode }] } saves many (Save all), each checked
@@ -335,7 +344,7 @@ async function handleOptimize(req, res, slate, opts) {
   if (opts.build) return fail(res, 409, "BUSY", "Lineups are already being made; try again when that finishes.");
   const picks = readPicks(slate, slateData);
   // Adam's overrides (typed numbers and bumps) are what the build scores, late swap included.
-  const players = effectivePlayers(res, slate, slateData);
+  const players = effectivePlayers(res, slate, slateData, opts);
   if (!players) return;
   let { locked, excluded } = picks, lateOut = null;
   if (lateSwap) {
@@ -475,15 +484,27 @@ async function route(req, res, opts) {
     if (req.method !== "GET") return fail(res, 405, "METHOD", "GET only.");
     return send(res, 200, { now_ms: opts.now(), injected: opts.injected });
   }
+  if (p === "/api/boxes/freshness") { // whether the stored box scores are behind the schedule (boxes/freshness.js); "unknown" with its reason when it cannot tell
+    if (req.method !== "GET") return fail(res, 405, "METHOD", "GET only.");
+    const refused = refuseCrossSiteRead(req.headers);
+    if (refused) return fail(res, refused.status, refused.code, refused.message);
+    return send(res, 200, readBoxFreshness({ nowMs: opts.now() }));
+  }
   if (p === "/api/player-usage") return (await import("../site/shim/app-only.js")).handlePlayerUsage(req, res, url, { send, fail, readJson }); // the card's usage data
   if (p === "/api/pull-now") return (await import("../site/shim/app-only.js")).handlePullNow(req, res, { send, fail, readJson, state: opts.pullNow, deps: opts.pullNowDeps }); // the header's Pull now button
   if (p === "/api/pull-status") return (await import("../site/shim/app-only.js")).handlePullStatus(req, res, { send, fail, state: opts.pullNow, deps: opts.pullNowDeps, url }); // the Pull now status block
+  // A machine with no league totals yet fetches them once (capped) before a board or minutes read, so a cold start is not a board of missing projections (minutes/inputs.js primeTotals).
+  // Reads only: a write, a build or late swap never waits on Basketball-Reference.
+  const primeFor = req.method === "GET" ? /^\/api\/(?:slate|minutes)\/([^/]+)(?:\/team\/[A-Z]{2,4})?$/.exec(p) : null;
+  if (opts.primeTotals && primeFor && SLATE_NAME.test(safeDecode(primeFor[1]))) await opts.primeTotals(safeDecode(primeFor[1]), { nowMs: opts.now() });
+  const mins = minutesHandler(p); // our minutes engine (minutes/route.js)
+  if (mins) return mins.handler(req, res, mins, { send, fail, readJson, now: opts.now, decode: safeDecode });
   const depth = depthHandler(p); // the saved depth charts (slate/depth-store.js)
   if (depth) return depth.handler(req, res, depth.team, { send, fail, readJson, now: opts.now });
   const cons = consoleHandler(p); // the scenario console (slate/console-route.js)
-  if (cons) return cons.handler(req, res, safeDecode(cons.encodedSlate), { send, fail, readJson, openSlate, usageTable: opts.usageTable, now: opts.now });
+  if (cons) return cons.handler(req, res, safeDecode(cons.encodedSlate), { send, fail, readJson, openSlate, usageTable: opts.usageTable, benchPlus: consoleBenchPlus, now: opts.now });
   const lsw = lateswapHandler(p); // the Late swap screen (slate/lateswap-route.js)
-  if (lsw) return lsw.handler(req, res, safeDecode(lsw.encodedSlate), { send, fail, readJson, openSlate, effectivePlayers, now: opts.now, injected: opts.injected });
+  if (lsw) return lsw.handler(req, res, safeDecode(lsw.encodedSlate), { send, fail, readJson, openSlate, effectivePlayers: (res, slate, slateData) => effectivePlayers(res, slate, slateData, opts), now: opts.now, injected: opts.injected });
   let m = p.match(/^\/api\/slate\/([^/]+)\/picks$/);
   if (m) return handlePicks(req, res, safeDecode(m[1]));
   m = p.match(/^\/api\/slate\/([^/]+)\/lineups$/);
@@ -495,7 +516,7 @@ async function route(req, res, opts) {
   m = p.match(/^\/api\/slate\/([^/]+)\/working$/);
   if (m) return handleWorking(req, res, safeDecode(m[1]));
   m = p.match(/^\/api\/slate\/([^/]+)\/overrides$/);
-  if (m) return handleOverrides(req, res, safeDecode(m[1]));
+  if (m) return handleOverrides(req, res, safeDecode(m[1]), opts);
   m = p.match(/^\/api\/slate\/([^/]+)\/optimize$/);
   if (m) return handleOptimize(req, res, safeDecode(m[1]), opts);
   m = p.match(/^\/api\/slate\/([^/]+)\/optimize\/progress$/);
@@ -503,7 +524,7 @@ async function route(req, res, opts) {
   m = p.match(/^\/api\/slate\/([^/]+)\/optimize\/stop$/);
   if (m) return handleBuildStop(req, res, safeDecode(m[1]), opts);
   m = p.match(/^\/api\/slate\/([^/]+)\/news-lineups$/);
-  if (m) { // the Monster and RotoWire lineup read (the board's proposals bar); a read-only answer, { state: "ok" | "missing" | "unreadable" }
+  if (m) { // the Monster, RotoWire and RotoGrinders lineup read (the board's proposals bar); a read-only answer, { state: "ok" | "missing" | "unreadable" }
     if (req.method !== "GET") return fail(res, 405, "METHOD", "GET only.");
     const slate = safeDecode(m[1]);
     if (!SLATE_NAME.test(slate)) return fail(res, 400, "BAD_SLATE", "Slate names look like 2026-10-29-main.");
@@ -530,10 +551,11 @@ async function route(req, res, opts) {
     if (refused) return fail(res, refused.status, refused.code, refused.message);
     const data = readSlate(slate);
     if (!data) return fail(res, 404, "NO_SLATE", "No such slate.");
-    const players = effectivePlayers(res, slate, data); // the board shows the effective figures, each with its base
+    const ours = withOurs(slate, data, opts); // our projections, or TwoGun's, per the minutes setting
+    const players = effectivePlayers(res, slate, ours); // the board shows the effective figures, each with its base
     if (!players) return;
-    const usual = withUsualMinutes(slate, { ...data, players }, { nowMs: opts.now() }); // each man's usual minutes, the console's figure
-    const merged = withPullMoves(slate, withOurMinutes(slate, usual), { nowMs: opts.now() }); // who the newest pull moved against the one before it
+    const usual = withUsualMinutes(slate, { ...ours, players }, { nowMs: opts.now() }); // each man's usual minutes, the console's figure
+    const merged = withBoxFreshness(withStatusSince(slate, withRest(slate, withPullMoves(slate, withOurMinutes(slate, usual), { nowMs: opts.now() })), { nowMs: opts.now() }), { nowMs: opts.now() }); // who the newest pull moved against the one before it; box_freshness: whether the stored box scores are behind the schedule
     return send(res, 200, opts.seasonFigures ? await opts.seasonFigures(merged) : merged);
   }
   if (p.startsWith("/api/")) return fail(res, 404, "NOT_FOUND", "Not found.");
@@ -549,9 +571,13 @@ async function route(req, res, opts) {
  *  given, so the tests never reach Basketball-Reference. The app below turns it on.
  *  nowMs: a fixed "now" for late swap (the NBADFS_NOW test clock); null means the real clock.
  *  usageTable: () -> this season's usage table for the console (usage/board_figures.js); off unless given, as seasonFigures is.
- *  pullNowDeps: Pull now's child, git and slate reads (pullnow/route.js defaultDeps when null); the tests inject them. */
-export function makeServer({ optimizeTimeoutMs = OPTIMIZE_CEILING_MS, optimizeUrl = OPTIMIZE_URL, seasonFigures = null, nowMs = null, answerStartMs = ANSWER_START_MS, answerKeepaliveMs = ANSWER_KEEPALIVE_MS, setTimer = setTimeout, usageTable = null, pullNowDeps = null } = {}) {
-  const opts = { optimizeTimeoutMs, optimizeUrl, answerStartMs, answerKeepaliveMs, setTimer, build: null, seasonFigures, usageTable, now: () => nowMs ?? Date.now(), injected: nowMs != null, pullNow: { running: null }, pullNowDeps };
+ *  pullNowDeps: Pull now's child, git and slate reads (pullnow/route.js defaultDeps when null); the tests inject them.
+ *  pullNowState: the object Pull now keeps its lock and last run in, shared with the light check (the app below passes one).
+ *  ourProjection: (slate, slateData, { nowMs }) -> slateData with our minutes engine's figures (minutes/board.js withOurProjection, which reads the projection setting); off unless given,
+ *  so the tests and the public site keep the slate's own (TwoGun's) figures. The app below turns it on.
+ *  primeTotals: (slate, { nowMs }) -> fetches missing league totals for the engine once (minutes/inputs.js); off unless given, so the tests never reach Basketball-Reference. */
+export function makeServer({ optimizeTimeoutMs = OPTIMIZE_CEILING_MS, optimizeUrl = OPTIMIZE_URL, seasonFigures = null, nowMs = null, answerStartMs = ANSWER_START_MS, answerKeepaliveMs = ANSWER_KEEPALIVE_MS, setTimer = setTimeout, usageTable = null, pullNowDeps = null, pullNowState = { running: null }, ourProjection = null, primeTotals: prime = null } = {}) {
+  const opts = { optimizeTimeoutMs, optimizeUrl, answerStartMs, answerKeepaliveMs, setTimer, build: null, seasonFigures, usageTable, ourProjection, primeTotals: prime, now: () => nowMs ?? Date.now(), injected: nowMs != null, pullNow: pullNowState, pullNowDeps };
   return http.createServer((req, res) => {
     route(req, res, opts).catch((e) => {
       error("request failed", { url: req.url, message: e.message });
@@ -571,5 +597,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   // A test clock is for a copy with its own data folder, never for the app on its own port: it would make real upload files from a fake now.
   if (now.ms != null && (!process.env.NBADFS_DATA_DIR || port === 8693)) { error("NBADFS_NOW needs NBADFS_DATA_DIR set and a port other than 8693; not starting."); process.exit(1); }
   if (now.ms != null) info(`Late swap test clock: now is ${new Date(now.ms).toISOString()} (NBADFS_NOW)`);
-  makeServer({ seasonFigures: withSeasonFigures, usageTable: seasonUsageTable, nowMs: now.ms }).listen(port, "127.0.0.1", () => info(`NBA board on http://127.0.0.1:${port}`));
+  const pullNowState = { running: null };
+  makeServer({ seasonFigures: withSeasonFigures, usageTable: seasonUsageTable, nowMs: now.ms, pullNowState, ourProjection: withOurProjection, primeTotals }).listen(port, "127.0.0.1", () => {
+    info(`NBA board on http://127.0.0.1:${port}`);
+    startSnapshotRefresh({ now: () => now.ms ?? Date.now() }); // keeps each team's figures saved for its tip (minutes/refresh.js)
+    import("../site/shim/app-only.js").then(({ startLightCheckIfAllowed }) => startLightCheckIfAllowed({ state: pullNowState, port })).catch((e) => error("the light check could not start", { error: e.message })); // only in the real app: the default data folder on port 8693
+  });
 }

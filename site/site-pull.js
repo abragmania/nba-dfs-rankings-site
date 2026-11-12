@@ -6,7 +6,7 @@
 // show is read from the site repo's freshly pushed baked files through GitHub's contents API (no wait for Pages) and the board takes them in
 // place through its own refresh. Once a dispatch is sent, no GitHub error is called a failure: the job may be running. Pure parts tested in node.
 import { adoptFresh } from "./static-api.js";
-import { pullLine, buildSources, etStamp, cloudState, cloudLast, newestDone } from "../server/board/pull-now.js";
+import { pullLine, buildSources, etStamp, cloudState, cloudLast, newestDone, publishedChanges } from "../server/board/pull-now.js";
 
 export const DATA_REPO = "abragmania/NBADFSRankings";
 export const SITE_REPO = "abragmania/nba-dfs-rankings-site";
@@ -242,7 +242,14 @@ export function createSitePull({ fetchImpl = (...a) => fetch(...a), store = keyS
     const sources = buildSources({ slateName: name, slate, entry, bbm: news?.bbm ?? null, nba: news?.nba ?? null, noNews, refMs: nowMs });
     const pub = Date.parse(meta?.publishedAt);
     if (!Number.isNaN(pub)) sources.push({ label: "Site published", text: etStamp(pub), note: null });
-    return { readAtMs: nowMs, slate: name, last: found.sort((a, b) => b.atMs - a.atMs)[0] ?? null, running, sources };
+    const left = Array.isArray(meta?.skipped) ? meta.skipped.filter((s) => typeof s?.slate === "string") : [];
+    if (left.length) sources.push({ label: "Slates left off the site", text: `${left.length}: ${left.map((s) => `${s.slate} (${typeof s.why === "string" ? s.why : "no reason given"})`).join("; ")}`, note: null }); // G62: the bake's skipped slates, with why
+    // The badge beside Pull now, from the published lineup read alone: the one signal a browser can read here (pull-now.js publishedChanges).
+    let readWhy = null;
+    const read = name && slate ? await jsonOf(`/api/slate/${encodeURIComponent(name)}/news-lineups`).catch((e) => { readWhy = `the published read could not be fetched (${e.message})`; return null; }) : null;
+    if (read?.state === "unreadable") readWhy = `the published read could not be used (${read.why})`;
+    const light = name && slate ? publishedChanges({ latest: read?.state === "ok" ? read.latest : null, readWhy, players: slate.players, nowMs }) : null;
+    return { readAtMs: nowMs, slate: name, last: found.sort((a, b) => b.atMs - a.atMs)[0] ?? null, running, sources, ...(light ? { light } : {}) };
   }
 
   return { run, actions, status, label: "Cloud pull…", title: "Start the cloud pull on GitHub (quick run), then show the new numbers here" };

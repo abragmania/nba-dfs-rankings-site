@@ -2,7 +2,8 @@
 // Every figure is read from the slate file or its route as given; a missing one is shown as an em dash with a title, never zero.
 import { paletteOf, teamColors } from "./teams.js";
 import { assignColours } from "./colours.js";
-import { esc, warningText, logo, tipWhen, tipMs, slateRefMs, shortTime, isoToEastern, ICON, topStamps, keepFocus } from "./board-util.js";
+import { sourceRows, sourcesHtml, badgeHtml } from "./sources-panel.js";
+import { esc, logo, tipWhen, tipMs, slateRefMs, shortTime, isoToEastern, ICON, topStamps, keepFocus } from "./board-util.js";
 import { createPanel, fullScreenPref } from "./panel.js";
 import { tiers, notes } from "./highlight.js";
 import { initCard, figureSource } from "./card.js";
@@ -13,9 +14,10 @@ import { askConfirm, CONFIRM } from "./confirm.js";
 import { columnsControl, sortNote } from "./columns.js";
 import { headHtml, rowHtml, SORT_KEYS, comparePlayers, hasResettable, minSourceOf } from "./player-table.js";
 import { pullChipHtml, pullNoteHtml } from "./pull-note.js";
+import { boxNote, noteLists as dataNotes, warningCount, freshBoxes } from "./box-note.js";
 import { CHECK_MS, applyHeld, createRefresher, mergeFresh, outNamesOf, overrideKey, picksOnBoard, pullOf, rememberRows, rosterCleanup, statusLine } from "./slate-refresh.js";
 import { pressSettle } from "./press-settle.js";
-import { createPullNow } from "./pull-now.js";
+import { createPullNow, firstTipOf } from "./pull-now.js";
 import { noFilters, filtersOn, filterPlayers, salaryRange, teamsOf } from "./filters.js";
 import { limitPatch } from "./row-limits.js";
 import { loadView, saveView, DEFAULT_SORT } from "./view-memory.js";
@@ -88,11 +90,14 @@ const panel = createPanel({ el: $("opt"), lineupsEl: $("lineups"), onView: (v) =
 const columns = columnsControl({ btn: $("colsBtn"), pop: $("colPop"), mode: panel.mode, tryStore, onChange: () => { if (S.slate) { renderHead(); fixTableWidth(); } } });
 const shownCols = () => columns.keys({ lateSwap: Boolean(panel.lateSwap()) });
 // The scenario console (console.js), the page's other view; each change there hands back the players' effective figures, as an override save does.
-const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: (t) => colourOf(t).t1, onPlayers: (players) => applyPlayers(players), onWork: () => { boardMarks.refresh({ news: false }); lineupBar.newsOnly(); } });
+const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: (t) => colourOf(t).t1, onPlayers: (players) => applyPlayers(players),
+  news: { slateData: () => (S.slate ? { ...S.slate, players: S.players } : null), tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; } }, // the lineup news strip and Status column (same inputs as the News tab)
+  onNews: (team) => { card.close(); setConsole(false); setView("news"); const chip = document.querySelector(`#lineupbar .nwchip[data-nw-team="${CSS.escape(team ?? "")}"]`); if (chip && !chip.classList.contains("on")) chip.click(); }, // the News tab opens on that team (its chip, unless already picked)
+  onWork: () => { boardMarks.refresh({ news: false }); lineupBar.newsOnly(); } });
 // The console's word on each row (board-marks.js): the S chip, and his typed Min and DK/m TON with their undo chips; those cells write through the console.
-const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, onChange: () => { if (S.slate) renderRows(); }, noteEl: $("pullnote").insertAdjacentElement("afterend", Object.assign(document.createElement("div"), { hidden: true })) });
-// The lineup bar above the list (lineup-bar.js): an Out or a confirmed start from the Monster and RotoWire pages applies itself through the console, with an undo X; a projected start is words only.
-const lineupBar = createLineupBar({ el: $("lineupbar"), api, slate: () => S.name, players: () => S.players, slateData: () => S.slate, tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; }, console: scenarioConsole, toast, tryStore, tick: true, onLabel: (l) => { S.news = l; renderTop(); } });
+const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, players: () => S.players, onChange: () => { if (!S.slate) return; if (formHasFocus()) { S.rowsLater = true; return; } renderRows(); }, noteEl: $("pullnote").insertAdjacentElement("afterend", Object.assign(document.createElement("div"), { hidden: true })) });
+// The lineup bar above the list (lineup-bar.js): an Out or a confirmed start from the Monster, RotoWire and RotoGrinders pages applies itself through the console, with an undo X; a projected start is words only.
+const lineupBar = createLineupBar({ el: $("lineupbar"), api, slate: () => S.name, players: () => S.players, slateData: () => S.slate, tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; }, console: scenarioConsole, toast, tryStore, tick: true, onLabel: (l) => { S.news = l; renderTop(); }, applyInPage: Boolean(globalThis.nbadfsSitePull) });
 // Full screen (Player list header): hides the optimizer panel so the table takes the width. Remembered per viewer; under 900 px
 // wide with nothing stored it starts on. Pin slots (late swap) needs the panel, so the button and the hiding step aside then.
 const FS_KEY = "nbaboard.fullscreen";
@@ -191,11 +196,26 @@ async function loadSlate(name) {
 // settings and lineups, and the console's work are other state, so they stand. The row with an open box waits until he leaves it.
 function renderUpdLine() {
   const el = $("updline");
-  if (S.upd.updatedMs == null) { el.hidden = true; return; }
-  const pull = pullOf(S.slate);
-  el.hidden = false;
+  renderSources();
+  if (S.upd.updatedMs == null || !S.slate) { el.hidden = true; return; }
+  const full = numbersLine();
+  // Main view: only a real problem, one short line; the whole line lives under "Sources and pull times" (and in the hover).
+  const short = S.upd.failed ? "Could not check for new numbers; may be stale" : S.upd.waiting ? "New numbers waiting; they go on when you finish" : "";
+  el.hidden = !short;
   el.classList.toggle("stale", Boolean(S.upd.failed));
-  el.textContent = statusLine({ ...S.upd, pull: pull.label, consoleOpen: scenarioConsole.isOn() && S.consolePull !== pull.key });
+  el.textContent = short;
+  el.title = full;
+}
+const numbersLine = () => (S.upd.updatedMs == null || !S.slate ? "" : statusLine({ ...S.upd, pull: pullOf(S.slate).label, consoleOpen: scenarioConsole.isOn() && S.consolePull !== pullOf(S.slate).key }));
+/** The collapsed "Sources and pull times" list at the foot of the page: the stamps, projection source, numbers line and box score line. */
+function renderSources() {
+  const el = $("sources"), s = S.slate;
+  if (!s) { el.hidden = true; return; }
+  const t = (raw) => when(raw) ?? null;
+  const { board, injuries } = topStamps(s);
+  const box = boxNote(s.box_freshness);
+  el.hidden = false;
+  el.innerHTML = sourcesHtml(sourceRows({ board: t(board), injuries: t(injuries), pulled: t(s.as_of?.pull_started), lock: t(s.lock), slate: s, numbers: numbersLine() }), box.text ? [["Box scores", box.text, true]] : []);
 }
 /** What names men, against the rows now (slate-refresh.js rosterCleanup): a man off the slate leaves the picks and the working lineup, named; a filter on a team or game gone ends. */
 function settleRoster() {
@@ -229,6 +249,7 @@ function applyFresh(slate) {
   if (onSlate.some((t) => !S.colours?.[t])) S.colours = assignColours(onSlate, Object.fromEntries(onSlate.map((t) => [t, paletteOf(t)])));
   const out = settleRoster();
   drawTop();
+  renderBoxNote();
   renderGames(); renderTeamChips(); renderRows(); renderOuts(); renderPick();
   panel.afterRoster(out); // the working lineup without who left; saved cards read again, always on the latest figures (Adam, 11-04)
   // The table holds a measured width; a man added or removed may change it. The console hides the table, and measures on the way back.
@@ -253,12 +274,20 @@ function flushHeld() {
 }
 const press = pressSettle();
 /** The forms a redraw would disturb: the team-limit and low-owned boxes, and a slot picker. A number box in a row is handled apart, row by row. */
-const formHasFocus = () => Boolean(document.activeElement?.matches?.("#opt [data-ov], #opt [data-lr], select[data-lspin], .psel, .rpin"));
+const formHasFocus = () => Boolean(document.activeElement?.matches?.("#opt [data-ov], #opt [data-lr], select[data-lspin], .psel, .rpin, #console input.fin"));
 const refresher = createRefresher({
   api, name: () => S.name, busy: () => panel.running() || formHasFocus() || press.pressing(), saves: () => ovSaves, apply: applyFresh,
   status: ({ failed, waiting = false }) => { S.upd = { ...S.upd, failed, waiting }; renderUpdLine(); },
+  onBoxes: async (slate) => { // the box score line and its Data warnings entry, in step with the stored boxes between pulls (box-note.js freshBoxes); nothing on the site
+    const f = await freshBoxes(S.slate, () => api("/api/boxes/freshness"));
+    if (!f || slate !== S.name || !S.slate) return;
+    S.slate = { ...S.slate, box_freshness: f };
+    renderBoxNote(); drawTop();
+  },
+  onNews: () => Promise.all([lineupBar.refresh(), boardMarks.refresh()]), // a lineup-only update: the News tab and the S chips; the rows redraw for the chips only, and wait while a form has focus (boardMarks' onChange)
 });
-const pullNow = createPullNow({ reload: () => refresher.tick(), runner: globalThis.nbadfsSitePull ?? null }); // the header's Pull now (pull-now.js); new numbers land through the refresh above
+document.addEventListener("focusout", () => setTimeout(() => { if (S.rowsLater && S.slate && !formHasFocus()) { S.rowsLater = false; renderRows(); } }, 0)); // the redraw that waited for him to leave the form
+const pullNow = createPullNow({ reload: () => refresher.tick(), runner: globalThis.nbadfsSitePull ?? null, firstTipMs: () => firstTipOf(S.players, slateRefMs(S.name) ?? Date.now()) }); // the header's Pull now (pull-now.js); new numbers land through the refresh above
 
 // ---------- header ----------
 function slateLabel(name) {
@@ -267,21 +296,27 @@ function slateLabel(name) {
   const day = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
   return `${day} · ${m[4][0].toUpperCase()}${m[4].slice(1)}`;
 }
-function noteLists() {
-  const f = warningText;
-  return { conflicts: (S.slate.conflicts ?? []).map(f), missing: [...(S.slate.missing ?? []).map(f), ...(S.slate.min_ours_problem ? [S.slate.min_ours_problem] : [])] };
+const noteLists = () => dataNotes(S.slate); // conflicts, missing and the box score line (box-note.js)
+/** The box score line under the games: stale or unknown box scores, in the amber note style; hidden when they are on file or the server does not say (the site). */
+function renderBoxNote() {
+  const el = $("boxnote"), { text, title } = boxNote(S.slate?.box_freshness);
+  const short = text.length <= 60 ? text : (S.slate?.box_freshness?.stale?.length ? "Box scores behind: minutes use older games" : /unknown/.test(text) ? "Box score freshness unknown" : `${text.slice(0, 57)}...`);
+  el.hidden = !text;
+  el.textContent = short;
+  el.title = [text, title].filter(Boolean).join("\n"); // the whole line (also under Sources and pull times)
+  renderSources();
 }
 function renderTop() {
   const s = S.slate; if (!s) return;
-  const { board, injuries, injuriesAbsent } = topStamps(s);
-  const stamp = (label, raw, why, cls = "", absent = false) => { const t = when(raw); return `<span class="${cls}">${label} <b>${t ? esc(t) : absent ? `<span class="miss" title="${esc(why)}">missing</span>` : dash(why)}</b></span>`; };
-  const n = noteLists(); const count = n.conflicts.length + n.missing.length;
+  const { injuries, injuriesAbsent } = topStamps(s);
+  const badges = badgeHtml({ injuriesMissing: injuriesAbsent && !when(injuries), projProblem: s.proj_problem ?? "" });
+  const n = noteLists(); const count = warningCount(n);
   const list = (h, a) => (a.length ? `<h4>${h}</h4><ul>${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "");
   $("top").innerHTML = `<div class="brand"><span class="mk"></span>NBA_BOARD<small>dk classic</small></div>
 <select class="slate" id="slateSel">${S.slates.map((x) => `<option value="${esc(x.slate)}"${x.slate === S.name ? " selected" : ""}>${esc(slateLabel(x.slate))}${x.slate === S.name ? ` · ${s.games.length} game${s.games.length === 1 ? "" : "s"}` : ""}</option>`).join("")}</select>
-<span class="vtabs"><button data-view="list" class="${S.view === "lineups" || S.view === "news" ? "" : "on"}">Player list</button><button data-view="lineups" class="${S.view === "lineups" ? "on" : ""}">Lineups${panel.builtCount() ? ` <b>${panel.builtCount()}</b>` : ""}</button><button data-view="news" class="${S.view === "news" ? "on" : ""}${S.news?.need ? " need" : ""}" title="${S.news?.need ? "Lineup news that needs your look" : "What the lineup sources say that the console does not show"}">News${S.news?.n ? ` <b>${S.news.n}</b>` : ""}</button></span>
-<div class="stamps">${stamp("Board", board, "no board time in this slate file")}${stamp("Injuries", injuries, injuriesAbsent ? "the TwoGun board row carries no injury report time" : "no injury report time in this slate file", "", injuriesAbsent)}${stamp("Pulled", s.as_of?.pull_started, "no pull time in this slate file")}${stamp("Lock", s.lock, "no lock time in this slate file", "lock")}</div>
-${count ? `<div class="notes"><button id="notesBtn" title="${count} data warning${count === 1 ? "" : "s"} on this slate">Data warnings</button><div class="list" id="notesList" hidden>${list("Conflicts", n.conflicts)}${list("Missing", n.missing)}</div></div>` : ""}
+<span class="vtabs"><button data-view="list" class="${S.view === "lineups" || S.view === "news" || scenarioConsole.isOn() ? "" : "on"}">Player list</button><button data-view="lineups" class="${S.view === "lineups" && !scenarioConsole.isOn() ? "on" : ""}">Lineups${panel.builtCount() ? ` <b>${panel.builtCount()}</b>` : ""}</button><button data-view="news" class="${S.view === "news" && !scenarioConsole.isOn() ? "on" : ""}${S.news?.need ? " need" : ""}" title="${S.news?.need ? "Lineup news that needs your look" : "What the lineup sources say that the console does not show"}">News${S.news?.n ? ` <b>${S.news.n}</b>` : ""}</button></span>
+${badges ? `<div class="stamps">${badges}</div>` : ""}
+${count ? `<div class="notes"><button id="notesBtn" title="${count} data warning${count === 1 ? "" : "s"} on this slate">Data warnings</button><div class="list" id="notesList" hidden>${list("Conflicts", n.conflicts)}${list("Missing", n.missing)}${list("Box scores", n.boxes)}</div></div>` : ""}
 ${pullNow.html()}<button id="csBtn" class="lsw csw${scenarioConsole.isOn() ? " on" : ""}" title="${scenarioConsole.isOn() ? "Back to the board" : "Scenario console: minutes and usage when men sit"}">Console</button>
 <button id="lsBtn" class="lsw${panel.lateSwap() ? " on" : ""}" title="${panel.lateSwap() ? "Leave late swap mode" : "Late swap: men whose game has started stay in their slot; pin others to a slot and fill the open ones"}"${panel.running() ? " disabled" : ""}>${ICON.lock} Pin slots</button>
 ${themeHtml(theme)}`;
@@ -290,7 +325,8 @@ function renderDropNote() {
   const el = $("dropnote");
   const d = [...S.dropped, ...S.rosterDropped];
   el.hidden = !d.length;
-  el.innerHTML = d.length ? `${d.length} saved pick${d.length === 1 ? " is" : "s are"} no longer on this slate and ${d.length === 1 ? "was" : "were"} removed (${d.map(esc).join(", ")}).` : "";
+  el.innerHTML = d.length ? `${d.length} saved pick${d.length === 1 ? "" : "s"} no longer on this slate, removed` : "";
+  el.title = d.join(", ");
 }
 
 // ---------- games strip ----------
@@ -434,7 +470,7 @@ function renderOuts() {
   $("outs").innerHTML = out.length ? `<button class="oh2" id="outTog" aria-expanded="${S.outOpen}" title="${S.outOpen ? "Hide" : "Show"} the Out list">Out ${S.outOpen ? "▾" : `(${out.length}) ▸`}</button>${!S.outOpen ? "" : out.map((o, i) => `<span class="o" title="${esc([o.reason, o.usual_minutes != null ? `usual minutes ${o.usual_minutes}` : null].filter(Boolean).join(" · "))}">${logo(o.team, "xs")}<button class="oname" data-out-i="${i}" title="Open ${esc(o.name)}'s card">${esc(o.name)}</button>${o.salary_text ? `<em>${esc(o.salary_text)}</em>` : ""}<i>${esc((o.status ?? "OUT").toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()))}</i></span>`).join("")}` : ""; // the strip folds (C2); stored uppercase; shown "Out", "Doubtful" like the injury chips
 }
 const renderPick = () => { panel.render(); card.refresh(); };
-function renderAll() { renderTop(); renderDropNote(); renderGames(); renderTabs(); renderTeamChips(); renderHead(); renderRows(); renderOuts(); renderPick(); }
+function renderAll() { renderTop(); renderDropNote(); renderBoxNote(); renderGames(); renderTabs(); renderTeamChips(); renderHead(); renderRows(); renderOuts(); renderPick(); }
 
 // ---------- picks ----------
 // Saves go out one at a time, in order, so quick clicks cannot reach the server out of order. After a failed save the
@@ -546,7 +582,7 @@ document.addEventListener("click", (e) => {
   if (!t) { const l = $("notesList"); if (l && !e.target.closest(".notes")) l.hidden = true; return; }
   const d = t.dataset;
   if (t.id === "notesBtn") { const l = $("notesList"); l.hidden = !l.hidden; }
-  else if (d.view) setView(d.view);
+  else if (d.view) { card.close(); if (scenarioConsole.isOn()) setConsole(false); setView(d.view); } // a tab leaves the console, so the bar shows where you are
   else if (t.id === "lsBtn") { setView("list"); panel.toggleLateSwap().then(fixTableWidth); }
   else if (t.id === "csBtn") setConsole(!scenarioConsole.isOn());
   else if (t.id === "pullDismiss") { tryStore(() => localStorage.setItem(pullNoteKey(), S.slate.pull_changes.pull)); renderPullNote(); }

@@ -120,23 +120,25 @@ export function statusLine(s) {
 
 /**
  * One check at a time. deps: api(url), name() (the slate on show), busy() (a build running, a form holding focus, a press under way), saves() (a count that moves with every override write), apply(slate) (draws it),
- * status({ failed }) after each check. A slate that changed, or an override written, while the fetch was out is thrown away and the next check fetches again: an older
- * answer must never cover a newer saved number. A failure changes nothing on screen but the line.
+ * status({ failed }) after each check, onNews() (the lineup read moved and the slate did not: the News tab and the S chips are read again and the board rows are not redrawn; while busy it waits for the next check). A slate that changed, or an override written, while the fetch was out is thrown away and the next check fetches again: an older
+ * answer must never cover a newer saved number. A failure changes nothing on screen but the line. onBoxes(slate) (the app's box score check, box-note.js) starts after every
+ * check's own work, whatever the stamp says, since a gap appears at 6 AM or is filled by hand with no new pull; it is not awaited (a slow answer never holds a refresh), one
+ * runs at a time, and it should not throw (its own failure is an "unknown" answer); if it does, the line says so.
  */
-export function createRefresher({ api, name, busy, saves, apply, status, now = Date.now }) {
-  let lastStamp = null, running = false;
+export function createRefresher({ api, name, busy, saves, apply, status, onNews = null, onBoxes = null, now = Date.now }) {
+  let lastStamp = null, lastNews = null, running = false, boxing = null;
   const stampUrl = (slate) => `/api/slate/${encodeURIComponent(slate)}/pull-stamp`;
   return {
     /** The stamp as a slate starts loading, read before its figures so a pull landing in between is fetched by the next check. Null when unreadable: the next check fetches. */
     async baseline(slate) {
-      try { lastStamp = (await api(stampUrl(slate))).stamp; } catch (e) { lastStamp = null; status({ failed: { ms: now(), reason: e.message } }); }
+      try { const b = await api(stampUrl(slate)); lastStamp = b.stamp; lastNews = b.news ?? null; } catch (e) { lastStamp = null; lastNews = null; status({ failed: { ms: now(), reason: e.message } }); }
     },
     async tick() {
       const slate = name();
       if (running || !slate) return;
       running = true;
       try {
-        const { stamp } = await api(stampUrl(slate));
+        const { stamp, news = null } = await api(stampUrl(slate));
         if (slate !== name()) return;
         const act = decideCheck({ stamp, lastStamp, busy: busy() });
         if (act === "wait") { status({ failed: null, waiting: true }); return; }
@@ -147,14 +149,20 @@ export function createRefresher({ api, name, busy, saves, apply, status, now = D
           if (at !== saves() || busy()) { status({ failed: null, waiting: true }); return; }
           const problem = freshProblem(fresh);
           if (problem) throw new Error(problem);
-          apply(fresh);
-          lastStamp = stamp; // only once it is on screen: a failed draw fetches again
+          apply(fresh); // a new slate also reads the lineup news again, so the news stamp is taken with it
+          lastStamp = stamp; lastNews = news; // only once it is on screen: a failed draw fetches again
+        } else if (news !== lastNews && onNews && !busy()) {
+          await onNews();
+          if (slate === name()) lastNews = news;
         }
         status({ failed: null });
       } catch (e) {
         if (slate === name()) status({ failed: { ms: now(), reason: e.message } });
       } finally {
         running = false;
+        if (onBoxes && !boxing && slate === name()) { // after the stamp and slate work, never awaited, so a slow box answer cannot hold a refresh; one at a time
+          boxing = Promise.resolve().then(() => onBoxes(slate)).catch((e) => { if (slate === name()) status({ failed: { ms: now(), reason: `the box score check failed (${e?.message ?? e})` } }); }).finally(() => { boxing = null; });
+        }
       }
     },
   };

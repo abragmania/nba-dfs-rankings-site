@@ -149,11 +149,17 @@ export const ICON = {
 const INJ = { probable: ["P", "var(--gr)"], questionable: ["Q", "var(--bl)"], doubtful: ["D", "var(--or)"], out: ["O", "var(--rd)"] };
 /** Injury-status letter badge in Basketball Monster's colours (P green, Q blue, D orange, O red); other statuses show
  *  their first letter dimmed. The title keeps the full word. Missing status renders nothing. */
-export function injBadge(status) {
+export function injBadge(status, source = "injury report") {
   const s = String(status ?? "").trim();
   if (!s) return "";
   const [letter, bg] = INJ[s.toLowerCase()] ?? [s[0].toUpperCase(), "var(--dim)"];
-  return `<span class="st" style="background:${bg}" title="${esc(s)} (injury report)">${esc(letter)}</span>`;
+  return `<span class="st" style="background:${bg}" title="${esc(s)} (${esc(source)})">${esc(letter)}</span>`;
+}
+
+/** The minutes note a man's slate row carries (twoway-cap.js: "capped: two-way, 2 games" or "bench bump") as the row's own note text, with the detail in its tooltip; "" with none. */
+export function minNoteHtml(p) {
+  const n = p?.min_note;
+  return n?.text ? ` · <span class="mnote" title="${esc(n.title ?? "")}">${esc(n.text)}</span>` : "";
 }
 
 /**

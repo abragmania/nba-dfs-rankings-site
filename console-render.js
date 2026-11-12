@@ -12,6 +12,8 @@ export const COLS = ["m", "u", "d", "p"];
 export const MISS = "—";
 export const stc = (pin, moved) => (pin ? "pin" : moved ? "mv" : "df");
 export const whyMissing = (p, k) => p.missing?.[{ m: "min", u: "usg", d: "rate", p: "rate", h: "healthy" }[k]] ?? "missing";
+/** TwoGun's tonight minutes as the console words them: a two-way man the board caps (twoway-cap.js) reads "21.6 min, capped 0.8", never the capped figure as TwoGun's. */
+export const tgMinHtml = (p) => (num(p.tg_min_raw) ? `<b>${f1(p.tg_min_raw)}</b> min, capped <b>${num(p.tg_min) ? f1(p.tg_min) : MISS}</b>` : `<b>${num(p.tg_min) ? f1(p.tg_min) : MISS}</b> min`);
 export const dash = (why) => `<span class="cmiss" title="${esc(why)}">${MISS}</span>`;
 const fig = (v, why) => (num(v) ? f1(v) : dash(why));
 const chg = (now, was, cls = "") => (num(now) && num(was) ? `<td class="${dcls(now - was)} ${cls}">${sgn(now - was)}</td>` : `<td class="${cls}">${dash("no figure to compare")}</td>`);
@@ -205,7 +207,8 @@ export function sideHtml(model, G, colourOf) {
   if (!p) return "";
   const key = keyOf(S.outs), r = calc(T, S, S.outs).rows.find((x) => x.id === f.id);
   const hist = G.hist.map((h, i) => ({ h, i })).slice(-12).reverse().map((x) => `<div class="hr ${x.i === G.hi ? "cur" : x.i > G.hi ? "redo" : ""}" data-hist="${x.i}"><i>${x.i}</i>${esc(x.h.label)}</div>`).join("");
-  const line1 = `TwoGun tonight <b>${num(p.tg_min) ? f1(p.tg_min) : MISS}</b> min, <b>${num(p.tg_proj) ? p.tg_proj.toFixed(2) : MISS}</b> pts`;
+  const capPts = num(p.tg_proj_raw) ? `<b>${p.tg_proj_raw.toFixed(2)}</b> pts, capped <b>${num(p.tg_proj) ? p.tg_proj.toFixed(2) : MISS}</b>` : `<b>${num(p.tg_proj) ? p.tg_proj.toFixed(2) : MISS}</b> pts`;
+  const line1 = `TwoGun tonight ${tgMinHtml(p)}, ${capPts}`;
   const line2 = `season USG <b>${num(p.usg_pct) ? `${f1(p.usg_pct)}%` : MISS}</b> · row cap <b>${num(p.cap) ? f1(p.cap) : MISS}</b>`;
   const last = p.season ? `2025-26 <b>${num(p.season.mpg) ? f1(p.season.mpg) : MISS}</b> MPG, started <b>${num(p.season.st) ? Math.round(p.season.st * 100) : MISS}%</b> of ${p.season.g} games${p.season.team === "TOT" ? " (traded)" : p.season.team !== f.team ? ` (${esc(p.season.team)})` : ""}` : "2025-26: no row";
   const line3 = `<div class="facts">Role <b>${esc(ROLE_LABEL[r.role] ?? "")}</b>${r.pinned.r ? " (yours)" : ""} · minutes from <b title="${esc(basisText(r))}">${esc(basisText(r))}</b></div><div class="facts">${last}</div>`;

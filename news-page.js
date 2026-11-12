@@ -26,14 +26,18 @@ function playerRow(r, day) {
     + `<span class="nwm nwo">${f1(r.ours) ?? dash}</span><span class="nwk">${r.mark ? `<i>${esc(r.mark)}</i>` : ""}</span><span class="nwl">${deltaHtml(r.delta)}</span></div>`;
 }
 
-const FIVE_WORD = { confirmed: "Confirmed", expected: "Expected", disagree: "Sources disagree", uncompared: "Fives not compared", twogun: "TwoGun's five" };
-/** One team as its block (header, five, bench, Out): teamHtml(teamModel(...), "away"|"home"|"", selectedCode). The Console reuses it, as it does logHtml and gamesHtml, with no second copy. */
-export function teamHtml(T, side, sel) {
-  const five = T.five, day = T.day ?? null;
+export const FIVE_WORD = { confirmed: "Confirmed", expected: "Expected", disagree: "Sources disagree", uncompared: "Fives not compared", twogun: "TwoGun's five" };
+/** Who said a team's five and when each source was read, as the header words (" · Monster + RotoWire as of 4:41 PM"); "" when no source. The Console's news strip reuses it. */
+export function fiveSaid(five, day = null) {
   // Who said it and when each source was read (the pages carry no announced time): one time when they match, else each; a source with no read time shows a dash.
   const times = five.by.map((n) => timeLabel(five.at?.[n], { day })), same = times.every((t) => t === times[0]);
   const named = five.by.length ? (same ? `${five.by.join(" + ")} as of ${times[0] ?? "—"}` : five.by.map((n, i) => `${n} as of ${times[i] ?? "—"}`).join(" + ")) : "";
-  const by = five.kind === "uncompared" ? ` · ${named}: a man has no id on the slate, so the fives could not be compared` : five.kind === "disagree" ? ` · ${named}; ${five.differs.join(" + ")} differ${five.differs.length === 1 ? "s" : ""}` : named ? ` · ${named}` : "";
+  return five.kind === "uncompared" ? ` · ${named}: a man has no id on the slate, so the fives could not be compared` : five.kind === "disagree" ? ` · ${named}; ${five.differs.join(" + ")} differ${five.differs.length === 1 ? "s" : ""}` : named ? ` · ${named}` : "";
+}
+/** One team as its block (header, five, bench, Out): teamHtml(teamModel(...), "away"|"home"|"", selectedCode). The Console reuses it, as it does logHtml and gamesHtml, with no second copy. */
+export function teamHtml(T, side, sel) {
+  const five = T.five, day = T.day ?? null;
+  const by = fiveSaid(five, day);
   const q = T.counts.questionable, A = T.asOf ?? {};
   // The last-pull column names the pull once, in its head, so no row needs its own time.
   const sinceHead = Number.isFinite(A.pullPrev) ? `Since ${timeLabel(A.pullPrev, { day, compact: true })}` : "Last pull";
@@ -57,10 +61,26 @@ export function gamesHtml(model, sel = null) {
     + `<div class="nwpair">${teamHtml(g.away, "away", sel)}${teamHtml(g.home, "home", sel)}</div></section>`).join("");
 }
 
+const KIND_WORD = { IN: ["AVAIL", "Available: the report says he is playing"] };
 /** A feed entry as one log row (its own time label, a dash when the card has none). */
 export function feedRowHtml(e) {
-  return `<div class="lprow le feed" data-team="${esc(e.team)}"><span class="lt">${esc(e.time ?? "—")}</span><span class="lsr">${esc(e.src)}</span><span class="lpkind k-${e.kind}">${e.kind}</span><span class="ltm">${esc(e.team)}</span>`
-    + `<span class="ltx" title="${esc(e.text)}">${esc(e.text)}</span><span class="lef${e.flag ? " fl" : ""}" title="${esc(e.effect)}">${e.flag ? "● " : ""}${esc(e.effect)}</span><span class="lxx"></span></div>`;
+  const word = KIND_WORD[e.kind]; // "IN" beside a man's injury reads as a contradiction: the chip says Available
+  return `<div class="lprow le feed" data-team="${esc(e.team)}"><span class="lt">${esc(e.time ?? "—")}</span><span class="lsr">${esc(e.src)}</span><span class="lpkind k-${e.kind}"${word ? ` title="${word[1]}"` : ""}>${word ? word[0] : e.kind}</span><span class="ltm">${esc(e.team)}</span>`
+    + `<span class="ltx" title="${esc(e.title ?? e.text)}">${announceHtml(e.text)}</span><span class="lef${e.flag ? " fl" : ""}" title="${esc(e.effectTitle ?? e.effect)}">${effectHtml(e.effect)}</span><span class="lxx"></span></div>`;
+}
+
+/** The lead words a log announcement may begin with, and the colour class of each (lineup-bar.css .aw): START green, Out red, Bench grey, Questionable / Doubtful amber, any other plain. */
+const LEADS = { START: "st", Out: "out", Bench: "bn", Questionable: "q", Doubtful: "q", Probable: "x", Playing: "x", Note: "x", "G League": "x" };
+/** An announcement as markup: "START: A, B · Bench: C" gives each lead word its colour; text with no lead word is shown as written. Escaped. */
+export function announceHtml(text) {
+  return String(text ?? "").split(" · ").map((seg) => {
+    const m = /^(\w+(?: \w+)?): (.*)$/.exec(seg);
+    return m && LEADS[m[1]] ? `<b class="aw aw-${LEADS[m[1]]}">${m[1]}:</b> ${esc(m[2])}` : esc(seg);
+  }).join('<span class="aw-dot"> · </span>');
+}
+/** A "what it did" text as markup: ▲ green, ▼ red. Escaped. */
+export function effectHtml(text) {
+  return esc(text ?? "").replace(/▲/g, '<i class="up">▲</i>').replace(/▼/g, '<i class="dn">▼</i>');
 }
 
 /**
@@ -79,7 +99,7 @@ export function logHtml({ feed, proposals, team = null, teams = [] }) {
   return `<aside class="nwlog"><div class="nwlh"><b>Injuries, changes and announcements</b><span class="nwmu">newest first · ${team ? `${esc(team)} only` : "all teams"} · ${n} item${n === 1 ? "" : "s"}</span></div>`
     + `<div class="nwchips">${chips}</div><div class="nwlc"><span>Time</span><span>Source</span><span>Type</span><span>Team</span><span>What was announced</span><span>What it did</span><span></span></div>`
     + `<div class="nwlrows">${need.join("")}${rest.join("") || (need.length ? "" : '<div class="lpempty">No lineup news right now.</div>')}</div>`
-    + `<div class="nwlf"><span class="fl">●</span> not yet accounted for: TwoGun's minutes have not moved for the report yet</div></aside>`;
+    + `<div class="nwlf"><span class="fl">⚠️</span> = TwoGun hasn't reacted to this report yet</div></aside>`;
 }
 
 /** The whole page: a quiet line when the lineup read is too old or missing, the games, the log. */

@@ -3,7 +3,7 @@
 // CSV writer, the seat, late swap, the build notes) come in as `own`, so this file never imports panel.js back.
 import { keepFocus } from "./board-util.js";
 import { lineupRefusals, isOutNow } from "./card-row.js";
-import { lineupsTabHtml, viewModel, builtAtText, viewOf, entriesOf, unavailableMen, unavailableLabel, savedLabel, heldSpots, outNamesOfCtx, SORTS, MODE_FILTERS } from "./lineups-tab.js";
+import { lineupsTabHtml, viewModel, builtAtText, viewOf, entriesOf, unavailableMen, unavailableLabel, savedLabel, heldSpots, outNamesOfCtx, SORTS, MODE_FILTERS, nextLtSort } from "./lineups-tab.js";
 import { swapContext, swapOptions, swapIds } from "./swap-list.js";
 import { savedCall, saveBatch, savedClick, savedNameInput } from "./saved-panel.js";
 import { cleanSpotName } from "./spot-name.js";
@@ -489,8 +489,9 @@ export function tabClick(X, d, own) {
     case "ltshow": P.lt.show = d.v === "compare" ? "compare" : "cards"; P.swap = null; redraw(); return true;
     case "cmp": P.cmp = compareClick(d, P.cmp ?? freshCompare()); redraw(); return true; // the Compare view's own controls (lineups-compare.js)
     case "menoff": P.lt.men = (P.lt.men ?? []).filter((x) => x !== d.man); redraw(); return true;
+    case "ltgray": P.lt.gray = P.lt.gray !== true; redraw(); return true; // quick on/off, off on reload (Adam, 11-11)
     case "menclear": P.lt.men = []; redraw(); return true;
-    case "ltsort": if (SORTS.some(([k]) => k === d.s)) P.lt.sort = d.s; redraw(); return true;
+    case "ltsort": if (SORTS.some(([k]) => k === d.s)) Object.assign(P.lt, nextLtSort(P.lt, d.s)); redraw(); return true;
     case "ltmode": if (MODE_FILTERS.includes(d.m)) P.lt.mode = d.m; redraw(); return true;
     // Each Filter click adds a man (only lineups holding all of them show); clicking a filtered man again takes him out.
     case "expfilter": P.lt.men = (P.lt.men ?? []).includes(d.man) ? P.lt.men.filter((x) => x !== d.man) : [...(P.lt.men ?? []), d.man]; redraw(); return true;

@@ -5,16 +5,17 @@
 import { esc, isoToEastern } from "./board-util.js";
 import { liveText } from "./console-marks.js";
 import { syncWords } from "./console-auto.js";
-import { staleOf } from "./lineup-proposals.js";
+import { staleOf, LINEUP_KEYS, BACKS_ONLY } from "./lineup-proposals.js";
+import { newsRuling, newestStatusCards } from "./news-status.js";
 
-const LABEL = { monster: "Monster", rotowire: "RotoWire" };
+const LABEL = { monster: "Monster", rotowire: "RotoWire", rotogrinders: "RotoGrinders" };
 const okBlock = (b) => b?.state === "ok" && Array.isArray(b.men);
 const at = (iso) => (iso ? isoToEastern(iso) ?? iso : "time unknown");
 
 /** The lineup sources naming a man in their five: [{ key, label, confirmed, at }]. latest: news/lineups/latest.json, or null. */
 export function lineupClaims(latest, team, id) {
   const block = latest?.teams?.[team] ?? {};
-  return ["monster", "rotowire"].filter((k) => okBlock(block[k]) && block[k].men.some((m) => m.id != null && String(m.id) === String(id) && m.status !== "Out"))
+  return LINEUP_KEYS.filter((k) => okBlock(block[k]) && block[k].men.some((m) => m.id != null && String(m.id) === String(id) && m.status !== "Out"))
     .map((k) => ({ key: k, label: LABEL[k], confirmed: block[k].confirmed === true, at: latest.sources?.[k]?.fetched_at ?? null }));
 }
 
@@ -25,8 +26,10 @@ export function lineupClaims(latest, team, id) {
 export function starterChip(v, latest, id, pullAt) {
   if (!v || v.role !== "starter") return null;
   const claims = lineupClaims(latest, v.team, id), conf = claims.filter((c) => c.confirmed);
+  const mon = latest?.teams?.[v.team]?.monster, monAgainst = okBlock(mon) && mon.confirmed === true && !claims.some((c) => c.key === "monster"); // a confirmed Monster five that leaves him out
+  const solid = monAgainst ? conf.filter((c) => !BACKS_ONLY.includes(c.key)).length >= 2 : conf.some((c) => !BACKS_ONLY.includes(c.key)) || conf.length >= 2; // a back-only page's confirmed mark never stands alone
   if (v.starterBy === "yours") return { state: "confirmed", title: "Starting: yours (you marked him S in the console)" };
-  if (conf.length) return { state: "confirmed", title: `Confirmed starter: ${conf.map((c) => `${c.label} confirmed lineup, ${at(c.at)}`).join("; ")}` };
+  if (solid) return { state: "confirmed", title: `Confirmed starter: ${conf.map((c) => `${c.label} confirmed lineup, ${at(c.at)}`).join("; ")}` };
   const why = [
     v.starterBy === "chart" ? "the depth chart's five" : null,
     v.tgStarter ? `TwoGun starter${pullAt ? `, ${pullAt}` : ""}` : null,
@@ -46,8 +49,8 @@ export const undoChipHtml = (id, kind, mark) => (mark ? `<button class="cundo" t
  * noteEl (the line above the list where the send's state shows) }.
  * Returns { refresh({ news }), of(id) -> { chip, m, d } or null, setPin(id, kind, v), drop(id, kind) }.
  */
-export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onChange, noteEl = null }) {
-  let view = null, latest = null, gen = 0;
+export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onChange, noteEl = null, players = () => [] }) {
+  let view = null, latest = null, gen = 0, statusCards = new Map(), byId = new Map(), byFor = null;
   const note = () => { if (noteEl) { const html = api2.syncHtml(); noteEl.innerHTML = html; noteEl.hidden = !html; } };
   /** news: read the lineup page again too (a new slate or pull); without it only the console's work is read again (after each change there). */
   async function refresh({ news = true } = {}) {
@@ -63,16 +66,26 @@ export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onC
       view = null;
       toast(`The board could not read the console (starters and your typed numbers): ${e.message}`, "err");
     }
+    statusCards = newestStatusCards(latest?.monster_news?.cards); // a stale read is null here, so it gives no ruling
     note();
     onChange();
   }
+  /** The news ruling for a man's injury badge (news-status.js), or null to keep TwoGun's word. */
+  const ruling = (id) => {
+    const card = statusCards.get(String(id));
+    if (!card) return null;
+    const list = players();
+    if (byFor !== list) { byFor = list; byId = new Map(list.map((p) => [String(p.dk_id), p])); } // rebuilt when the page swaps in a new player list
+    const p = byId.get(String(id));
+    return p ? newsRuling({ card, tgStatus: p.injury_status, tgSince: p.status_since ?? null, viewOut: Boolean(view?.[String(id)]?.out) }) : null;
+  };
   const teamOf = (id) => view?.[String(id)]?.team ?? null;
   const api2 = {
     refresh,
     of(id) {
-      const v = view?.[String(id)];
-      if (!v) return null;
-      return { chip: starterChip(v, latest, id, pullAt()), m: v.marks?.m ?? null, d: v.marks?.d ?? null };
+      const v = view?.[String(id)], inj = ruling(id);
+      if (!v && !inj) return null;
+      return { chip: v ? starterChip(v, latest, id, pullAt()) : null, m: v?.marks?.m ?? null, d: v?.marks?.d ?? null, inj };
     },
     /** Every refusal is said (Adam, 11-07): not on the console, Out there, or the console could not load. Never rejects. */
     async setPin(id, kind, value) {

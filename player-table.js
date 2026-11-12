@@ -2,7 +2,7 @@
 // Every figure is read from the slate file as given (Usual and Chg from the slate route's min_usual, the board row's usual minutes); a
 // missing one is the board's dash with a title, never zero (RULES R1).
 // Pure strings, tested in node; board.js owns the state and the events.
-import { esc, money, logo, ICON, injBadge } from "./board-util.js";
+import { esc, money, logo, ICON, injBadge, minNoteHtml } from "./board-util.js";
 import { bumpControlHtml, bumpFigureHtml } from "./bump-control.js";
 import { rowPin } from "./lateswap-panel.js";
 import { limitCellHtml } from "./row-limits.js";
@@ -10,6 +10,7 @@ import { sgn, dcls } from "./console-model.js";
 import { tonightRate } from "./figures.js";
 import { moveLine, moveTag } from "./pull-note.js";
 import { starterChipHtml, undoChipHtml } from "./board-marks.js";
+import { tgMin } from "./lineup-proposals.js";
 
 export const FIG_COLS = {
   salary: { key: "salary", label: "Sal", cls: "num sal", title: "no salary in this slate file" },
@@ -44,7 +45,7 @@ export const minOtherLabel = (source = "twogun") => (source === "ours" ? "TG" : 
 /** The beside column's figure and hover for a man: { value, note }. While TwoGun's is in force it is ours (min_ours); if ours were in force it is TwoGun's own figure (the base under any minutes set in the console). */
 export function minOtherOf(p, source = "twogun") {
   if (source === "ours") {
-    const tg = "base_minutes" in p ? p.base_minutes : p.minutes;
+    const tg = tgMin(p);
     return typeof tg === "number" ? { value: tg, note: "TwoGun's minutes, as pulled" } : { value: null, note: "no TwoGun minutes in this pull" };
   }
   return typeof p.min_ours === "number" ? { value: p.min_ours, note: p.min_ours_note ?? "our own minutes" } : { value: null, note: p.min_ours_note ?? "our own minutes are not on this slate" };
@@ -57,6 +58,14 @@ export const dkTonight = (p) => tonightRate(p.projection, p.minutes);
 export const TON_ARROW_BAND = 0.02;
 /** The figure a sort on column key reads. */
 export const sortValue = (p, key, source = "twogun") => (key === "min_chg" ? minChg(p) : key === "dk_tonight" ? dkTonight(p) : key === "min_other" ? minOtherOf(p, source).value : p[key]);
+/** The Proj cell's hover under our minutes engine: why his figure is missing, or ours against TwoGun's; null on TwoGun's own figures. */
+export function projTitle(p) {
+  if (p.proj_note) return p.proj_note;
+  if (p.proj_source !== "ours") return null;
+  const tg = typeof p.tg_projection === "number" ? p.tg_projection.toFixed(1) : "none";
+  const rate = typeof p.ours?.rate === "number" ? p.ours.rate.toFixed(2) : "missing";
+  return `Ours: ${typeof p.ours?.minutes === "number" ? p.ours.minutes.toFixed(1) : "—"} min x DK/min ${rate}; TwoGun ${tg}`;
+}
 /** Why a man has no figure tonight, for the dash's hover. */
 const noTonight = (p) => (typeof p.minutes !== "number" ? "no minutes in this pull, so no DK/min tonight" : p.minutes <= 0 ? "on 0 minutes, so no DK/min tonight" : "no projection in this pull, so no DK/min tonight");
 /** The Tonight cell: the figure, its arrow against the season's and both numbers on hover. */
@@ -107,7 +116,7 @@ function figCell(k, p, x) {
   // A figure's own hover keeps its use and carries why the row is greyed after it, as it hides the row's own hover.
   const also = x.why ?? "";
   const withWhy = (t) => (also ? `${t} · ${also}` : t);
-  if (k === "projection") return `<td class="${col.cls}">${bumpFigureHtml(p, v == null ? dash(col.title) : v.toFixed(1), also)}${moveTag(p.pull_move?.proj, 1, "TwoGun's projection")}</td>`;
+  if (k === "projection") return `<td class="${col.cls}"${projTitle(p) ? ` title="${esc(projTitle(p))}"` : ""}>${bumpFigureHtml(p, v == null ? dash(p.proj_note ?? col.title) : v.toFixed(1), also)}${moveTag(p.pull_move?.proj, 1, "TwoGun's projection")}</td>`;
   if (k === "dk_tonight") return tonightCell(p, col, dash, withWhy, x.mark?.d);
   if (k === "value" || k === "proj_own") {
     const own = k === "proj_own", typed = own && p.ovr?.proj_own != null;
@@ -167,7 +176,7 @@ export function rowHtml(p, keys, x) {
   const cell = (k) => {
     switch (k) {
       case "star": return `<td class="ctl"><button class="fav${p.starred ? " on" : ""}" data-star="${id}" title="${p.starred ? "Unstar" : "Star"}">${p.starred ? "★" : "☆"}</button></td>`;
-      case "name": return `<td class="pl"><div class="who">${logo(p.team)}<div class="nm"><div class="l1"><button class="name" data-dk-id="${id}">${esc(p.name)}</button>${starterChipHtml(x.mark?.chip)}${x.tag ? `<span class="pos">${esc(x.tag)}</span>` : ""}${injBadge(p.injury_status)}</div><div class="l2${p.pull_move ? " why" : ""}"${p.pull_move && p.tip ? ` title="Tip ${esc(x.when(p.tip))}"` : ""}>${esc(p.team)} ${p.oppText ? esc(p.oppText) : dash("no opponent in this slate file")} · ${p.pull_move ? moveLine(p.pull_move) : p.tip ? esc(x.when(p.tip)) : dash("no tip time in this slate file")}</div></div>${tools}</div></td>`;
+      case "name": return `<td class="pl"><div class="who">${logo(p.team)}<div class="nm"><div class="l1"><button class="name" data-dk-id="${id}">${esc(p.name)}</button>${starterChipHtml(x.mark?.chip)}${x.tag ? `<span class="pos">${esc(x.tag)}</span>` : ""}${x.mark?.inj ? injBadge(x.mark.inj.word, `Monster news${x.mark.inj.note ? `: ${x.mark.inj.note}` : ""}; TwoGun says ${p.injury_status || "nothing"}`) : injBadge(p.injury_status)}</div><div class="l2${p.pull_move ? " why" : ""}"${p.pull_move && p.tip ? ` title="Tip ${esc(x.when(p.tip))}"` : ""}>${esc(p.team)} ${p.oppText ? esc(p.oppText) : dash("no opponent in this slate file")} · ${p.pull_move ? moveLine(p.pull_move) : p.tip ? esc(x.when(p.tip)) : dash("no tip time in this slate file")}${minNoteHtml(p)}</div></div>${tools}</div></td>`;
       case "thumbs": return `<td class="bmp">${bumpControlHtml(p)}</td>`;
       // Late swap mode: the slot picker takes the lock button's place; a lock is still set from the player card.
       case "lock": return `<td class="ctl${L ? " ls" : ""}">${L ? rowPin(p, L) : `<button class="lk${lk ? " on" : ""}" data-lock="${id}"${btn("Lock")}>${ICON.lock}</button>`}</td>`;

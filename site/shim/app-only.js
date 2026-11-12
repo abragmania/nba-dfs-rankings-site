@@ -15,6 +15,17 @@ export const withSeasonFigures = never("The season figures reader");
 export const seasonUsageTable = never("The season usage reader");
 export const handlePlayerUsage = never("The usage lookup");
 export const handlePullStatus = never("The app's pull status (the site's status block reads GitHub and its own baked files, site-src/site-pull.js)");
+/** Our minutes engine runs only in the app for now: on the site its routes are unknown paths (404) and the board keeps TwoGun's projections (makeServer is given no ourProjection). */
+export const minutesHandler = () => null;
+/** The console's Bench+ suggestions read the stored boxes: app only, so on the site the console shows none. */
+export const consoleBenchPlus = () => {};
+export const withOurProjection = never("Our minutes engine");
+export const primeTotals = never("Our minutes engine's totals fetch");
+export const startSnapshotRefresh = never("Our minutes engine's snapshot refresh");
+/** The box score freshness check reads the stored boxes and the schedule, which the site does not carry: the slate passes through with no box_freshness (the board shows no line),
+ *  and the route answers unknown with its reason. */
+export const withBoxFreshness = (data) => data;
+export const readBoxFreshness = ({ nowMs = Date.now() } = {}) => ({ checked_at: new Date(nowMs).toISOString(), state: "unknown", ok: false, stale: [], why: "the box scores are checked only in the app on the computer", season: null });
 export const handlePullNow = never("The app's Pull now (the site's button asks GitHub's cloud job instead, site-src/site-pull.js)");
 
 /**

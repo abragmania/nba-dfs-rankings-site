@@ -6,10 +6,11 @@ import { esc, tipWhen } from "./board-util.js";
 import { buildModel, buildTeam, canonRecord, recordOf, refreshTeams, savedBehind, typedText } from "./console-model.js";
 import { depthHtml } from "./console-depth.js";
 import { dropMark, firstPlaying, jumpTeam, pushHist, redo, setPin, setSource, toggleOut, toggleStarter, undo } from "./console-moves.js";
-import { cardApi } from "./console-card.js";
+import { cardApi, lineupViewOf } from "./console-card.js";
 import { createAutoApply, createPullReads, mayAutoSend, requeueApplied, requeueNews, resendChanged, resultSigs } from "./console-auto.js";
 import { PIN_MAX } from "./override-limits.js";
 import { keyOf } from "./console-engine.js";
+import { teamNews } from "./console-news.js";
 
 const USAGE_RETRY_MS = 20_000;
 const USAGE_RETRIES = 6;
@@ -36,6 +37,34 @@ function keepInput(c, draw) {
   el.setSelectionRange(at.s ?? at.typed.length, at.e ?? at.typed.length);
 }
 
+/** The lineup read behind the news strip (the News tab's own route, so the site serves it too): kept with the server's clock then, so its age moves on. Trouble is kept as words, never thrown into a redraw. */
+async function readNews(c) {
+  if (!c.news) return;
+  const name = c.slate;
+  try {
+    const out = await c.api(`/api/slate/${encodeURIComponent(name)}/news-lineups`);
+    if (name !== c.slate) return;
+    c.newsRead = { state: "ok", latest: out.state === "ok" ? out.latest : null, nowMs: Number.isFinite(out.now_ms) ? out.now_ms : Date.now(), localAt: Date.now() };
+  } catch (e) {
+    if (name === c.slate) c.newsRead = { state: "fail", why: e.message };
+  }
+}
+
+/** What the news strip and the Status column draw from now: { state, why, N } (console-news.js), or undefined when the page wired no news. */
+function newsOpt(c) {
+  if (!c.news) return undefined;
+  const n = c.newsRead;
+  if (!n) return { state: "loading" };
+  if (n.state !== "ok") return n;
+  try {
+    const slate = c.news.slateData();
+    if (!slate) return { state: "fail", why: "no slate on show" };
+    return { state: "ok", N: teamNews({ slate, latest: n.latest, nowMs: n.nowMs + (Date.now() - n.localAt), tips: c.news.tips(), view: c.model ? lineupViewOf(c) : null }, c.G.cur) };
+  } catch (e) {
+    return { state: "fail", why: e.message };
+  }
+}
+
 function render(c) {
   const G = c.G;
   if (c.loadError || !c.model || !G.cur) return;
@@ -44,7 +73,7 @@ function render(c) {
   c.redrawLater = false;
   const saveErr = Object.values(c.saveErrs).join(" ") || null;
   keepInput(c, () => {
-    c.E("app").innerHTML = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr });
+    c.E("app").innerHTML = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr, news: newsOpt(c), help: G.help });
   });
   c.onWork?.();
 }
@@ -73,7 +102,7 @@ function ensure(c, name) {
 async function load(c, name) {
   clearTimeout(c.usageTimer);
   clearTimeout(c.retryTimer);
-  Object.assign(c, { slate: name, loadError: null, model: null, usageTries: 0, saveErrs: {}, sync: { state: "ok", at: null }, touched: new Set(), pending: new Set() }); // another slate: nothing changed on it yet
+  Object.assign(c, { slate: name, loadError: null, model: null, newsRead: null, usageTries: 0, saveErrs: {}, sync: { state: "ok", at: null }, touched: new Set(), pending: new Set() }); // another slate: nothing changed on it yet
   c.E("app").innerHTML = `<div class="fatalc dimc">Loading ${esc(name)}...</div>`;
   try {
     const out = await c.api(`/api/slate/${encodeURIComponent(name)}/console`);
@@ -88,6 +117,7 @@ async function load(c, name) {
     if (!first) return showError(c, "This slate has no games.");
     pushHist(c, "Start");
     render(c);
+    readNews(c).then(() => { if (c.on && name === c.slate) render(c); }); // the strip says "reading..." until the read lands; readNews never rejects
     const news = requeueNews(c), applied = requeueApplied(c);
     if (news || applied) c.auto.kick(); // a news change whose send never landed, or a pull since the last send, reaches the board now
     else c.auto.settleNow(); // old work this page does not send (a locked or older slate, a mark nothing moved) is said in the header, not "up to date"
@@ -105,13 +135,15 @@ async function refresh(c) {
     const gen = c.saveGen;
     const out = await c.api(`/api/slate/${encodeURIComponent(name)}/console`);
     if (name !== c.slate || !c.model) return;
+    await readNews(c);
+    if (name !== c.slate || !c.model) return;
     const was = resultSigs(c);
     takeInputs(c, out);
     refreshTeams(c.model, c.inputs);
     const others = c.saveGen === gen ? takeOthersWork(c, out) : []; // a save of his own during the read makes the comparison unsafe, so it waits for the next one
     resendChanged(c, was); // a pull that moved a team the board holds is sent without a click
     render(c);
-    if (others.length) c.toast(`Another page changed ${others.join(", ")}: this page took its marks and sent nothing over them.`, "notice");
+    if (others.length) c.toast(`${others.join(", ")} changed outside this page (the lineup news or another page): it took those marks and sent nothing over them.`, "notice");
   } catch (e) {
     c.toast(`Could not refresh the console's inputs: ${e.message}`, "err");
     c.auto?.fail(`The console could not read the new inputs, so the board may be behind: ${e.message}`); // the header is not green
@@ -163,6 +195,8 @@ function onClick(c, e) {
   if (!t || !c.model || t.disabled) return;
   const d = t.dataset;
   if (d.teamGo) jumpTeam(c, d.teamGo);
+  else if (d.help) { c.G.help = !c.G.help; render(c); }
+  else if (d.goNews) c.onNews?.(c.G.cur);
   else if (d.undo) dropMark(c, d.team, d.id, d.undo);
   else if (d.s) toggleStarter(c, d.team, d.s);
   else if (d.out) toggleOut(c, d.team, d.out);
@@ -183,11 +217,12 @@ function onKey(c, e) {
 
 const SHELL = `<div id="app"></div>`;
 
-/** deps: { el, api, toast, colourOf(team) -> css colour, onPlayers(players), onWork() (his work moved: the board reads his marks again) }. show() never rejects: its trouble goes to showError. */
-export function createConsole({ el, api, toast, colourOf, onPlayers, onWork }) {
+/** deps: { el, api, toast, colourOf(team) -> css colour, onPlayers(players), onWork() (his work moved: the board reads his marks again), news: { slateData() -> the slate with the board's rows, tips() -> { tip, tipAt } }
+ *  (the lineup news strip and the Status column; without it neither reads the news), onNews() (the strip's link: opens the News tab) }. show() never rejects: its trouble goes to showError. */
+export function createConsole({ el, api, toast, colourOf, onPlayers, onWork, news, onNews }) {
   el.innerHTML = SHELL;
   const c = {
-    el, api, toast, colourOf, onPlayers, onWork, on: false, slate: null, inputs: null, model: null, applied: null, loadError: null, lastSaved: {}, saveErrs: {}, saveQueue: Promise.resolve(), usageTimer: null, usageTries: 0, sync: { state: "ok", at: null },
+    el, api, toast, colourOf, onPlayers, onWork, news, onNews, newsRead: null, on: false, slate: null, inputs: null, model: null, applied: null, loadError: null, lastSaved: {}, saveErrs: {}, saveQueue: Promise.resolve(), usageTimer: null, usageTries: 0, sync: { state: "ok", at: null },
     E: (id) => el.querySelector(`#${id}`),
     G: { cur: null, view: "team", pick: null, roleMoves: null, focus: null, hist: [], hi: -1, editing: false, rows: [], modal: null },
     render: () => render(c), drawBar: () => render(c), focusCell: () => {},
@@ -201,7 +236,7 @@ export function createConsole({ el, api, toast, colourOf, onPlayers, onWork }) {
     /** The slate on show changed. Nothing loads until the console is opened or the board asks. */
     setSlate(name) {
       if (name === c.slate) return;
-      Object.assign(c, { slate: name, model: null, inputs: null, loadError: null });
+      Object.assign(c, { slate: name, model: null, inputs: null, loadError: null, newsRead: null });
       clearTimeout(c.usageTimer);
       clearTimeout(c.retryTimer);
       if (c.on) load(c, name);

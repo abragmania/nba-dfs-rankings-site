@@ -1,4 +1,4 @@
-// The lineup news (Adam, 11-06; no buttons to press, 11-07; its own tab, 11-09): what the Monster and RotoWire lineup pages say that the console
+// The lineup news (Adam, 11-06; no buttons to press, 11-07; its own tab, 11-09): what the Monster, RotoWire and RotoGrinders lineup pages say that the console
 // did not show, as the rows of the News tab. An Out, and a start from confirmed lineups, apply themselves through the console's role moves on the scenario the team is on (his marks
 // kept; console-card.js autoApplyProposal) and reach the board by the console's own send; each shows as a note with an undo X. A projected start is
 // information only. A change is applied once per proposal, recorded in the console's saved work, so a reload never applies one he undid. A check or a
@@ -7,9 +7,9 @@
 // on the public site, from the published lineups-latest.json. barHtml, statusLine, newsRows and refusalText are DOM-free (tested in node). Look: lineup-bar.css.
 import { esc } from "./board-util.js";
 import { lastName } from "./console-model.js";
-import { autoPlan, makeProposals, staleOf } from "./lineup-proposals.js";
+import { autoPlan, makeProposals, staleOf, LINEUP_KEYS } from "./lineup-proposals.js";
 import { newsModel, timeLabel } from "./news-model.js";
-import { newsPageHtml } from "./news-page.js";
+import { newsPageHtml, announceHtml, effectHtml } from "./news-page.js";
 
 const TIME_FMT = { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" };
 const timeText = (iso) => {
@@ -32,17 +32,23 @@ export function statusLine(read) {
   const l = read.latest;
   if (l.status === "failed") return `Lineups: ${noUrl(l.note ?? "the read failed")}`;
   const parts = [];
-  let bad = false;
-  for (const [key, label] of [["monster", "Monster"], ["rotowire", "RotoWire"]]) {
+  let bad = false, sourceUnread = false; // sourceUnread: a lineup page itself was not read, so every team is short and the count would say nothing
+  const keys = LINEUP_KEYS.filter((k) => k !== "rotogrinders" || l.sources?.[k]); // a read from before RotoGrinders was added has no such source: nothing to say about it
+  for (const [key, label] of keys.map((k) => [k, { monster: "Monster", rotowire: "RotoWire", rotogrinders: "RotoGrinders" }[k]])) {
     const s = l.sources?.[key];
-    if (s?.status === "ok") parts.push(`${label} ok`);
-    else { bad = true; parts.push(`${label} not read (${noUrl(s?.note ?? "no answer")})`); }
+    const sk = Array.isArray(s?.skipped) ? s.skipped.length : 0; // parts of the page the parser could not read (G62)
+    if (s?.status === "ok" && sk) { bad = true; parts.push(`${label} ok, ${sk} part${sk === 1 ? "" : "s"} of the page not read (${noUrl(s.skipped[0])}${sk > 1 ? "; …" : ""})`); }
+    else if (s?.status === "ok") parts.push(`${label} ok`);
+    else { bad = sourceUnread = true; parts.push(`${label} not read (${noUrl(s?.note ?? "no answer")})`); }
+    if (s?.status === "ok" && s.unmatched?.length) { bad = true; parts.push(`${label}: ${s.unmatched.length} ${s.unmatched.length === 1 ? "man" : "men"} not matched to a slate player (${s.unmatched.slice(0, 5).map(noUrl).join("; ")}${s.unmatched.length > 5 ? "; …" : ""})`); } // G62
+    if (s?.status === "ok" && s.confirm_unknown) { bad = true; parts.push(`${label} ${noUrl(s.confirm_unknown)}`); }
   }
   const n = l.monster_news;
   if (n?.status === "ok") parts.push(`Monster news ${timeText(n.fetched_at)}`);
   else { bad = true; parts.push(`Monster news missing (${noUrl(n?.note ?? "no answer")})`); }
-  const short = Object.values(l.teams ?? {}).filter((t) => usable(t.monster) !== usable(t.rotowire)).length;
-  if (short && !bad) { bad = true; parts.push(`${short} team${short === 1 ? "" : "s"} missing a source's five`); }
+  if (n?.unread_cards > 0) { bad = true; parts.push(`${n.unread_cards} Monster news card${n.unread_cards === 1 ? "" : "s"} not read (newest page: ${n.no_id_newest ?? 0} without an id)`); }
+  const short = Object.values(l.teams ?? {}).filter((t) => { const u = keys.filter((k) => usable(t[k])).length; return u > 0 && u < keys.length; }).length;
+  if (short && !sourceUnread) { bad = true; parts.push(`${short} team${short === 1 ? "" : "s"} missing a source's five`); }
   return bad ? `Lineups ${timeText(l.generated_at)}: ${parts.join("; ")}` : "";
 }
 
@@ -85,9 +91,9 @@ export function newsRows(view) {
 export const kindOf = (key) => (/^[^|]+\|[A-Z]{2,4}\|out\|[^|]+$/.test(key) ? "out" : /^[^|]+\|[A-Z]{2,4}\|starter(\|[^|]*)?$/.test(key) ? "starter" : "news");
 
 /** "Monster + RotoWire: Man A STARTS" -> { who: "Mon + Roto", text: "Man A STARTS" }: the source goes in its own column (as the mock-up has it), not in the sentence. No prefix: who is null. */
-const SHORT = { Monster: "Mon", RotoWire: "Roto" };
+const SHORT = { Monster: "Mon", RotoWire: "Roto", RotoGrinders: "Grind" };
 export function splitSource(text) {
-  const m = /^((?:Monster|RotoWire)(?: \+ (?:Monster|RotoWire))*): /.exec(String(text ?? ""));
+  const m = /^((?:Monster|RotoWire|RotoGrinders)(?: \+ (?:Monster|RotoWire|RotoGrinders))*): /.exec(String(text ?? ""));
   return m ? { who: m[1].split(" + ").map((x) => SHORT[x]).join(" + "), text: text.slice(m[0].length) } : { who: null, text };
 }
 
@@ -104,23 +110,26 @@ export function proposalRows(bar, state = {}) {
   const ms = (iso) => { const v = Date.parse(iso ?? ""); return Number.isNaN(v) ? null : v; };
   const clock = (at) => timeLabel(at, { day: state.day ?? null, log: true }) ?? "—";
   const row = (cls, o) => `<div class="lprow le ${cls}"${o.key ? ` data-lp="${esc(o.key)}"` : ""}><span class="lt">${esc(clock(o.at))}</span><span class="lsr">${esc(o.src)}</span>`
-    + `<span class="lpkind k-${o.kind}">${o.kind}</span><span class="ltm">${esc(o.team ?? "—")}</span><span class="ltx"${o.title ? ` title="${esc(o.title)}"` : ""}>${esc(o.text)}</span><span class="lef" title="${esc(o.effect)}">${esc(o.effect)}</span><span class="lxx">${o.x}</span>${o.sides ?? ""}</div>`;
+    + `<span class="lpkind k-${o.kind}">${o.kind}</span><span class="ltm">${esc(o.team ?? "—")}</span><span class="ltx"${o.title ? ` title="${esc(o.title)}"` : ""}>${o.plain ? esc(o.text) : announceHtml(o.text)}</span><span class="lef" title="${esc(o.effectTitle ?? o.effect)}">${effectHtml(o.effect)}</span><span class="lxx">${o.x}</span>${o.sides ?? ""}</div>`;
   const news = ({ team, key, entry }) => {
-    const k = kindOf(key), failed = entry.state === "failed", reverted = entry.state === "reverted", at = ms(entry.at), sp = splitSource(entry.text);
-    const when = failed ? `not applied: ${entry.why ?? ""}` : reverted ? "taken back with Ctrl+Z" : `applied by itself ${timeText(entry.at)}`;
-    // The X only on a live entry; a failed note can be hidden; a change taken back with Ctrl+Z has nothing left to undo.
-    const x = failed ? hide(key, "note") : reverted ? "" : `<button type="button" class="lpx" data-lp-undo="${esc(key)}" data-team="${esc(team)}" title="Undo this change: the console goes back to how it was before it">&#10005;</button>`;
-    return { needs: failed, at, sortAt: at, team, html: row(`auto ${k}${failed ? " failed" : ""}${reverted ? " reverted" : ""}`, { key, at, src: sp.who ?? "Auto", kind: KIND[k], team, text: sp.text, title: entry.text, effect: when, x }) };
+    const k = kindOf(key), failed = entry.state === "failed", reverted = entry.state === "reverted", putBack = entry.state === "reversed", at = ms(entry.at), sp = splitSource(entry.text);
+    const clk = at == null ? "" : ` · ${timeLabel(at, { day: state.day ?? null })}`;
+    const when = failed ? `⚠️ Not applied: ${entry.why ?? ""}` : reverted ? "↩️ Taken back by hand" : putBack ? (k === "out" ? `↩️ Put back in${clk}` : `↩️ Taken off${clk}`) : `✅ Applied${clk}`;
+    const whenTitle = failed ? when : reverted ? "You took this change back by hand" : putBack ? (k === "out" ? `The news put him back in by itself ${timeText(entry.at)}` : `Taken off ${timeText(entry.at)}; it applies again if the news still says so`) : `Applied by itself ${timeText(entry.at)}`;
+    // The X only on a live entry; a failed note can be hidden; a change taken back with Ctrl+Z or put back by the news has nothing left to undo.
+    const x = failed ? hide(key, "note") : reverted || putBack ? "" : `<button type="button" class="lpx" data-lp-undo="${esc(key)}" data-team="${esc(team)}" title="Undo this change: the console goes back to how it was before it">&#10005;</button>`;
+    return { needs: failed, at, sortAt: at, team, html: row(`auto ${k}${failed ? " failed" : ""}${reverted || putBack ? " reverted" : ""}`, { key, at, src: sp.who ?? "Auto", kind: putBack ? KIND.news : KIND[k], team, text: sp.text, title: entry.text, effect: when, effectTitle: whenTitle, x }) };
   };
   const words = (r) => {
     const check = r.kind === "conflict" || r.kind === "unmatched" || r.kind === "unknown", where = check ? "" : sourcesText(r.sources);
     const why = check ? "" : r.nearApply ?? r.noApply ?? ""; // the text already says projected or confirmed: that is not repeated on every row
     const sortAt = check ? state.readAt ?? null : Math.max(...r.sources.map((s) => ms(s.at) ?? 0)) || null;
     const sides = check && r.sides?.length ? `<div class="lpsides">${r.sides.map((x) => `<div>${esc(x)}</div>`).join("")}</div>` : "";
-    const sp = splitSource(r.text);
-    return { needs: check, at: null, sortAt, team: r.team, html: row(`info ${check ? "conflict" : r.kind}`, { key: r.id, at: null, src: check ? "Check" : sp.who ?? r.sources.map((s) => SHORT[s.label] ?? s.label).join(" + "), kind: check ? KIND[r.kind] : "INFO", team: r.team, text: check ? r.text : sp.text, title: where, effect: [why, where].filter(Boolean).join(" · "), x: hide(r.id, check ? "check" : "line"), sides }) };
+    const sp = splitSource(r.text), latestAt = check ? 0 : Math.max(...r.sources.map((s) => ms(s.at) ?? 0));
+    const did = check ? "" : `${[...new Set(r.sources.map((s) => (s.lineup === "confirmed" ? "✅" : "📋")))].join("")} ${r.sources.map((s) => s.label).join(" + ")}${latestAt > 0 ? ` · ${timeLabel(latestAt, { day: state.day ?? null })}` : ""}`;
+    return { needs: check, at: null, sortAt, team: r.team, html: row(`info ${check ? "conflict" : r.kind}`, { key: r.id, at: null, src: check ? "Check" : sp.who ?? r.sources.map((s) => SHORT[s.label] ?? s.label).join(" + "), kind: check ? KIND[r.kind] : "INFO", team: r.team, text: check ? r.text : sp.text, title: [r.detail, where].filter(Boolean).join(" · "), effect: did, effectTitle: [why, r.detail, where && `Lineup pages read: ${where}`].filter(Boolean).join(" · "), plain: check, x: hide(r.id, check ? "check" : "line"), sides }) };
   };
-  const note = (n) => ({ needs: true, at: null, sortAt: null, team: null, html: row("lpnote", { at: null, src: "Read", kind: "NOTE", team: null, text: n, effect: "", x: "" }) });
+  const note = (n) => ({ needs: true, at: null, sortAt: null, team: null, html: row("lpnote", { at: null, src: "Read", kind: "NOTE", team: null, text: n, effect: "", plain: true, x: "" }) });
   return [...notes.map(note), ...conflicts.map(words), ...applied.map(news), ...info.map(words)];
 }
 
@@ -134,8 +143,9 @@ export function barHtml(bar, state = {}) {
  * deps: { el, api(path), slate() -> the slate on show, players() -> its rows, console: { lineupView(slate), autoApplyProposal(slate, proposal), undoNews(team, key) },
  * toast(msg, kind), tryStore(fn), now() }. Returns { refresh(), newsOnly() }. refresh asks again for the lineup read, applies what is new and allowed, and redraws;
  * call it when the slate or its numbers change. newsOnly redraws the applied notes from the console; call it when his work moves.
+ * applyInPage: only the public site's page applies (autoApplyProposal); on the app the server applies inside every pull (server/slate/news-apply.js), so a page never applies alongside it and never applies twice.
  */
-export function createLineupBar({ el, api, slate, players, slateData = () => null, tips = () => ({}), console: cons, toast, tryStore, now = Date.now, onLabel = () => {}, tick = false }) {
+export function createLineupBar({ el, api, slate, players, slateData = () => null, tips = () => ({}), console: cons, toast, tryStore, now = Date.now, onLabel = () => {}, tick = false, applyInPage = false }) {
   const key = () => `nbaboard.lineupdismiss.${slate()}`;
   const readDismissed = () => { try { return JSON.parse(tryStore(() => localStorage.getItem(key())) ?? "{}") ?? {}; } catch (e) { console.warn("Lineup dismissals unreadable:", e.message); return {}; } };
   const state = { notes: [], team: null }; // team: the log filtered to one team (a click on a team header or a chip)
@@ -195,8 +205,10 @@ export function createLineupBar({ el, api, slate, players, slateData = () => nul
     try {
       seen = await look();
       if (mine !== gen) return;
-      for (const p of seen.plan.apply) await cons.autoApplyProposal(name, p); // each one saved with what it moved, so it is never applied twice
-      if (seen.plan.apply.length) seen = await look();
+      if (applyInPage && seen.plan.apply.length) {
+        for (const p of seen.plan.apply) await cons.autoApplyProposal(name, p); // the site's page: each one saved with what it moved, so it is never applied twice
+        seen = await look();
+      }
     } catch (e) {
       if (mine !== gen) return;
       return settle([line, `Lineup news waits: the console could not load (${e.message})`]);
@@ -204,7 +216,9 @@ export function createLineupBar({ el, api, slate, players, slateData = () => nul
     if (mine !== gen || name !== slate()) return;
     ctx.view = seen.view;
     // A read over STALE_MIN minutes old (or of unknown age) says nothing in the default view: no line, no box. Nothing from it was made by itself.
-    settle([line], { applied: newsRows(seen.view), info: seen.plan.info, conflicts: seen.result.conflicts }, Boolean(seen.result.stale));
+    // On the app a change not yet applied waits for the next pressed pull, and is shown so; the site's page has just applied it.
+    const waiting = applyInPage ? [] : seen.plan.apply.map((p) => ({ ...p, noApply: "applies at the next Pull now" }));
+    settle([line], { applied: newsRows(seen.view), info: [...seen.plan.info, ...waiting], conflicts: seen.result.conflicts }, Boolean(seen.result.stale));
   }
   /** One look at a time, so a change is never applied twice; a call while one runs makes one more after it. */
   function refresh() {

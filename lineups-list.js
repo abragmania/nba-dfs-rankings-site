@@ -64,11 +64,11 @@ function fieldCells(r, dash) {
 
 /** The one exposure table (A10): every column sorts, `Pos` shows the men who can play one position (`pos`, "All" for all), and
  *  each man's Filter button shows only the lineups holding him (`only` is the man it is on now; his name opens his card, A7). */
-export function exposureHtml(rows, sort, dash, only = null, pos = "All", field = false) {
+export function exposureHtml(rows, sort, dash, only = null, pos = "All", field = false, dim = false) {
   const head = (key, label, cls = "") => `<th class="sortable${cls ? ` ${cls}` : ""}" data-op="expsort" data-key="${key}" title="Sort by ${label}">${label}${sort.key === key ? (sort.dir > 0 ? " ▲" : " ▼") : ""}</th>`;
   const isOn = (id) => (Array.isArray(only) ? only.includes(id) : only === id); // the men filtered (an AND), or the one the older list had
   const shown = pos === "All" ? rows : rows.filter((r) => (r.positions ?? []).includes(pos));
-  const body = !shown.length ? `<tr><td colspan="${field ? 8 : 6}" class="ex-none">No man in these lineups plays ${esc(pos)}.</td></tr>` : sortExposure(shown, sort).map((r) => `<tr><td class="ex-pct">${r.pct.toFixed(1)}% <span class="ex-n">(${r.count})</span></td>`
+  const body = !shown.length ? `<tr><td colspan="${field ? 8 : 6}" class="ex-none">No man in these lineups plays ${esc(pos)}.</td></tr>` : sortExposure(shown, sort).map((r) => `<tr${dim && isOn(r.id) ? ' class="held"' : ""}><td class="ex-pct">${r.pct.toFixed(1)}% <span class="ex-n">(${r.count})</span></td>`
     + `<td class="ex-name">${nameLink({ dk_id: r.id, name: r.name })}</td>`
     + `<td>${r.pos ? esc(r.pos) : dash("no position in this slate file")}</td><td>${r.team ? esc(r.team) : dash("no team in this slate file")}</td>`
     + `<td class="ex-own">${r.own == null ? dash("no projected ownership in this pull") : r.own.toFixed(1) + "%"}</td>`

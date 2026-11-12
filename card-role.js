@@ -5,7 +5,7 @@ import { esc } from "./board-util.js";
 import { ROLES, ROLE_LABEL, ROLE_SHORT } from "./console-roles.js";
 import { PIN_MAX } from "./override-limits.js";
 import { isNum } from "./figures.js";
-import { basisText, medianFlag } from "./console-render.js";
+import { basisText, medianFlag, tgMinHtml } from "./console-render.js";
 import { typedText } from "./console-model.js";
 
 const f1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
@@ -28,7 +28,7 @@ export function roleBoxHtml(v, state = {}) {
   const err = v.saveErr ? `<div class="cardmsg err">${esc(v.saveErr)}</div>` : "";
   const refusal = state.refusal ? `<div class="cardmsg err">Not sent: ${esc(state.refusal)}</div>` : "";
   const notes = state.notes?.length ? `<ul class="crn">${state.notes.map((n) => `<li><b>${esc(n.team)}</b> ${esc(n.text)}</li>`).join("")}</ul>` : "";
-  return `${head}<div class="crr">${seg}<span class="crf">TwoGun <b>${isNum(p.tg_min) ? f1(p.tg_min) : MISS}</b> min</span></div>`
+  return `${head}<div class="crr">${seg}<span class="crf">TwoGun ${tgMinHtml(p)}</span></div>`
     + `<div class="crr">${boxOf("m", r.min, f1)}${boxOf("d", r.rate, (x) => x.toFixed(2))}<span class="crf">Proj <b class="${r.pinned.m || r.pinned.d || r.pinned.r ? "pin" : ""}">${proj}</b></span></div>`
     + `<div class="crs" title="${esc(basisText(r))}">${medianFlag(r)}Minutes from: ${esc(basisText(r))}</div>${moves}${err}`
     + `<div class="crr"><span class="crsaid">${state.busy ? "Sending to the board…" : esc(state.said ?? "")}</span></div>${refusal}${notes}`;

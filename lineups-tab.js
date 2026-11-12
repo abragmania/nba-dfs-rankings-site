@@ -17,10 +17,12 @@ import { HINT } from "./cell-editor.js";
 import { MAX_SPOTS } from "./spot-name.js";
 
 export const SORTS = [["proj", "Projection", "Most projected points first"], ["sal", "Salary", "Most salary used first"], ["own", "Ownership", "Lowest total ownership first"], ["new", "Newest", "Newest first (a build's own order)"]];
+/** The arrow on the sort in force: up is low to high, down is high to low (Projection and Salary start down, Ownership starts up). */
+export const sortArrow = (key, rev) => ((key === "own") !== !!rev ? "▲" : "▼");
 export const MODE_FILTERS = ["All", "Cash", "GPP"];
 
 /** The tab's own state: view null means "this build when there is one, else saved". */
-export const freshLt = () => ({ view: null, show: "cards", q: "", sort: "proj", mode: "All", men: [], spot: "All", replace: false });
+export const freshLt = () => ({ view: null, show: "cards", q: "", sort: "proj", rev: false, mode: "All", men: [], spot: "All", replace: false });
 
 // ---- spots (Adam's contest entries; spots.json on the server): a saved lineup holds none, one or several ----
 const SPOT_COLOURS = ["#7ee787", "#79c0ff", "#d2a8ff", "#f778ba", "#56d4dd", "#b6e354", "#9ea8ff", "#e6edf3"]; // eight, so a card's spots never share one
@@ -129,11 +131,15 @@ export function prep(e, { byId, seat, outNames = new Set(), knownName = null }) 
   return { ...e, men, t: totals(men.map((p) => (p?.stale ? null : p))) };
 }
 
-/** Sorts by a total, a missing one last; "new" and anything unknown keeps the order given. A new array. */
-export function sortEntries(list, key) {
+/** The sort state after a click on a sort button: the same key reverses, a new key starts in its natural direction. */
+export const nextLtSort = (lt, key) => (lt.sort === key ? { sort: key, rev: !lt.rev } : { sort: key, rev: false });
+
+/** Sorts by a total, a missing one last either way. Every key sorts both ways: `rev` turns the key's natural direction round
+ *  (natural: Projection and Salary high to low, Ownership low to high, Newest the order given). Anything unknown keeps the order given. A new array. */
+export function sortEntries(list, key, rev = false) {
   const f = { proj: (x) => x.t.projection, sal: (x) => x.t.salary, own: (x) => x.t.own }[key];
-  if (!f) return [...list];
-  const dir = key === "own" ? 1 : -1;
+  if (!f) return rev && key === "new" ? [...list].reverse() : [...list];
+  const dir = (key === "own" ? 1 : -1) * (rev ? -1 : 1);
   return [...list].sort((a, b) => {
     const x = f(a), y = f(b);
     return (x == null) - (y == null) || (x == null ? 0 : dir * (x - y));
@@ -172,7 +178,7 @@ export function summaryCells(list, { view }) {
 
 const summaryHtml = (cells, dash) => `<div class="lt-sum">${cells.map(([l, v]) => `<div><small>${esc(l)}</small><b>${v == null ? dash(`no ${l.toLowerCase()} to show`) : esc(v)}</b></div>`).join("")}</div>`;
 
-function cardHtml(e, { byId, dash, colourOf, swap, locked, savedSet, names, edit, spots, spotMenu, saved, spotWarn, spotsReady, spotText, tagOf, live }) {
+function cardHtml(e, { byId, dash, colourOf, swap, locked, savedSet, names, edit, spots, spotMenu, saved, spotWarn, spotsReady, spotText, tagOf, live, held = null }) {
   const spotCtx = { spots, spotMenu, saved, names, warn: spotWarn, ready: spotsReady, text: spotText };
   // The red banner reads the board now: a built card holds its men as built, so a man who went Out since is found by his live row.
   const bannerMen = e.kind === "build" && live ? e.men.map((p) => (p && !p.stale ? (live.get(p.dk_id) ?? { dk_id: p.dk_id, stale: true, name: p.name }) : p)) : e.men;
@@ -180,7 +186,7 @@ function cardHtml(e, { byId, dash, colourOf, swap, locked, savedSet, names, edit
   const stacks = e.mode === "GPP" ? gameStacks(e.men) : new Map(); // game stacks are a GPP idea: a Cash lineup shows no CORR chip (Adam)
   const rows = SLOTS.map((s, k) => {
     const p = e.men[k], lk = e.kind === "build" && locked.has(p?.dk_id), tag = tagOf(e.kind, p);
-    return cardRowHtml({ slot: s, p, dash, colourOf, lead: "logo", cls: `lr${lk ? " locked" : ""}${tag ? " gonetag" : ""}`, note: [lk ? "locked" : "", tag ?? ""].filter(Boolean).join(" · "), corr: stacks.get(p?.dk_id) ?? null, ctl: swapButtonHtml(p, e.key, swap.ctx, open, lineupStarted(e.men, swap.ctx)) })
+    return cardRowHtml({ slot: s, p, dash, colourOf, lead: "logo", cls: `lr${lk ? " locked" : ""}${tag ? " gonetag" : ""}${heldRow(p, held) ? " held" : ""}`, note: [lk ? "locked" : "", tag ?? ""].filter(Boolean).join(" · "), corr: stacks.get(p?.dk_id) ?? null, ctl: swapButtonHtml(p, e.key, swap.ctx, open, lineupStarted(e.men, swap.ctx)) })
       + (open && p?.dk_id === open ? swapPanelHtml(swapOptions(e.ids, open, swap.ctx), e.key, dash) : "");
   }).join("");
   const foot = capLine(e.men.map((p) => (p?.stale ? null : p)), { dash, short: true });
@@ -251,18 +257,21 @@ export function viewModel(P, c, seat) {
     if (x) e.same = x.kind === "build" ? `Cash ${x.n}` : `Cash ${savedLabel(x.l, P.svNames, P.saved)}`;
   }
   const inMode = bySpot(filterEntries(all, { mode: P.lt.mode }, true), P.spots, view === "saved" && P.spotsReady ? P.lt.spot : "All");
-  const sorted = sortEntries(filterEntries(inMode, { q: P.lt.q, men: P.lt.men ?? [] }, false), P.lt.sort);
+  const sorted = sortEntries(filterEntries(inMode, { q: P.lt.q, men: P.lt.men ?? [] }, false), P.lt.sort, P.lt.rev);
   // Builds stay newest first whatever the sort: the sort orders the lineups inside each build.
   const at = new Map((P.builds ?? []).map((b, i) => [b.id, i]));
   const shown = view === "build" ? [...sorted].sort((a, b) => at.get(a.bid) - at.get(b.bid)) : sorted;
   return { lists, view, all, inMode, shown };
 }
 
+/** Compare mode (Adam, 11-11): a held man's row is dimmed so only the men who differ stand out. `held` is the dimmed set, or null when off. */
+export const heldRow = (p, held) => !!(held && p?.dk_id != null && held.has(p.dk_id));
+
 /** The filtered men as chips (each with its own ×), the count of lineups holding all of them, and Clear all. "" with nobody filtered. */
-function filterChipsHtml(men, figures, shownN, totalN) {
+function filterChipsHtml(men, figures, shownN, totalN, gray = null) {
   if (!men.length) return "";
   const chips = men.map((id) => `<span class="lt-chip"><b>${esc(figures.get(id)?.name ?? `DraftKings id ${id}`)}</b><button data-op="menoff" data-man="${esc(id)}" title="Take ${esc(figures.get(id)?.name ?? id)} out of the filter" aria-label="Remove from the filter">×</button></span>`).join("");
-  return `<div class="lt-chips"><em>Holding all of</em>${chips}<span class="lt-count">${shownN} of ${totalN} lineup${totalN === 1 ? "" : "s"}</span><button class="ol sm lt-clear" data-op="menclear">Clear all</button></div>`;
+  return `<div class="lt-chips"><em>Holding all of</em>${chips}<span class="lt-count">${shownN} of ${totalN} lineup${totalN === 1 ? "" : "s"}</span>${gray === null ? "" : `<button class="ol sm lt-gray${gray ? " on" : ""}" data-op="ltgray" aria-pressed="${gray}" title="${gray ? "Turn off: show the held men in normal type again" : "Gray out the men held by the filter, so only the men who differ stand out"}">Compare</button>`}<button class="ol sm lt-clear" data-op="menclear">Clear all</button></div>`;
 }
 
 /**
@@ -281,7 +290,7 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
     + `<span class="lt-tabs lt-show" title="Cards, or every lineup side by side">${showBtn("cards", "Cards")}${showBtn("compare", "Compare")}</span>`
     + `<input class="search lt-q" data-lt="q" placeholder="Filter by player..." value="${esc(P.lt.q)}" autocomplete="off" aria-label="Filter lineups by player">`
     // Compare has its own sort (every heading); the cards' sort buttons are not drawn there, so there is one set of sort controls.
-    + ((P.lt.show ?? "cards") === "compare" ? "" : `<span class="lt-sort"><em>Sort</em>${SORTS.map(([k, l, t]) => `<button class="${P.lt.sort === k ? "on" : ""}" data-op="ltsort" data-s="${k}" title="${esc(t)}">${l}</button>`).join("")}</span>`)
+    + ((P.lt.show ?? "cards") === "compare" ? "" : `<span class="lt-sort"><em>Sort</em>${SORTS.map(([k, l, t]) => `<button class="${P.lt.sort === k ? "on" : ""}" data-op="ltsort" data-s="${k}" title="${esc(t)}${P.lt.sort === k ? "; click again to reverse" : ""}">${l}${P.lt.sort === k ? ` <i class="arr">${sortArrow(k, P.lt.rev)}</i>` : ""}</button>`).join("")}</span>`)
     + `<span class="lt-sort"><em>Mode</em>${MODE_FILTERS.map((m) => `<button class="${P.lt.mode === m ? "on" : ""}" data-op="ltmode" data-m="${m}">${m}</button>`).join("")}</span>`
     + (view === "saved" ? (P.spotsReady
       ? `<span class="lt-sort lt-spotf"><em>Spot</em><span class="lt-spotbtns">${[["All", "All"], ["None", "Unassigned"], ...spotNames(P.spots).map((n) => [n, n])].map(([k, l]) => `<button class="${P.lt.spot === k ? "on" : ""}" data-op="ltspot" data-s="${esc(k)}">${esc(l)}</button>`).join("")}</span><span class="lt-spotn" aria-hidden="true"></span></span>`
@@ -308,11 +317,12 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
     const tagOf = (kind, p) => (kind === "saved" && isOutNow(p) ? "now Out" : live(p));
     // The exposure table counts the lineups shown (after the player filter), so clicking Filter on the next man narrows it further.
     const men = P.lt.men ?? [];
+    const grayOn = men.length > 0 && P.lt.gray === true;
     const rows = exposureRows(shown.map((e) => e.ids), figures);
     const sort = shown.length === 1 && P.expSort.key === "diff" ? { key: "pct", dir: -1 } : P.expSort;
     // You vs field and Diff are GPP figures: a list of Cash lineups alone does not show them.
-    const ex = shown.length ? exposureHtml(rows, sort, dash, men, P.expPos, shown.length > 1 && shown.some((e) => e.mode === "GPP")) : "";
-    const ctx = { byId: figures, live: c.byId, tagOf, spotText: P.spotText ?? null, dash, colourOf: c.colourOf, swap: { ctx: swapCtx, open: P.swap ?? null }, locked: new Set(c.picks.locked), savedSet, names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true };
+    const ex = shown.length ? exposureHtml(rows, sort, dash, men, P.expPos, shown.length > 1 && shown.some((e) => e.mode === "GPP"), grayOn) : "";
+    const ctx = { byId: figures, live: c.byId, tagOf, spotText: P.spotText ?? null, dash, colourOf: c.colourOf, swap: { ctx: swapCtx, open: P.swap ?? null }, locked: new Set(c.picks.locked), savedSet, names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true, held: grayOn ? new Set(men) : null };
     const counted = men.length ? `${shown.length} of ${inMode.length} lineup${inMode.length === 1 ? "" : "s"} holding all ${men.length === 1 ? "of him" : `${men.length} men`}` : `${inMode.length} lineup${inMode.length === 1 ? "" : "s"}`;
     const none = men.length
       ? `<div class="lt-empty">No lineup holds all of ${men.map((id) => esc(figures.get(id)?.name ?? id)).join(", ")}. <button class="ol sm lt-clear" data-op="menclear">Clear all</button></div>`
@@ -325,13 +335,13 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
       lastBuild = e.bid;
       return head + cardHtml(e, ctx);
     }).join("");
-    const chips = filterChipsHtml(men, figures, shown.length, inMode.length);
+    const chips = filterChipsHtml(men, figures, shown.length, inMode.length, (P.lt.show ?? "cards") === "compare" ? null : P.lt.gray === true);
     if (P.lt.show === "compare") {
       // Compare lays the same filtered lineups side by side (lineups-compare.js); nothing shown says so, with Clear all in view.
       const cmp = compareLineups(shown, P);
       body = chips + (shown.length ? compareHtml(cmp, P.cmp ?? freshCompare(), { dash }) : `<div class="lt-body"><div class="lt-cards">${none}</div></div>`);
     } else {
-      body = `${chips}<div class="lt-body"><div class="lt-ex"><div class="lt-exh">Exposure · ${view === "build" ? "recently generated" : "saved"} · ${counted}</div>${ex}</div>`
+      body = `${chips}<div class="lt-body"><div class="lt-ex"><div class="lt-exh" title="Exposure · ${view === "build" ? "recently generated" : "saved"} · ${counted}">Exposure · ${view === "build" ? "recently generated" : "saved"} · ${counted}</div>${ex}</div>`
         + `<div class="lt-cards">${shown.length ? cards : none}</div></div>`;
     }
   }

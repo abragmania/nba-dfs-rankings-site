@@ -25,7 +25,7 @@ export function ourFigure(man, doc) {
 
 /** The slate with min_ours and min_ours_note on every player and min_source on the slate. */
 export function withOurMinutes(slate, slateData) {
-  const base = { ...slateData, min_source: MIN_SOURCE_IN_FORCE };
+  const base = { ...slateData, min_source: slateData.proj_source === "ours" ? "ours" : MIN_SOURCE_IN_FORCE }; // our minutes engine in force: Min is ours and the beside column shows TwoGun's
   const blank = (why) => ({ ...base, players: (slateData.players ?? []).map((p) => ({ ...p, min_ours: null, min_ours_note: why })) });
   const file = path.join(dataDir(), "slates", slate, "own-minutes.json");
   if (!fs.existsSync(file)) return blank(NOT_RECORDED);

@@ -7,7 +7,7 @@ import { PIN_MAX } from "./override-limits.js";
 import { roleMove, ROLE_LABEL, swapStarterMove } from "./console-roles.js";
 import { EMPTY_RECORD } from "./figures.js";
 import { MINUTE_SOURCES, SOURCE_LABEL } from "./depth-chart.js";
-import { alignNews, manAsLeft, marksOf } from "./console-marks.js";
+import { alignNews, endNewsOuts, manAsLeft, marksOf, stillAsLeft } from "./console-marks.js";
 
 const THR = { m: 0.05, u: 0.05, d: 0.004, p: 0.05 };
 const STEP = { m: [0.5, 2], u: [0.5, 2], d: [0.01, 0.05], p: [0.1, 1] };
@@ -24,7 +24,11 @@ function touch(c, before, { track = false } = {}) {
   for (const [code, S] of Object.entries(c.model.ST)) {
     dropCopies(S); // a scenario left holding the same marks as the one on show is not kept
     if (before[code] !== teamState(S)) { c.touched.add(code); c.pending.add(code); }
-    if (track && c.model.TEAMS[code] && before[code] !== undefined) noteOuts(c.model.TEAMS[code], S, JSON.parse(before[code])[0]); // who he put Out or back in, kept as its own record
+    if (track && c.model.TEAMS[code] && before[code] !== undefined) {
+      const wasKey = JSON.parse(before[code])[0];
+      noteOuts(c.model.TEAMS[code], S, wasKey); // who he put Out or back in, kept as its own record
+      if (!c.inNewsUndo) endNewsOuts(S, wasKey, { reverted: (key) => (c.G.revertedAt ??= new Map()).set(key, c.G.hist[c.G.hi]) }); // his own hand took a man off Out: the news's Out on him is over, unless Ctrl+Z returns to the step before this one
+    }
     if (S.tonight !== undefined && keyOf(S.outs) !== S.tonight) S.sticky = true; // off Tonight once: where he is stays saved (console-model.js recordOf)
   }
 }
@@ -104,7 +108,7 @@ export function restore(c, i) {
   const before = vals(c), was = states(c), o = JSON.parse(G.hist[i].s), leaving = G.hist[G.hi];
   // A reverted news entry remembers the history step it was reverted from, and goes back to applied only when a restore reaches that step again. A step he has since overwritten is gone, so the entry stays reverted.
   const anchors = (G.revertedAt ??= new Map());
-  const memo = { reverted: (key) => anchors.set(key, leaving), mayReturn: (key) => { const at = G.hist.indexOf(anchors.get(key)); return at >= 0 && i >= at; } };
+  const memo = { reverted: (key) => anchors.set(key, leaving), mayReturn: (key) => { const at = G.hist.indexOf(anchors.get(key)); return at >= 0 && i === at; } }; // only the very step, so a redo past it never hands his own later Out to the news
   for (const [code, S] of Object.entries(o.ST)) {
     const T = c.model.TEAMS[code];
     if (!T) continue;
@@ -175,20 +179,29 @@ export function setNews(c, t, key, entry) {
   c.render();
 }
 /** The undo X on a lineup-news note: what that entry moved goes back (an Out back in, a role it set off), and it is kept as undone so it never
- *  applies again. One history step. False when there is nothing applied under that key. */
-export function undoNews(c, t, key) {
+ *  applies again. `ends` replaces how the entry is left: the server's reversal (server/slate/news-reverse.js) leaves it { state: "reversed", at, text }, so it can apply again. One history step. False when there is nothing applied under that key. */
+export function undoNews(c, t, key, ends = { state: "undone" }) {
   const S = c.model.ST[t], e = S.news?.[key];
   if (!e || e.state !== "applied") return false;
   const base = histMark(c);
   const tonight = new Set(c.model.TEAMS[t].tonight ?? []);
-  for (const m of e.men) {
-    const cur = c.model.ST[t]; // a move may put a new team object in place
-    if (!manAsLeft(cur, m)) continue; // he is not as the news left him: what he is now is his own mark, and stays
-    if (m.kind === "out" && !tonight.has(m.id)) toggleOut(c, t, m.id);
-    else if (m.kind === "out") mutate(c, `${t} ${nameOf(c, t, m.id)} news Out undone`, () => { cur.mine.out = cur.mine.out.filter((x) => x !== m.id); }); // TwoGun has him Out too now: he stays Out, never "back in", for as long as TwoGun says so; a history step, so Ctrl+Z then Ctrl+Y keeps it
-    else if (m.kind === "r") clearFlip(c, t, m.id);
-  }
-  setNews(c, t, key, { ...e, state: "undone" });
+  const asLeftBefore = new Set(Object.entries(S.news).filter(([k, en]) => k !== key && en.state === "applied" && en.men.some((m) => m.kind === "r") && stillAsLeft(S, en)).map(([k]) => k)); // the starts this undo can leave behind: one he has already taken off is his, and stays off
+  c.inNewsUndo = true; // these moves are the undo's own, never his hand ending the entry
+  try {
+    for (const m of e.men) {
+      const cur = c.model.ST[t]; // a move may put a new team object in place
+      if (!manAsLeft(cur, m)) continue; // he is not as the news left him: what he is now is his own mark, and stays
+      if (m.kind === "out" && !tonight.has(m.id)) {
+        toggleOut(c, t, m.id);
+        if (m.was !== undefined && setRole(c, t, m.id, m.was) === null) { const S2 = c.model.ST[t]; mutate(c, `${t} ${nameOf(c, t, m.id)} role back`, () => { pinsOf(S2, keyOf(S2.outs)).r[m.id] = m.was; }); } // the flip he had when the Out applied comes back on the scenario he lands on, whatever that scenario held
+      } else if (m.kind === "out") mutate(c, `${t} ${nameOf(c, t, m.id)} news Out undone`, () => { cur.mine.out = cur.mine.out.filter((x) => x !== m.id); }); // TwoGun has him Out too now: he stays Out, never "back in", for as long as TwoGun says so; a history step, so Ctrl+Z then Ctrl+Y keeps it
+      else if (m.kind === "r") clearFlip(c, t, m.id);
+    }
+  } finally { c.inNewsUndo = false; }
+  setNews(c, t, key, { ...e, ...ends });
+  // A confirmed start applied on the scenario he has left: its flips stayed there, so the entry is ended, and the proposal returns at the next read that still confirms it (autoPlan).
+  const cur = c.model.ST[t];
+  for (const k of asLeftBefore) { const en = cur.news[k]; if (en?.state === "applied" && !stillAsLeft(cur, en)) setNews(c, t, k, { ...en, state: "reversed", at: ends.at ?? new Date().toISOString(), text: `${en.text}; taken off when the Out came back`.slice(0, 600) }); }
   foldHistory(c, base);
   return true;
 }

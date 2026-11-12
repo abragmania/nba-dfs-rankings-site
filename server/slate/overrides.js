@@ -232,12 +232,16 @@ export function valueFrom(projection, salary) {
   return isNum(projection) && Number.isInteger(salary) && salary > 0 ? round2((projection * 1000) / salary) : null;
 }
 
+/** The players with only the applied minutes merged: the figures a typed number or a bump works on (under our engine, the projection after applied minutes). For applyChanges' base. */
+export const minutesBase = (players, overrides) => mergeOverrides(players, { ...EMPTY(), min: { ...(overrides?.min ?? {}) } });
+
 /**
  * The slate's players with the overrides applied, without adding or dropping anyone and without touching the inputs.
  * Every player gets starred (true/false); the retired notes are not added. A player with a typed number or a bump also gets
  * projection, value and proj_own as the effective figures, base: { projection, value, proj_own } (the slate's own), and
  * ovr: { steps (0 when none), projection (typed or null), proj_own (typed or null) }. The ceiling is never changed. A man with applied minutes
- * gets minutes as those and base_minutes as the slate's own; they alone leave his projection, value, ownership and ovr as they are.
+ * gets minutes as those and base_minutes as the slate's own; they alone leave his projection, value, ownership and ovr as they are, except under our minutes engine
+ * (proj_source "ours" with a rate), where his projection becomes those minutes x our DK/min and the typed number and bump work on that.
  */
 export function mergeOverrides(players, overrides) {
   const o = overrides ?? EMPTY();
@@ -248,16 +252,28 @@ export function mergeOverrides(players, overrides) {
     const typedOwn = has(o.own ?? {}, id) ? o.own[id] : null;
     const steps = has(o.bump ?? {}, id) ? o.bump[id] : 0; // the real steps, on a typed row too
     const out = { ...p, starred: stars.has(id) };
-    if (has(o.min ?? {}, id)) { out.minutes = o.min[id]; out.base_minutes = p.minutes ?? null; }
+    let q = p; // the figures the typed number and bump work on
+    if (has(o.min ?? {}, id) && p.proj_source === "ours" && p.ours?.playing === false) {
+      // Under our engine the Minutes page decides who plays: console minutes on a man it has Out are ignored, and said (the console is being retired).
+      out.proj_note = `Your console minutes (${o.min[id]}) are ignored: he is Out tonight on the Minutes page`;
+    } else if (has(o.min ?? {}, id)) {
+      out.minutes = o.min[id]; out.base_minutes = p.minutes ?? null;
+      // Under our minutes engine the projection is minutes x DK/min (Adam 11-10), so applied minutes carry it: the shown minutes times our rate, never the engine's minutes' projection.
+      if (p.proj_source === "ours" && isNum(p.ours?.rate)) {
+        const pr = round2(o.min[id] * p.ours.rate);
+        q = { ...p, projection: pr, value: valueFrom(pr, p.salary) };
+        Object.assign(out, { projection: q.projection, value: q.value, proj_note: `Projection = your applied ${o.min[id]} minutes x our DK/min ${p.ours.rate}` });
+      }
+    }
     if (typedProj == null && typedOwn == null && !steps) return out;
-    const projection = effectiveProjection(p.projection, typedProj, steps);
-    const moved = projection !== p.projection;
+    const projection = effectiveProjection(q.projection, typedProj, steps);
+    const moved = projection !== q.projection;
     return {
       ...out,
       projection,
-      value: moved ? valueFrom(projection, p.salary) : p.value,
+      value: moved ? valueFrom(projection, p.salary) : q.value,
       proj_own: typedOwn ?? p.proj_own,
-      base: { projection: p.projection, value: p.value, proj_own: p.proj_own },
+      base: { projection: q.projection, value: q.value, proj_own: p.proj_own },
       ovr: { steps, projection: typedProj, proj_own: typedOwn },
     };
   });

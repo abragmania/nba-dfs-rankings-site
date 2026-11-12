@@ -4,7 +4,8 @@
 // console; one that is not there is null and drawn as a dash, never a stand-in. A lineup read too old to act on (staleOf) gives no Confirmed or Expected and no sources' statuses: the
 // five is then TwoGun's own, and the board's status and the injury notes still show. Men are joined to cards by the DraftKings id the lineup read stored (matchMan), Out-list men
 // (who have no id on the slate) by the Out entry's name the read stored (out_as); Out claims are the proposals' own (lineup-proposals.js claimsFor); TwoGun's minutes are tgMin, never his applied number.
-import { staleOf, tgMin, claimsFor } from "./lineup-proposals.js";
+import { staleOf, tgMin, claimsFor, NO_STATUS, BACKS_ONLY } from "./lineup-proposals.js";
+import { newsRuling, newestStatusCards } from "./news-status.js";
 
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
 const stampMs = (s) => { const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})(\d{2})(\d{2})([+-]\d{2})(\d{2})$/.exec(String(s ?? "")); return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}${m[5]}:${m[6]}`) : NaN; };
@@ -61,11 +62,21 @@ function cardIndex(cards) {
 /** What a card says in short when it has no body: the site's own badge word ("Has Returned", "Starting"). */
 const shortWord = (c) => (c ? c.body ?? c.word ?? null : null);
 
+/** The word that leads a log row's announcement, by the card's kind; a kind with none leads with "Note". */
+const LEAD_OF = { OUT: "Out", Q: "Questionable", D: "Doubtful", PROB: "Probable", IN: "Playing", START: "START" };
+/** The injury words of a card made short and tidy for a row: the coach's sentence after " - " is left to the hover, "g league" is "G League". null with no words. */
+export function tidyInjury(body) {
+  const s = String(body ?? "").split(/\s+-\s+/)[0].replace(/\bg league\b/gi, "G League").replace(/\btwoway\b/gi, "two-way").replace(/\s+/g, " ").trim();
+  return s || null;
+}
+/** A move of a figure for a row: "30.9 → 30.8 ▼" (no arrow when it did not change). */
+const moveText = (x) => `${x.from.toFixed(1)} → ${x.to.toFixed(1)}${x.to > x.from ? " ▲" : x.to < x.from ? " ▼" : ""}`;
+
 /**
  * The log's entries from the lineup read's Monster cards: [{ at (ms or null), time (its label), kind, team, text, effect, flag, src, id }], newest first, a card with no time last.
- * `effect` says what the report did, and only where the pulls can say it: the pulls compared are pull_changes.prev and .pull. A report between them is followed by TwoGun's move of
- * his minutes, else "no change since the <prev> pull"; one after the newest pull is "not yet in the numbers"; one older than the earlier pull makes no claim. `flag` (the amber dot,
- * "not yet accounted for") is true for the last two kinds that have news to show: a report between the pulls with no move, a report after the newest pull, and a report that a man on
+ * `effect` says what the report did, in plain words with arrows and icons (`effectTitle` is its hover), and only where the pulls can say it: the pulls compared are pull_changes.prev and .pull. A report between them is followed by TwoGun's move of
+ * his minutes, else "TwoGun hasn't moved him yet"; one after the newest pull is "Newer than your last pull"; one older than the earlier pull makes no claim. `text` leads with Out / START / Questionable ...; `title` is the card's whole words. `flag` (amber,
+ * "TwoGun has not reacted yet") is true for the last two kinds that have news to show: a report between the pulls with no move, a report after the newest pull, and a report that a man on
  * the Out list is back (any card but an Out) newer than the earlier pull. Without a pull comparison nothing is flagged. Ours does not count: only TwoGun's move does.
  */
 export function feedEntries({ cards, players, out, pullChanges, day = null }) {
@@ -76,19 +87,23 @@ export function feedEntries({ cards, players, out, pullChanges, day = null }) {
   const entries = (Array.isArray(cards) ? cards : []).map((c) => {
     const at = atOf(c), p = c.dk_id != null ? byId.get(String(c.dk_id)) : null, o = c.out_as ? outBy.get(`${c.team}|${c.out_as}`) : null, kind = kindOf(c.label);
     const known = pc && Number.isFinite(pc.prev) && Number.isFinite(pc.now) && at != null;
-    let effect = "not on this slate", flag = false;
+    let effect = "Not on tonight's slate", effectTitle = "No player on this slate matches this report", flag = false;
     if (p) {
-      const tg = tgMin(p), tgText = isNum(tg) ? `TG ${tg.toFixed(1)} min` : null, mv = p.pull_move, join = (x) => [tgText, x].filter(Boolean).join(", ");
-      if (!known || at < pc.prev) effect = tgText ?? "—"; // older than the pulls compared, or no comparison: no claim
-      else if (at > pc.now) { effect = join(`reported after the ${t(pc.now)} pull, not yet in the numbers`); flag = true; }
-      else if (mv?.min) effect = `TG ${mv.min.from.toFixed(1)} → ${mv.min.to.toFixed(1)} min${mv.proj ? `, proj ${mv.proj.from.toFixed(1)} → ${mv.proj.to.toFixed(1)}` : ""}`;
-      else { effect = join(`no change since the ${t(pc.prev)} pull`); flag = true; }
+      const tg = tgMin(p), mins = isNum(tg) ? `${tg.toFixed(1)} min` : null, mv = p.pull_move;
+      if (!known || at < pc.prev) { effect = mins ?? "—"; effectTitle = "TwoGun's minutes for him now; this report is older than the pulls compared, so no change is claimed"; } // older than the pulls compared, or no comparison: no claim
+      else if (at > pc.now) { effect = "🕒 Newer than your last pull — press Pull now"; effectTitle = `Reported after the ${t(pc.now)} pull, so it is not in the numbers yet${mins ? `; TwoGun has him at ${mins}` : ""}`; flag = true; }
+      else if (mv?.min) { effect = `Minutes ${moveText(mv.min)}${mv.proj ? ` · pts ${moveText(mv.proj)}` : ""}`; effectTitle = "TwoGun's move between the last two pulls"; }
+      else { effect = `⚠️ TwoGun hasn't moved him yet${mins ? ` (${mins})` : ""}`; effectTitle = `No change in TwoGun's minutes since the ${t(pc.prev)} pull`; flag = true; }
     } else if (o) {
       const back = kind !== "OUT" && kind !== "NOTE";
-      if (back && known && at >= pc.prev) { effect = `on the Out list; this report says ${c.word ?? c.label ?? "something else"}: not yet accounted for`; flag = true; }
-      else effect = `on the Out list (usual ${isNum(o.usual_minutes) ? o.usual_minutes.toFixed(1) : "?"} min struck)`;
+      if (back && known && at >= pc.prev) { effect = `⚠️ Listed Out, report says ${c.word ?? c.label ?? "something else"} — check him`; effectTitle = "He is on TwoGun's Out list but this report says otherwise; TwoGun has not changed him yet"; flag = true; }
+      else { effect = `🚫 Out${isNum(o.usual_minutes) ? ` · usually ${o.usual_minutes.toFixed(1)} min` : ""}`; effectTitle = "On TwoGun's Out list; his usual minutes are taken off the board"; }
     }
-    return { at, time: timeLabel(at, { day, precision: c.precision, log: true }), kind, team: c.team, text: `${c.name}: ${c.body ?? c.word ?? c.label ?? ""}`, effect, flag, src: "Monster", id: c.id };
+    const body = c.body ?? null, said = tidyInjury(body), gl = /g[ -]?league/i.test(`${c.word ?? ""} ${c.label ?? ""} ${body ?? ""}`); // a G League assignment or two-way deal means he is not with the team: never "Playing"
+    const lead = gl ? "G League" : LEAD_OF[kind];
+    const glSaid = said?.replace(/^G League\s*/, "") ?? "";
+    const text = gl ? `G League: ${c.name}${glSaid ? ` — ${glSaid}` : ""}` : lead ? `${lead}: ${c.name}${said ? ` — ${said}` : ""}` : `Note: ${c.name} — ${[c.word ?? c.label, said].filter(Boolean).join(", ")}`;
+    return { at, time: timeLabel(at, { day, precision: c.precision, log: true }), kind: gl ? "NOTE" : kind, team: c.team, text, title: `${c.name}: ${[c.word ?? c.label, body].filter(Boolean).join(" — ")}`, effect, effectTitle, flag, src: "Monster", id: c.id };
   });
   return entries.sort((a, b) => (b.at ?? -Infinity) - (a.at ?? -Infinity));
 }
@@ -112,11 +127,11 @@ export function markOf(view, team, id) {
 export function asOfTimes({ slate, latest }) {
   const iso = (t) => { const v = Date.parse(t ?? ""); return Number.isNaN(v) ? null : v; };
   const pc = slate?.pull_changes?.state === "ready" ? slate.pull_changes : null;
-  return { monster: iso(latest?.sources?.monster?.fetched_at), rotowire: iso(latest?.sources?.rotowire?.fetched_at), pullPrev: pc ? stampMs(pc.prev) : null, pullNow: pc ? stampMs(pc.pull) : null };
+  return { monster: iso(latest?.sources?.monster?.fetched_at), rotowire: iso(latest?.sources?.rotowire?.fetched_at), rotogrinders: iso(latest?.sources?.rotogrinders?.fetched_at), pullPrev: pc ? stampMs(pc.prev) : null, pullNow: pc ? stampMs(pc.pull) : null };
 }
 
 const money = (n) => (isNum(n) ? `$${(n / 1000).toFixed(1)}K` : null);
-const SOURCE = [["monster", "Monster"], ["rotowire", "RotoWire"]];
+const SOURCE = [["monster", "Monster"], ["rotowire", "RotoWire"], ["rotogrinders", "RotoGrinders"]];
 
 /**
  * One team: { code, five: { kind: "confirmed" | "expected" | "disagree" | "uncompared" (a man with no id on the slate, so the fives cannot be compared) | "twogun", by: [the sources whose five is the one shown], differs: [sources whose five is not], at: { source: read ms },
@@ -128,7 +143,7 @@ export function teamModel({ code, players, out, latest, stale, cards, view, asOf
   const block = stale ? {} : latest?.teams?.[code] ?? {};
   const ok = (b) => b?.state === "ok" && Array.isArray(b.men);
   const usable = SOURCE.filter(([k]) => ok(block[k]));
-  const confirmed = usable.filter(([k]) => block[k].confirmed);
+  const confirmed = usable.filter(([k]) => block[k].confirmed && (!BACKS_ONLY.includes(k) || usable.some(([j]) => j !== k && block[j].confirmed))); // a back-only page's confirmed mark never stands alone
   const use = confirmed.length ? confirmed : usable;
   const idsOf = (k) => new Set(block[k].men.filter((m) => m.id != null && m.status !== "Out").map((m) => String(m.id)));
   const same = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
@@ -136,21 +151,23 @@ export function teamModel({ code, players, out, latest, stale, cards, view, asOf
   const claimedOut = (id) => Boolean(claims?.out.has(String(id)));
   // A man the five shows whom another feed says is Out is not settled: the Out claim comes from a different feed than a claim that he is in a five (the proposals' outVsFive test), or
   // every Out claim on him is a near-name match, which the proposals refuse to act on. The feeds saying Out are named.
-  const FEED = { monster: "Monster", rotowire: "RotoWire", monster_news: "Monster news" };
+  const FEED = { monster: "Monster", rotowire: "RotoWire", rotogrinders: "RotoGrinders", monster_news: "Monster news" };
   const unsettledFeeds = (id) => {
     const outs = claims?.out.get(String(id));
     if (!outs) return [];
-    const clash = (claims.five.get(String(id)) ?? []).some((f) => outs.some((o) => o.key !== f.key));
+    const clash = (claims.five.get(String(id)) ?? []).some((f) => !NO_STATUS.includes(f.key) && outs.some((o) => o.key !== f.key)); // a page with no statuses cannot contradict an Out
     return clash || outs.every((o) => o.near) ? [...new Set(outs.map((o) => FEED[o.key] ?? o.key))] : [];
   };
   let five = new Set(), by = [], differs = [], unmatched = [], uncompared = false;
   if (use.length) {
-    const [k0, n0] = use[0];
-    five = idsOf(k0); by = [n0];
-    // A name-match miss (a man with no id on the slate) in either source means two fives cannot be compared by their ids: that is not a disagreement.
+    // A name-match miss (a man with no id on the slate) in any source means fives cannot be compared by their ids: that is not a disagreement.
     uncompared = use.length > 1 && use.some(([k]) => block[k].men.some((m) => m.id == null));
-    if (!uncompared) for (const [k, n] of use.slice(1)) (same(idsOf(k), five) ? by : differs).push(n);
-    else by = use.map(([, n]) => n);
+    // The five shown is the one most of the pages agree on (Monster's, then the page order, on a tie), so with three pages two that agree outvote one.
+    const agree = (a) => use.filter(([k]) => !uncompared && same(idsOf(k), idsOf(a[0]))).length;
+    const [k0, n0] = uncompared ? use[0] : use.reduce((best, u) => (agree(u) > agree(best) ? u : best), use[0]);
+    five = idsOf(k0); by = [n0];
+    if (uncompared) by = use.map(([, n]) => n);
+    else for (const [k, n] of use) if (k !== k0) (same(idsOf(k), five) ? by : differs).push(n);
     for (const id of five) for (const n of unsettledFeeds(id)) if (!differs.includes(n)) differs.push(n);
     unmatched = block[k0].men.filter((m) => m.id == null).map((m) => m.name);
   }
@@ -161,8 +178,14 @@ export function teamModel({ code, players, out, latest, stale, cards, view, asOf
   const srcStatus = new Map(); // dk_id -> a status word a lineup source gave him
   for (const [k] of usable) for (const m of block[k].men) if (m.id != null && m.status && m.status !== "Out" && m.status !== "Starting" && m.status !== "Playing" && m.status !== "Off injury report") srcStatus.set(String(m.id), m.status);
   const { byId: cardById, byName: cardByName } = cardIndex((cards ?? []).filter((c) => c.team === code));
+  const statusCards = newestStatusCards((cards ?? []).filter((c) => c.team === code));
+  const srcReadAt = Math.max(asOf.monster ?? -Infinity, asOf.rotowire ?? -Infinity, asOf.rotogrinders ?? -Infinity);
   const row = (p) => {
-    const word = claimedOut(p.dk_id) ? "Out" : srcStatus.get(String(p.dk_id)) ?? (p.injury_status && p.injury_status !== "Available" ? p.injury_status : null);
+    // The newest news ruling shows on the row unless a lineup page read after the card says otherwise (news-status.js holds the rule).
+    const ruled = stale ? null : newsRuling({ card: statusCards.get(String(p.dk_id)), tgStatus: p.injury_status, tgSince: p.status_since ?? null, viewOut: markOf(view, code, p.dk_id) === "Out" || (view?.[code]?.newsOut ?? []).includes(String(p.dk_id)) });
+    const fromSource = srcStatus.get(String(p.dk_id)), useRuling = ruled && !(fromSource && srcReadAt > ruled.at);
+    const tgWord = p.injury_status && p.injury_status !== "Available" ? p.injury_status : null;
+    const word = claimedOut(p.dk_id) ? "Out" : useRuling ? ruled.word : fromSource ?? tgWord;
     const mv = p.pull_move ?? null, card = cardById.get(String(p.dk_id));
     return {
       id: String(p.dk_id), name: p.name, pos: Array.isArray(p.positions) && p.positions.length ? p.positions.join("/") : null, salary: money(p.salary), status: statusChip(word),

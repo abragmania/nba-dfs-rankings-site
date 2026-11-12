@@ -1,7 +1,7 @@
 // His own marks on a team (Adam, 11-07) and what each man would be without one: typed minutes (m), typed DK/min (d), a role he set (r: S, or
 // a starter sent to the bench) and an Out or back-in he set against TwoGun's list (out). Each mark's undo chip drops it and the man goes back
 // to what the app has live; `live` is that figure, for the chip's hover. Pure, no page: the console and the board both read it.
-import { keyOf } from "./console-engine.js";
+import { keyOf, outsOf } from "./console-engine.js";
 import { calc } from "./console-model.js";
 
 /** The work with one pin taken off the scenario on show. */
@@ -14,7 +14,7 @@ const rowOf = (T, S, id) => calc(T, S, S.outs).rows.find((r) => r.id === id) ?? 
 
 /**
  * { id: { m?: { v, live }, d?: { v, live }, r?: { v: role, live: role }, out?: { v: "out" | "in", live: "playing" | "out" } } } for every man
- * with a mark on the scenario on show. live is null when the app has no figure for him without the mark; news is the lineup news's words when the news made it.
+ * with a mark on the scenario on show. live is null when the app has no figure for him without the mark; news is the lineup news's words when the news made it; by is "news" then, else "you".
  */
 export function marksOf(T, S) {
   const key = keyOf(S.outs), pins = S.pins[key] ?? {}, out = {}, outs = new Set(S.outs), tonight = new Set(T.tonight ?? []);
@@ -27,6 +27,8 @@ export function marksOf(T, S) {
   // A change the lineup news made by itself (lineup-bar.js) and that still stands as it left it is not his: it says so, with the news it came from.
   const owned = newsOwned(S);
   for (const e of Object.values(S.news ?? {})) if (e.state === "applied") for (const m of e.men) if (owned[m.kind]?.has(m.id) && out[m.id]?.[m.kind]) out[m.id][m.kind].news = e.text;
+  // Who made each mark: "news" (grey, no undo chip) or "you" (orange, with undo). A screen draws an undo chip only for by === "you".
+  for (const marks of Object.values(out)) for (const mark of Object.values(marks)) mark.by = mark.news ? "news" : "you";
   return out;
 }
 
@@ -53,6 +55,13 @@ export function newsOwned(S) {
   const { flips, outs } = onShow(S), own = { out: new Set(), r: new Set() };
   for (const e of Object.values(S.news ?? {})) if (e.state === "applied") for (const m of e.men) if (asLeft(m, flips, outs)) own[m.kind].add(m.id);
   return own;
+}
+
+/** A hand move took men off Out (`wasKey`: the scenario before it): any applied news Out naming one of them is over, so a later Out of his own is never taken for the news's. It ends as reverted, with memo.reverted(key) keeping the history step it can return on, so Ctrl+Z back to that step undoes a misclick or a look at another scenario. Mutates S.news. */
+export function endNewsOuts(S, wasKey, memo = {}) {
+  const gone = new Set(outsOf(wasKey).filter((id) => !S.outs.includes(id)));
+  if (!gone.size) return;
+  for (const [key, e] of Object.entries(S.news ?? {})) if (e.state === "applied" && e.men.some((m) => m.kind === "out" && gone.has(m.id))) { S.news[key] = { ...e, state: "reverted" }; memo.reverted?.(key); }
 }
 
 /** Whether every man an entry moved is still as it left him (the undo X takes a man back only then). */

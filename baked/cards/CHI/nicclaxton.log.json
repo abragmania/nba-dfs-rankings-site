@@ -1,1 +1,1 @@
-{"source":"ESPN","fetched_at":"2026-11-04T22:40:36.370Z","games_total":0,"games":[]}
+{"source":"ESPN","fetched_at":"2026-11-12T06:21:04.421Z","games_total":2,"games":[{"event_id":"401909969","date":"2026-11-11","home_away":"vs","opp":"SAS","result":"L","score":"119-124","min":16,"pts":17,"reb":6,"ast":1,"fg3m":0,"fg3a":0,"stl":0,"blk":1,"to":0,"dk":28},{"event_id":"401909945","date":"2026-11-08","home_away":"vs","opp":"PHI","result":"L","score":"121-127","min":18,"pts":4,"reb":4,"ast":4,"fg3m":0,"fg3a":0,"stl":0,"blk":2,"to":1,"dk":18.5}]}

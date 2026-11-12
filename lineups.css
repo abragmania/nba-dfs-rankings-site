@@ -164,7 +164,7 @@ body.lineups-on{padding-bottom:0} /* the tab ends at its scrolling boxes, sized 
 @media (min-width:600px){
   #lineups .lt-ex,#lineups .lt-cards,#lineups .cp-scroll{max-height:calc(100dvh - 12px);overflow-y:auto;overscroll-behavior:contain}
   #lineups .lt-ex{padding-top:0}
-  #lineups .lt-exh{position:sticky;top:0;z-index:3;height:26px;box-sizing:border-box;padding:8px 16px 0;background:var(--p)}
+  #lineups .lt-exh{position:sticky;top:0;z-index:3;height:26px;box-sizing:border-box;padding:8px 16px 0;background:var(--p);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #lineups .lt-ex .ext thead th{position:sticky;top:26px;z-index:2;background:var(--p);box-shadow:inset 0 -1px var(--ln)}
   #lineups .cp-scroll thead tr:not(.cp-cap) th{position:sticky;top:0;z-index:2;box-shadow:inset 0 -1px var(--ln)}
 }
@@ -193,3 +193,10 @@ body.lineups-on{padding-bottom:0} /* the tab ends at its scrolling boxes, sized 
   #lineups .lt-acts{flex-direction:column;align-items:stretch}
   #lineups .lt-dl{width:100%;min-height:36px}
 }
+/* Compare (gray out held men): a held man's row recedes, still readable; works in both themes through the tokens. */
+#lineups .lt-gray{background:none;border:1px solid var(--am);color:var(--am);font-weight:800;font-size:11.5px;padding:4px 12px;width:auto}
+#lineups .lt-gray.on{background:var(--am);border-color:var(--am);color:#000}
+#lineups .crow.held>*{opacity:.4}
+#lineups .crow.held .sn b,#lineups .crow.held .sn a{color:var(--mu)}
+#lineups .ext tr.held>td{opacity:.4}
+#lineups .ext tr.held .ex-f{opacity:1}

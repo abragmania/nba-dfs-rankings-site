@@ -3,7 +3,9 @@
 // brought new numbers, `reload` is the board's own in-page refresh (slate-refresh.js createRefresher().tick): never a page reload, his typed
 // numbers, picks, tab, console work and scroll stay. The header is redrawn whole (board.js renderTop), so the button and the line are drawn from
 // this module's state each time; the line's box is always there, its width fixed, so nothing moves when its words change.
-import { esc, shortTime } from "./board-util.js";
+import { esc, shortTime, tipMs } from "./board-util.js";
+import { lastName } from "./console-model.js";
+import { staleOf, LINEUP_KEYS } from "./lineup-proposals.js";
 
 /** TwoGun's board stamp as the page shows every time: Eastern ("Fri, Nov 6, 2:37 PM CT" -> "3:37 PM ET"). Null when missing. Pure. */
 export function boardShort(text, refMs = Date.now()) {
@@ -37,7 +39,9 @@ function savedClauses(saved) {
  */
 export function pullLine(r) {
   const board = boardShort(r?.board);
-  const tail = r?.alsoFailed?.length ? ` Also failed: ${r.alsoFailed.join(", ")}.` : "";
+  const newsWords = r?.news?.status === "failed" ? ` Lineup news not applied: ${bare(r.news.note) ?? "no reason given"}; the board stays on TwoGun's numbers.` : r?.news?.status === "skipped" && !r.news.locked ? ` Lineup news not applied: ${bare(r.news.note) ?? "no reason given"}.` : r?.news?.applied?.length ? ` Lineup news applied: ${plural(r.news.applied.length, "change", "changes")}.` : "";
+  const backWords = `${r?.news?.reversed?.length ? ` Put back in, no source has him Out: ${r.news.reversed.join(", ")}.` : ""}${r?.news?.heldBack?.length ? ` Not put back in: ${r.news.heldBack.map((h) => `${h.name} (${bare(h.why)})`).join("; ")}.` : ""}`;
+  const tail = `${r?.alsoFailed?.length ? ` Also failed: ${r.alsoFailed.join(", ")}.` : ""}${newsWords}${backWords}`;
   const others = r?.others?.length ? `; also saved ${r.others.map((o) => `${o.slate}${o.board ? ` (board ${boardShort(o.board)})` : ""}`).join(", ")}` : "";
   const saved = savedClauses(r?.saved);
   switch (r?.state) {
@@ -217,11 +221,60 @@ export function statusView(s) {
   const st = s.status, b = busyOf(s);
   const cloudUnknown = st?.running?.cloud === "unknown";
   const tail = cloudUnknown ? " · cloud status unknown" : "";
-  const title = [b.busy ? `Don't press: ${b.why}` : null, cloudUnknown ? `Cloud status unknown: ${st.running.cloudWhy ?? "GitHub could not be read"}` : null].filter(Boolean).join(". ");
+  const title = [b.busy ? `Don't press: ${b.why}` : null, cloudUnknown ? `Cloud status unknown: ${st.running.cloudWhy ?? "GitHub could not be read"}` : null, st?.last?.why ? `Last pull: ${st.last.why}` : null, st?.last?.hook?.length ? `Publish hook: ${st.last.hook.join("; ")}` : null].filter(Boolean).join(". ");
   if (b.busy) return { summary: `Pulling… don't press (${b.why})`, title, cls: "busy" };
   if (!st) return s.statusErr ? { summary: `Pull status unknown (${s.statusErr})`, title: s.statusErr, cls: "unk" } : { summary: "Checking pull status…", title: "", cls: "" };
   if (!st.last) return { summary: `Last pull unknown${tail}`, title: title || "No pull time is saved on this computer", cls: "unk" };
   return { summary: `Last pull ${etStamp(st.last.atMs) ?? "at an unknown time"} · ${whereWords(st.last.where)} · ${resultWords(st.last.result)}${tail}`, title, cls: s.statusErr || !GOOD_RESULT.has(st.last.result) ? "unk" : "" }; // the dim dot: the read failed, or the last pull failed or its outcome is unknown
+}
+
+// ---------- the freshness tag: one coloured word for "am I current?" (green / amber / red), beside the Pull now button ----------
+export const FRESH_WINDOW_MS = 2 * 3_600_000; // the age limits bite only in the 2 hours before the first tip (and after it)
+export const FRESH_AMBER_MS = 30 * 60_000;
+export const FRESH_RED_MS = 60 * 60_000;
+const FRESH_REASON_MAX = 60;
+
+/** The earliest tip among the board's rows as an instant, or null when none can be read (then the age limits do not apply). Pure. */
+export function firstTipOf(players, refMs = Date.now()) {
+  const t = (players ?? []).map((p) => tipMs(p?.tip, refMs)).filter(Number.isFinite);
+  return t.length ? Math.min(...t) : null;
+}
+
+/** An age as words: "just now", "3 min ago", "1 h 20 min ago". Pure. */
+export function ageWords(ms) {
+  const m = Math.floor(Math.max(0, ms) / 60_000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60), r = m % 60;
+  return `${h} h${r ? ` ${r} min` : ""} ago`;
+}
+
+const shortReason = (t) => { const x = String(t ?? "").replace(/\s+/g, " ").trim().replace(/\.+$/, ""); const c = x.charAt(0).toUpperCase() + x.slice(1); return c.length > FRESH_REASON_MAX ? `${c.slice(0, FRESH_REASON_MAX - 1).trimEnd()}…` : c; };
+
+/**
+ * The freshness tag from the pull status: { level: "green" | "amber" | "red" | "busy" | "unk", text, title, cls }. Red: any step failed (the last pull's result or note,
+ * or this page's own failed press), or the last pull is over 60 min old inside the 2 hours before the first tip (firstTipMs, null = no age limit). Amber: the light
+ * check names a change since the pull, or the pull is 30 to 60 min old in that window. Green otherwise. A pull running, a missing status or no known last pull keep
+ * the plain words of statusView. s.nowMs is the clock. Pure.
+ */
+export function freshnessOf(s) {
+  const base = statusView(s), st = s.status;
+  if (base.cls === "busy" || !st?.last) return { level: base.cls === "busy" ? "busy" : "unk", text: base.summary, title: base.title, cls: base.cls };
+  const nowMs = Number.isFinite(s.nowMs) && s.nowMs > 0 ? s.nowMs : Date.now(), last = st.last, age = Math.max(0, nowMs - last.atMs);
+  const when = (age >= 24 * 3_600_000 ? etStamp(last.atMs) : etClock(last.atMs))?.replace(/ ET$/, "") ?? "an unknown time", ageW = ageWords(age);
+  const tip = Number.isFinite(s.firstTipMs) ? s.firstTipMs : null, inWindow = tip !== null && nowMs >= tip - FRESH_WINDOW_MS;
+  const detail = `Last pull ${etStamp(last.atMs) ?? "at an unknown time"} (${ageW}) · ${whereWords(last.where)} · ${resultWords(last.result)}`;
+  const mk = (level, text, extra) => ({ level, text, title: [extra, detail, base.title].filter(Boolean).join(". "), cls: `f${level}` });
+  const noteWhy = last.why && !/^not put back in/i.test(last.why) ? last.why : null; // men held back is information, not a failure
+  const pressWhy = s.lineCls === "bad" && s.line ? String(s.line).replace(/^Pull failed(?: at .*? ET)?: /, "") : null;
+  const badResult = !GOOD_RESULT.has(last.result) && last.result !== "finished";
+  const why = noteWhy ?? pressWhy ?? (badResult ? (last.result === "failed" || last.result === "missing" ? "the pull failed" : "the outcome is unknown") : null);
+  if (why) return mk("red", `Pull had a problem: ${shortReason(why)}`, `Pull had a problem: ${String(why).replace(/\s+/g, " ").trim()}`);
+  if (inWindow && age > FRESH_RED_MS) return mk("red", `Stale: last pull ${ageW}`, "More than 60 minutes since the last pull, and the first tip is within 2 hours");
+  const badge = badgeView(st.light);
+  if (badge) return mk("amber", st.light.site ? "Lineup read has men Out the board plays: press Pull now" : "TwoGun updated since your pull: press Pull now", badge.text);
+  if (inWindow && age >= FRESH_AMBER_MS) return mk("amber", `Pulled ${ageW}: press Pull now`, "30 to 60 minutes since the last pull, and the first tip is within 2 hours");
+  return mk("green", `Up to date · pulled ${when} (${ageW})`, st.light ? "The light check sees no change since" : null);
 }
 
 /** Escaped text with a leading weekday ("Fri, Nov 6, ...") wrapped so a phone can hide it. Pure. */
@@ -234,7 +287,7 @@ function panelHtml(s) {
   if (!st) return `<div class="pnpanel" role="region" aria-label="Pull status">${kv("Status", esc(s.statusErr ? `unknown (${s.statusErr})` : "checking…"), s.statusErr ? "pnmiss" : "")}</div>`;
   const run = st.running ?? {};
   out.push("<h5>Most recent pull</h5>");
-  out.push(st.last ? kv("When", dayHtml(etStamp(st.last.atMs) ?? "unknown")) + kv("Where", esc(whereWords(st.last.where))) + kv("Result", esc(resultWords(st.last.result))) : kv("When", "unknown", "pnmiss"));
+  out.push(st.last ? kv("When", dayHtml(etStamp(st.last.atMs) ?? "unknown")) + kv("Where", esc(whereWords(st.last.where))) + kv("Result", esc(resultWords(st.last.result))) + (st.last.why ? kv("Note", esc(st.last.why), "pnmiss") : "") : kv("When", "unknown", "pnmiss"));
   out.push("<h5>Running now</h5>");
   out.push(kv("This computer", run.local ? esc(`yes, since ${etClock(run.local.startedMs)}`) : s.running ? "yes, started here" : "no"));
   out.push(kv("Cloud job", run.cloud === "running" ? esc(`${run.cloudDetail ?? "running"}${run.cloudStartedMs ? `, started ${etClock(run.cloudStartedMs)}` : ""}`) : run.cloud === "idle" ? "no" : esc(`unknown (${run.cloudWhy ?? "GitHub could not be read"})`), run.cloud === "unknown" ? "pnmiss" : ""));
@@ -243,6 +296,12 @@ function panelHtml(s) {
   for (const r of (st.sources ?? []).filter((x) => x.group !== "later")) out.push(rowOf(r));
   const later = (st.sources ?? []).filter((x) => x.group === "later");
   if (later.length) { out.push("<h5>Later tonight</h5>"); for (const r of later) out.push(rowOf(r)); }
+  if (st.light) {
+    out.push("<h5>Light check</h5>", kv("Checked", dayHtml(etStamp(st.light.atMs) ?? "unknown")));
+    for (const u of st.light.unknown ?? []) out.push(kv(u.source, esc(`not read (${u.why})`), "pnmiss"));
+    for (const n of st.light.notes ?? []) out.push(kv(n.source, esc(n.text))); // read but left off the badge, counted with why (G62)
+    if (st.light.note) out.push(`<div class="pnread">${esc(st.light.note)}</div>`);
+  }
   if (s.line) out.push(`<h5>This page's last press</h5><div class="pnlast">${esc(s.line)}</div>`);
   out.push(`<div class="pnread">Status read ${esc(etClock(st.readAtMs) ?? "at an unknown time")}${s.statusErr ? esc(`; the latest read failed (${s.statusErr}), so this is the earlier one`) : ""}</div>`);
   return `<div class="pnpanel" role="region" aria-label="Pull status">${out.join("")}</div>`;
@@ -250,26 +309,60 @@ function panelHtml(s) {
 
 /** The status summary line and, when open, its panel. Always drawn (its box is reserved), so a header redraw keeps it. Pure. */
 export function statHtml(s) {
-  const v = statusView(s);
+  const f = freshnessOf(s), v = { summary: f.text, title: f.title, cls: f.cls };
   return `<span id="pullNowStat" class="pnstat${v.cls ? ` ${v.cls}` : ""}"><button type="button" class="pnsum" data-pn-toggle aria-expanded="${s.open ? "true" : "false"}"${v.title ? ` title="${esc(v.title)}"` : ""}><i class="pndot"></i><span class="pnsumtext">${dayHtml(v.summary)}</span><span class="pncaret"></span></button>${s.open ? panelHtml(s) : ""}</span>`;
 }
+
+/** The Pull now button's extra class from the tag: " fa" (amber outline) or " fr" (red outline), else "". Pure. */
+const btnTone = (s) => { const l = freshnessOf(s).level; return l === "amber" ? " fa" : l === "red" ? " fr" : ""; };
 
 /** The button and its status and line for the header, from the module's state, so a header redraw keeps all three. Pure. */
 export function pullNowHtml(s) {
   const b = busyOf(s);
   const title = s.running ? "A pull is running" : b.busy ? `Don't press: ${b.why}` : s.siteTitle ?? "Pull TwoGun's board now, rebuild the slate and save it";
   const text = s.running ? buttonText(s) : b.busy ? "Pulling…" : "Pull now";
-  return `<span class="pngroup"><button id="pullNowBtn" class="lsw pullnow" title="${esc(title)}"${b.busy ? " disabled" : ""}>${esc(text)}</button><span class="pnbox">${statHtml(s)}${lineHtml(s)}</span></span>`;
+  return `<span class="pngroup"><button id="pullNowBtn" class="lsw pullnow${btnTone(s)}" title="${esc(title)}"${b.busy ? " disabled" : ""}>${esc(text)}</button><span class="pnbox">${statHtml(s)}${lineHtml(s)}</span></span>`;
 }
 
-/** The line's box alone: always present, empty until a run ends; the site's key controls sit at its end. Pure. */
+/** The badge's words from a light-check answer, or null with nothing to say: { text, title }. Only a difference is ever said; what could not be read goes in the title and the panel, never as "no changes". Pure. */
+export function badgeView(light) {
+  const changes = light?.changes ?? [];
+  if (!changes.length) return null;
+  const n = changes.length, words = changes.map((c) => c.text).join(", ");
+  const text = light.site ? `The lineup read has ${n} ${n === 1 ? "man" : "men"} Out that the board still plays: ${words}` : `${n} change${n === 1 ? "" : "s"} since your pull: ${words}`;
+  const unread = (light.unknown ?? []).map((u) => u.source);
+  return { text, title: [`${text}. Press to pull.`, light.note ?? null, unread.length ? `Not read: ${unread.join(", ")}` : null].filter(Boolean).join(" ") };
+}
+
+/**
+ * The public site's light check, from what it can read with no server: men its published lineup read has Out whom the published board still plays. Nothing else can be read from a browser, so nothing else is claimed. A near-name match is left out.
+ * in: { latest (the baked lineup read, or null), readWhy (why it could not be read, when that is so), players (the board's rows), nowMs }. atMs is the read's own time, null when it has none. Returns { atMs, changes, unknown, site, note }. Pure.
+ */
+export function publishedChanges({ latest, readWhy = null, players, nowMs }) {
+  const gen = Date.parse(latest?.generated_at ?? "");
+  const base = { atMs: Number.isNaN(gen) ? null : gen, changes: [], site: true, note: "From the published lineup read only; TwoGun, the NBA report and Monster's news page cannot be read from this site." };
+  if (!latest || staleOf(latest, nowMs)) return { ...base, unknown: [{ source: "Published lineup read", why: readWhy ?? (latest ? "it is too old to act on" : "the site has none for this slate") }] };
+  const playing = new Map((players ?? []).filter((p) => p.minutes > 0).map((p) => [String(p.dk_id), p]));
+  const men = [...(latest.monster_news?.status === "ok" ? latest.monster_news.out ?? [] : [])];
+  for (const block of Object.values(latest.teams ?? {})) for (const k of LINEUP_KEYS) if (block[k]?.state === "ok") men.push(...(block[k].men ?? []).filter((m) => m.status === "Out"), ...(block[k].may_not_play ?? []).filter((m) => m.status === "Out"));
+  const out = new Map();
+  for (const m of men) { const p = m.match !== "near" && m.id != null ? playing.get(String(m.id)) : null; if (p) out.set(p.dk_id, { key: `man:${p.dk_id}:OUT`, text: lastName(p.name), source: "lineups" }); }
+  return { ...base, changes: [...out.values()], unknown: [] };
+}
+
+/** Which published read a light answer is from: the slate and the read's time. Pure. */
+const lightKey = (s) => `${s.status?.slate ?? ""}|${s.status?.light?.atMs ?? ""}`;
+
+/** The line's box alone: always present, empty until a run ends; the site's key controls sit at its end. The light check's badge takes the same place, so nothing else moves, except that a failed press keeps its words and the badge is hidden while a pull runs. Pure. */
 export function lineHtml(s) {
   const actions = (s.actions ?? []).map((a, i) => `<button type="button" class="pnact" data-pn-action="${i}">${esc(a.label)}</button>`).join("");
+  const badge = s.running || s.lineCls === "bad" || (s.heldLight != null && s.heldLight === lightKey(s)) ? null : badgeView(s.status?.light); // heldLight: the site's press keeps its result line until the next slate or publish
+  if (badge) return `<span id="pullNowLine" class="pnline pnhasbadge" role="status" aria-live="polite"><button type="button" id="pullNowBadge" class="pnbadge" title="${esc(badge.title)}"${busyOf(s).busy ? " disabled" : ""}>${esc(badge.text)}</button>${actions}</span>`;
   return `<span id="pullNowLine" class="pnline${s.lineCls ? ` ${s.lineCls}` : ""}" role="status" aria-live="polite"${s.line ? ` title="${esc(s.line)}"` : ""}><span class="pntext">${esc(s.line ?? "")}</span>${actions}</span>`;
 }
 
 /** Whether the board should take the new numbers in place: only when the run says new numbers landed. Pure. */
-export const shouldReload = (r) => r?.state === "pulled";
+export const shouldReload = (r) => r?.state === "pulled" || Boolean(r?.news?.applied?.length || r?.news?.reversed?.length); // news that moved a number on an unchanged board reaches the page too
 const CALM = new Set(["pulled", "unchanged", "older", "no_board", "saved"]); // the line's plain colour; anything else is red
 
 /**
@@ -277,21 +370,27 @@ const CALM = new Set(["pulled", "unchanged", "older", "no_board", "saved"]); // 
  * else the app's POST /api/pull-now), fetchImpl }. Clicks are taken at the document, since the header is redrawn whole.
  */
 export const STATUS_POLL_MS = 15_000; // the status is read at most this often, and only while the page is visible
-export function createPullNow({ doc = globalThis.document, now = Date.now, every = globalThis.setInterval?.bind(globalThis), stop = globalThis.clearInterval?.bind(globalThis), reload, runner = null, fetchImpl = (...a) => fetch(...a), pollMs = doc === globalThis.document ? STATUS_POLL_MS : 0 } = {}) {
+export function createPullNow({ doc = globalThis.document, now = Date.now, every = globalThis.setInterval?.bind(globalThis), stop = globalThis.clearInterval?.bind(globalThis), reload, runner = null, fetchImpl = (...a) => fetch(...a), pollMs = doc === globalThis.document ? STATUS_POLL_MS : 0, firstTipMs = null } = {}) {
   const s = { running: false, startedMs: 0, nowMs: 0, label: "Pulling…", siteTitle: runner?.title ?? null, line: "", lineCls: "", actions: [], status: null, statusErr: null, open: false };
-  let timer = null, polling = null, lastPollMs = -Infinity;
+  let timer = null, polling = null, lastPollMs = -Infinity, lastLineHtml = null;
+  const tick = () => { s.nowMs = now(); s.firstTipMs = firstTipMs?.() ?? null; }; // the clock and the first tip the tag's ages are read against (redrawn at every status read, so the ages move with it)
   const draw = () => {
-    s.nowMs = now();
+    tick();
     const btn = doc?.getElementById("pullNowBtn");
     if (!btn) return;
-    const b = busyOf(s);
+    const b = busyOf(s), level = freshnessOf(s).level;
+    btn.classList?.toggle("fa", level === "amber");
+    btn.classList?.toggle("fr", level === "red");
     btn.textContent = s.running ? buttonText(s) : b.busy ? "Pulling…" : "Pull now";
     btn.disabled = b.busy;
     btn.title = s.running ? "A pull is running" : b.busy ? `Don't press: ${b.why}` : s.siteTitle ?? "Pull TwoGun's board now, rebuild the slate and save it";
   };
   const drawStat = () => {
+    tick();
     const el = doc?.getElementById("pullNowStat");
     if (el?.parentNode) el.outerHTML = statHtml(s); // a stand-in element (the tests) has no parent: nothing to redraw
+    const line = doc?.getElementById("pullNowLine"), lineNow = lineHtml(s);
+    if (line?.parentNode && lineNow !== lastLineHtml) { line.outerHTML = lineNow; lastLineHtml = lineNow; } // the badge lives in the line's box
     draw();
   };
   const appStatus = async () => {
@@ -325,7 +424,7 @@ export function createPullNow({ doc = globalThis.document, now = Date.now, every
     s.line = text ?? ""; s.lineCls = cls; s.actions = actions;
     const el = doc?.getElementById("pullNowLine");
     if (!el) return;
-    if (el.parentNode) el.outerHTML = lineHtml(s); // the page: the line's box is drawn afresh in place
+    if (el.parentNode) { lastLineHtml = lineHtml(s); el.outerHTML = lastLineHtml; } // the page: the line's box is drawn afresh in place
     else { el.textContent = s.line; el.className = `pnline${cls ? ` ${cls}` : ""}`; } // a stand-in element (the tests)
   };
   const appRun = async () => {
@@ -358,10 +457,11 @@ export function createPullNow({ doc = globalThis.document, now = Date.now, every
     show(result.line, CALM.has(result.state) ? "" : "bad", runner?.actions?.(result) ?? []);
     if (shouldReload(result)) await reload?.();
     if (pollMs) await poll(true);
+    if (runner) { s.heldLight = lightKey(s); drawStat(); } // the site's badge cannot clear by itself, so the press's result stays until the published read moves
     return result;
   }
   doc?.addEventListener?.("click", (e) => {
-    if (e.target?.closest?.("#pullNowBtn")) { press(); return; }
+    if (e.target?.closest?.("#pullNowBtn, #pullNowBadge")) { press(); return; } // the badge is Pull now: the same function and the same lock
     if (e.target?.closest?.("[data-pn-toggle]")) { s.open = !s.open; drawStat(); return; }
     if (s.open && !e.target?.closest?.(".pnpanel")) { s.open = false; drawStat(); }
     const act = e.target?.closest?.("[data-pn-action]");
@@ -373,5 +473,5 @@ export function createPullNow({ doc = globalThis.document, now = Date.now, every
     every?.(() => poll(), pollMs);
     poll(true);
   }
-  return { html: () => pullNowHtml({ ...s, nowMs: now() }), press, state: () => ({ ...s }), show, poll };
+  return { html: () => pullNowHtml({ ...s, nowMs: now(), firstTipMs: firstTipMs?.() ?? null }), press, state: () => ({ ...s }), show, poll };
 }

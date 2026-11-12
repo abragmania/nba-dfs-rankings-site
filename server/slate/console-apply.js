@@ -93,17 +93,25 @@ function planTeam(plan, t, rec, key, ctx) {
     }
     ctx.men.set(r.id, { man, t });
     minMoves += planMinutes(plan, r, ctx);
+    const typedNow = ctx.overrides.proj?.[r.id], earlier = ctx.applied?.set?.[r.id];
+    const fromApply = earlier?.to === typedNow;
+    const from = ctx.board.get(r.id).projection, baseProj = ctx.base.get(r.id).projection;
+    // An Out (Apply's 0) took what was on the board, and he is back in: it comes back as it stood, his typed number or the slate's own (Adam, 11-09).
+    const backFromOut = () => {
+      const back = effectiveProjection(baseProj, earlier.prev, ctx.overrides.bump?.[r.id] ?? 0);
+      plan.typed[r.id] = earlier.prev;
+      plan.restoring.add(r.id);
+      plan.changes.push({ id: r.id, name: man.name, short: tableName(shapedTeam(t), man), team: t.code, from: from ?? null, to: back ?? null, move: isNum(from) && isNum(back) ? round2(back - from) : null });
+    };
     if (r.proj === null) {
-      const earlier = ctx.applied?.set?.[r.id];
+      if (earlier && fromApply && earlier.to === 0 && !r.out) { backFromOut(); continue; } // no model figure now, so nothing else would take the 0 away
       const held = earlier && ctx.overrides.proj?.[r.id] === earlier.to ? `; his earlier applied projection ${earlier.to} is still on the board` : "";
       plan.missing.push({ name: man.name, team: t.code, why: `${missingWhy(r, man)}${held}` });
       continue;
     }
-    const typedNow = ctx.overrides.proj?.[r.id];
-    const fromApply = ctx.applied?.set?.[r.id]?.to === typedNow;
     const hasPin = ["m", "u", "d", "p", "r"].some((k) => Object.hasOwn(pins[k] ?? {}, r.id));
     const to = round2(Math.max(0, Math.min(PROJ_MAX, r.proj)));
-    const from = ctx.board.get(r.id).projection, baseProj = ctx.base.get(r.id).projection, earlier = ctx.applied?.set?.[r.id];
+    if (earlier && fromApply && earlier.to === 0 && earlier.prev !== null && !hasPin && !r.out) { backFromOut(); continue; }
     if (earlier && fromApply && !hasPin && !r.out && isNum(baseProj) && Math.abs(to - baseProj) < MOVE_FLOOR) {
       // Back on the slate's own figure with no mark of his on him (an undo chip): the typed number comes off and he is on the live figure the chip
       // showed, never an older typed number from before an Apply (Adam, 11-07: one undo-chip rule).

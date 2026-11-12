@@ -18,7 +18,7 @@ const TEAM = /^[A-Z]{2,4}$/;
 const PIN_KINDS = ["m", "u", "d", "p", "r"]; // r: his role flips (console-roles.js), the others numbers
 const SHARE_KINDS = ["m", "u"];
 const RECORD_KEYS = ["saved", "pins", "handouts", "combos", "source", "news", "tonight", "on", "mine"]; // on: the scenario on show when last saved; mine: the men he or the news put Out and the men he put back in // tonight: the Tonight key his work was made on (console-model.js rebases on a newer one) // source: which minutes feed the optimizer (depth-chart.js MINUTE_SOURCES); absent is TwoGun's. news: below
-const NEWS_STATES = ["applied", "undone", "failed", "reverted"]; // reverted: taken back with Ctrl+Z (never applied again; applied once more on Ctrl+Y)
+const NEWS_STATES = ["applied", "undone", "failed", "reverted", "reversed"]; // reverted: taken back with Ctrl+Z (never applied again; applied once more on Ctrl+Y). reversed: a news Out put back by a pressed pull when no source claimed it any more (news-reverse.js); it applies again if a source rules him Out again
 const NEWS_KINDS = ["out", "r"];
 const NEWS_FIELDS = ["sig", "state", "at", "text", "men", "why"];
 
@@ -56,7 +56,7 @@ function badRoles(map) {
 }
 
 /**
- * The lineup news the console applied by itself (lineup-bar.js, Adam 11-07), keyed by proposal id: { sig (a hash of its news), state ("applied" | "undone" | "failed" | "reverted"), at,
+ * The lineup news the console applied by itself (lineup-bar.js, Adam 11-07), keyed by proposal id: { sig (a hash of its news), state ("applied" | "undone" | "failed" | "reverted" | "reversed"), at,
  * text, men: [{ id, kind ("out" | "r") }] (what it moved, so its undo X takes back only that), why (a failure's reason) }. Null when good, else the reason.
  */
 const SLATE_PART = /^\d{4}-\d{2}-\d{2}-[a-z0-9-]+$/;
@@ -77,7 +77,7 @@ function badNews(news, team) {
     if (!text(e.at, 40) || !ISO.test(e.at) || Number.isNaN(Date.parse(e.at))) return "A news entry's time is not an ISO time";
     if (e.state === "failed" ? !text(e.why, 600) : e.why !== undefined) return "A news entry has a reason only when it failed";
     // to: what the news set on him (a flip, or "out"); he is the news's only while he is still that (console-marks.js newsOwned).
-    if (!Array.isArray(e.men) || e.men.length > 20 || !e.men.every((m) => isPlain(m) && ID.test(m.id ?? "") && NEWS_KINDS.includes(m.kind) && Object.keys(m).every((f) => ["id", "kind", "to"].includes(f)) && (m.to === undefined || (m.kind === "out" ? m.to === "out" : FLIP_ROLES.includes(m.to))))) return "A news entry's men are not well formed";
+    if (!Array.isArray(e.men) || e.men.length > 20 || !e.men.every((m) => isPlain(m) && ID.test(m.id ?? "") && NEWS_KINDS.includes(m.kind) && Object.keys(m).every((f) => ["id", "kind", "to", "was", "typed", "bump"].includes(f)) && (m.to === undefined || (m.kind === "out" ? m.to === "out" : FLIP_ROLES.includes(m.to))) && (m.was === undefined || (m.kind === "out" && FLIP_ROLES.includes(m.was))) && (m.typed === undefined || (m.kind === "out" && (m.typed === null || isNum(m.typed)))) && (m.bump === undefined || (m.kind === "out" && isNum(m.bump))))) return "A news entry's men are not well formed";
     if ((e.state === "applied" || e.state === "reverted") && !e.men.length) return "An applied news entry must name the men it moved";
   }
   return null;

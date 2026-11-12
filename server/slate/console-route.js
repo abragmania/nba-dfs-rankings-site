@@ -41,7 +41,7 @@ async function inputsFor(res, ctx, slate, slateData) {
 
 const publicPlan = ({ changes, rows, min_moves, holds, teams, refused, kept, missing, clamped, back_on_zero, not_on_board, back_in, orphaned_pins, unchanged, basis }) => ({ changes, rows, min_moves, holds, teams, refused, kept, missing, clamped, back_on_zero, not_on_board, back_in, orphaned_pins, unchanged, basis });
 /** count: men whose projection an Apply set. min_count: men holding applied minutes, read from the overrides, the only place they are kept. */
-const appliedView = (applied, overrides) => (applied ? { at: applied.at, count: Object.keys(applied.set).length, min_count: Object.keys(overrides.min ?? {}).length, keys: applied.keys ?? {} } : null);
+const appliedView = (applied, overrides) => (applied ? { at: applied.at, count: Object.keys(applied.set).length, min_count: Object.keys(overrides.min ?? {}).length, keys: applied.keys ?? {}, set: Object.fromEntries(Object.entries(applied.set).map(([id, e]) => [id, e.to])) } : null); // set: { id: the number the Apply wrote }, so the page does not call it his
 
 async function handleRead(req, res, slate, ctx) {
   if (req.method !== "GET") return ctx.fail(res, 405, "METHOD", "GET only.");
@@ -52,6 +52,7 @@ async function handleRead(req, res, slate, ctx) {
   if (!slateData) return;
   const inputs = await inputsFor(res, ctx, slate, slateData);
   if (!inputs) return;
+  ctx.benchPlus?.(slate, inputs); // each charted team's Bench+ suggestions (minutes/route.js consoleBenchPlus; app only, never throws)
   try {
     const file = readScenarios(slate);
     ctx.send(res, 200, { inputs, scenarios: { teams: file.teams, applied: appliedView(file.applied, readOverrides(slate)) } });
@@ -77,8 +78,8 @@ async function handleSave(req, res, slate, ctx) {
   }
 }
 
-/** The record first, so a failed overrides write has nothing of its own to reverse; on that failure the record goes back as it was. */
-function writeApply(slate, file, overrides, rec, players) {
+/** The record first, so a failed overrides write has nothing of its own to reverse; on that failure the record goes back as it was. The one path that writes a send, a press's or the server's news (news-apply.js). */
+export function writeApply(slate, file, overrides, rec, players) {
   writeScenarios(slate, { ...file, applied: rec.applied });
   try {
     return writeOverrides(slate, applyChanges(overrides, rec.changes, players));
