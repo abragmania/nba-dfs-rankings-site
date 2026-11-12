@@ -1,37 +1,35 @@
 {
  "slate": "2026-11-12-main",
- "generated_at": "2026-11-12T23:25:30.429Z",
+ "generated_at": "2026-11-12T23:35:30.587Z",
  "status": "ok",
  "slate_built_from": "slates/2026-11-12-main/raw/2026-11-12T175840-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-12T23:25:22.114Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-12T140020-0500.html.gz",
-   "saved_at": "2026-11-12T19:00:20.530Z",
-   "unchanged_since": "2026-11-12T19:00:20.530Z",
-   "parsed_sha": "86f0736a51c925e6b60d3d3efd2936a687757f6eb7ef882b21307a32950728c5",
-   "sha256": "92334e94920e9202960b51db63f6f4d63efcdaf962c2ca7a3511cc17bddddd4d"
+   "fetched_at": "2026-11-12T23:35:22.284Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-12T183522-0500.html.gz",
+   "saved_at": "2026-11-12T23:35:22.284Z",
+   "parsed_sha": "f1bfe5684b192668d90cd2eabe6132ab7fdec12400f6929251d4442ba4e1ec78",
+   "sha256": "40e6f77b5ff09fbfb3e894c599467c34fe40d9edfc2cb94899a37650105568ce"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-12T23:25:26.202Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-12T182526-0500.html.gz",
-   "saved_at": "2026-11-12T23:25:26.202Z",
-   "parsed_sha": "132c4f77039272dff4e0d484418cc3b143f239e2a62e11dd752558141af6985c",
-   "sha256": "f4ecf79430c803a98d35e8b968ed674995db0d3a71c085746bedce2118b3702d"
+   "fetched_at": "2026-11-12T23:35:26.379Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-12T183526-0500.html.gz",
+   "saved_at": "2026-11-12T23:35:26.379Z",
+   "parsed_sha": "5181bc266562ab160f4088ee3cdb2b105fc2adaf40de2e08fe825aa521dae06f",
+   "sha256": "5b80d268343cbcdba8faefa9fdf6f56073bda9eec36c8f22f605ab2548768304"
   },
   "rotogrinders": {
    "url": "https://rotogrinders.com/lineups/nba?site=draftkings",
    "status": "ok",
-   "fetched_at": "2026-11-12T23:25:30.361Z",
-   "saved_as": "news/lineups/pages/rotogrinders-2026-11-12T131528-0500.html.gz",
-   "saved_at": "2026-11-12T18:15:28.444Z",
-   "unchanged_since": "2026-11-12T18:15:28.444Z",
-   "parsed_sha": "0ba099b5e7021dc4c2794104ba44eeb92f6fecacb8975e861d60540932d13ca5",
-   "sha256": "2346fc2e29c80c3d3a4d78c3166121730d635de5a0c2bc1eef5ec6585296a794"
+   "fetched_at": "2026-11-12T23:35:30.519Z",
+   "saved_as": "news/lineups/pages/rotogrinders-2026-11-12T183530-0500.html.gz",
+   "saved_at": "2026-11-12T23:35:30.519Z",
+   "parsed_sha": "d1f57d81dc50990c566a447b6bd0b3066ccbf38bbb21d403b433ba8ec7e07a2a",
+   "sha256": "1555b5a5c7059cb47fb298715509e805b8067e8c92b4d5e4906cb50077c3d25d"
   }
  },
  "monster_news": {
@@ -952,7 +950,7 @@
    "game": "DET@WAS",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Daniss Jenkins",
@@ -961,7 +959,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44887845",
       "match": "exact"
      },
@@ -972,7 +970,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44887689",
       "match": "exact"
      },
@@ -983,7 +981,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44887823",
       "match": "exact"
      },
@@ -994,7 +992,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44887770",
       "match": "exact"
      },
@@ -1005,7 +1003,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44887832",
       "match": "exact"
      }
@@ -1013,7 +1011,7 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Cade Cunningham",
@@ -1056,7 +1054,7 @@
       "match": "exact"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": [
      {
       "name": "Jalen Duren",
@@ -1078,7 +1076,7 @@
    },
    "rotogrinders": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Cade Cunningham",
@@ -1121,14 +1119,14 @@
       "match": "exact"
      }
     ],
-    "label": "lineup not released"
+    "label": "Confirmed"
    }
   },
   "WAS": {
    "game": "DET@WAS",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Trae Young",
@@ -1137,7 +1135,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44887734",
       "match": "exact"
      },
@@ -1148,7 +1146,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44887764",
       "match": "exact"
      },
@@ -1159,7 +1157,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44887773",
       "match": "exact"
      },
@@ -1170,7 +1168,7 @@
       "flag": "Off",
       "word": "Off Injury Report",
       "status": "Off injury report",
-      "verified": false,
+      "verified": true,
       "id": "44887695",
       "match": "exact"
      },
@@ -1181,7 +1179,7 @@
       "flag": "Off",
       "word": "Off Injury Report",
       "status": "Off injury report",
-      "verified": false,
+      "verified": true,
       "id": "44887796",
       "match": "exact"
      }
@@ -1189,7 +1187,7 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Trae Young",
@@ -1232,7 +1230,7 @@
       "match": "near"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": [
      {
       "name": "Reece Beekman",
@@ -1270,7 +1268,7 @@
    },
    "rotogrinders": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Trae Young",
@@ -1313,14 +1311,14 @@
       "match": "exact"
      }
     ],
-    "label": "lineup not released"
+    "label": "Confirmed"
    }
   },
   "TOR": {
    "game": "TOR@PHI",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Immanuel Quickley",
@@ -1329,7 +1327,7 @@
       "flag": "Off",
       "word": "Off Injury Report",
       "status": "Off injury report",
-      "verified": false,
+      "verified": true,
       "id": "44887759",
       "match": "exact"
      },
@@ -1340,7 +1338,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44887716",
       "match": "exact"
      },
@@ -1351,7 +1349,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44887814",
       "match": "exact"
      },
@@ -1362,7 +1360,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44887808",
       "match": "exact"
      },
@@ -1373,7 +1371,7 @@
       "flag": "Off",
       "word": "Off Injury Report",
       "status": "Off injury report",
-      "verified": false,
+      "verified": true,
       "id": "44887819",
       "match": "exact"
      }
@@ -1462,7 +1460,7 @@
    },
    "rotogrinders": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Immanuel Quickley",
@@ -1505,14 +1503,14 @@
       "match": "exact"
      }
     ],
-    "label": "lineup not released"
+    "label": "Confirmed"
    }
   },
   "PHI": {
    "game": "TOR@PHI",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Tyrese Maxey",
@@ -1521,7 +1519,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44887703",
       "match": "exact"
      },
@@ -1532,7 +1530,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44887781",
       "match": "exact"
      },
@@ -1543,7 +1541,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44887711",
       "match": "exact"
      },
@@ -1551,10 +1549,10 @@
       "name": "Dean Wade",
       "pos": "PF",
       "bmId": "5907",
-      "flag": null,
-      "word": null,
-      "status": null,
-      "verified": false,
+      "flag": "S",
+      "word": "Starting",
+      "status": "Starting",
+      "verified": true,
       "id": "44887933",
       "match": "exact"
      },
@@ -1562,10 +1560,10 @@
       "name": "Joel Embiid",
       "pos": "C",
       "bmId": "3916",
-      "flag": "Q",
-      "word": "Questionable",
-      "status": "Questionable (undetermined)",
-      "verified": false,
+      "flag": "IN",
+      "word": "Playing",
+      "status": "Playing",
+      "verified": true,
       "id": "44887706",
       "match": "exact"
      }
@@ -1573,7 +1571,7 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Tyrese Maxey",
@@ -1610,13 +1608,13 @@
      {
       "name": "Joel Embiid",
       "pos": "C",
-      "flag": "Ques",
-      "status": "Questionable",
+      "flag": null,
+      "status": null,
       "id": "44887706",
       "match": "exact"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": [
      {
       "name": "Ariel Hukporti",
@@ -1625,14 +1623,6 @@
       "status": "Out",
       "id": null,
       "match": null
-     },
-     {
-      "name": "Joel Embiid",
-      "pos": "C",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44887706",
-      "match": "exact"
      },
      {
       "name": "Dominick Barlow",
@@ -1662,7 +1652,7 @@
    },
    "rotogrinders": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Tyrese Maxey",
@@ -1705,7 +1695,7 @@
       "match": "exact"
      }
     ],
-    "label": "lineup not released"
+    "label": "Confirmed"
    }
   },
   "DAL": {
