@@ -43,18 +43,18 @@ const mins = (v) => (isNum(v) ? `${Math.round(v * 10) / 10}` : "—");
 
 const sourceTime = (latest, key) => (key === "monster_news" ? latest.monster_news?.fetched_at : latest.sources?.[key]?.fetched_at) ?? null;
 const labelsOf = (sources) => [...new Set(sources.map((s) => LABEL[s.key]))].join(" + ");
-const unknownStatus = (m) => String(m.status ?? "").startsWith("UNKNOWN");
+export const unknownStatus = (m) => String(m.status ?? "").startsWith("UNKNOWN");
 /** An unrecognised status as words only: "UNKNOWN(Q #123456 Questionable)" becomes "Q Questionable"; a colour code is never shown. */
 export const statusWords = (s) => String(s ?? "").replace(/^UNKNOWN\((.*)\)$/, "$1").replace(/\s*#[0-9A-Fa-f]{3,8}\b/g, "").replace(/\s+/g, " ").trim() || "unreadable";
 
 /** The Out claims and the in-five claims on one team, by man id: { out: Map(id -> [claim]), five: Map(id -> [claim]) }. A claim is { key, at, lineup, detail, name, near }. */
-export function claimsFor(latest, team) {
+export function claimsFor(latest, team, skip = new Set()) {
   const out = new Map(), five = new Map();
   const add = (map, m, claim) => { if (m.id != null) map.set(m.id, [...(map.get(m.id) ?? []), { ...claim, name: m.name, near: m.match === "near" }]); };
   const block = latest.teams?.[team] ?? {};
   for (const key of LINEUP_KEYS) {
     const b = block[key];
-    if (!okBlock(b)) continue;
+    if (skip.has(key) || !okBlock(b)) continue;
     const at = sourceTime(latest, key), lineup = b.confirmed ? "confirmed" : "projected";
     for (const m of b.men) add(m.status === "Out" ? out : five, m, { key, at, lineup, detail: m.status === "Out" ? `${String(m.flag ?? "Out").slice(0, DETAIL_MAX)} in its five` : null });
     for (const m of Array.isArray(b.may_not_play) ? b.may_not_play : []) if (m.status === "Out") add(out, m, { key, at, lineup: null, detail: `${String(m.flag ?? "Out").slice(0, DETAIL_MAX)} on MAY NOT PLAY` });
@@ -65,7 +65,7 @@ export function claimsFor(latest, team) {
 }
 
 /** Two feeds disagree about a man when one has him Out and a different feed lists him in its five. */
-function outVsFive(claims) {
+export function outVsFive(claims) {
   const rows = [];
   for (const [id, outs] of claims.out) {
     const fives = (claims.five.get(id) ?? []).filter((f) => !NO_STATUS.includes(f.key) && outs.some((o) => o.key !== f.key));
@@ -96,18 +96,66 @@ function qualifying(latest, team, skip = new Set()) {
     if (best.length >= 2 && beats) return pick(best, idsOf(b[best[0]]));
     if (best.length >= 2 && !beats) return pick(["monster"], idsOf(b.monster));
     const solo = confs.filter((k) => !BACKS_ONLY.includes(k));
-    if (confs.length === 3 && confs.includes("monster")) return pick(["monster"], idsOf(b.monster)); // all three confirmed and all differ: Monster wins (Adam)
+    if (confs.length >= 2 && confs.includes("monster")) return pick(["monster"], idsOf(b.monster)); // two or three confirmed and none agree: a confirmed Monster wins (Adam 11-11)
     if (solo.length === 1) return pick(solo, idsOf(b[solo[0]]));
     if (solo.length >= 2) return { ...none, conflict: "the confirmed lineups differ and no two agree" };
   }
-  if (oks.length >= 2) { // projected fives (or a confirmed mark that only backs): the men at least two pages name
-    const count = new Map();
-    for (const k of oks) for (const id of idsOf(b[k])) count.set(id, (count.get(id) ?? 0) + 1);
+  if (oks.length >= 2) { // projected fives (or a confirmed mark that only backs): the men at least two pages name; a man a page marks Out is not counted (Adam 11-12)
+    const count = new Map(), outAny = new Set(oks.flatMap((k) => b[k].men.filter((m) => m.status === "Out" && m.id != null).map((m) => m.id))); // a man any page marks Out takes no place in the vote
+    for (const k of oks) for (const m of b[k].men) if (m.id != null && !outAny.has(m.id)) count.set(m.id, (count.get(m.id) ?? 0) + 1);
     const mon = b.monster && oks.includes("monster") ? idsOf(b.monster) : new Set();
-    const q = new Set([...count].filter(([, n]) => n >= 2).sort((x, y) => y[1] - x[1] || Number(mon.has(y[0])) - Number(mon.has(x[0]))).slice(0, 5).map(([id]) => id));
-    return { q, five: q, used: oks, pages: oks, vote: true, conflict: null };
+    const ranked = [...count].filter(([, n]) => n >= 2).sort((x, y) => y[1] - x[1] || Number(mon.has(y[0])) - Number(mon.has(x[0])));
+    const q = new Set(ranked.slice(0, 5).map(([id]) => id));
+    return { q, five: q, used: oks, pages: oks, vote: true, cut: ranked.slice(5).map(([id]) => id), conflict: null };
   }
   return none;
+}
+
+/**
+ * The vote as the lineup bar and the minutes engine both use it (one copy): { first: qualifying() on every page, q: the five in force, dropped: null or { pages, names } when pages holding a man
+ * not matched to a slate player were left out of the vote because two clean pages remained }.
+ */
+export function settledFive(latest, team, skip = new Set()) {
+  const first = qualifying(latest, team, skip);
+  let q = first, dropped = null;
+  const dirty = first.used.filter((k) => latest.teams[team][k].men.some((m) => m.id == null));
+  if (dirty.length) {
+    const q2 = qualifying(latest, team, new Set([...skip, ...dirty]));
+    if (q2.pages.length >= 2 && !q2.conflict) {
+      dropped = { pages: dirty, names: [...new Set(dirty.flatMap((k) => latest.teams[team][k].men.filter((m) => m.id == null).map((m) => m.name)))] };
+      q = q2;
+    }
+  }
+  return { first, q, dropped };
+}
+
+/**
+ * The five the minutes engine plays from, decided by the same vote as the bar (one owner; Adam 11-12): { ids: DraftKings ids in the five (a man any page marks Out left out), used: pages, kind:
+ * "confirmed" | "partly confirmed" | "projected", named: id -> page keys, outs: names left out as Out, cut: names the vote cut at five, dropped (settledFive), why: null, or the words for no five }.
+ * No five (ids empty, why set) on: the vote's conflict, a man Out on one page and in another's five (the bar's clash), a status not recognised, a man with no slate id, or no man two pages agree on.
+ * skip: page keys not read (fetched at or after lock). names: id -> name for the words. Pure.
+ */
+export function fiveFor(latest, team, { skip = new Set(), names = new Map() } = {}) {
+  const none = (why, refused = false) => ({ ids: [], used: [], kind: null, named: {}, outs: [], cut: [], dropped: null, why, refused });
+  const blocks = latest?.teams?.[team];
+  if (!blocks) return none(null);
+  const nameOf = (id, fb) => names.get(String(id)) ?? fb ?? "a man not on this slate";
+  const { first, q, dropped } = settledFive(latest, team, skip); // the bar refuses on the first vote's conflict before it drops an unmatched page, so does this
+  const claims = claimsFor(latest, team, skip), clash = outVsFive(claims); // a page not read makes no claim
+  if (clash.length) return none(`${clash.map((c) => nameOf(c.id, c.outs[0].name)).join(", ")} ${clash.length > 1 ? "are" : "is"} Out in one feed and in the five in another; no five used`, true);
+  if (first.conflict || q.conflict) return none(`${first.conflict ?? q.conflict}; no five used`, true);
+  const usedMen = q.used.flatMap((k) => blocks[k].men), unmatched = [...new Set(usedMen.filter((m) => m.id == null).map((m) => m.name))], unknown = [...new Set(usedMen.filter(unknownStatus).map((m) => m.name))];
+  if (unmatched.length) return none(`${unmatched.join(", ")} in a lineup ${unmatched.length > 1 ? "are" : "is"} not matched to a slate player; no five used`, true);
+  if (unknown.length) return none(`${unknown.join(", ")} in a lineup ${unknown.length > 1 ? "have" : "has"} a status that was not recognised; no five used`, true);
+  const outIds = [...q.five].filter((id) => claims.out.has(id)), ids = [...q.five].filter((id) => !claims.out.has(id));
+  if (!ids.length) {
+    const read = q.used.map((k) => LABEL[k]);
+    return none(q.five.size ? "every man in the five is Out; no five used" : !read.length ? "no lineup page could be used; no five used" : read.length === 1 ? `only ${read[0]}'s lineup was read; one page alone does not set the five`
+      : blocks[q.used[0]].men.length === 0 ? "the confirmed five is empty; no five used" : `${read.join(" and ")} share no man two of them name; no five used`);
+  }
+  const kind = q.used.every((k) => blocks[k].confirmed) ? "confirmed" : q.used.some((k) => blocks[k].confirmed) ? "partly confirmed" : "projected";
+  const named = Object.fromEntries(ids.map((id) => [id, q.used.filter((k) => blocks[k].men.some((m) => m.id === id))]));
+  return { ids, used: q.used, kind, named, outs: outIds.map((id) => nameOf(id, claims.out.get(id)[0].name)), cut: (q.cut ?? []).map((id) => nameOf(id)), dropped, why: null, refused: false };
 }
 
 const sideText = (b, name) => (okBlock(b) ? `${name}${b.confirmed ? " (confirmed)" : " (projected)"}: ${b.men.map((m) => m.name).join(", ")}` : `${name}: ${b?.note ?? "not read"}`);
@@ -143,7 +191,8 @@ export function makeProposals({ latest, players, view = null, nowMs = Date.now()
     if (!v) continue;
     const claims = claimsFor(latest, team), consoleOut = new Set(v.outs ?? []), roles = v.roles ?? {};
     const marks = v.marks ?? {}, markedOut = new Set(marks.out ?? []), markedS = new Set(marks.s ?? []), typed = new Set(marks.typed ?? []), markedIn = new Set(marks.in ?? []), benched = new Set(marks.benched ?? []);
-    let q = qualifying(latest, team);
+    const settled = settledFive(latest, team);
+    let q = settled.first;
     const clash = outVsFive(claims);
     if (q.conflict || clash.length) {
       const names = clash.map((c) => nameOf(c.id, c.outs[0].name));
@@ -167,14 +216,9 @@ export function makeProposals({ latest, players, view = null, nowMs = Date.now()
       });
     }
     // A page with a man not matched to a slate player is left out of the vote when two clean pages remain, and the check says so; with fewer it refuses (G62).
-    const dirty = q.used.filter((k) => latest.teams[team][k].men.some((m) => m.id == null));
-    if (dirty.length) {
-      const q2 = qualifying(latest, team, new Set(dirty));
-      if (q2.pages.length >= 2 && !q2.conflict) {
-        const names = [...new Set(dirty.flatMap((k) => latest.teams[team][k].men.filter((m) => m.id == null).map((m) => m.name)))];
-        conflicts.push(checkRow(slate, team, "unmatched", `${team}: ${dirty.map((k) => LABEL[k]).join(" + ")}'s lineup left out of the vote (${names.join(", ")} not matched to a slate player); the other pages decide.`, names));
-        q = q2;
-      }
+    if (settled.dropped) {
+      conflicts.push(checkRow(slate, team, "unmatched", `${team}: ${settled.dropped.pages.map((k) => LABEL[k]).join(" + ")}'s lineup left out of the vote (${settled.dropped.names.join(", ")} not matched to a slate player); the other pages decide.`, settled.dropped.names));
+      q = settled.q;
     }
     const usedMen = q.used.flatMap((k) => latest.teams[team][k].men);
     const unmatched = [...new Set(usedMen.filter((m) => m.id == null).map((m) => m.name))];
