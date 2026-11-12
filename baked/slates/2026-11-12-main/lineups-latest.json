@@ -1,33 +1,35 @@
 {
  "slate": "2026-11-12-main",
- "generated_at": "2026-11-12T18:15:28.498Z",
+ "generated_at": "2026-11-12T18:45:28.524Z",
  "status": "ok",
  "slate_built_from": "slates/2026-11-12-main/raw/2026-11-12T130031-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-12T18:15:20.116Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-12T131520-0500.html.gz",
-   "saved_at": "2026-11-12T18:15:20.116Z",
-   "parsed_sha": "92b5bb393c0cc92501c489bf1c1b73f59e2e167eaeb693f078f7beb53c5694ed",
-   "sha256": "301dd0a7e9af375ad0f09bf3c71b31970a600ffec2e6f49c1733be40ae9e540c"
+   "fetched_at": "2026-11-12T18:45:20.285Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-12T134520-0500.html.gz",
+   "saved_at": "2026-11-12T18:45:20.285Z",
+   "parsed_sha": "d0dab49b98e788b5cbaac91d54cdc4ab4407a17c34e6408d202797fafa842f70",
+   "sha256": "34d307fdad372f57f39c5722a2cfd93a9e7482ecd4494610e33a5779f5712570"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-12T18:15:24.317Z",
+   "fetched_at": "2026-11-12T18:45:24.365Z",
    "saved_as": "news/lineups/pages/rotowire-2026-11-12T131524-0500.html.gz",
    "saved_at": "2026-11-12T18:15:24.317Z",
+   "unchanged_since": "2026-11-12T18:15:24.317Z",
    "parsed_sha": "4d39ce01c09a5a5563c06c9e5eceabd714e013e38149113987e5b2b18e70ee78",
-   "sha256": "467b2b2249bf1890f0c1944c8741528729f3948488fd94c83926a914395171fb"
+   "sha256": "dde5ae029a527e49e7cc2ba228b307baca3b5c44c642de00ceea69ba7d241e53"
   },
   "rotogrinders": {
    "url": "https://rotogrinders.com/lineups/nba?site=draftkings",
    "status": "ok",
-   "fetched_at": "2026-11-12T18:15:28.444Z",
+   "fetched_at": "2026-11-12T18:45:28.496Z",
    "saved_as": "news/lineups/pages/rotogrinders-2026-11-12T131528-0500.html.gz",
    "saved_at": "2026-11-12T18:15:28.444Z",
+   "unchanged_since": "2026-11-12T18:15:28.444Z",
    "parsed_sha": "0ba099b5e7021dc4c2794104ba44eeb92f6fecacb8975e861d60540932d13ca5",
    "sha256": "b9dc6a14c442ac164d765f5b5834015ce90607246aad4f092afdb660890784eb"
   }
@@ -600,9 +602,9 @@
       "name": "Anthony Davis",
       "pos": "PF",
       "bmId": "3640",
-      "flag": "P",
-      "word": "Probable",
-      "status": "Probable",
+      "flag": "Off",
+      "word": "Off Injury Report",
+      "status": "Off injury report",
       "verified": false,
       "id": "44887695",
       "match": "exact"
@@ -611,9 +613,9 @@
       "name": "Alexandre Sarr",
       "pos": "C",
       "bmId": "6935",
-      "flag": "P",
-      "word": "Probable",
-      "status": "Probable",
+      "flag": "Off",
+      "word": "Off Injury Report",
+      "status": "Off injury report",
       "verified": false,
       "id": "44887796",
       "match": "exact"
