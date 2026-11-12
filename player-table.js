@@ -2,7 +2,7 @@
 // Every figure is read from the slate file as given (Usual and Chg from the slate route's min_usual, the board row's usual minutes); a
 // missing one is the board's dash with a title, never zero (RULES R1).
 // Pure strings, tested in node; board.js owns the state and the events.
-import { esc, money, logo, ICON, injBadge, minNoteHtml } from "./board-util.js";
+import { esc, money, logo, ICON, injBadge, minNoteHtml, figSourceWord } from "./board-util.js";
 import { bumpControlHtml, bumpFigureHtml } from "./bump-control.js";
 import { rowPin } from "./lateswap-panel.js";
 import { limitCellHtml } from "./row-limits.js";
@@ -49,6 +49,33 @@ export function minOtherOf(p, source = "twogun") {
     return typeof tg === "number" ? { value: tg, note: "TwoGun's minutes, as pulled" } : { value: null, note: "no TwoGun minutes in this pull" };
   }
   return typeof p.min_ours === "number" ? { value: p.min_ours, note: p.min_ours_note ?? "our own minutes" } : { value: null, note: p.min_ours_note ?? "our own minutes are not on this slate" };
+}
+/** Minutes; Adam 11-12: flag ours vs TwoGun this far apart. */
+export const GAP_WARN = 10;
+/** The two figures a gap compares, each to the tenth: the one the board shows as ours (p.minutes under our engine, typed or not; min_ours in TwoGun mode and on the site) and TwoGun's own as pulled; null on a side with no number. */
+function gapFigures(p) {
+  const t = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
+  return { ours: t(p?.proj_source === "ours" ? p.minutes : p?.min_ours), tg: t(tgMin(p)) };
+}
+/** Ours against TwoGun's own minutes: { ours, tg, gap, word } when both are numbers and GAP_WARN or more apart, else null (G62: a missing figure is no flag, the dash already says so). word names the ours side ("Ours", or "Yours" for a typed row). */
+export function minGapOf(p) {
+  const { ours, tg } = gapFigures(p);
+  if (ours === null || tg === null) return null;
+  const gap = Math.round(Math.abs(ours - tg) * 10) / 10;
+  return gap >= GAP_WARN ? { ours, tg, gap, word: p.proj_source === "ours" ? figSourceWord(p, "min") || "Ours" : "Ours" } : null;
+}
+/** The hover for the gap mark. */
+export const gapTitle = (g) => `${g.word ?? "Ours"} ${g.ours.toFixed(1)} vs TwoGun ${g.tg.toFixed(1)}: a ${g.gap.toFixed(1)}-minute gap. Check his role before using him.`;
+/** The count chip beside the pull chips: names on hover, a click filters to them (filters.js "gap"). At zero it is dim and disabled with how many men were compared and how many lacked a figure (G62), as pullChipHtml does; with the filter on it stays live so he can turn it off. */
+export function gapChipHtml(players, on) {
+  const men = players.map((p) => ({ p, g: minGapOf(p) })).filter((x) => x.g);
+  if (!men.length) {
+    const compared = players.filter((p) => { const f = gapFigures(p); return f.ours !== null && f.tg !== null; }).length;
+    const why = `No man is ${GAP_WARN}+ minutes apart: ${compared} compared, ${players.length - compared} lacked a figure on one side or both.`;
+    return on ? `<button data-chip="gap" class="chip gapchip on zero" title="${esc(`${why} Click to show everyone again`)}">⚠ Min gap <b>0</b></button>` : `<button class="chip gapchip zero" disabled title="${esc(why)}">⚠ Min gap <b>0</b></button>`;
+  }
+  const names = men.map(({ p, g }) => `${p.name} (${g.word.toLowerCase()} ${g.ours.toFixed(1)}, TwoGun ${g.tg.toFixed(1)})`).join("\n");
+  return `<button data-chip="gap" class="chip gapchip${on ? " on" : ""}" title="${esc(`${men.length} player${men.length === 1 ? "" : "s"}: ours and TwoGun ${GAP_WARN}+ minutes apart. ${on ? "Click to show everyone again" : "Click to show only these men"}\n${names}`)}">⚠ Min gap <b>${men.length}</b></button>`;
 }
 /** Min minus Usual, to the tenth as Min shows; null when either figure is missing (never a stand-in). */
 export const minChg = (p) => (typeof p.minutes === "number" && typeof p.min_usual === "number" ? Math.round((p.minutes - p.min_usual) * 10) / 10 : null);
@@ -147,10 +174,11 @@ function figCell(k, p, x) {
   const moved = k === "minutes" ? moveTag(p.pull_move?.min, 1, "TwoGun's minutes") : "";
   if (k === "minutes") {
     // Min is typeable (Adam, 11-07): the number goes to the console as his typed minutes, and the console sends the board his projection.
-    const mk = x.mark?.m, applied = v != null && "base_minutes" in p, tg = applied ? p.base_minutes : v;
-    const tgText = `TwoGun's ${tg == null ? "none" : tg.toFixed(1)}`;
+    const mk = x.mark?.m, applied = v != null && "base_minutes" in p, tg = tgMin(p);
+    const tgText = `TwoGun's ${typeof tg === "number" ? tg.toFixed(1) : "none"}`;
     const hover = mk ? `Your typed minutes; ${tgText}. Click to change them` : applied ? `From the console; ${tgText}. Click to type his minutes` : "Click to type his minutes; Proj = Min × DK/min";
-    return `<td class="${col.cls}"><span class="cu">${undoChipHtml(p.dk_id, "m", mk)}</span><span class="cedit${mk ? " ctyped" : applied ? " min-typed" : ""}" data-edit="cmin" data-id="${esc(p.dk_id)}" title="${esc(withWhy(hover))}">${shown}</span>${moved}</td>`;
+    const gap = minGapOf(p), warn = gap ? `<i class="gapw" title="${esc(gapTitle(gap))}">⚠</i>` : "";
+    return `<td class="${col.cls}"><span class="cu">${undoChipHtml(p.dk_id, "m", mk)}</span>${warn}<span class="cedit${mk ? " ctyped" : applied ? " min-typed" : ""}" data-edit="cmin" data-id="${esc(p.dk_id)}" title="${esc(withWhy(hover))}">${shown}</span>${moved}</td>`;
   }
   return `<td class="${col.cls}">${shown}${moved}</td>`;
 }

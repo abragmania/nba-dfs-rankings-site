@@ -15,6 +15,11 @@ export function warningText(c) {
 export const money = (n) => "$" + n.toLocaleString("en-US");
 /** A figure at one decimal; null when it is not a number. */
 export const dec1 = (v) => (typeof v === "number" && Number.isFinite(v) ? v.toFixed(1) : null);
+/** Whose figure the board shows for a man: "Yours" (typed or bumped), "Ours" (our minutes engine), "TwoGun", or "" when the pull does not say. kind: "proj" or "min". (G62: no ambiguous source on the card.) */
+export function figSourceWord(p, kind) {
+  if (kind === "min" ? "base_minutes" in (p ?? {}) : p?.ovr?.projection != null || p?.ovr?.steps) return "Yours";
+  return p?.proj_source === "ours" ? "Ours" : p?.proj_source === "twogun" ? "TwoGun" : "";
+}
 
 /** A selector that finds the same control after a redraw: its tag and data attributes, data-count aside (a thumbs button's count
  *  changes with each press). Null for a control with no data attributes. */

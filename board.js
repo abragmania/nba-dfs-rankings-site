@@ -12,7 +12,7 @@ import { bumpPatch, delegateBumpClicks } from "./bump-control.js";
 import { createEditors } from "./cell-editor.js";
 import { askConfirm, CONFIRM } from "./confirm.js";
 import { columnsControl, sortNote } from "./columns.js";
-import { headHtml, rowHtml, SORT_KEYS, comparePlayers, hasResettable, minSourceOf } from "./player-table.js";
+import { headHtml, rowHtml, SORT_KEYS, comparePlayers, hasResettable, minSourceOf, gapChipHtml } from "./player-table.js";
 import { pullChipHtml, pullNoteHtml } from "./pull-note.js";
 import { boxNote, noteLists as dataNotes, warningCount, freshBoxes } from "./box-note.js";
 import { CHECK_MS, applyHeld, createRefresher, mergeFresh, outNamesOf, overrideKey, picksOnBoard, pullOf, rememberRows, rosterCleanup, statusLine } from "./slate-refresh.js";
@@ -451,6 +451,9 @@ function renderChips() {
   $("chips").innerHTML = [["locked", "Locked"], ["excluded", "Excluded"], ["starred", "Starred"]].map(([k, label]) => `<button data-chip="${k}" class="chip ${k}${S.pickFilter === k ? " on" : ""}${n(k) ? "" : " zero"}" title="${S.pickFilter === k ? "Show everyone again" : `Show only ${label.toLowerCase()} players`}">${label} <b>${n(k)}</b></button>`).join("")
     + `<button id="ovReset" class="chip ovr${nOvr ? "" : " zero"}"${nOvr ? ` title="${nOvr} ${nOvr === 1 ? "man has" : "men have"} a typed number, a bump or minutes set in the console on this slate"` : ` disabled title="No typed numbers, bumps or console minutes on this slate"`}>Reset all overrides</button>`
     + pullChipHtml(S.slate?.pull_changes, S.players, S.pickFilter === "changed");
+  // The gap chip rides the team-chip row: the toolbar's first row has no room for it at 1920 (renderTeamChips rebuilds that row, and renderRows follows it).
+  $("teamChips").querySelector(".gapchip")?.remove();
+  $("teamChips").insertAdjacentHTML("afterbegin", gapChipHtml(S.players, S.pickFilter === "gap"));
   renderPullNote();
 }
 /** Changed since the last pull: the banner, until he dismisses this pull's. The dismissal is a per-viewer convenience, in browser storage, and a newer pull brings the banner back. */

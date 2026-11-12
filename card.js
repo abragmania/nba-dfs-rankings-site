@@ -9,10 +9,11 @@
 // The state (which player, which log) lives in createCardState and the markup in cardHtml, both DOM-free so the swap
 // rule is tested: opening a player shows Loading at once, and a log that arrives for a card since closed or swapped is
 // dropped (its request is also aborted).
-import { esc, money, dec1, logo, isoToEastern, ICON, injBadge, focusSelector, minNoteHtml } from "./board-util.js";
+import { esc, money, dec1, logo, isoToEastern, ICON, injBadge, focusSelector, minNoteHtml, figSourceWord } from "./board-util.js";
 import { gamesProblem, usgCell, usgNote, MONTHS } from "./gamerow.js";
 import { createUsageState, usageHtml, chartModel, fetchUsageHttp, closeUsageHttp, fetchedAt } from "./card-usage.js";
 import { wireChart } from "./card-chart.js";
+import { minGapOf, gapTitle } from "./player-table.js";
 
 const prettyDate = (iso) => { const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso); return m ? `${MONTHS[+m[1] - 1]} ${+m[2]}` : iso; };
 const LAST_N = 10; // the summary and sparkline cover this many of the most recent games; the log below lists them all
@@ -107,7 +108,7 @@ export function figureSource(slate) {
   const s = slate?.sources ?? {};
   const said = [s.salary, s.projection, s.proj_own].filter((t) => typeof t === "string" && !t.startsWith("none"));
   if (!said.length) return null;
-  return said.some((t) => /board\.csv|get_nba|twogun/i.test(t)) ? "TwoGun NBA board" : said[0];
+  return said.some((t) => /board\.csv|board_row|get_nba|twogun/i.test(t)) ? "TwoGun NBA board" : said[0];
 }
 
 /** The header's figures line: Sal, Proj, Min, Own, then their source and as-of time. Own and Proj follow Adam's typed
@@ -117,8 +118,10 @@ export function cardFiguresHtml(p, figs, dash) {
   const num = (v, f, why) => (typeof v === "number" ? f(v) : dash(off ?? why));
   const sal = typeof p.salary === "number" ? money(p.salary) : p.salary_text ? esc(p.salary_text) : dash(off ?? "no salary in this slate file");
   const yours = p.ovr ? " Proj and Own include your changes." : "";
-  const item = (label, html) => `<span>${label} <b>${html}</b></span>`;
-  return `<div class="cfig"><div class="cfn">${item("Sal", sal)}${item("Proj", num(p.projection, dec1, "no projection in this pull"))}${item("Min", num(p.minutes, dec1, "no projected minutes in this pull"))}${item("Own", num(p.proj_own, (v) => v.toFixed(1) + "%", "no projected ownership in this pull"))}</div>`
+  const item = (label, html, src = "") => `<span>${label} <b>${html}</b>${src ? ` <small class="cfsrc">${src}</small>` : ""}</span>`;
+  const srcOf = (kind, v) => (typeof v === "number" ? figSourceWord(p, kind) : "");
+  const gap = minGapOf(p), gapHtml = gap ? `<span class="cfgap" title="${esc(gapTitle(gap))}">⚠ ${esc(gap.word ?? "Ours")} ${dec1(gap.ours)} vs TwoGun ${dec1(gap.tg)}</span>` : "";
+  return `<div class="cfig"><div class="cfn">${item("Sal", sal)}${item("Proj", num(p.projection, dec1, "no projection in this pull"), srcOf("proj", p.projection))}${item("Min", num(p.minutes, dec1, "no projected minutes in this pull"), srcOf("min", p.minutes))}${gapHtml}${item("Own", num(p.proj_own, (v) => v.toFixed(1) + "%", "no projected ownership in this pull"))}</div>`
     + `<div class="cfs">Source: ${figs?.source ? esc(figs.source) : dash("no source in this slate file")}, as of ${figs?.asOf ? esc(figs.asOf) : dash("no board time in this slate file")}.${yours}</div></div>`;
 }
 

@@ -1,7 +1,7 @@
 // The player card's role and minutes block (Adam, 11-06): his role buttons, a minutes box and a DK points per minute box, writing the
 // same console work as the console's own controls (console-card.js). Each change goes to the board by itself, as the console's own changes do;
 // a change the send would hold back is taken back and said. Typed numbers are his: never scaled, never refused (0 to the pin limits). roleBoxHtml is DOM-free; cardRoles wires it.
-import { esc } from "./board-util.js";
+import { esc, figSourceWord } from "./board-util.js";
 import { ROLES, ROLE_LABEL, ROLE_SHORT } from "./console-roles.js";
 import { PIN_MAX } from "./override-limits.js";
 import { isNum } from "./figures.js";
@@ -13,7 +13,7 @@ const MISS = "—";
 
 /** The block for one man. v: manView's answer, or null when he is on no team of the console; state: { loading, error, said, notes, refusal, busy }. */
 export function roleBoxHtml(v, state = {}) {
-  const head = `<div class="sec">Role and minutes${v ? `<span class="hint">the console's ${esc(v.team)} scenario; a change here goes to the board by itself</span>` : ""}</div>`;
+  const head = `<div class="sec">Role and minutes${v ? `<span class="hint">the console's ${esc(v.team)} scenario numbers; a change here goes to the board by itself</span>` : ""}</div>`;
   if (state.loading) return `${head}<div class="cardmsg">Loading the console…</div>`;
   if (state.error) return `${head}<div class="cardmsg err">The console could not load, so his role and minutes cannot be set here: ${esc(state.error)}</div>`;
   if (!v) return `${head}<div class="cardmsg">He is on no team of this slate's console.</div>`;
@@ -28,9 +28,13 @@ export function roleBoxHtml(v, state = {}) {
   const err = v.saveErr ? `<div class="cardmsg err">${esc(v.saveErr)}</div>` : "";
   const refusal = state.refusal ? `<div class="cardmsg err">Not sent: ${esc(state.refusal)}</div>` : "";
   const notes = state.notes?.length ? `<ul class="crn">${state.notes.map((n) => `<li><b>${esc(n.team)}</b> ${esc(n.text)}</li>`).join("")}</ul>` : "";
-  return `${head}<div class="crr">${seg}<span class="crf">TwoGun ${tgMinHtml(p)}</span></div>`
-    + `<div class="crr">${boxOf("m", r.min, f1)}${boxOf("d", r.rate, (x) => x.toFixed(2))}<span class="crf">Proj <b class="${r.pinned.m || r.pinned.d || r.pinned.r ? "pin" : ""}">${proj}</b></span></div>`
-    + `<div class="crs" title="${esc(basisText(r))}">${medianFlag(r)}Minutes from: ${esc(basisText(r))}</div>${moves}${err}`
+  const b = state.board; // the header's own figures, so a console figure that differs says so
+  const word = b ? figSourceWord(b, "min") : "";
+  const differs = b && isNum(b.minutes) && isNum(r.min) && !r.out && Math.abs(b.minutes - r.min) > 0.05;
+  const differ = differs ? `<div class="crs">Console scenario (${esc(basisText(r))} minutes): ${f1(r.min)} min. The board above uses ${word ? `${esc(word)}: ` : ""}${f1(b.minutes)}.</div>` : "";
+  return `${head}<div class="crr">${seg}<span class="crf">TwoGun's own ${tgMinHtml(p)}</span></div>`
+    + `<div class="crr">${boxOf("m", r.min, f1)}${boxOf("d", r.rate, (x) => x.toFixed(2))}<span class="crf">Console proj <b class="${r.pinned.m || r.pinned.d || r.pinned.r ? "pin" : ""}">${proj}</b></span></div>`
+    + `<div class="crs" title="${esc(basisText(r))}">${medianFlag(r)}Console minutes from: ${esc(basisText(r))}</div>${differ}${moves}${err}`
     + `<div class="crr"><span class="crsaid">${state.busy ? "Sending to the board…" : esc(state.said ?? "")}</span></div>${refusal}${notes}`;
 }
 
@@ -54,7 +58,7 @@ export function cardRoles({ api, slate, toast }) {
         const v = await api().manView(slate(), who);
         if (slot.isConnected) {
           const a = document.activeElement, at = a && slot.contains(a) && a.matches("[data-crk]") ? { k: a.dataset.crk, typed: typedText(a), s: a.selectionStart, e: a.selectionEnd } : null; // the box he is typing in
-          slot.innerHTML = roleBoxHtml(v, { said, notes, refusal, ...state });
+          slot.innerHTML = roleBoxHtml(v, { said, notes, refusal, board: p, ...state });
           const el = at && slot.querySelector(`[data-crk="${at.k}"]`);
           if (el && !el.readOnly) { el.focus({ preventScroll: true }); if (at.typed !== null) { el.value = at.typed; el.setSelectionRange(at.s ?? at.typed.length, at.e ?? at.typed.length); } }
         }
