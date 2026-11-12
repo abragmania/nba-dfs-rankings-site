@@ -1,35 +1,35 @@
 {
  "slate": "2026-11-12-main",
- "generated_at": "2026-11-12T18:00:55.176Z",
+ "generated_at": "2026-11-12T18:15:28.498Z",
  "status": "ok",
  "slate_built_from": "slates/2026-11-12-main/raw/2026-11-12T130031-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-12T18:00:46.591Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-12T130046-0500.html.gz",
-   "saved_at": "2026-11-12T18:00:46.591Z",
-   "parsed_sha": "cf8339cbfc31e8d1f9a3e16668206f543448b93d22fdda26072503a802b79dc3",
-   "sha256": "c98212561243f10e44c37e3471df4f981791d0ef435ad2c9bb7a7e6af4a2fc2b"
+   "fetched_at": "2026-11-12T18:15:20.116Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-12T131520-0500.html.gz",
+   "saved_at": "2026-11-12T18:15:20.116Z",
+   "parsed_sha": "92b5bb393c0cc92501c489bf1c1b73f59e2e167eaeb693f078f7beb53c5694ed",
+   "sha256": "301dd0a7e9af375ad0f09bf3c71b31970a600ffec2e6f49c1733be40ae9e540c"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-12T18:00:50.870Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-12T130050-0500.html.gz",
-   "saved_at": "2026-11-12T18:00:50.870Z",
-   "parsed_sha": "8ed617f6de48ad4bcaf125d4db95a6359523593498f353fb4bd32b8ec984f8bc",
-   "sha256": "f5d1471c942336585f71bc20305813970e9231ae93aa416362327cad92086f2c"
+   "fetched_at": "2026-11-12T18:15:24.317Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-12T131524-0500.html.gz",
+   "saved_at": "2026-11-12T18:15:24.317Z",
+   "parsed_sha": "4d39ce01c09a5a5563c06c9e5eceabd714e013e38149113987e5b2b18e70ee78",
+   "sha256": "467b2b2249bf1890f0c1944c8741528729f3948488fd94c83926a914395171fb"
   },
   "rotogrinders": {
    "url": "https://rotogrinders.com/lineups/nba?site=draftkings",
    "status": "ok",
-   "fetched_at": "2026-11-12T18:00:55.057Z",
-   "saved_as": "news/lineups/pages/rotogrinders-2026-11-12T130055-0500.html.gz",
-   "saved_at": "2026-11-12T18:00:55.057Z",
-   "parsed_sha": "68c1f7a563de67fbeacc490ace864b196239b407217613a724ae3577dba97953",
-   "sha256": "3fb08761db80a05319f377ebfd0c672738c42fc4eb22aacba02ce4800c7e6520"
+   "fetched_at": "2026-11-12T18:15:28.444Z",
+   "saved_as": "news/lineups/pages/rotogrinders-2026-11-12T131528-0500.html.gz",
+   "saved_at": "2026-11-12T18:15:28.444Z",
+   "parsed_sha": "0ba099b5e7021dc4c2794104ba44eeb92f6fecacb8975e861d60540932d13ca5",
+   "sha256": "b9dc6a14c442ac164d765f5b5834015ce90607246aad4f092afdb660890784eb"
   }
  },
  "monster_news": {
@@ -759,9 +759,9 @@
       "name": "Immanuel Quickley",
       "pos": "PG",
       "bmId": "6185",
-      "flag": "Q",
-      "word": "Questionable",
-      "status": "Questionable (undetermined)",
+      "flag": "Off",
+      "word": "Off Injury Report",
+      "status": "Off injury report",
       "verified": false,
       "id": "44887759",
       "match": "exact"
@@ -789,23 +789,23 @@
       "match": "exact"
      },
      {
-      "name": "Scottie Barnes",
+      "name": "Collin Murray-Boyles",
       "pos": "PF",
-      "bmId": "6285",
-      "flag": "Q",
-      "word": "Questionable",
-      "status": "Questionable (undetermined)",
+      "bmId": "7174",
+      "flag": null,
+      "word": null,
+      "status": null,
       "verified": false,
-      "id": "44887698",
+      "id": "44887808",
       "match": "exact"
      },
      {
       "name": "Jakob Poeltl",
       "pos": "C",
       "bmId": "5355",
-      "flag": "Q",
-      "word": "Questionable",
-      "status": "Questionable (undetermined)",
+      "flag": "Off",
+      "word": "Off Injury Report",
+      "status": "Off injury report",
       "verified": false,
       "id": "44887819",
       "match": "exact"
@@ -841,11 +841,11 @@
       "match": "exact"
      },
      {
-      "name": "Scottie Barnes",
+      "name": "Collin Murray-Boyles",
       "pos": "PF",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44887698",
+      "flag": null,
+      "status": null,
+      "id": "44887808",
       "match": "exact"
      },
      {
@@ -862,17 +862,9 @@
      {
       "name": "Scottie Barnes",
       "pos": "F",
-      "flag": "Ques",
-      "status": "Questionable",
+      "flag": "Out",
+      "status": "Out",
       "id": "44887698",
-      "match": "exact"
-     },
-     {
-      "name": "Trayce Jackson-Davis",
-      "pos": "C",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44887943",
       "match": "exact"
      },
      {
@@ -882,6 +874,14 @@
       "status": "Out",
       "id": null,
       "match": null
+     },
+     {
+      "name": "Trayce Jackson-Davis",
+      "pos": "C",
+      "flag": "Out",
+      "status": "Out",
+      "id": "44887943",
+      "match": "exact"
      },
      {
       "name": "Kawhi Leonard",
@@ -981,14 +981,14 @@
       "match": "exact"
      },
      {
-      "name": "LeBron James",
+      "name": "Dean Wade",
       "pos": "PF",
-      "bmId": "2011",
-      "flag": "OUT",
-      "word": "Out",
-      "status": "Out",
+      "bmId": "5907",
+      "flag": null,
+      "word": null,
+      "status": null,
       "verified": false,
-      "id": "44887728",
+      "id": "44887933",
       "match": "exact"
      },
      {
@@ -1033,11 +1033,11 @@
       "match": "exact"
      },
      {
-      "name": "LeBron James",
+      "name": "Dean Wade",
       "pos": "PF",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44887728",
+      "flag": null,
+      "status": null,
+      "id": "44887933",
       "match": "exact"
      },
      {
@@ -1068,14 +1068,6 @@
       "match": "exact"
      },
      {
-      "name": "LeBron James",
-      "pos": "F",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44887728",
-      "match": "exact"
-     },
-     {
       "name": "Dominick Barlow",
       "pos": "C",
       "flag": "Out",
@@ -1090,6 +1082,14 @@
       "status": "Out",
       "id": null,
       "match": null
+     },
+     {
+      "name": "LeBron James",
+      "pos": "F",
+      "flag": "Out",
+      "status": "Out",
+      "id": "44887728",
+      "match": "exact"
      }
     ]
    },
@@ -1122,11 +1122,11 @@
       "match": "exact"
      },
      {
-      "name": "LeBron James",
-      "pos": "PF",
+      "name": "Dean Wade",
+      "pos": "SF/PF",
       "flag": null,
       "status": null,
-      "id": "44887728",
+      "id": "44887933",
       "match": "exact"
      },
      {
