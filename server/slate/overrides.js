@@ -12,6 +12,8 @@
 // "Reset all overrides" clears typed numbers and bumps, never stars (NFL D72); a row's reset does the same for one man.
 // `min` holds the minutes a console Apply set, so the board's Min and Chg show the applied scenario. Only an Apply writes it: the overrides
 // route refuses it. Display only: the projection reaches the optimizer and the DK file through `proj`, and no build reads minutes.
+// `auto` lists, per section (proj, min), the men whose stored number a send wrote from news or the engine, not from his hand (Adam 11-12: only his
+// own numbers wear the marker and the reset). Absent means his; the figures are the same either way. A number he types (the overrides route) is his.
 import fs from "../../site/shim/fs.js";
 import path from "../../site/shim/path.js";
 import { dataDir } from "../../site/shim/log.js";
@@ -34,8 +36,19 @@ export class OverridesError extends Error {
   }
 }
 
-const EMPTY = () => ({ proj: {}, own: {}, bump: {}, min: {}, stars: [], notes: {}, updated_at: null });
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+const AUTO_SECTIONS = ["proj", "min"]; // proj, min: figures a send wrote from news or the engine. pin: projections a send wrote from his console marks (not typed on the board, so a board reset leaves them)
+const AUTO_LISTS = [...AUTO_SECTIONS, "pin"];
+const EMPTY_AUTO = () => ({ proj: [], min: [], pin: [] });
+const EMPTY = () => ({ proj: {}, own: {}, bump: {}, min: {}, stars: [], notes: {}, updated_at: null });
+/** `{ auto }` for a record that has any flag or is flag-aware (`aware`: its source already had the key), else `{}`. A file with no `auto` key is a pre-flag file, which a send may re-mark freely; once the key is written, even empty, it stays. */
+const autoPart = (auto, rec, aware = auto !== undefined) => { const a = cleanAuto(auto, rec); return aware || a.proj.length || a.min.length || a.pin.length ? { auto: a } : {}; };
+/** The auto lists of a record: both sections always, ids only for a number the record holds (a flag never outlives its number). */
+function cleanAuto(auto, rec) {
+  const out = EMPTY_AUTO();
+  for (const list of AUTO_LISTS) out[list] = [...new Set((auto?.[list] ?? []).filter((id) => has(rec[list === "pin" ? "proj" : list] ?? {}, id)))];
+  return out;
+}
 
 export const overridesFile = (slate) => path.join(dataDir(), "slates", slate, "overrides.json");
 
@@ -61,6 +74,13 @@ export function validateOverrides(obj) {
     }
   }
   if (!isPlain(obj.notes ?? {})) invalid('"notes" must be an object.');
+  if (!isPlain(obj.auto ?? {})) invalid('"auto" must be an object.');
+  const extra = Object.keys(obj.auto ?? {}).filter((k) => !AUTO_LISTS.includes(k));
+  if (extra.length) invalid(`"auto" has an unknown section: ${extra[0].slice(0, 20)}.`);
+  for (const sec of AUTO_LISTS) {
+    const list = obj.auto?.[sec] ?? [];
+    if (!Array.isArray(list) || list.some((id) => typeof id !== "string" || id === "")) invalid(`"auto.${sec}" must be a list of DraftKings ids.`);
+  }
   const stars = obj.stars ?? [];
   if (!Array.isArray(stars) || stars.some((id) => typeof id !== "string" || id === "")) invalid('"stars" must be a list of DraftKings ids.');
   if (new Set(stars).size !== stars.length) invalid('"stars" repeats an id.');
@@ -96,7 +116,7 @@ export function readOverrides(slate) {
     throw new OverridesError("OVERRIDES_UNREADABLE", `This slate's overrides file is not well formed: ${e.message}`);
   }
   return {
-    proj: { ...(parsed.proj ?? {}) }, own: { ...(parsed.own ?? {}) }, bump: { ...(parsed.bump ?? {}) }, min: { ...(parsed.min ?? {}) },
+    proj: { ...(parsed.proj ?? {}) }, own: { ...(parsed.own ?? {}) }, bump: { ...(parsed.bump ?? {}) }, min: { ...(parsed.min ?? {}) }, ...autoPart(parsed.auto, parsed),
     stars: [...(parsed.stars ?? [])], notes: { ...(parsed.notes ?? {}) }, updated_at: parsed.updated_at ?? null,
   };
 }
@@ -105,7 +125,7 @@ export function readOverrides(slate) {
 export function writeOverrides(slate, obj) {
   validateOverrides(obj);
   const record = {
-    slate, proj: { ...(obj.proj ?? {}) }, own: { ...(obj.own ?? {}) }, bump: { ...(obj.bump ?? {}) }, min: { ...(obj.min ?? {}) },
+    slate, proj: { ...(obj.proj ?? {}) }, own: { ...(obj.own ?? {}) }, bump: { ...(obj.bump ?? {}) }, min: { ...(obj.min ?? {}) }, ...autoPart(obj.auto, obj),
     stars: [...(obj.stars ?? [])], notes: { ...(obj.notes ?? {}) }, updated_at: new Date().toISOString(),
   };
   writeFileAtomic(overridesFile(slate), JSON.stringify(record, null, 1) + "\n");
@@ -168,8 +188,10 @@ export function checkChanges(body, slateData) {
  */
 export function applyChanges(current, changes, players = []) {
   const next = { proj: { ...current.proj }, own: { ...current.own }, bump: { ...current.bump }, min: { ...current.min }, stars: [...current.stars], notes: { ...current.notes }, updated_at: current.updated_at };
+  const held = cleanAuto(current.auto, current), auto = { proj: new Set(held.proj), min: new Set(held.min), pin: new Set(held.pin) };
   const baseOf = new Map((players ?? []).map((p) => [String(p.dk_id), p.projection]));
   for (const [id, v] of Object.entries(changes.proj ?? {})) {
+    auto.proj.delete(id); auto.pin.delete(id); // a number set here is typed on the board, his, unless changes.auto says a send wrote it
     if (v !== null) { next.proj[id] = v; continue; }
     delete next.proj[id];
     // With the typed number gone, a man whose base is not a number has nothing left for his steps to scale: they go too
@@ -181,6 +203,7 @@ export function applyChanges(current, changes, players = []) {
     else next.own[id] = v;
   }
   for (const [id, v] of Object.entries(changes.min ?? {})) {
+    auto.min.delete(id);
     if (v === null) delete next.min[id];
     else next.min[id] = v;
   }
@@ -194,26 +217,48 @@ export function applyChanges(current, changes, players = []) {
     if (v && !on) next.stars.push(id);
     else if (!v && on) next.stars = next.stars.filter((s) => s !== id);
   }
+  // changes.auto { proj|min: { id: true (news or engine) | false (his console marks) } } re-marks men holding a number, after the numbers, so a number left as it was is marked too.
+  // A projection the console wrote for his marks is also listed in `pin`: it is his, but not typed on the board, so a board reset leaves it.
+  for (const sec of AUTO_SECTIONS) {
+    for (const [id, on] of Object.entries(changes.auto?.[sec] ?? {})) {
+      if (!has(next[sec], id)) continue;
+      if (on) auto[sec].add(id); else auto[sec].delete(id);
+      if (sec === "proj") { if (on) auto.pin.delete(id); else auto.pin.add(id); }
+    }
+  }
+  Object.assign(next, autoPart({ proj: [...auto.proj], min: [...auto.min], pin: [...auto.pin] }, next, current.auto !== undefined || changes.auto !== undefined));
   return next;
 }
 
-/** Pure: one man's typed projection, typed ownership, bump and applied minutes removed; his star stays (NFL D72). */
+/**
+ * What a board reset clears, by section: a projection typed on the board (one no send wrote: not news's or the engine's, not from his console marks), every
+ * typed ownership and every bump. Never a number the console or news wrote, minutes included: those are changed in the console. The one definition Reset all, the row reset and the count use.
+ */
+export function hisNumbers(o) {
+  const auto = cleanAuto(o.auto, o), sent = new Set([...auto.proj, ...auto.pin]);
+  return { proj: Object.keys(o.proj).filter((id) => !sent.has(id)), own: Object.keys(o.own), bump: Object.keys(o.bump) };
+}
+
+/** True when the record holds a number a board reset would clear. */
+export const hasNumbers = (o) => Object.values(hisNumbers(o)).some((ids) => ids.length > 0);
+
+/** Pure: one man's projection, ownership and bump typed on the board removed; his star and every number the console or news wrote stay (NFL D72). */
 export function resetPlayer(current, id) {
+  const his = hisNumbers(current);
   const next = { ...current, proj: { ...current.proj }, own: { ...current.own }, bump: { ...current.bump }, min: { ...current.min }, stars: [...current.stars], notes: { ...current.notes } };
-  delete next.proj[id];
+  if (his.proj.includes(id)) delete next.proj[id];
   delete next.own[id];
   delete next.bump[id];
-  delete next.min[id];
   return next;
 }
 
-/** Pure: every typed number, bump and applied minutes figure cleared; stars stay (NFL D72); the retired notes are carried through untouched. */
+/** Pure: every projection, ownership and bump typed on the board cleared; stars stay (NFL D72); the retired notes are carried through untouched. The console's and news's numbers, minutes included, stay. */
 export function resetAll(current) {
-  return { proj: {}, own: {}, bump: {}, min: {}, stars: [...current.stars], notes: { ...current.notes }, updated_at: current.updated_at };
+  const his = hisNumbers(current);
+  const next = { ...current, proj: { ...current.proj }, own: {}, bump: {}, min: { ...current.min }, stars: [...current.stars], notes: { ...current.notes } };
+  for (const id of his.proj) delete next.proj[id];
+  return next;
 }
-
-/** True when the record holds a typed number, a bump or applied minutes (what "Reset all overrides" would clear). */
-export const hasNumbers = (o) => Object.keys(o.proj).length + Object.keys(o.own).length + Object.keys(o.bump).length + Object.keys(o.min ?? {}).length > 0;
 
 /** The bump multiplier, (100 + 5 x steps) / 100 so 20 at +2 is exactly 22; 1 at 0 steps. */
 export const bumpFactor = (steps) => (Number.isInteger(steps) && steps ? (100 + BUMP_STEP_PCT * steps) / 100 : 1);
@@ -252,6 +297,11 @@ export function mergeOverrides(players, overrides) {
     const typedOwn = has(o.own ?? {}, id) ? o.own[id] : null;
     const steps = has(o.bump ?? {}, id) ? o.bump[id] : 0; // the real steps, on a typed row too
     const out = { ...p, starred: stars.has(id) };
+    // auto: this figure came from a send's news or engine numbers, not his hand; the board marks and resets only his (the figure itself is the same).
+    // Minutes count only when they are applied: under our engine a man it has Out ignores them (the proj_note below), so they carry no mark. pin: the projection is the console's, from his marks.
+    const minApplied = has(o.min ?? {}, id) && !(p.proj_source === "ours" && p.ours?.playing === false);
+    const autoProj = typedProj != null && (o.auto?.proj ?? []).includes(id), autoMin = minApplied && (o.auto?.min ?? []).includes(id), pin = typedProj != null && (o.auto?.pin ?? []).includes(id);
+    if (autoProj || autoMin || pin) out.auto = { proj: autoProj, min: autoMin, pin };
     let q = p; // the figures the typed number and bump work on
     if (has(o.min ?? {}, id) && p.proj_source === "ours" && p.ours?.playing === false) {
       // Under our engine the Minutes page decides who plays: console minutes on a man it has Out are ignored, and said (the console is being retired).

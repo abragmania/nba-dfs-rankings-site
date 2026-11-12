@@ -108,6 +108,14 @@ export const limitsMoved = (atKey, nowKey, byId) => limitsOnSlate(atKey, byId) !
 const oversOnSlate = (key, byId) => onSlateText(key, (rows) => rows.filter(([id]) => byId.has(id)).sort(([a], [b]) => String(a).localeCompare(String(b))));
 /** Whether his override inputs differ from a build's, likewise. Pure. */
 export const oversMoved = (atKey, nowKey, byId) => oversOnSlate(atKey, byId) !== oversOnSlate(nowKey, byId);
+/** The row fields an overrides or console answer owns (`auto`: which of a row's figures news or the engine wrote, so the marks follow every answer). */
+export const OV_KEYS = ["projection", "value", "proj_own", "base", "ovr", "auto", "starred", "minutes", "base_minutes"];
+/** A board row with the server's answer for him taken onto it: the override fields come from the answer, and a field the answer lacks is dropped. Pure. */
+export function takeAnswer(p, f) {
+  const next = { ...p };
+  for (const k of OV_KEYS) { if (k in f) next[k] = f[k]; else delete next[k]; }
+  return next;
+}
 /** The key a build compares his overrides with: what he typed and bumped, never a figure a new pull moves. Pure. */
 export const overrideKey = (players) => JSON.stringify(players.filter((p) => p.ovr).map((p) => [p.dk_id, p.ovr.steps, p.ovr.projection, p.ovr.proj_own]));
 

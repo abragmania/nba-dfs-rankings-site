@@ -2,7 +2,7 @@
 // Every figure is read from the slate file as given (Usual and Chg from the slate route's min_usual, the board row's usual minutes); a
 // missing one is the board's dash with a title, never zero (RULES R1).
 // Pure strings, tested in node; board.js owns the state and the events.
-import { esc, money, logo, ICON, injBadge, minNoteHtml, figSourceWord } from "./board-util.js";
+import { esc, money, logo, ICON, injBadge, minNoteHtml, figSourceWord, hisProj, hisMin, boardTyped } from "./board-util.js";
 import { bumpControlHtml, bumpFigureHtml } from "./bump-control.js";
 import { rowPin } from "./lateswap-panel.js";
 import { limitCellHtml } from "./row-limits.js";
@@ -100,7 +100,7 @@ function tonightCell(p, col, dash, withWhy, mark) {
   const v = dkTonight(p);
   if (v === null) return `<td class="${col.cls}"><span class="cu"></span>${dash(noTonight(p))}${moveTag(null)}</td>`;
   const season = p.dk_per_min, d = typeof season === "number" ? Math.round((v - season) * 100) / 100 : null;
-  const yours = p.ovr?.projection != null || p.ovr?.steps || "base_minutes" in p ? " · from your projection or minutes set in the console" : "";
+  const yours = hisProj(p) || p.ovr?.steps || hisMin(p) ? " · from your projection or minutes set in the console" : "";
   const title = `${d === null ? `Tonight ${v.toFixed(2)}; no season figure to compare` : `Tonight ${v.toFixed(2)}, season ${season.toFixed(2)}, ${d > 0 ? "+" : ""}${d.toFixed(2)}`}${mark ? " · your typed DK/min" : yours}. Click to type his DK/min; Proj = Min × DK/min`;
   const arrow = d !== null && Math.abs(d) > TON_ARROW_BAND ? `<i class="ton-arr ${d > 0 ? "up" : "dn"}">${d > 0 ? "▲" : "▼"}</i>` : "";
   return `<td class="${col.cls}" title="${esc(withWhy(title))}"><span class="cu">${undoChipHtml(p.dk_id, "d", mark)}</span>${arrow}<span class="cedit${mark ? " ctyped" : ""}" data-edit="crate" data-id="${esc(p.dk_id)}">${v.toFixed(2)}</span>${moveTag(p.pull_move?.rate, 2, "TwoGun's DK/min", { signed: true })}</td>`;
@@ -114,8 +114,8 @@ export function comparePlayers(a, b, { key, dir }, source = "twogun") {
   if (y == null) return -1;
   return dir * (x - y) || a.name.localeCompare(b.name);
 }
-/** Whether a row holds anything a reset clears: a typed number, a bump or minutes set in the console (those are not in ovr, which the bump controls read). */
-export const hasResettable = (p) => Boolean(p.ovr) || "base_minutes" in p;
+/** Whether a row holds anything a board reset clears: a projection, ownership or bump typed on the board (board-util.js boardTyped). Console figures and news's keep it off. */
+export const hasResettable = (p) => boardTyped(p);
 /** Every key the table can sort on. A remembered sort must be one of these (view-memory.js). */
 export const SORT_KEYS = ["name", ...Object.keys(FIG_COLS)];
 const CTL_HEAD = { star: "Star", lock: "Lock", exclude: "Exclude" };
@@ -149,7 +149,7 @@ function figCell(k, p, x) {
     const own = k === "proj_own", typed = own && p.ovr?.proj_own != null;
     const edit = own ? ` data-edit="own" data-id="${esc(p.dk_id)}" title="${esc(withWhy(typed ? `Your number. Base ${p.base?.proj_own == null ? "none" : p.base.proj_own.toFixed(1) + "%"}; click to change it, or reset the row` : "Click to type your own projected ownership"))}"` : "";
     const vcls = `v${own ? " ov-own" : ""}${typed ? " ov-typed" : ""}`;
-    const moved = !own && p.base && p.base.value !== p.value ? ` title="${esc(withWhy(`From the ${p.ovr?.projection != null ? "typed" : "bumped"} projection; base ${p.base.value == null ? "none" : p.base.value.toFixed(2)}`))}"` : "";
+    const moved = !own && p.base && p.base.value !== p.value ? ` title="${esc(withWhy(`From the ${p.ovr?.projection != null ? (p.auto?.proj && !p.ovr?.steps ? "console" : "typed") : "bumped"} projection; base ${p.base.value == null ? "none" : p.base.value.toFixed(2)}`))}"` : "";
     if (v == null) return `<td class="${col.cls}"><span class="${vcls}"${edit}>${dash(col.title)}</span></td>`;
     return `<td class="${col.cls}"${moved}><span class="${vcls}"${edit}>${k === "value" ? v.toFixed(2) : v.toFixed(1) + "%"}</span></td>`;
   }
@@ -174,7 +174,7 @@ function figCell(k, p, x) {
   const moved = k === "minutes" ? moveTag(p.pull_move?.min, 1, "TwoGun's minutes") : "";
   if (k === "minutes") {
     // Min is typeable (Adam, 11-07): the number goes to the console as his typed minutes, and the console sends the board his projection.
-    const mk = x.mark?.m, applied = v != null && "base_minutes" in p, tg = tgMin(p);
+    const mk = x.mark?.m, applied = v != null && hisMin(p), tg = tgMin(p);
     const tgText = `TwoGun's ${typeof tg === "number" ? tg.toFixed(1) : "none"}`;
     const hover = mk ? `Your typed minutes; ${tgText}. Click to change them` : applied ? `From the console; ${tgText}. Click to type his minutes` : "Click to type his minutes; Proj = Min × DK/min";
     const gap = minGapOf(p), warn = gap ? `<i class="gapw" title="${esc(gapTitle(gap))}">⚠</i>` : "";
@@ -200,7 +200,7 @@ export function rowHtml(p, keys, x) {
   // The row's reset sits at the player cell's right edge (the reset is always drawn, hidden when the row has
   // nothing to reset, so the column never changes width).
   const ovr = hasResettable(p);
-  const tools = `<span class="ovt"><button class="rs${ovr ? "" : " off"}" data-reset="${id}" title="Reset ${esc(p.name)}'s typed numbers, bump and console minutes (his star stays)"${ovr ? "" : " disabled tabindex=\"-1\""}>↺</button></span>`;
+  const tools = `<span class="ovt"><button class="rs${ovr ? "" : " off"}" data-reset="${id}" title="${ovr ? `Reset ${esc(p.name)}'s typed projection, ownership and bump (his star stays)` : hisMin(p) ? "His minutes are set in the console; change or clear them there" : `Nothing typed on the board to reset`}"${ovr ? "" : " disabled tabindex=\"-1\""}>↺</button></span>`;
   const cell = (k) => {
     switch (k) {
       case "star": return `<td class="ctl"><button class="fav${p.starred ? " on" : ""}" data-star="${id}" title="${p.starred ? "Unstar" : "Star"}">${p.starred ? "★" : "☆"}</button></td>`;

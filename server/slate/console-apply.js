@@ -7,6 +7,7 @@ import { effectiveProjection, mergeOverrides } from "./overrides.js";
 import { PROJ_MAX } from "../board/override-limits.js";
 import { isNum, isPlain, round2, tonightRate } from "../board/figures.js";
 import { validKey } from "./scenarios.js";
+import { newsOwned } from "../board/console-marks.js";
 
 const MOVE_FLOOR = 0.05; // the console shows tenths
 const MIN_FLOOR = 0.0005; // minutes are kept to thousandths, so a team's total survives the rounding
@@ -60,13 +61,56 @@ export function orphanedPins(inputs, file, keys) {
 
 const shapedTeam = (t) => ({ ...t, byId: Object.fromEntries(t.men.map((p) => [p.id, p])), pl: t.men, tonightKey: keyOf(t.tonight) });
 
+/** The team record as the console's newsOwned reads it: the news entries, the pins and the scenario on show. */
+const newsView = (rec, key) => ({ news: rec?.news ?? {}, pins: rec?.pins ?? {}, outs: outsOf(key) });
+
+/**
+ * Whether a man's number in this send is his own hand (Adam 11-12: only his own numbers wear the board's marker): a pin on him, a hand-out edit
+ * naming him, or an Out / back-in he marked himself. Men moved only by news, the engine's own figures or a teammate's change are not his.
+ * A flip or Out the lineup news made and that still stands as it left him is news's, not his (console-marks.js newsOwned, the one definition).
+ */
+function isHis(rec, key, pins, r, t) {
+  const owned = newsOwned(newsView(rec, key));
+  if (["m", "u", "d", "p"].some((k) => Object.hasOwn(pins[k] ?? {}, r.id))) return true;
+  if (Object.hasOwn(pins.r ?? {}, r.id) && !owned.r.has(r.id)) return true;
+  const outs = outsOf(key), edited = (h) => ["m", "u"].some((k) => Object.hasOwn(h?.[k] ?? {}, r.id));
+  if (outs.some((sitter) => edited(rec?.handouts?.[sitter])) || (outs.length >= 2 && edited(rec?.combos?.[keyOf(outs)]))) return true;
+  const tonightOut = t.tonight.includes(r.id);
+  return r.out ? !tonightOut && !owned.out.has(r.id) : tonightOut;
+}
+
+/**
+ * Notes the flag a send gives a number the board holds: plan.auto[section][id] is true when news or the engine wrote it, false when it is his. Counted in
+ * plan.flag_moves when the stored flag differs. `refresh`: the number is left as it was, so it may go from his to automatic only in a file with no flags
+ * yet (a legacy file); a number he typed that equals the engine's stays his. A number this send writes takes the flag it computes.
+ */
+function setAuto(plan, ctx, section, id, his, refresh = false) {
+  const stored = (ctx.overrides.auto?.[section] ?? []).includes(id), pinned = section === "proj" && (ctx.overrides.auto?.pin ?? []).includes(id);
+  if (refresh && !stored && ctx.overrides.auto !== undefined) return; // flag-aware file: a figure not listed as news's is his (typed on the board or pinned) and stays as it is
+  plan.auto[section][id] = !his;
+  if (stored === his || (section === "proj" && his && !pinned)) plan.flag_ids.add(`${section}:${id}`);
+}
+
+/** A news Out's 0 left on a team this send does not plan (its applied key is gone, so nothing re-sends it): still news's, so it is marked so, never his. Only a number still the Apply's own, on a team asked for, for a man still Out as the news left him. */
+function flagNewsOuts(plan, ctx, file, only) {
+  for (const [code, rec] of Object.entries(file.teams ?? {})) {
+    if (only && !only.has(code)) continue;
+    const owned = newsOwned(newsView(rec, rec?.on ?? ""));
+    for (const id of owned.out) {
+      if (ctx.men.has(id) || ctx.applied?.set?.[id]?.to !== ctx.overrides.proj?.[id] || ctx.overrides.proj?.[id] === undefined) continue;
+      setAuto(plan, ctx, "proj", id, false); // the number is still the Apply's own and news still owns the man, so it is news's even in a flag-aware file
+    }
+  }
+}
+
 /** One man's scenario minutes into the plan when the board shows otherwise: 1 if they move, else 0. Back on the slate's own figure removes the entry. Each man goes, however small, so the board holds the scenario's minutes exactly. */
-function planMinutes(plan, r, ctx) {
+function planMinutes(plan, r, ctx, his) {
   if (!isNum(r.min)) return 0;
   const to = Math.round(r.min * 1000) / 1000, base = ctx.base.get(r.id).minutes, typed = ctx.overrides.min?.[r.id];
-  if (Math.abs(to - (typed ?? base ?? Infinity)) < MIN_FLOOR) return 0;
+  if (Math.abs(to - (typed ?? base ?? Infinity)) < MIN_FLOOR) { if (typed !== undefined) setAuto(plan, ctx, "min", r.id, his, true); return 0; }
   if (typed === undefined && !isNum(base) && to === 0) return 0;
   plan.min[r.id] = isNum(base) && Math.abs(to - base) < MIN_FLOOR ? null : to;
+  if (plan.min[r.id] !== null) setAuto(plan, ctx, "min", r.id, his);
   return 1;
 }
 
@@ -92,7 +136,8 @@ function planTeam(plan, t, rec, key, ctx) {
       continue;
     }
     ctx.men.set(r.id, { man, t });
-    minMoves += planMinutes(plan, r, ctx);
+    const his = isHis(rec, key, pins, r, t);
+    minMoves += planMinutes(plan, r, ctx, his);
     const typedNow = ctx.overrides.proj?.[r.id], earlier = ctx.applied?.set?.[r.id];
     const fromApply = earlier?.to === typedNow;
     const from = ctx.board.get(r.id).projection, baseProj = ctx.base.get(r.id).projection;
@@ -105,6 +150,7 @@ function planTeam(plan, t, rec, key, ctx) {
     };
     if (r.proj === null) {
       if (earlier && fromApply && earlier.to === 0 && !r.out) { backFromOut(); continue; } // no model figure now, so nothing else would take the 0 away
+      if (typedNow !== undefined && fromApply) setAuto(plan, ctx, "proj", r.id, his, true); // an Out's 0 stays on the board: marked his only if he marked the Out
       const held = earlier && ctx.overrides.proj?.[r.id] === earlier.to ? `; his earlier applied projection ${earlier.to} is still on the board` : "";
       plan.missing.push({ name: man.name, team: t.code, why: `${missingWhy(r, man)}${held}` });
       continue;
@@ -122,9 +168,10 @@ function planTeam(plan, t, rec, key, ctx) {
       continue;
     }
     const after = effectiveProjection(baseProj, to, ctx.overrides.bump?.[r.id] ?? 0);
-    if (isNum(from) && Math.abs(after - from) < MOVE_FLOOR) { plan.unchanged++; continue; }
+    if (isNum(from) && Math.abs(after - from) < MOVE_FLOOR) { if (typedNow !== undefined && fromApply) setAuto(plan, ctx, "proj", r.id, his, true); plan.unchanged++; continue; }
     if (typedNow !== undefined && !fromApply && !hasPin && !r.out) { plan.kept.push({ id: r.id, name: man.name, team: t.code, typed: typedNow, would: to }); continue; }
     plan.typed[r.id] = to;
+    setAuto(plan, ctx, "proj", r.id, his);
     plan.changes.push({ id: r.id, name: man.name, short: tableName(shapedTeam(t), man), team: t.code, from: from ?? null, to: after, move: isNum(from) ? round2(after - from) : null });
   }
   return { moves: plan.changes.length - before, min_moves: minMoves, totals: res.totals };
@@ -184,7 +231,7 @@ export function planApply(inputs, file, overrides, players, keys, only = null) {
     board: new Map(mergeOverrides(players, overrides).map((p) => [String(p.dk_id), p])),
     base: new Map(players.map((p) => [String(p.dk_id), p])),
   };
-  const plan = { changes: [], typed: {}, min: {}, restoring: new Set(), teams: [], refused: [], kept: [], missing: [], clamped: [], back_on_zero: [], not_on_board: [], back_in: [], unchanged: 0 };
+  const plan = { changes: [], typed: {}, min: {}, auto: { proj: {}, min: {} }, flag_ids: new Set(), restoring: new Set(), teams: [], refused: [], kept: [], missing: [], clamped: [], back_on_zero: [], not_on_board: [], back_in: [], unchanged: 0 };
   for (const t of Object.values(inputs.teams)) {
     if (only && !only.has(t.code)) continue; // a team not asked for is not planned, sent or undone (the console sends only the teams he changed)
     const rec = Object.hasOwn(file.teams, t.code) ? file.teams[t.code] : null, key = keys[t.code], tonight = keyOf(t.tonight);
@@ -199,13 +246,15 @@ export function planApply(inputs, file, overrides, players, keys, only = null) {
     plan.teams.push({ team: t.code, key, tonight, name, moves, min_moves, min_total: totals.min, held: true });
   }
   plan.min_moves = Object.keys(plan.min).length;
+  flagNewsOuts(plan, ctx, file, only);
+  plan.flag_moves = plan.flag_ids.size; // numbers left as they are whose "his or news's" mark changes: written, not counted as a move
   // A mark that moved no number is still held: the applied record names its team and scenario, so a reload sends it again and the header does not call it unsent.
   plan.holds = plan.teams.some((t) => { const ak = file.applied?.keys?.[t.team], k = typeof ak === "string" ? ak : ak?.key; return t.held && k !== t.key; });
   plan.changes.sort((a, b) => Math.abs(b.move ?? Infinity) - Math.abs(a.move ?? Infinity) || a.name.localeCompare(b.name));
   plan.rows = changedRows(plan, ctx);
   plan.orphaned_pins = orphanedPins(inputs, file, keys).filter((o) => !only || only.has(o.team));
   const sent = Object.entries(plan.typed).sort().map(([id, to]) => [id, to, overrides.bump?.[id] ?? 0]);
-  plan.basis = crypto.createHash("sha256").update(JSON.stringify({ sent, min: Object.entries(plan.min).sort(), keys: Object.entries(keys).sort(), orphans: plan.orphaned_pins, refused: plan.refused })).digest("hex").slice(0, 16);
+  plan.basis = crypto.createHash("sha256").update(JSON.stringify({ sent, min: Object.entries(plan.min).sort(), keys: Object.entries(keys).sort(), orphans: plan.orphaned_pins, refused: plan.refused, ...(plan.flag_ids.size ? { flags: [...plan.flag_ids].sort() } : {}) })).digest("hex").slice(0, 16);
   plan.pull = inputs.basis?.pull ?? null;
   plan.base = baseOf(plan, ctx);
   return plan;
@@ -247,8 +296,9 @@ export function applyRecord(plan, overrides, applied, atIso) {
     if (Object.hasOwn(plan.base ?? {}, id)) base[id] = plan.base[id];
     else delete base[id];
   }
-  const out = Object.keys(set).length || minLeft || Object.keys(keys).length ? { at: atIso, set, keys, base, pull: plan.pull ?? null } : null;
-  return { changes: { proj, min: plan.min }, applied: out };
+  const flagOnly = Boolean(applied) && plan.flag_moves > 0 && !plan.changes.length && !plan.min_moves && !plan.holds; // only marks changed: the record keeps the time and pull of the send that wrote its numbers
+  const out = Object.keys(set).length || minLeft || Object.keys(keys).length ? { at: flagOnly ? applied.at : atIso, set, keys, base, pull: (flagOnly ? applied.pull : plan.pull) ?? null } : null;
+  return { changes: { proj, min: plan.min, auto: plan.auto ?? { proj: {}, min: {} } }, applied: out };
 }
 
 /** The overrides change a reverse makes: only men whose typed number is still what Apply set; anyone he has typed over since is left and named. Every applied minutes figure comes off, since only an Apply sets them. */

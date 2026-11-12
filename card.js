@@ -9,7 +9,7 @@
 // The state (which player, which log) lives in createCardState and the markup in cardHtml, both DOM-free so the swap
 // rule is tested: opening a player shows Loading at once, and a log that arrives for a card since closed or swapped is
 // dropped (its request is also aborted).
-import { esc, money, dec1, logo, isoToEastern, ICON, injBadge, focusSelector, minNoteHtml, figSourceWord } from "./board-util.js";
+import { esc, money, dec1, logo, isoToEastern, ICON, injBadge, focusSelector, minNoteHtml, figSourceWord, hasHis } from "./board-util.js";
 import { gamesProblem, usgCell, usgNote, MONTHS } from "./gamerow.js";
 import { createUsageState, usageHtml, chartModel, fetchUsageHttp, closeUsageHttp, fetchedAt } from "./card-usage.js";
 import { wireChart } from "./card-chart.js";
@@ -117,7 +117,7 @@ export function cardFiguresHtml(p, figs, dash) {
   const off = p.dk_id == null ? "he is on the Out list, not in this slate's player pool" : null;
   const num = (v, f, why) => (typeof v === "number" ? f(v) : dash(off ?? why));
   const sal = typeof p.salary === "number" ? money(p.salary) : p.salary_text ? esc(p.salary_text) : dash(off ?? "no salary in this slate file");
-  const yours = p.ovr ? " Proj and Own include your changes." : "";
+  const yours = hasHis(p) ? " Proj and Own include your changes." : "";
   const item = (label, html, src = "") => `<span>${label} <b>${html}</b>${src ? ` <small class="cfsrc">${src}</small>` : ""}</span>`;
   const srcOf = (kind, v) => (typeof v === "number" ? figSourceWord(p, kind) : "");
   const gap = minGapOf(p), gapHtml = gap ? `<span class="cfgap" title="${esc(gapTitle(gap))}">⚠ ${esc(gap.word ?? "Ours")} ${dec1(gap.ours)} vs TwoGun ${dec1(gap.tg)}</span>` : "";

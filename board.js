@@ -15,7 +15,7 @@ import { columnsControl, sortNote } from "./columns.js";
 import { headHtml, rowHtml, SORT_KEYS, comparePlayers, hasResettable, minSourceOf, gapChipHtml } from "./player-table.js";
 import { pullChipHtml, pullNoteHtml } from "./pull-note.js";
 import { boxNote, noteLists as dataNotes, warningCount, freshBoxes } from "./box-note.js";
-import { CHECK_MS, applyHeld, createRefresher, followNewest, mergeFresh, outNamesOf, pickSlate, slateQuery, overrideKey, picksOnBoard, pullOf, rememberRows, rosterCleanup, statusLine } from "./slate-refresh.js";
+import { CHECK_MS, takeAnswer, applyHeld, createRefresher, followNewest, mergeFresh, outNamesOf, pickSlate, slateQuery, overrideKey, picksOnBoard, pullOf, rememberRows, rosterCleanup, statusLine } from "./slate-refresh.js";
 import { pressSettle } from "./press-settle.js";
 import { createPullNow, firstTipOf } from "./pull-now.js";
 import { noFilters, filtersOn, filterPlayers, salaryRange, teamsOf } from "./filters.js";
@@ -476,7 +476,7 @@ function renderChips() {
   const n = (k) => (k === "starred" ? S.players.filter((p) => p.starred).length : S.picks[k].filter((id) => S.byId.has(id)).length);
   const nOvr = S.players.filter(hasResettable).length;
   $("chips").innerHTML = [["locked", "Locked"], ["excluded", "Excluded"], ["starred", "Starred"]].map(([k, label]) => `<button data-chip="${k}" class="chip ${k}${S.pickFilter === k ? " on" : ""}${n(k) ? "" : " zero"}" title="${S.pickFilter === k ? "Show everyone again" : `Show only ${label.toLowerCase()} players`}">${label} <b>${n(k)}</b></button>`).join("")
-    + `<button id="ovReset" class="chip ovr${nOvr ? "" : " zero"}"${nOvr ? ` title="${nOvr} ${nOvr === 1 ? "man has" : "men have"} a typed number, a bump or minutes set in the console on this slate"` : ` disabled title="No typed numbers, bumps or console minutes on this slate"`}>Reset all overrides</button>`
+    + `<button id="ovReset" class="chip ovr${nOvr ? "" : " zero"}"${nOvr ? ` title="${nOvr} ${nOvr === 1 ? "man has" : "men have"} a projection, ownership or bump typed on the board"` : ` disabled title="Nothing typed on the board to reset"`}>Reset all overrides</button>`
     + pullChipHtml(S.slate?.pull_changes, S.players, S.pickFilter === "changed");
   // The gap chip rides the team-chip row: the toolbar's first row has no room for it at 1920 (renderTeamChips rebuilds that row, and renderRows follows it).
   $("teamChips").querySelector(".gapchip")?.remove();
@@ -543,7 +543,6 @@ function toggle(id, kind) {
 // out when the request is sent (a star toggle reads the star the previous answer left, so a double-click toggles twice).
 let ovQueue = Promise.resolve();
 let ovSaves = 0; // moves with every override write and its answer, so a refresh fetched across one is not drawn over it
-const OV_KEYS = ["projection", "value", "proj_own", "base", "ovr", "starred", "minutes", "base_minutes"];
 function saveOverride(body, what) {
   const name = S.name;
   ovSaves++;
@@ -577,9 +576,7 @@ function applyPlayers(players) {
   const withAnswer = (p) => {
     const f = fresh.get(p.dk_id);
     if (!f) return p;
-    const next = { ...p };
-    for (const k of OV_KEYS) { if (k in f) next[k] = f[k]; else delete next[k]; }
-    return next;
+    return takeAnswer(p, f);
   };
   S.players = S.players.map(withAnswer);
   S.held = new Map([...S.held].map(([id, row]) => [id, row && withAnswer(row)])); // a row waiting on his box takes the answer too

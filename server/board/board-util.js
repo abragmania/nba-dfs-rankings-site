@@ -15,9 +15,20 @@ export function warningText(c) {
 export const money = (n) => "$" + n.toLocaleString("en-US");
 /** A figure at one decimal; null when it is not a number. */
 export const dec1 = (v) => (typeof v === "number" && Number.isFinite(v) ? v.toFixed(1) : null);
+// What the board marks as Adam's own (Adam 11-12): a number a send wrote from news or the engine (the row's `auto`, set by the server's overrides merge) is a plain
+// figure; the amber marker, "Yours" and an enabled reset belong to a number he set. Rows carry `ovr` / `base_minutes` for both; these three tell them apart.
+/** A typed projection of his (not one a news or engine send wrote). */
+export const hisProj = (p) => p?.ovr?.projection != null && !p?.auto?.proj;
+/** Minutes of his (typed or from his own console marks), not ones a news or engine send wrote. */
+export const hisMin = (p) => p != null && "base_minutes" in p && !p?.auto?.min;
+/** Anything on the row that is his (marked, "Yours"): his projection or ownership, his bump, his minutes. */
+export const hasHis = (p) => hisProj(p) || hisMin(p) || p?.ovr?.proj_own != null || Boolean(p?.ovr?.steps);
+/** What a board reset clears on the row (Adam 11-12): a projection, ownership or bump typed on the board. Never a figure the console or news wrote, his console minutes and marks included; those change in the console. */
+export const boardTyped = (p) => (hisProj(p) && !p?.auto?.pin) || p?.ovr?.proj_own != null || Boolean(p?.ovr?.steps);
+
 /** Whose figure the board shows for a man: "Yours" (typed or bumped), "Ours" (our minutes engine), "TwoGun", or "" when the pull does not say. kind: "proj" or "min". (G62: no ambiguous source on the card.) */
 export function figSourceWord(p, kind) {
-  if (kind === "min" ? "base_minutes" in (p ?? {}) : p?.ovr?.projection != null || p?.ovr?.steps) return "Yours";
+  if (kind === "min" ? hisMin(p) : hisProj(p) || p?.ovr?.steps) return "Yours";
   return p?.proj_source === "ours" ? "Ours" : p?.proj_source === "twogun" ? "TwoGun" : "";
 }
 

@@ -126,7 +126,7 @@ export async function previewAndSend(c, teams, check = null) {
     const plan = await post(c, { ...body, preview: true });
     if (slate !== c.slate) return null;
     check?.(plan);
-    if (!plan.changes.length && !plan.min_moves && !plan.holds) return { plan, out: null };
+    if (!plan.changes.length && !plan.min_moves && !plan.flag_moves && !plan.holds) return { plan, out: null };
     try {
       const out = await post(c, { ...body, basis: plan.basis });
       if (slate !== c.slate) return null;

@@ -6,7 +6,7 @@
 // as null) and redraws from the players the server answers. On a man with a typed projection the thumbs raise and lower
 // the typed number (Adam, 5:41 PM ET 2026-10-29), as the NFL app does. This file is the one copy of the pair's and the
 // Proj figure's markup and of the press; the limits come from override-limits.js, shared with the server.
-import { esc, dec1 } from "./board-util.js";
+import { esc, dec1, hisProj } from "./board-util.js";
 import { BUMP_STEP_PCT, BUMP_MAX_STEPS } from "./override-limits.js";
 
 export { BUMP_STEP_PCT, BUMP_MAX_STEPS };
@@ -20,8 +20,8 @@ export function bumpStepsOf(p) {
   return Number.isInteger(n) ? n : 0;
 }
 
-/** True when the player has a typed projection (the thumbs then scale it; the figure wears the typed marker). */
-export const hasTypedProj = (p) => p?.ovr?.projection != null;
+/** True when the player has a typed projection of his own (the thumbs then scale it; the figure wears the typed marker). A number a send wrote from news or the engine is a plain figure (board-util.js hisProj). */
+export const hasTypedProj = (p) => hisProj(p);
 
 /** The steps one press leaves: one more in the same direction; the opposite thumb clears to 0; kept within -10..10. */
 export function nextBumpSteps(current, dir) {
@@ -93,7 +93,8 @@ export function bumpFigureHtml(p, text, also = "") {
       ? `Typed ${dec1(p.ovr.projection) ?? "—"} → ${dec1(p?.projection) ?? "—"} (${bumpPctText(steps)}); base ${base}. Click to change the typed number, or reset the row`
       : `Your number. Base ${base}; click to change it, or reset the row`;
   } else if (steps) {
-    title = `Base ${base} → ${dec1(p?.projection) ?? "—"} (${bumpPctText(steps)})`;
+    const from = p?.auto?.proj ? dec1(p?.ovr?.projection) ?? base : base; // under a news or engine number the bump scales that number
+    title = `Base ${from} → ${dec1(p?.projection) ?? "—"} (${bumpPctText(steps)})`;
   }
   return `<span class="${cls}" data-edit="proj" data-id="${id}" title="${esc(also ? `${title} · ${also}` : title)}">${text}</span>`;
 }
