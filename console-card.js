@@ -1,5 +1,6 @@
 // The console's reach outside its own screen: the calls the player card (card-role.js), the lineup bar and the board's own cells
 // (board-marks.js) make to read and write the same work the console holds.
+import { oursUse } from "./console-ours.js";
 import { calc, plain } from "./console-model.js";
 import { keyOf, outsOf } from "./console-engine.js";
 import * as M from "./console-moves.js";
@@ -118,7 +119,7 @@ export function cardApi(c, ensure) {
       return lineupViewOf(c);
     },
     /**
-     * For the board's rows (board-marks.js), each man on the slate by his id: { team, role, out, starterBy (why the app starts him: "yours", "chart"
+     * For the board's rows (board-marks.js), each man on the slate by his id: { team, role, out, starterBy (why the app starts him: "yours", "chart" = the minutes engine's five
      * or "twogun"), marks (marksOf: his own marks with their live figures) }. Throws when the console cannot load.
      */
     async boardView(slate) {
@@ -126,7 +127,7 @@ export function cardApi(c, ensure) {
       if (!c.model) throw new Error(c.loadError ?? "the console could not load");
       const view = {};
       for (const [code, T] of Object.entries(c.model.TEAMS)) {
-        const S = c.model.ST[code], marks = marksOf(T, S), chart = Boolean(T.depth);
+        const S = c.model.ST[code], marks = marksOf(T, S), chart = oursUse(T).ok;
         for (const r of calc(T, S, S.outs).rows) {
           const mine = marks[r.id]?.r?.v === "starter" && !marks[r.id].r.news; // a start the confirmed news set is the news's, not his
           view[r.id] = { team: code, role: r.role, out: r.out, starterBy: r.role !== "starter" ? null : mine ? "yours" : chart ? "chart" : "twogun", tgStarter: r.p.starter === true, marks: marks[r.id] ?? null };

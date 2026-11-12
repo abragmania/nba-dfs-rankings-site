@@ -98,7 +98,7 @@ async function handleApply(req, res, slate, ctx) {
   const inputs = await inputsFor(res, ctx, slate, slateData);
   if (!inputs) return;
   // A console left open across a pull holds an old Tonight: what it reads as a chosen scenario would be sent as one.
-  if (Object.hasOwn(read.body ?? {}, "pull") && read.body.pull !== inputs.basis.pull) return ctx.fail(res, 409, "CONSOLE_OLD_PULL", "A new pull has landed since this console read its inputs, so nothing was sent. The console reads the new pull and sends again by itself.");
+  if ((Object.hasOwn(read.body ?? {}, "pull") && read.body.pull !== inputs.basis.pull) || (Object.hasOwn(read.body ?? {}, "tier") && read.body.tier !== (inputs.basis.tier ?? null))) return ctx.fail(res, 409, "CONSOLE_OLD_PULL", "A new pull has landed since this console read its inputs, so nothing was sent. The console reads the new pull and sends again by itself.");
   const checked = checkKeys(read.body?.scenarios, inputs), teams = checkTeams(read.body?.teams, inputs);
   if (!checked.ok) return ctx.fail(res, 400, "BAD_SCENARIO", checked.message);
   if (!teams.ok) return ctx.fail(res, 400, "BAD_SCENARIO", teams.message);

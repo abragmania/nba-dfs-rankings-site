@@ -1,4 +1,5 @@
 // The console's moves on his work: history and ripple, saving, pins, roles, who is out, hand-outs. Each takes the console's shared state `c`.
+import { oursUse } from "./console-ours.js";
 import { keyOf, outsOf, usageStart } from "./console-engine.js";
 import { calc, canonRecord, chipName, dropCopies, hasPins, label, moveTo, noteOuts, pinsOf, recordOf, savedFor, sgn } from "./console-model.js";
 import { FN, fmtv } from "./console-cmd.js";
@@ -274,7 +275,7 @@ export function setRole(c, t, id, role) {
 /** Which minutes feed the optimizer (depth-chart.js MINUTE_SOURCES): one team, or every team that has a chart. It is saved with his work and takes Ctrl+Z like any move. */
 export function setSource(c, t, source, all = false) {
   if (!MINUTE_SOURCES.includes(source)) return;
-  const codes = (all ? Object.keys(c.model.TEAMS) : [t]).filter((code) => c.model.TEAMS[code].depth && (c.model.ST[code].source ?? "twogun") !== source);
+  const codes = (all ? Object.keys(c.model.TEAMS) : [t]).filter((code) => oursUse(c.model.TEAMS[code]).ok && (c.model.ST[code].source ?? "twogun") !== source);
   if (!codes.length) return;
   mutate(c, `${all ? "all teams" : t} minutes: ${SOURCE_LABEL[source]}`, () => { for (const code of codes) c.model.ST[code].source = source; });
 }

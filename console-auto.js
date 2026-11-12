@@ -121,7 +121,7 @@ export async function previewAndSend(c, teams, check = null) {
   const failed = Object.values(c.saveErrs);
   if (failed.length) throw new Error(`not sent, because your last change is not saved. ${failed.join(" ")}`);
   const keys = Object.fromEntries(teams.map((t) => [t, keyOf(c.model.ST[t].outs)]));
-  const body = { scenarios: keys, teams, pull: c.inputs.basis.pull };
+  const body = { scenarios: keys, teams, pull: c.inputs.basis.pull, tier: c.inputs.basis.tier ?? null };
   for (let round = 0; ; round++) {
     const plan = await post(c, { ...body, preview: true });
     if (slate !== c.slate) return null;

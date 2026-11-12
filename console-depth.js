@@ -2,6 +2,7 @@
 // tip; a team switcher with logos; then the Starters (the men starting, a position on every row), the Bench in rotation order and the men
 // Out, each row with his minutes, DK/min, projection, where his minutes come from, an S toggle and an Out toggle, and an undo chip on every
 // mark he made. A side column holds the team total, the notes and which minutes feed the optimizer. Pure strings, tested in node.
+import { oursUse } from "./console-ours.js";
 import { esc, logo } from "./board-util.js";
 import { calc } from "./console-model.js";
 import { keyOf, outsOf } from "./console-engine.js";
@@ -32,7 +33,7 @@ const chip = (team, id, kind, mark, text) => `<button class="rv" type="button" d
 function basisOf(r, T, S) {
   const p = r.p;
   if (r.pinned.m) return { tag: "you", word: "Yours", text: "minutes typed by you" };
-  if (r.min_from_ours || ((S.source ?? "twogun") !== "twogun" && r.min_basis)) return { tag: "ch", word: "Chart", text: r.min_basis ?? "depth chart" };
+  if (r.min_from_ours || ((S.source ?? "twogun") !== "twogun" && r.min_basis)) return { tag: "ch", word: "Tier", text: r.min_basis ?? "the minutes engine", flag: r.min_flag ?? null };
   if (r.min_basis) return { tag: "tg", word: "Role", text: r.min_basis };
   if (isNum(r.min) && isNum(p.min) && Math.abs(r.min - p.min) < 0.05) return { tag: "tg", word: "TwoGun", text: p.starter ? "TwoGun starter" : "TwoGun projection" };
   if (isNum(r.min) && isNum(p.min)) {
@@ -63,7 +64,7 @@ function manRow(team, r, T, S, mk, rank, N) {
 <span class="who"><span class="nm">${esc(p.name)}</span><span class="pp">${esc(p.pos ?? "")}</span></span>
 ${numBox(team, r, "m", mk?.m)}${numBox(team, r, "d", mk?.d)}
 <span class="r">${proj}</span>
-<span class="why"><span class="stag k-${b.tag}">${b.word}</span>${esc(b.text)}</span>
+<span class="why" title="${esc(b.text)}">${b.flag ? `<span class="fl" title="${esc(b.flag.text)}">!</span>` : ""}<span class="stag k-${b.tag}">${b.word}</span>${esc(b.text)}</span>
 ${noteCell(N, p)}
 <span class="tgl"><button class="tg s${starter ? " on" : ""}" type="button" data-s="${esc(r.id)}" data-team="${esc(team)}" title="${starter ? "Starting. Click to send him to the bench" : "Click to mark him a starter (S)"}">S</button><span class="cs">${rmark}</span></span>
 <span class="tgl"><button class="tg o" type="button" data-out="${esc(r.id)}" data-team="${esc(team)}" title="Click to mark him Out">Out</button><span class="cs">${omark}</span></span>
@@ -84,7 +85,9 @@ const HEAD = (first) => `<div class="hd"><span>${first}</span><span>Player</span
 const sumMin = (rows) => rows.reduce((s, r) => s + (isNum(r.min) ? r.min : 0), 0);
 
 /** A roles note in the side column's width: the no-chart sentence says the same in fewer words, so it holds one line. */
-const shortNote = (n) => (/^Starters by TwoGun's flag and Tonight's minutes: no depth chart for (?:[A-Z]{2,4}|this team)\.$/.test(n) ? "No depth chart: starters by TwoGun's flag and minutes." : n);
+/** The minutes engine's plain statements (the five, the pot, the trim): muted in the Team total box; every other note is a warning and stays red. */
+const ENGINE_INFO = /^Starters: |^The team's figures add to [\d.]+(?:, over| and|;)|^TwoGun flags \d+ starter|^the lineup pages' five names|^\d+ of \w+'s box scores give no overtime count/;
+const shortNote =(n) => (/^Starters by TwoGun's flag and Tonight's minutes: no depth chart for (?:[A-Z]{2,4}|this team)\.$/.test(n) ? "No depth chart: starters by TwoGun's flag and minutes." : n);
 
 /**
  * The Bench+ suggestions under the Team total (server/rotation/bench-plus.js), muted, one line each; suggestions only, no buttons: he marks a man himself. A check that could not be made,
@@ -114,19 +117,19 @@ function teamBody(model, code, news) {
   const notes = [];
   if (starters.length > 5) notes.push(`${starters.length} starters marked: unmark one.`);
   else if (starters.length < 5) notes.push(`Only ${starters.length} starters: mark a man S.`);
-  for (const n of String(res.roles_note ?? "").split(/(?<=\.)\s+/).filter(Boolean).map(shortNote)) if (!notes.some((x) => x.slice(0, 12) === n.slice(0, 12)) && !/starters marked|Only \d starters/.test(n)) notes.push(n);
+  for (const n of String(res.roles_note ?? "").split(/\n+|(?<=\.)\s+/).filter(Boolean).map(shortNote)) if (!notes.some((x) => x.slice(0, 12) === n.slice(0, 12)) && !/starters marked|Only \d starters/.test(n)) notes.push(n);
   const auto = calc(T, { ...S, pins: {} }, T.tonight).totals;
   const typedAdd = (res.totals.min ?? 0) - (auto.min ?? 0);
   const main = `<section class="box"><h2>Starters <small>${starters.length} &middot; ${f1(sumMin(starters))} min</small></h2>${HEAD("Pos")}${starters.map((r) => manRow(code, r, T, S, marks[r.id], "", N)).join("") || `<div class="none">Nobody is starting. Mark five men S.</div>`}</section>
 <section class="box"><h2>Bench <small>rotation order &middot; ${f1(sumMin(inRot))} min</small></h2>${HEAD("#")}${inRot.map((r, i) => manRow(code, r, T, S, marks[r.id], String(6 + i), N)).join("") || `<div class="none">Nobody on the bench has minutes.</div>`}${notRot.length ? `<div class="sub">Not in the rotation</div>${notRot.map((r) => manRow(code, r, T, S, marks[r.id], "", N)).join("")}` : ""}<div class="row tot"><span></span><span class="who">Team total</span><span class="mt">${f1(res.totals.min) ?? "—"}</span></div>${benchPlusHtml(T.bench_plus)}</section>`;
   const src = S.source ?? "twogun";
-  const srcBox = T.depth ? `<section class="box"><h2>Minutes for the optimizer</h2><div class="srcs">${MINUTE_SOURCES.map((k) => `<button class="sv${k === src ? " on" : ""}" type="button" data-source="${k}" data-team="${esc(code)}">${SOURCE_LABEL[k]}</button>`).join("")}<button class="sv all" type="button" data-source-all="${src}" data-team="${esc(code)}" title="Use ${esc(SOURCE_LABEL[src])} on every team with a depth chart">All teams</button></div></section>` : "";
+  const srcBox = oursUse(T).ok ? `<section class="box"><h2>Minutes for the optimizer</h2><div class="srcs">${MINUTE_SOURCES.map((k) => `<button class="sv${k === src ? " on" : ""}" type="button" data-source="${k}" data-team="${esc(code)}">${SOURCE_LABEL[k]}</button>`).join("")}<button class="sv all" type="button" data-source-all="${src}" data-team="${esc(code)}" title="Use ${esc(SOURCE_LABEL[src])} on every team with the minutes engine">All teams</button></div></section>` : "";
   const side = `<section class="box"><h2>Team total</h2><div class="tot">
 <div class="big"><span>Minutes tonight</span><b class="${Math.abs(typedAdd) >= 0.05 ? "warn" : ""}">${f1(res.totals.min) ?? "—"} min</b></div>
 <div><span>Without your marks</span><b>${f1(auto.min) ?? "—"} min</b></div>
 ${Math.abs(typedAdd) >= 0.05 ? `<div class="warn"><span>Your marks add</span><b>${typedAdd > 0 ? "+" : ""}${f1(typedAdd)}</b></div>` : ""}
 <div><span>Team projection</span><b>${f1(res.totals.proj) ?? "—"} pts</b></div></div>
-${notes.length ? `<ul class="notes">${notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}</section>
+${notes.length ? `<ul class="notes">${notes.map((n) => `<li${ENGINE_INFO.test(n) ? ' class="info"' : ""}>${esc(n)}</li>`).join("")}</ul>` : ""}</section>
 <section class="box"><h2>Out / injured <small>${outs.length} ${outs.length === 1 ? "man" : "men"}</small></h2>${outs.map((r) => outRow(code, r, T, marks[r.id], N)).join("") || `<div class="none">Nobody is out.</div>`}</section>${srcBox}`;
   return { main, side, marks: Object.keys(marks).length, starterIds: starters.map((r) => r.id) };
 }

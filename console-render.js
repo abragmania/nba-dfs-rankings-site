@@ -1,5 +1,6 @@
 // The console's HTML: the team table with its compare block, slate sweep and side readout. There is no picker bar or Apply box: each change sends itself (console-auto.js).
 // Strings only; console.js puts them on the page. A missing figure is the one mark saying why, never zero.
+import { oursUse } from "./console-ours.js";
 import { esc, isoToEastern } from "./board-util.js";
 import { keyOf, outsOf, handoutShares, teamFor, TEAM_USAGE } from "./console-engine.js";
 import { calc, chipName, dcls, f1, fullLabel, label, savedFor, sgn, tableName, tonightMin, tonightProj, tonightUsg, usualMin, usualProj } from "./console-model.js";
@@ -55,8 +56,8 @@ export function basisText(r) {
 }
 /** Adam's flag (11-06): a flipped man on a position median, not his own figure, so he knows to adjust it. Gone once he types the minutes. */
 export const medianFlag = (r) => (r.min_median && !r.pinned.m ? `<span class="mdf" title="A position median, not his own figure: type his minutes if you know better">median — adjust?</span>` : "");
-/** The saved depth chart's minutes for him beside TwoGun's; amber when his figure is a role median, with the basis on hover. */
-const oursCell = (r) => (num(r.ours_min) ? `<td class="mu x-ours${r.ours_median ? " mdn" : ""}" title="${esc(r.ours_basis)}">${f1(r.ours_min)}</td>` : `<td class="mu x-ours">${dash(r.ours_basis ?? "no depth chart for this team")}</td>`);
+/** The minutes engine's figure for him beside TwoGun's; amber and starred when the engine flagged it, the why and the flag on hover. */
+const oursCell = (r) => (num(r.ours_min) ? `<td class="mu x-ours${r.ours_flag ? " mdn" : ""}" title="${esc(r.ours_basis)}${r.ours_flag ? ` | ${esc(r.ours_flag.text)}` : ""}">${f1(r.ours_min)}${r.ours_flag ? "*" : ""}</td>` : `<td class="mu x-ours">${dash(r.ours_basis ?? "no minutes engine inputs for this team")}</td>`);
 const basisCell = (r) => `<td class="bs x-from${r.pinned.m ? " pin" : r.pinned.r ? " rb" : ""}" title="${esc(r.min_from_ours ? `ours: ${r.min_basis}` : basisText(r))}">${medianFlag(r)}${esc(basisText(r))}</td>`;
 
 /** How far a usage total may sit off 100 and read as rounding. A working value. */
@@ -126,7 +127,7 @@ export function teamHtml(model, G, code, colour) {
 }
 
 /** Which minutes feed the optimizer for this team: TwoGun's (the default), the saved depth chart's, or the chart with his edits. "All" sets every team. Only where the team has a chart. */
-const sourceSwitch = (T, S, code) => (!T.depth ? "" : `<span class="grow"></span><span class="msrc"><span class="mu">Optimizer minutes</span>${MINUTE_SOURCES.map((k) => `<button class="ms${(S.source ?? "twogun") === k ? " on" : ""}" data-msrc="${k}" data-team="${esc(code)}" title="${k === "twogun" ? "TwoGun's minutes (the default)" : k === "ours" ? "The saved depth chart, on this scenario's outs" : "The depth chart that also follows your role flips and typed minutes"}" tabindex="-1">${SOURCE_LABEL[k]}</button>`).join("")}<button class="ms all" data-msrc-all="${esc(S.source ?? "twogun")}" data-team="${esc(code)}" title="Use this team's choice for every team that has a chart" tabindex="-1">All teams</button></span>`);
+const sourceSwitch = (T, S, code) => (!oursUse(T).ok ? "" : `<span class="grow"></span><span class="msrc"><span class="mu">Optimizer minutes</span>${MINUTE_SOURCES.map((k) => `<button class="ms${(S.source ?? "twogun") === k ? " on" : ""}" data-msrc="${k}" data-team="${esc(code)}" title="${k === "twogun" ? "TwoGun's minutes (the default)" : k === "ours" ? "The minutes engine's tiers, on this scenario's outs" : "The minutes engine that also follows your role flips and typed minutes"}" tabindex="-1">${SOURCE_LABEL[k]}</button>`).join("")}<button class="ms all" data-msrc-all="${esc(S.source ?? "twogun")}" data-team="${esc(code)}" title="Use this team's choice for every team with the minutes engine" tabindex="-1">All teams</button></span>`);
 /** The team panel's heading: its code, its scenario and who is out. Shared by both layouts. */
 export function teamHead(T, S, code, key) {
   const named = S.outs.map((i) => T.byId[i]).filter(Boolean).map((p) => chipName(T, p));

@@ -19,7 +19,7 @@
 // Pins: { m: minutes, u: usage, d: rate, p: projection }, each { id: value }, and r: { id: role } (his role flips). A pin always wins, the ceiling included.
 import { isNum } from "./figures.js";
 import { FLIP_ROLES, liveFlips, resolveRoles } from "./console-roles.js";
-import { chartUse, oursFor, sourceOf } from "./console-ours.js";
+import { oursUse, rolesFromEngine, chartUse, oursFor, sourceOf } from "./console-ours.js";
 import { settleTyped } from "./depth-chart.js";
 
 export const TEAM_USAGE = 100;
@@ -47,7 +47,7 @@ export const outsOf = (key) => (key ? key.split("+") : []);
 export const emptyPins = () => ({ m: {}, u: {}, d: {}, p: {}, r: {} });
 
 /** The engine's team from the inputs route's team and his saved record for it. */
-export const teamFor = (input, record) => ({ men: input.men, tonight: input.tonight ?? [], healthy_exact: Boolean(input.healthy_exact), tables: input.tables ?? {}, handouts: record?.handouts ?? {}, combos: record?.combos ?? {}, depth: input.depth ?? null, depth_figures: input.depth_figures ?? null, source: record?.source ?? "twogun" });
+export const teamFor = (input, record) => ({ men: input.men, tonight: input.tonight ?? [], healthy_exact: Boolean(input.healthy_exact), tables: input.tables ?? {}, handouts: record?.handouts ?? {}, combos: record?.combos ?? {}, tier: input.tier, depth: input.depth ?? null, source: record?.source ?? "twogun" });
 
 const positions = (man) => (typeof man.pos === "string" ? man.pos.split("/").filter(Boolean) : []);
 
@@ -209,25 +209,26 @@ function minutesFor(team, outSet, tonightSet, pins, flips, implicit = {}) {
   const edits = settleTyped(typed, (rest) => modelledMinutes(team, outSet, tonightSet, new Set([...Object.keys(rest), ...Object.keys(moved)]))); // a man typed at his own figure is no edit: he takes his hand-out and nobody moves
   const closed = new Set([...Object.keys(edits), ...Object.keys(moved)]);
   const modelled = modelledMinutes(team, outSet, tonightSet, closed);
-  const minutes = {}, basis = {}, median = new Set(), fromOurs = new Set();
-  const src = sourceOf(team), ours = src === "twogun" ? null : oursFor(team, outSet, flips, typed, src === "ours_edits");
+  const minutes = {}, basis = {}, flag = {}, median = new Set(), fromOurs = new Set();
+  const src = sourceOf(team), ours = src === "twogun" ? null : oursFor(team, outSet, flips, edits, src === "ours_edits"); // the settled edits: a man typed at his own figure is no edit and moves nobody
   const flipFig = src === "twogun" ? null : src === "ours_edits" ? ours : oursFor(team, outSet, flips, {}, true); // a flipped man's chart figure is the rule's figure for him in his new role
   for (const p of team.men) {
     if (outSet.has(p.id)) { minutes[p.id] = 0; continue; }
     if (own(typed, p.id)) { minutes[p.id] = typed[p.id]; basis[p.id] = "typed"; continue; }
     const chartOwn = src === "ours_edits" && own(implicit, p.id) && !own(flips, p.id) ? ours?.[p.id] : null; // on Ours + my edits a man a flip moved has the chart's own figure
-    if (chartOwn && isNum(chartOwn.min)) { minutes[p.id] = chartOwn.min; basis[p.id] = chartOwn.basis; fromOurs.add(p.id); if (chartOwn.median) median.add(p.id); continue; }
+    if (chartOwn && isNum(chartOwn.min)) { minutes[p.id] = chartOwn.min; basis[p.id] = chartOwn.basis; flag[p.id] = chartOwn.flag ?? null; fromOurs.add(p.id); if (chartOwn.median) median.add(p.id); continue; }
     if (own(moved, p.id)) {
       const f = flipFig?.[p.id] ?? roleMinutes(p, moved[p.id]); // the chart's figure, a null one included, only when ours feeds the optimizer (TwoGun stays as it was)
-      minutes[p.id] = f.min; basis[p.id] = own(implicit, p.id) && !own(flips, p.id) ? `${f.basis}; moved by your role flip` : f.basis;
+      minutes[p.id] = f.min; flag[p.id] = f.flag ?? null; basis[p.id] = own(implicit, p.id) && !own(flips, p.id) ? `${f.basis}; moved by your role flip` : f.basis;
       if (f.median) median.add(p.id);
       continue;
     }
     const o = ours?.[p.id];
-    if (o) { minutes[p.id] = o.min; basis[p.id] = o.basis; if (isNum(o.min)) fromOurs.add(p.id); if (o.median) median.add(p.id); continue; } // a missing chart figure stays missing, with its reason: TwoGun's number never stands in for it (R1)
+    if (o) { minutes[p.id] = o.min; basis[p.id] = o.basis; flag[p.id] = o.flag ?? null; if (isNum(o.min)) fromOurs.add(p.id); if (o.median) median.add(p.id); continue; } // a missing chart figure stays missing, with its reason: TwoGun's number never stands in for it (R1)
+    if (ours) { minutes[p.id] = null; basis[p.id] = "the minutes engine has no inputs for him"; flag[p.id] = null; continue; } // on an Ours source TwoGun's number never stands in for the engine's (R1); the team note counts him
     minutes[p.id] = modelled[p.id];
   }
-  return { minutes, basis, median, fromOurs, totalNote: ours?.totalNote ?? null };
+  return { minutes, basis, flag, median, fromOurs, totalNote: ours?.totalNote ?? null };
 }
 
 /** Why the usage total misses 100, with the fix; null when it is on it or no man has a figure. Only typed usage can miss: the fit places the rest. */
@@ -299,7 +300,7 @@ const OFF_SCENARIO = { m: false, u: false, d: false, p: false, r: false };
 
 /** Men a flip moved without his touching them (a starter pushed out of the five, a backup pulled in): where the chart names the five, whoever's resolved role differs from the same outs with no flips and who is not flipped himself. Outs stay out. { id: role }. */
 function implicitFlips(team, outSet, flips, roles) {
-  if (!chartUse(team).ok || !Object.keys(flips).length) return {};
+  if (!(rolesFromEngine(team) || chartUse(team).ok) || !Object.keys(flips).length) return {};
   const plain = resolveRoles(team, outSet, {}).roles, out = {};
   for (const p of team.men) if (!outSet.has(p.id) && !Object.hasOwn(flips, p.id) && roles[p.id] !== plain[p.id] && FLIP_ROLES.includes(roles[p.id])) out[p.id] = roles[p.id];
   return out;
@@ -318,13 +319,13 @@ export function scenario(team, outs = [], pins = emptyPins()) {
   const { roles, note: rolesNote } = resolveRoles(team, outSet, pins.r);
   const implicit = implicitFlips(team, outSet, flips, roles);
   const moved = { ...implicit, ...flips };
-  const { minutes: m, basis, median, fromOurs, totalNote } = minutesFor(team, outSet, tonightSet, pins.m ?? {}, flips, implicit);
-  const use = chartUse(team), clean = oursFor(team, outSet);
-  const oursNote = sourceOf(team) !== "twogun" && !use.ok ? `Ours minutes are chosen but ${use.why ?? "this team has no depth chart"}, so TwoGun's minutes are in use.` : null; // the chart's minutes on this scenario's outs alone, for the "Ours" column beside TwoGun's
+  const { minutes: m, basis, flag, median, fromOurs, totalNote } = minutesFor(team, outSet, tonightSet, pins.m ?? {}, flips, implicit);
+  const use = oursUse(team), clean = oursFor(team, outSet);
+  const oursNote = sourceOf(team) !== "twogun" && !use.ok ? `Ours minutes are chosen but ${use.why ?? "this team has no minutes engine inputs"}, so TwoGun's minutes are in use.` : null; // the chart's minutes on this scenario's outs alone, for the "Ours" column beside TwoGun's
   const u = usageFor(team, outSet, tonightSet, m, pins, moved);
   const rows = team.men.map((p) => {
-    const oc = clean?.[p.id], oursFields = { ours_min: isNum(oc?.min) ? oc.min : null, ours_basis: oc?.basis ?? (use.ok ? "not matched to the chart" : use.why), ours_median: oc?.median === true };
-    if (outSet.has(p.id)) return { id: p.id, out: true, role: "out", ...oursFields, min_from_ours: false, min: 0, min_basis: null, min_median: false, usg: 0, rate: isNum(p.rate) ? p.rate : null, formula: 0, proj: 0, pinned: OFF_SCENARIO, clamped: false, back_on_zero: false, missing: [] };
+    const oc = clean?.[p.id], oursFields = { ours_min: isNum(oc?.min) ? oc.min : null, ours_basis: oc?.basis ?? (use.ok ? "the minutes engine has no inputs for him" : use.why), ours_median: false, ours_tier: oc?.tier ?? null, ours_flag: oc?.flag ?? null };
+    if (outSet.has(p.id)) return { id: p.id, out: true, role: "out", ...oursFields, min_from_ours: false, min_flag: null, min: 0, min_basis: null, min_median: false, usg: 0, rate: isNum(p.rate) ? p.rate : null, formula: 0, proj: 0, pinned: OFF_SCENARIO, clamped: false, back_on_zero: false, missing: [] };
     const pinned = { m: own(pins.m, p.id), u: own(pins.u, p.id), d: own(pins.d, p.id), p: own(pins.p, p.id), r: own(flips, p.id) };
     const held = pinned.d ? { rate: pins.d[p.id], clamped: false }
       : u.keep && !pinned.u ? { rate: isNum(p.rate) ? p.rate : null, clamped: false }
@@ -339,7 +340,7 @@ export function scenario(team, outs = [], pins = emptyPins()) {
     if (proj === null) missing.push("proj");
     if (held.clamped) missing.push("rate clamped");
     if (backOnZero) missing.push("back on 0 minutes; pin his minutes");
-    return { id: p.id, out: false, role: roles[p.id], ...oursFields, min_from_ours: fromOurs.has(p.id), min: m[p.id], min_basis: basis[p.id] ?? null, min_median: median.has(p.id), usg: u.shown[p.id], rate: held.rate, formula, proj, pinned, clamped: held.clamped, back_on_zero: backOnZero, missing };
+    return { id: p.id, out: false, role: roles[p.id], ...oursFields, min_from_ours: fromOurs.has(p.id), min_flag: flag[p.id] ?? null, min: m[p.id], min_basis: basis[p.id] ?? null, min_median: median.has(p.id), usg: u.shown[p.id], rate: held.rate, formula, proj, pinned, clamped: held.clamped, back_on_zero: backOnZero, missing };
   });
   const playing = rows.filter((r) => !r.out); // a man out is on 0 by the scenario, which says nothing about whether the figure is known
   const min = sum(playing, "min"), usg = sum(playing, "usg");
@@ -353,6 +354,6 @@ export function scenario(team, outs = [], pins = emptyPins()) {
       usg_why: usageMiss(usg),
       proj_missing: rows.filter((r) => r.proj === null).length,
     },
-    roles_note: [rolesNote, oursNote, totalNote, plainNote].filter(Boolean).join(" ") || null,
+    roles_note: [rolesNote, oursNote, totalNote ?? clean?.totalNote, plainNote].filter(Boolean).join(" ") || null,
   };
 }
