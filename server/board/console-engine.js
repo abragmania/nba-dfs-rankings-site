@@ -328,6 +328,7 @@ export function scenario(team, outs = [], pins = emptyPins()) {
     if (outSet.has(p.id)) return { id: p.id, out: true, role: "out", ...oursFields, min_from_ours: false, min_flag: null, min: 0, min_basis: null, min_median: false, usg: 0, rate: isNum(p.rate) ? p.rate : null, formula: 0, proj: 0, pinned: OFF_SCENARIO, clamped: false, back_on_zero: false, missing: [] };
     const pinned = { m: own(pins.m, p.id), u: own(pins.u, p.id), d: own(pins.d, p.id), p: own(pins.p, p.id), r: own(flips, p.id) };
     const held = pinned.d ? { rate: pins.d[p.id], clamped: false }
+      : p.rate_source === "typed" ? { rate: p.rate, clamped: false } // a DK/min he typed on the board is held like a pin: no usage scaling
       : u.keep && !pinned.u ? { rate: isNum(p.rate) ? p.rate : null, clamped: false }
       : rateAt(p, u.rate[p.id], m[p.id], tonightSet.has(p.id));
     const formula = isNum(m[p.id]) && isNum(held.rate) ? m[p.id] * held.rate : null;
