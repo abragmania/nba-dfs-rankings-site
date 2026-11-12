@@ -1,35 +1,37 @@
 {
  "slate": "2026-11-12-main",
- "generated_at": "2026-11-12T23:35:30.587Z",
+ "generated_at": "2026-11-12T23:40:30.835Z",
  "status": "ok",
  "slate_built_from": "slates/2026-11-12-main/raw/2026-11-12T175840-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-12T23:35:22.284Z",
+   "fetched_at": "2026-11-12T23:40:22.519Z",
    "saved_as": "news/lineups/pages/monster-2026-11-12T183522-0500.html.gz",
    "saved_at": "2026-11-12T23:35:22.284Z",
+   "unchanged_since": "2026-11-12T23:35:22.284Z",
    "parsed_sha": "f1bfe5684b192668d90cd2eabe6132ab7fdec12400f6929251d4442ba4e1ec78",
-   "sha256": "40e6f77b5ff09fbfb3e894c599467c34fe40d9edfc2cb94899a37650105568ce"
+   "sha256": "395bb4ef7704adb4aadc97f502d3ae4cb4550a69d20fad1ffd415910bd57fbea"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-12T23:35:26.379Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-12T183526-0500.html.gz",
-   "saved_at": "2026-11-12T23:35:26.379Z",
-   "parsed_sha": "5181bc266562ab160f4088ee3cdb2b105fc2adaf40de2e08fe825aa521dae06f",
-   "sha256": "5b80d268343cbcdba8faefa9fdf6f56073bda9eec36c8f22f605ab2548768304"
+   "fetched_at": "2026-11-12T23:40:26.612Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-12T184026-0500.html.gz",
+   "saved_at": "2026-11-12T23:40:26.612Z",
+   "parsed_sha": "064aeb1992b3fe2b7bcdc85fa3d7a9a1753b31e5b7ff68229302be41a9af8ab0",
+   "sha256": "9cba08e376163d658d93fa4b369e8d39842f176df0568ecb372c60e430039243"
   },
   "rotogrinders": {
    "url": "https://rotogrinders.com/lineups/nba?site=draftkings",
    "status": "ok",
-   "fetched_at": "2026-11-12T23:35:30.519Z",
+   "fetched_at": "2026-11-12T23:40:30.773Z",
    "saved_as": "news/lineups/pages/rotogrinders-2026-11-12T183530-0500.html.gz",
    "saved_at": "2026-11-12T23:35:30.519Z",
+   "unchanged_since": "2026-11-12T23:35:30.519Z",
    "parsed_sha": "d1f57d81dc50990c566a447b6bd0b3066ccbf38bbb21d403b433ba8ec7e07a2a",
-   "sha256": "1555b5a5c7059cb47fb298715509e805b8067e8c92b4d5e4906cb50077c3d25d"
+   "sha256": "46ba40cc3c3dceb00b6f7d0e97e864dfaf3abf228f799649fe7f787d8c9453de"
   }
  },
  "monster_news": {
@@ -1379,7 +1381,7 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Immanuel Quickley",
@@ -1422,7 +1424,7 @@
       "match": "exact"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": [
      {
       "name": "Scottie Barnes",
