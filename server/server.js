@@ -6,6 +6,9 @@ import { startUsageWarm } from "../site/shim/app-only.js";
 import fs from "../site/shim/fs.js";
 import path from "../site/shim/path.js";
 import { fileURLToPath, pathToFileURL } from "../site/shim/url.js";
+import { routeModule, routeMods, loadRouteModules } from "./route-modules.js";
+import { readNowSetting, optimizeErrorKind } from "./server-util.js";
+export { readNowSetting, optimizeErrorKind };
 import { refuseNonJsonPost, refuseCrossSiteRead } from "./lib/origin.js";
 import { info, error } from "../site/shim/log.js";
 import { checkLogQuery, getPlayerLog, PlayerLogError } from "../site/shim/app-only.js";
@@ -290,15 +293,6 @@ async function handleBuilds(req, res, slate) {
 // The worker, the limits and the partial answer are in lineup/build-run.js.
 const OPTIMIZE_URL = pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), "lineup", "optimize.js")).href;
 
-/**
- * Sorts an optimize() error: one about the slate file or the saved picks (it names "in this slate file", or the players,
- * locked or excluded lists the server itself passed) is the server's data, not the request; anything else is the mode or
- * the settings the request sent.
- */
-export function optimizeErrorKind(message) {
-  return /in this slate file\.?$/.test(message) || /^(Players|Locked|Excluded) /.test(message) ? "slate" : "settings";
-}
-
 /** GET the slate's working lineup; POST { slots: 8 entries, a player id or null each } saves it (server/slate/store.js). */
 async function handleWorking(req, res, slate) {
   const slateData = openSlate(req, res, slate, "The working lineup");
@@ -428,17 +422,6 @@ async function handleBuildStop(req, res, slate, opts) {
   return send(res, 200, { stopped: true });
 }
 
-/**
- * NBADFS_NOW, the test clock for late swap: unset means the real clock; set, it must be a whole number of milliseconds or an
- * ISO stamp with an offset, else the server refuses to start. Returns { ms } (null when unset) or { error }.
- */
-export function readNowSetting(v) {
-  if (v == null || v === "") return { ms: null };
-  if (/^\d+$/.test(v)) return { ms: Number(v) };
-  if (/T\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/.test(v) && !Number.isNaN(Date.parse(v))) return { ms: Date.parse(v) };
-  return { error: `NBADFS_NOW is "${v}"; it must be milliseconds or an ISO time with an offset, like 2026-10-29T21:00:00-04:00.` };
-}
-
 /** GET /api/player-log?name=&team= : all the player's regular-season games this season, newest first, from ESPN (Basketball-Reference as the
  *  fallback). It makes the server fetch from outside sites, so another site's page is refused (403). When the browser
  *  drops the request (the card was closed or swapped), the lookup is told and its queued fetches are skipped. */
@@ -460,32 +443,6 @@ async function handlePlayerLog(req, res, url) {
     error("player log failed", { name: q.name, team: q.team, message: e.message });
     return fail(res, e.status, "NO_LOG", e.message);
   }
-}
-
-/** The lazily imported route modules (R: startup check). Loaded once at startup by loadRouteModules; after that a request uses
- *  the copy loaded then, so an edit on disk reaches the running app only with a restart. Tests that build a server without
- *  the startup load fall back to a plain import on first use. */
-// The site build does not shim these; static-api.js and site-pull.js answer these routes on the site. The worker and cycle child read code from disk, which is safe because the live app runs from a clean copy nobody edits.
-// newsApply has no route of its own: Pull now imports it lazily (pullnow/route.js), and loading it here puts it in the module cache.
-const ROUTE_FILES = { usage: "usage/route.js", pullnow: "pullnow/route.js", newsApply: "slate/news-apply.js" };
-const routeMods = {};
-function routeModule(key) {
-  return routeMods[key] ? Promise.resolve(routeMods[key]) : import(`./${ROUTE_FILES[key]}`);
-}
-
-/** Imports every lazily loaded route module before the server listens. Returns { ok: true, mods } (key -> module; the caller
- *  keeps it, so a test's own map never leaks into routeMods) or { ok: false, file, message, stack } for the first file that
- *  would not load. `files` is the key -> relative path map. */
-export async function loadRouteModules(files = ROUTE_FILES, base = import.meta.url) {
-  const mods = {};
-  for (const [key, rel] of Object.entries(files)) {
-    try {
-      mods[key] = await import(new URL(rel, base).href);
-    } catch (e) {
-      return { ok: false, file: `server/${rel}`, message: e?.message ?? String(e), stack: String(e?.stack ?? "").split("\n").slice(0, 5).join("\n") };
-    }
-  }
-  return { ok: true, mods };
 }
 
 /** Decodes a path segment; a malformed escape (%E0) comes back as "" so the slate-name check refuses it with 400. */
@@ -630,6 +587,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   makeServer({ seasonFigures: withSeasonFigures, usageTable: seasonUsageTable, nowMs: now.ms, pullNowState, ourProjection: withOurProjection, primeTotals }).listen(port, "127.0.0.1", () => {
     info(`NBA board on http://127.0.0.1:${port}`);
     startSnapshotRefresh({ now: () => now.ms ?? Date.now() }); // keeps each team's figures saved for its tip (minutes/refresh.js)
-    routeModule("pullnow").then(({ startLightCheckIfAllowed }) => startLightCheckIfAllowed({ state: pullNowState, port })).catch((e) => error("the light check could not start", { error: e.message })); // only in the real app: the default data folder on port 8693
+    routeModule("pullnow").then(({ startLightCheckIfAllowed }) => startLightCheckIfAllowed({ state: pullNowState, port })).catch((e) => error("the light check could not start", { error: e.message })); // only in the real app: port 8693, on the default data folder or the live copy's NBADFS_DATA_DIR (route.js startLightCheckIfAllowed decides)
   });
 }

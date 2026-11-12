@@ -19,12 +19,14 @@
 const DETAIL_MAX = 160;
 /** The lineup pages, in the order they are named and the order that breaks a tie (Monster first). One copy; the other modules import it. */
 export const LINEUP_KEYS = Object.freeze(["monster", "rotowire", "rotogrinders"]);
+/** The pages' names as shown (R-audit item 6: one copy; engine, inputs, lineup-sync and board-marks import it). */
+export const LINEUP_LABEL = Object.freeze({ monster: "Monster", rotowire: "RotoWire", rotogrinders: "RotoGrinders" });
 /** Pages whose "confirmed" mark only backs another page until a real confirmed card has been seen (RotoGrinders, 11-11): it can join an agreement, never stand alone. */
 export const BACKS_ONLY = Object.freeze(["rotogrinders"]);
 /** Pages that carry no injury statuses: their five says nothing about who is Out, so it never counts against an Out claim. */
 export const NO_STATUS = Object.freeze(["rotogrinders"]);
 const ORDER = ["monster", "monster_news", "rotowire", "rotogrinders"]; // the order sources are named in
-const LABEL = { monster: "Monster", monster_news: "Monster", rotowire: "RotoWire", rotogrinders: "RotoGrinders" };
+const LABEL = { ...LINEUP_LABEL, monster_news: "Monster" };
 export const STALE_MIN = 90;
 /** The one age test of a lineup read: null while it is fresh, else { ageMin } (null when its time is unknown). Used by the proposals, the bar and the board's S chips. */
 export function staleOf(latest, nowMs) {

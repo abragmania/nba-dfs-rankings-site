@@ -5,10 +5,9 @@
 import { esc, isoToEastern } from "./board-util.js";
 import { liveText } from "./console-marks.js";
 import { syncWords } from "./console-auto.js";
-import { staleOf, LINEUP_KEYS, BACKS_ONLY } from "./lineup-proposals.js";
+import { staleOf, LINEUP_KEYS, LINEUP_LABEL, BACKS_ONLY } from "./lineup-proposals.js";
 import { newsRuling, newestStatusCards } from "./news-status.js";
 
-const LABEL = { monster: "Monster", rotowire: "RotoWire", rotogrinders: "RotoGrinders" };
 const okBlock = (b) => b?.state === "ok" && Array.isArray(b.men);
 const at = (iso) => (iso ? isoToEastern(iso) ?? iso : "time unknown");
 
@@ -16,7 +15,7 @@ const at = (iso) => (iso ? isoToEastern(iso) ?? iso : "time unknown");
 export function lineupClaims(latest, team, id) {
   const block = latest?.teams?.[team] ?? {};
   return LINEUP_KEYS.filter((k) => okBlock(block[k]) && block[k].men.some((m) => m.id != null && String(m.id) === String(id) && m.status !== "Out"))
-    .map((k) => ({ key: k, label: LABEL[k], confirmed: block[k].confirmed === true, at: latest.sources?.[k]?.fetched_at ?? null }));
+    .map((k) => ({ key: k, label: LINEUP_LABEL[k], confirmed: block[k].confirmed === true, at: latest.sources?.[k]?.fetched_at ?? null }));
 }
 
 /**
