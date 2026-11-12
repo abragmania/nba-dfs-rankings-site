@@ -1,13 +1,14 @@
 // Our minutes engine's three-tier model (Adam 11-12, replacing the rung/slot ladder), pure; tests/minutes_tiers.test.mjs on frozen fixtures.
 //  1. Tiers. Starter: tonight's five (the lineup pages' confirmed or agreed five, else TwoGun's starter flags on the board, said "expected"; a short five is filled from tonight's order).
-//     Bench+: a regular with real minutes in the team's last RECENT_GAMES games (BENCH_PLUS_GAMES of them, BENCH_PLUS_AVG a game when he played). Bench: everyone else, a man with no recent
-//     games included. An injury never moves a man up a tier.
+//     Bench+: a regular with real minutes: at least BENCH_PLUS_AVG minutes (overtime-scaled, the ledger rows' own) in at least BENCH_PLUS_GAMES of the team's last RECENT_GAMES games (Adam 11-12; not an
+//     average). Bench: everyone else, a man with no recent games included. An injury never moves a man up a tier.
 //  2. His own figure is ROLE DEPENDENT: the mean of his minutes in this season's games he played in tonight's role (started, or came off the bench). Last season's role games would fill a
 //     thin sample, but no source on file carries last season's per-game role (the ESPN logs have no starter flag), so only this season's are read. No game in the role: TwoGun's number for
 //     tonight, flagged "no games in this role" (R1: missing when TwoGun has none). Never his usual across roles, a blend across roles, or a slot or rung average.
 //  3. His ceiling: the CEILING_QUANTILE of his same-role games; fewer than CEILING_MIN_GAMES, his best; none, TwoGun's number. Never a single-game high otherwise.
 //  4. Pot: the team's figures against 240. Under 240 (the Out men's minutes): starters are filled first, each up to his ceiling; then Bench+ up to theirs, men sharing a position with an Out man
 //     first; then Bench in order of recent minutes, a man with no recent game last. Over 240: trimmed in reverse tier order (Bench, fewest recent minutes first, toward 0; then Bench+ in proportion; starters last), each trim said in the team's notes. What nobody can take is named, never dropped (G62).
+//  4b. A standing usual or cap override applies only in the role it was set for (Starter, or off the bench; ovGate): its stored role, else the role he held most often before its set date.
 //  5. Minutes limit: TwoGun far below his own figure (FAR_BELOW share and FAR_BELOW_MIN minutes) flags the row; both figures are shown, ours stands.
 // RECENT_GAMES, BENCH_PLUS_*, CEILING_*, FAR_BELOW* are working values Adam may tune. Typed minutes and standing minutes overrides are applied after this (figures.js), never rescaled.
 import { isNum } from "./figures.js";
@@ -16,7 +17,7 @@ const GAME_MINUTES = 240; // no import from tools/: the console page runs this f
 export const RETURN_LAST_GAMES = 20; // a returning rotation man needs this many games last season (a working value)
 export const RECENT_GAMES = 10;
 export const BENCH_PLUS_GAMES = 6;
-export const BENCH_PLUS_AVG = 15;
+export const BENCH_PLUS_AVG = 15; // minutes in a game for it to count toward Bench+ (and the returning man's mean)
 export const CEILING_QUANTILE = 0.75;
 export const CEILING_MIN_GAMES = 4;
 export const FAR_BELOW = 0.4;
@@ -60,11 +61,28 @@ export function chooseFive(order, confirmed) {
   return { ids: new Set(ids), kind, note };
 }
 
-/** A man's recent games: his own games (any team) dated on or after `since`, the date of the team's RECENT_GAMES-th last game (null: none). { n (played), total, avg (when he played) }. Pure. */
+/** A man's recent games: his own games (any team) dated on or after `since`, the date of the team's RECENT_GAMES-th last game (null: none). { n (played), total, avg (when he played), big (games of BENCH_PLUS_AVG minutes or more) }. Rows' minutes are overtime-scaled already (roleRows). Pure. */
 export function recentOf(rows, since) {
   const mine = since ? rows.filter((r) => r.date >= since) : [];
   const total = mine.reduce((s, r) => s + r.min, 0);
-  return { n: mine.length, total, avg: mine.length ? total / mine.length : null };
+  return { n: mine.length, total, avg: mine.length ? total / mine.length : null, big: mine.filter((r) => r.min >= BENCH_PLUS_AVG).length };
+}
+
+/**
+ * The role a standing override applies in (Adam 11-12): meta { role: "starter" | "bench" | null, set: "YYYY-MM-DD" }. Its stored role; with none, the role he held most often in his games before the set date
+ * (started in more than half of them: starter, else bench); null (applies in any role) when there is no such game. rows: [{ started, date }]. Pure.
+ */
+export function overrideRole(meta, rows) {
+  if (meta?.role === "starter" || meta?.role === "bench") return meta.role;
+  const before = meta?.set ? rows.filter((r) => r.date < meta.set) : [];
+  return before.length ? (before.filter((r) => r.started).length * 2 > before.length ? "starter" : "bench") : null;
+}
+
+/** Whether a standing override (value, meta) applies in tonight's role ("starter" | "bench"): { ok, for_role, text (when it does not) }. Pure. */
+export function ovGate(value, meta, rows, role) {
+  const forRole = overrideRole(meta, rows);
+  if (!forRole || forRole === role) return { ok: true, for_role: forRole, text: null };
+  return { ok: false, for_role: forRole, text: `your override of ${value} is for his ${forRole} role; tonight he ${role === "starter" ? "starts" : "is on the bench"}` };
 }
 
 /** One man's figure and ceiling for a role from his rows ({ min, started }): { value, ceiling, n, source: "role" | "twogun" | "none" }. Pure. */
@@ -95,9 +113,11 @@ const tierWords = { starter: "Starter", bench_plus: "Bench+", bench: "Bench" };
 
 /**
  * Tonight's minutes for one team. men: [{ id, key, name, lid (ledger id or null), tg (TwoGun's minutes or null), positions, in_five, replaces: [names of the Out starters he takes the place of], last_mpg (last
- * season's minutes a game, for a man with no games this season), ov: { usual, cap } (standing overrides' values, or {}) }]; rowsOf(lid) -> this season's played games [{ min, started }]; games: the team's ledger
+ * season's minutes a game, for a man with no games this season; last_missing: true when last season's minutes are not on file), ov: { usual, cap } (standing overrides' values, or {}) }]; rowsOf(lid) -> this season's played games [{ min, started }]; games: the team's ledger
  * games (null: none read); teamMinutes: what the team's men share (240; the console's typed minutes come off it); outs: [{ name, lid, positions, starter }] (Out for a reason); five: { kind, note }; boxNote: why games are unusable, or null.
- * Returns { byId: Map id -> { auto (null when missing), figure, computed, ceiling, computed_ceiling, tier, basis, why, used, flag, n }, notes, total (null when a figure is missing), pot }. Pure.
+ * ov may carry `meta` ({ usual, cap, minutes: { role, set } }) and `minutes` (the standing minutes override's value): each override applies only in the role it was set for (ovGate); the entry's `skipped`
+ * lists those it did not apply [{ field, text }] and `minutes_gate` is the minutes override's gate (null with none; its use stays with figures.js and console-tier.js).
+ * Returns { byId: Map id -> { auto (null when missing), figure, computed, ceiling, computed_ceiling, tier, basis, why, used, skipped, minutes_gate, flag, n }, notes, total (null when a figure is missing), pot }. Pure.
  */
 export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, teamMinutes: TEAM_MINUTES = GAME_MINUTES, since: sinceIn, teamGames: teamGamesIn }) {
   // since / teamGames: given by the console's payload (no ledger games there); else read from `games`
@@ -109,28 +129,37 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
     const rows = boxNote || !m.lid ? [] : rowsOf(m.lid) ?? [], recent = recentOf(rows, since);
     if (!boxNote && !m.lid) unmatched.push(m.name);
     // a returning rotation man (Out for most of this season's games with a real last season, or back from an injury that kept him Out for most of the last 10) takes his tier from his own minutes then
-    let returning = null;
-    if (!m.in_five && recent.n < BENCH_PLUS_GAMES && !boxNote) {
+    let returning = null, noFile = false;
+    if (!m.in_five && recent.big < BENCH_PLUS_GAMES && !boxNote) {
       const allMean = rows.length ? rows.reduce((s, r) => s + r.min, 0) / rows.length : null, window = Math.min(RECENT_GAMES, teamGames);
       if (!rows.length && teamGames > 0 && (m.out_season ?? 0) * 2 > teamGames && m.last_unknown) noLast.push(m.name);
+      noFile = !rows.length && teamGames > 0 && (m.out_season ?? 0) * 2 > teamGames && m.last_missing === true; // last season's minutes are not on file: said on his row, never read as Bench silently
       if (!rows.length && teamGames > 0 && (m.out_season ?? 0) * 2 > teamGames && (m.last_games ?? 0) >= RETURN_LAST_GAMES && isNum(m.last_mpg) && m.last_mpg >= BENCH_PLUS_AVG)
         returning = `returning rotation man: ${r1(m.last_mpg)} a game over ${m.last_games} games last season, Out for ${m.out_season} of the team's ${teamGames} games this season`;
       else if (rows.length && window > 0 && (m.out_recent ?? 0) * 2 > window && allMean >= BENCH_PLUS_AVG)
         returning = `back from injury: ${r1(allMean)} a game over ${rows.length} earlier game${rows.length === 1 ? "" : "s"} this season, Out for ${m.out_recent} of the team's last ${window}`;
     }
-    const tier = m.tier_force ?? (m.in_five ? "starter" : (recent.n >= BENCH_PLUS_GAMES && recent.avg >= BENCH_PLUS_AVG) || returning ? "bench_plus" : "bench");
+    const tier = m.tier_force ?? (m.in_five ? "starter" : recent.big >= BENCH_PLUS_GAMES || returning ? "bench_plus" : "bench");
     const role = tier === "starter" ? "starter" : "bench", f = roleFigure(rows, role, m.tg);
     let value = f.value, ceiling = f.ceiling;
     const computed = value, computedCeiling = ceiling, used = [];
     let words;
-    const pre = returning ? `${returning}; ` : "";
+    const pre = returning ? `${returning}; ` : noFile ? "last season's minutes are not on file, so he cannot be recognized as a returning rotation man; " : "";
     if (f.source === "role") words = `${pre}${tierWords[tier]}: mean ${r1(f.value)} over ${f.n} game${f.n === 1 ? "" : "s"} he played ${ROLE_WORD[role]} this season, ceiling ${r1(f.ceiling)} (${f.n < CEILING_MIN_GAMES ? `his best: under ${CEILING_MIN_GAMES} games` : `the ${Math.round(CEILING_QUANTILE * 100)}th percentile of them`})${f.n < CEILING_MIN_GAMES ? "; last season's role games are not on file" : ""}`;
     else if (f.source === "twogun") words = `${pre}${tierWords[tier]}${m.replaces.length ? ` (takes ${m.replaces.join(", ")}'s place in the five)` : ""}: no games ${ROLE_WORD[role]} this season, so TwoGun's ${r1(f.value)} minutes, his ceiling too (flag: no games in this role; last season's role games are not on file)`;
     else words = `${pre}${tierWords[tier]}: no games ${ROLE_WORD[role]} this season and TwoGun has no minutes for him: minutes missing, not guessed (RULES R1)`;
-    if (isNum(m.ov.usual)) { value = m.ov.usual; used.push("usual"); }
-    if (isNum(m.ov.cap)) { ceiling = m.ov.cap; used.push("cap"); if (isNum(value) && value > ceiling) value = ceiling; } else if (isNum(m.ov.usual) && isNum(ceiling) && ceiling < m.ov.usual) { ceiling = m.ov.usual; used.push("cap"); }
-    if (isNum(m.ov.usual) && !isNum(ceiling)) { ceiling = m.ov.usual; used.push("cap"); }
+    const meta = m.ov.meta ?? {}, skipped = [], ovNow = {};
+    for (const f of ["usual", "cap"]) {
+      if (!isNum(m.ov[f])) continue;
+      const g = ovGate(m.ov[f], meta[f], rows, role);
+      if (g.ok) ovNow[f] = m.ov[f]; else skipped.push({ field: f, text: g.text });
+    }
+    const minutesGate = isNum(m.ov.minutes) ? ovGate(m.ov.minutes, meta.minutes, rows, role) : null;
+    if (isNum(ovNow.usual)) { value = ovNow.usual; used.push("usual"); }
+    if (isNum(ovNow.cap)) { ceiling = ovNow.cap; used.push("cap"); if (isNum(value) && value > ceiling) value = ceiling; } else if (isNum(ovNow.usual) && isNum(ceiling) && ceiling < ovNow.usual) { ceiling = ovNow.usual; used.push("cap"); }
+    if (isNum(ovNow.usual) && !isNum(ceiling)) { ceiling = ovNow.usual; used.push("cap"); }
     if (used.length) words += `; your standing override sets his ${used.map((u) => (u === "usual" ? "figure" : "ceiling")).join(" and ")}`;
+    if (skipped.length) words += `; ${skipped.map((x) => x.text).join("; ")}`;
     const overridden = used.includes("usual");
     const basis = overridden ? "override" : f.source === "none" ? "none" : f.source === "twogun" ? "twogun" : m.replaces.length && tier === "starter" ? "replaces" : tier;
     let flag = null;
@@ -138,7 +167,7 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
       flag = { kind: "twogun_far_below", twogun: m.tg, own: r1(value), text: `Minutes limit: TwoGun has ${m.tg}, far below his own ${r1(value)} (over ${Math.round(FAR_BELOW * 100)}% and ${FAR_BELOW_MIN}+ minutes under); both are shown, ours is used` };
     if (!overridden && f.source === "twogun") flag = m.lid || boxNote ? { kind: "no_role_games", twogun: m.tg, own: null, text: "No games in this role: TwoGun's number is used" } : { kind: "not_matched", twogun: m.tg, own: null, text: "Not matched to the box scores, so no games of his were read: TwoGun's number is used" };
     if (!overridden && f.source === "none") flag = m.lid || boxNote ? { kind: "no_figure", twogun: null, own: null, text: "No games in this role and no TwoGun minutes: his minutes are missing" } : { kind: "not_matched", twogun: null, own: null, text: "Not matched to the box scores and TwoGun has no minutes: his minutes are missing" };
-    by.set(m.id, { m, tier, recent, figure: value, computed, ceiling, computed_ceiling: computedCeiling, basis, words, used, flag, n: f.n, source: f.source });
+    by.set(m.id, { m, tier, recent, skipped, minutes_gate: minutesGate, figure: value, computed, ceiling, computed_ceiling: computedCeiling, basis, words, used, flag, n: f.n, source: f.source });
   }
   const all = [...by.values()], known = all.filter((x) => isNum(x.figure)), missing = all.filter((x) => !isNum(x.figure));
   const sum = known.reduce((s, x) => s + x.figure, 0), out = new Map(), gap = TEAM_MINUTES - sum;
@@ -189,9 +218,9 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
   }
   for (const x of known) {
     const e = extra.get(x.m.id) ?? 0, c = cut.get(x.m.id) ?? 0, auto = x.figure + e - c, t = tail.get(x.m.id);
-    out.set(x.m.id, { auto, figure: x.figure, computed: x.computed, ceiling: x.ceiling, computed_ceiling: x.computed_ceiling, tier: x.tier, basis: x.basis, used: x.used, flag: x.flag, n: x.n,
+    out.set(x.m.id, { auto, figure: x.figure, computed: x.computed, ceiling: x.ceiling, computed_ceiling: x.computed_ceiling, tier: x.tier, basis: x.basis, used: x.used, skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: x.n,
       why: `${x.words}${e > 0 ? `; plus ${r1(e)} from the ${potWord} (${t})` : ""}${c > 0 ? `; minus ${r1(c)}: the team's figures are over ${TEAM_MINUTES} (${t})` : ""} = ${r1(auto)}` });
   }
-  for (const x of missing) out.set(x.m.id, { auto: null, figure: null, computed: null, ceiling: null, computed_ceiling: null, tier: x.tier, basis: x.basis, used: x.used, flag: x.flag, n: 0, why: x.words });
+  for (const x of missing) out.set(x.m.id, { auto: null, figure: null, computed: null, ceiling: null, computed_ceiling: null, tier: x.tier, basis: x.basis, used: x.used, skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: 0, why: x.words });
   return { byId: out, notes, total: missing.length ? null : sum + [...extra.values()].reduce((s, v) => s + v, 0) - [...cut.values()].reduce((s, v) => s + v, 0), pot: potState };
 }

@@ -45,7 +45,7 @@ export function tierScenario(team, outSet, flips = {}, typed = {}, edits = false
   const men = order.filter((id) => !typedIn.some(([t]) => t === id)).map((id) => {
     const m = T.men[id];
     return { id, key: id, name: m.name, lid: m.matched ? id : null, tg: m.tg, positions: m.positions ?? [], in_five: five.has(id), replaces: five.has(id) && !m.top5 ? outStarters : [], last_mpg: m.last_mpg, last_games: m.last_games,
-      last_unknown: m.last_unknown === true, out_season: m.out_season, out_recent: m.out_recent, ov: { usual: m.ov?.usual ?? undefined, cap: m.ov?.cap ?? undefined }, tier_force: FORCE[mark[id]] };
+      last_unknown: m.last_unknown === true, last_missing: m.last_missing === true, out_season: m.out_season, out_recent: m.out_recent, ov: { usual: m.ov?.usual ?? undefined, cap: m.ov?.cap ?? undefined, minutes: m.ov?.minutes ?? undefined, meta: m.ov?.meta ?? {} }, tier_force: FORCE[mark[id]] };
   });
   const typedSum = typedIn.reduce((s, [, v]) => s + v, 0);
   const why = T.confirmed ? (conf.ids.length ? null : "the lineup pages' five are all Out in this scenario") : T.five_why;
@@ -57,6 +57,7 @@ export function tierScenario(team, outSet, flips = {}, typed = {}, edits = false
     if (typedMin) { minutes[id] = { min: typedMin[1], basis: "typed", median: false, tier: five.has(id) ? "starter" : null, flag: null }; roles[id] = five.has(id) ? "starter" : mark[id] ?? "bench"; continue; }
     const e = plan.byId.get(id), ov = T.men[id].ov?.minutes;
     roles[id] = ROLE_OF[e.tier];
+    if (isNum(ov) && e.tier !== "bench" && e.minutes_gate?.ok === false) { minutes[id] = { min: e.auto, basis: `${e.why}; your standing minutes override (${ov}) is not used: ${e.minutes_gate.text}`, median: false, tier: e.tier, flag: e.flag }; continue; }
     if (isNum(ov) && e.tier !== "bench") { minutes[id] = { min: ov, basis: `${e.why}; your standing minutes override: ${ov} minutes (computed ${isNum(e.auto) ? Math.round(e.auto * 10) / 10 : "missing"})`, median: false, tier: e.tier, flag: e.flag }; continue; }
     minutes[id] = { min: e.auto, basis: e.why, median: false, tier: e.tier, flag: e.flag };
   }
