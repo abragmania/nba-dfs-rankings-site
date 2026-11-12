@@ -1,43 +1,45 @@
 {
  "slate": "2026-11-12-main",
- "generated_at": "2026-11-12T19:00:28.768Z",
+ "generated_at": "2026-11-12T21:10:44.467Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-12-main/raw/2026-11-12T130031-0500",
+ "slate_built_from": "slates/2026-11-12-main/raw/2026-11-12T161021-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-12T19:00:20.530Z",
+   "fetched_at": "2026-11-12T21:10:36.253Z",
    "saved_as": "news/lineups/pages/monster-2026-11-12T140020-0500.html.gz",
    "saved_at": "2026-11-12T19:00:20.530Z",
+   "unchanged_since": "2026-11-12T19:00:20.530Z",
    "parsed_sha": "86f0736a51c925e6b60d3d3efd2936a687757f6eb7ef882b21307a32950728c5",
-   "sha256": "bebbc8219e8ab3403ec4304f14ff1184636d8516fac23f705f8b6e6ced999b21"
+   "sha256": "eb8d57383fc7104426243137d7091e1e8aaa0c5921a80928323b8f28d70c43c7"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-12T19:00:24.602Z",
+   "fetched_at": "2026-11-12T21:10:40.321Z",
    "saved_as": "news/lineups/pages/rotowire-2026-11-12T140024-0500.html.gz",
    "saved_at": "2026-11-12T19:00:24.602Z",
+   "unchanged_since": "2026-11-12T19:00:24.602Z",
    "parsed_sha": "d5e557b6c1120886de5a38fec32c3a507446617f478543959e1e74221b537d36",
-   "sha256": "aeab87b6f5970091d7b961e9fd6b1add90b4e9cc7ccee8d7bb0d71f3a4c86d14"
+   "sha256": "d39396ceea72367b7705ba4081a69b45c5ead353545f7998e2cc9a6a434e02d7"
   },
   "rotogrinders": {
    "url": "https://rotogrinders.com/lineups/nba?site=draftkings",
    "status": "ok",
-   "fetched_at": "2026-11-12T19:00:28.732Z",
+   "fetched_at": "2026-11-12T21:10:44.454Z",
    "saved_as": "news/lineups/pages/rotogrinders-2026-11-12T131528-0500.html.gz",
    "saved_at": "2026-11-12T18:15:28.444Z",
    "unchanged_since": "2026-11-12T18:15:28.444Z",
    "parsed_sha": "0ba099b5e7021dc4c2794104ba44eeb92f6fecacb8975e861d60540932d13ca5",
-   "sha256": "b9dc6a14c442ac164d765f5b5834015ce90607246aad4f092afdb660890784eb"
+   "sha256": "7870aef3ca068189fd508eeeab5e3bb3c0e3744ee47b0d55391a8a74d50930b7"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-12T18:00:31.563Z",
-  "changed_at": "2026-11-12T13:00:31-05:00",
-  "saved_as": "news/bbm/2026-11-12T130031-0500.html",
+  "fetched_at": "2026-11-12T21:10:21.282Z",
+  "changed_at": "2026-11-12T16:10:21-05:00",
+  "saved_as": "news/bbm/2026-11-12T161021-0500.html",
   "out": [
    {
     "name": "Dominick Barlow",
@@ -58,10 +60,26 @@
    {
     "name": "LeBron James",
     "team": "PHI",
-    "id": "44887728",
-    "match": "exact",
+    "id": null,
+    "match": null,
     "status": "Out",
-    "detail": "low back/sciatica management - Est. Return 11/15"
+    "detail": "low back/sciatica management (Injury Maintenance) - Est. Return 11/15"
+   },
+   {
+    "name": "Scottie Barnes",
+    "team": "TOR",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "left groin strain - Est. Return 11/15"
+   },
+   {
+    "name": "Trayce Jackson-Davis",
+    "team": "TOR",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "illness - Est. Return 11/15"
    },
    {
     "name": "Kawhi Leonard",
@@ -106,18 +124,298 @@
   ],
   "cards": [
    {
+    "id": "182428",
+    "name": "Maxime Raynaud",
+    "team": "SAC",
+    "dk_id": null,
+    "match": null,
+    "word": "Injured",
+    "label": "Out",
+    "body": "right patella subluxation - Progressing but no official return date",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T21:02:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182427",
+    "name": "Malik Dia",
+    "team": "NOP",
+    "dk_id": null,
+    "match": null,
+    "word": "Doubtful",
+    "label": "Doubtful",
+    "body": "g league twoway",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T20:46:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182426",
+    "name": "Jaron Pierre",
+    "team": "NOP",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "g league twoway",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T20:46:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182425",
+    "name": "Bryce McGowens",
+    "team": "NOP",
+    "dk_id": null,
+    "match": null,
+    "word": "Doubtful",
+    "label": "Doubtful",
+    "body": "left elbow infection",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T20:45:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182424",
+    "name": "Bennedict Mathurin",
+    "team": "NOP",
+    "dk_id": null,
+    "match": null,
+    "word": "Doubtful",
+    "label": "Doubtful",
+    "body": "right thumb sprain",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T20:45:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182423",
+    "name": "Trendon Watford",
+    "team": "NOP",
+    "dk_id": null,
+    "match": null,
+    "word": "Out",
+    "label": "Out",
+    "body": "right ankle sprain",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T20:45:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182422",
+    "name": "Yves Missi",
+    "team": "NOP",
+    "dk_id": null,
+    "match": null,
+    "word": "Doubtful",
+    "label": "Doubtful",
+    "body": "left knee contusion / bone bruise",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T20:45:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182421",
+    "name": "Trey Murphy",
+    "team": "NOP",
+    "dk_id": null,
+    "match": null,
+    "word": "Doubtful",
+    "label": "Doubtful",
+    "body": "bilateral patellar tendinopathy",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T20:45:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182420",
+    "name": "Stephen Curry",
+    "team": "GSW",
+    "dk_id": null,
+    "match": null,
+    "word": "Injured",
+    "label": "Out",
+    "body": "oblique abdominal tear - He's expected to miss close to one month.",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T20:11:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182419",
+    "name": "Yves Missi",
+    "team": "NOP",
+    "dk_id": null,
+    "match": null,
+    "word": "",
+    "label": "UNKNOWN( #01A9DB)",
+    "body": "left knee contusion / bone bruise - Coach Mosley says Yves Missi will be listed as day-to-day.",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T19:46:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182418",
+    "name": "Grant Williams",
+    "team": "CHA",
+    "dk_id": "44888130",
+    "match": "exact",
+    "word": "Playing",
+    "label": "Playing",
+    "body": "right hamstring strain",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T18:52:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182417",
+    "name": "Moussa Diabate",
+    "team": "CHA",
+    "dk_id": "44887812",
+    "match": "exact",
+    "word": "Playing",
+    "label": "Playing",
+    "body": "right quadriceps tendinopathy",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T18:52:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182416",
+    "name": "Klay Thompson",
+    "team": "MIA",
+    "dk_id": null,
+    "match": null,
+    "word": "",
+    "label": "UNKNOWN( #01A9DB)",
+    "body": "left ankle",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T18:34:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182415",
+    "name": "Pelle Larsson",
+    "team": "MIA",
+    "dk_id": null,
+    "match": null,
+    "word": "",
+    "label": "UNKNOWN( #01A9DB)",
+    "body": null,
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T18:28:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182414",
+    "name": "Alexandre Sarr",
+    "team": "WAS",
+    "dk_id": "44887796",
+    "match": "exact",
+    "word": "Off Injury Report",
+    "label": "UNKNOWN(Off Injury Report #00cc44)",
+    "body": null,
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T18:28:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182413",
+    "name": "Anthony Davis",
+    "team": "WAS",
+    "dk_id": "44887695",
+    "match": "exact",
+    "word": "Off Injury Report",
+    "label": "UNKNOWN(Off Injury Report #00cc44)",
+    "body": null,
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T18:28:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
     "id": "182408",
     "name": "LeBron James",
     "team": "PHI",
-    "dk_id": "44887728",
-    "match": "exact",
+    "dk_id": null,
+    "match": null,
     "word": "Out",
     "label": "Out",
     "body": "low back/sciatica management",
     "words_at": "2026-11-12T130031-0500",
     "at": "2026-11-12T18:00:31.000Z",
     "precision": "minute",
+    "out_as": "LeBron James"
+   },
+   {
+    "id": "182412",
+    "name": "Trayce Jackson-Davis",
+    "team": "TOR",
+    "dk_id": null,
+    "match": null,
+    "word": "Out",
+    "label": "Out",
+    "body": "illness",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T17:58:21.000Z",
+    "precision": "minute",
+    "out_as": "Trayce Jackson-Davis"
+   },
+   {
+    "id": "182411",
+    "name": "Jakob Poeltl",
+    "team": "TOR",
+    "dk_id": "44887819",
+    "match": "exact",
+    "word": "Off Injury Report",
+    "label": "UNKNOWN(Off Injury Report #00cc44)",
+    "body": null,
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T17:58:21.000Z",
+    "precision": "minute",
     "out_as": null
+   },
+   {
+    "id": "182410",
+    "name": "Immanuel Quickley",
+    "team": "TOR",
+    "dk_id": "44887759",
+    "match": "exact",
+    "word": "Off Injury Report",
+    "label": "UNKNOWN(Off Injury Report #00cc44)",
+    "body": null,
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T17:58:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182409",
+    "name": "Scottie Barnes",
+    "team": "TOR",
+    "dk_id": null,
+    "match": null,
+    "word": "Out",
+    "label": "Out",
+    "body": "left groin strain",
+    "words_at": "2026-11-12T161021-0500",
+    "at": "2026-11-12T17:58:21.000Z",
+    "precision": "minute",
+    "out_as": "Scottie Barnes"
    },
    {
     "id": "182407",
@@ -179,15 +477,15 @@
     "id": "182403",
     "name": "LeBron James",
     "team": "PHI",
-    "dk_id": "44887728",
-    "match": "exact",
+    "dk_id": null,
+    "match": null,
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "low back/sciatica management",
     "words_at": "2026-11-12T130031-0500",
     "at": "2026-11-12T16:12:31.000Z",
     "precision": "minute",
-    "out_as": null
+    "out_as": "LeBron James"
    },
    {
     "id": "182402",
@@ -373,11 +671,12 @@
    }
   ],
   "pages_read": [
-   "2026-11-12T130031-0500.html"
+   "2026-11-12T130031-0500.html",
+   "2026-11-12T161021-0500.html"
   ],
   "unreadable_age": 0,
   "unread_ids": [],
-  "no_id_page": "2026-11-12T130031-0500.html",
+  "no_id_page": "2026-11-12T161021-0500.html",
   "no_id_newest": 0,
   "unread_cards": 0
  },
@@ -865,8 +1164,8 @@
       "pos": "F",
       "flag": "Out",
       "status": "Out",
-      "id": "44887698",
-      "match": "exact"
+      "id": null,
+      "match": null
      },
      {
       "name": "Nate Bittle",
@@ -881,8 +1180,8 @@
       "pos": "C",
       "flag": "Out",
       "status": "Out",
-      "id": "44887943",
-      "match": "exact"
+      "id": null,
+      "match": null
      },
      {
       "name": "Kawhi Leonard",
@@ -1089,8 +1388,8 @@
       "pos": "F",
       "flag": "Out",
       "status": "Out",
-      "id": "44887728",
-      "match": "exact"
+      "id": null,
+      "match": null
      }
     ]
    },
