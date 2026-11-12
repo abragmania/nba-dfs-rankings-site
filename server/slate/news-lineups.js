@@ -11,6 +11,11 @@ export function readNewsLineups(slate) {
   try {
     const latest = JSON.parse(fs.readFileSync(file, "utf8"));
     if (latest === null || typeof latest !== "object" || latest.teams === null || typeof latest.teams !== "object" || Array.isArray(latest.teams)) return { state: "unreadable", why: "latest.json has no teams" };
+    // The 5-minute lineup check's own finds file rides along as latest.found_by_check (server/pullnow/lineup-sync.js owns it), so a pull rewriting latest.json never loses them; a damaged file is said, not hidden (G62).
+    try {
+      const f = JSON.parse(fs.readFileSync(path.join(dataRoot(), "slates", slate, "lineup-finds.json"), "utf8"));
+      if (Array.isArray(f?.finds)) { latest.found_by_check = f.finds; if (f.last_check) latest.last_check = f.last_check; } else latest.found_unreadable = "lineup-finds.json has no finds list";
+    } catch (e) { if (e.code !== "ENOENT") latest.found_unreadable = `lineup-finds.json could not be read (${e.name})`; }
     return { state: "ok", latest };
   } catch (e) {
     return { state: "unreadable", why: `latest.json could not be read (${e.name})` };

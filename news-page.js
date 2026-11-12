@@ -102,10 +102,15 @@ export function logHtml({ feed, proposals, team = null, teams = [] }) {
     + `<div class="nwlf"><span class="fl">⚠️</span> = TwoGun hasn't reacted to this report yet</div></aside>`;
 }
 
+/** The page's foot: the lineup check's own notes (when it looked, a site it could not read, a saved five it kept); nothing when it has none. Escaped. */
+export function footHtml(lines) {
+  return Array.isArray(lines) && lines.length ? `<div class="nwnote nwfoot">${lines.map((l) => `<div>${esc(l)}</div>`).join("")}</div>` : "";
+}
+
 /** The whole page: a quiet line when the lineup read is too old or missing, the games, the log. */
 export function newsPageHtml({ model, proposals, team = null }) {
   const teams = [...new Set([...model.games.flatMap((g) => [g.away.code, g.home.code]), ...(model.orphans ?? []).map((o) => o.team)])].sort();
   const note = !model.hasRead ? "No lineup read yet: the starting fives are TwoGun's and no lineup news is proposed."
     : model.stale ? "The lineup read is too old to act on: the starting fives are TwoGun's and nothing is proposed from it." : "";
-  return `${note ? `<div class="nwnote">${esc(note)}</div>` : ""}<div class="nw"><main class="nwmain">${gamesHtml(model, team)}</main>${logHtml({ feed: model.log, proposals, team, teams })}</div>`;
+  return `${note ? `<div class="nwnote">${esc(note)}</div>` : ""}<div class="nw"><main class="nwmain">${gamesHtml(model, team)}</main>${logHtml({ feed: model.log, proposals, team, teams })}</div>${footHtml(model.foot)}`;
 }

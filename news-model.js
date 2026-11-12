@@ -108,6 +108,36 @@ export function feedEntries({ cards, players, out, pullChanges, day = null }) {
   return entries.sort((a, b) => (b.at ?? -Infinity) - (a.at ?? -Infinity));
 }
 
+/**
+ * The lineup changes the app's own 5-minute lineup check found (latest.json found_by_check, written by server/pullnow/lineup-sync.js): log rows with their time and "found by the 5-minute lineup check".
+ * A find for a team not on the slate, or one with no readable time, is left out of the log. Same row shape as feedEntries. Pure.
+ */
+export function foundEntries(found, teams, day = null) {
+  return (Array.isArray(found) ? found : []).map((f, i) => {
+    const at = Date.parse(f?.at ?? "");
+    if (!Number.isFinite(at) || typeof f?.text !== "string" || (f.team != null && !teams.has(f.team))) return null;
+    return { at, time: timeLabel(at, { day, log: true }), kind: "NOTE", team: f.team ?? "", text: `Lineup: ${f.text}`, title: `${f.text} (found ${timeLabel(at, { day })} ET)`, effect: `found by the ${f.by === "5-minute lineup check" ? "5-minute lineup check" : String(f.by ?? "lineup check")}`, effectTitle: "The app read the lineup pages itself and saw this change; no pull was pressed", flag: false, src: "Lineups", id: `found-${f.at}-${i}` };
+  }).filter(Boolean);
+}
+
+/**
+ * The News tab's foot lines about the 5-minute lineup check (G62, G64: at the bottom, not the main view): when it last looked and what it found, a site it could not read and why, a site or team whose saved five it kept
+ * (check_failed), and a damaged finds file. `latest`: the lineup read with the check's finds file attached (server/slate/news-lineups.js). [] with nothing to say. Pure.
+ */
+export function checkFoot(latest, day = null) {
+  const out = [], lc = latest?.last_check, name = { monster: "Monster", rotowire: "RotoWire", rotogrinders: "RotoGrinders" };
+  if (lc?.at) {
+    const at = Date.parse(lc.at);
+    out.push(`Lineup check (${lc.how ?? "5-minute check"}) at ${timeLabel(at, { day }) ?? "?"} ET: ${lc.result ?? "no result"}${lc.skipped_count ? `; ${lc.skipped_count} part${lc.skipped_count === 1 ? "" : "s"} of the pages not usable (${(lc.skipped_first ?? []).join("; ")}${lc.skipped_count > (lc.skipped_first ?? []).length ? "; …" : ""})` : ""}.`);
+    for (const f of lc.failed ?? []) out.push(`${name[f.src] ?? f.src} was not read by the check: ${f.why}.`);
+  }
+  for (const [src, s] of Object.entries(latest?.sources ?? {})) if (s?.check_failed) out.push(`${name[src] ?? src}: the saved read from before was kept (${s.check_failed.why}).`);
+  const teams = Object.entries(latest?.teams ?? {}).flatMap(([t, b]) => Object.entries(b ?? {}).filter(([k, v]) => v?.check_failed && !latest?.sources?.[k]?.check_failed).map(([k, v]) => `${t} ${name[k] ?? k}: ${v.check_failed.why}`));
+  if (teams.length) out.push(`Saved fives kept because the page no longer listed them: ${teams.join("; ")}.`);
+  if (latest?.found_unreadable) out.push(`The lineup check's finds could not be shown: ${latest.found_unreadable}.`);
+  return out;
+}
+
 /** A man's mark in words from the console's marks for his team: Out, Bench, S, or his typed minutes (m) or DK per minute (d); null with none. */
 export function markOf(view, team, id) {
   const m = view?.[team]?.marks;
@@ -228,6 +258,6 @@ export function newsModel({ slate, latest, nowMs, view, tip = (t) => t, tipAt = 
   for (const p of slate?.players ?? []) if (!inGames.has(p.team)) orphanTeams.set(p.team, { team: p.team, players: (orphanTeams.get(p.team)?.players ?? 0) + 1, outs: orphanTeams.get(p.team)?.outs ?? 0 });
   for (const o of slate?.out ?? []) if (!inGames.has(o.team)) orphanTeams.set(o.team, { team: o.team, players: orphanTeams.get(o.team)?.players ?? 0, outs: (orphanTeams.get(o.team)?.outs ?? 0) + 1 });
   const teams = new Set([...inGames, ...orphanTeams.keys()]);
-  const log = feedEntries({ cards: cards.filter((c) => teams.has(c.team)), players: slate?.players, out: slate?.out, pullChanges: slate?.pull_changes, day });
-  return { games, log, stale, hasRead: Boolean(latest), asOf, day, orphans: [...orphanTeams.values()] };
+  const log = [...feedEntries({ cards: cards.filter((c) => teams.has(c.team)), players: slate?.players, out: slate?.out, pullChanges: slate?.pull_changes, day }), ...foundEntries(latest?.found_by_check, teams, day)].sort((a, b) => (b.at ?? -Infinity) - (a.at ?? -Infinity));
+  return { games, log, stale, hasRead: Boolean(latest), asOf, day, orphans: [...orphanTeams.values()], foot: checkFoot(latest, day) };
 }
