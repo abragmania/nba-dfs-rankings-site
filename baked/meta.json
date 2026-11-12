@@ -1,6 +1,6 @@
 {
-  "publishedAt": "2026-11-12T23:22:26.877Z",
-  "sourceCommit": "34778aef6ebabe50b411bce03f82c12c227b59aa",
+  "publishedAt": "2026-11-12T23:25:52.490Z",
+  "sourceCommit": "25eca59d0be2a5850dd83cc8cb743ac52d146e23",
   "latest": {
     "slate": "2026-11-12-main",
     "players": 110,
@@ -29,9 +29,9 @@
   "console_missing": [],
   "files_missing": [],
   "cards": {
-    "log": 4,
-    "usage": 4,
-    "kept": 909,
+    "log": 0,
+    "usage": 0,
+    "kept": 917,
     "none": 137
   },
   "pull_facts": {

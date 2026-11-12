@@ -1,38 +1,37 @@
 {
  "slate": "2026-11-12-main",
- "generated_at": "2026-11-12T22:58:53.975Z",
+ "generated_at": "2026-11-12T23:25:30.429Z",
  "status": "ok",
  "slate_built_from": "slates/2026-11-12-main/raw/2026-11-12T175840-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-12T22:58:45.742Z",
+   "fetched_at": "2026-11-12T23:25:22.114Z",
    "saved_as": "news/lineups/pages/monster-2026-11-12T140020-0500.html.gz",
    "saved_at": "2026-11-12T19:00:20.530Z",
    "unchanged_since": "2026-11-12T19:00:20.530Z",
    "parsed_sha": "86f0736a51c925e6b60d3d3efd2936a687757f6eb7ef882b21307a32950728c5",
-   "sha256": "dc0c92d37dab8aaebdf4c1aa282b28e46b9227c36a9759044a9ec72f6c43289e"
+   "sha256": "92334e94920e9202960b51db63f6f4d63efcdaf962c2ca7a3511cc17bddddd4d"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-12T22:58:49.821Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-12T140024-0500.html.gz",
-   "saved_at": "2026-11-12T19:00:24.602Z",
-   "unchanged_since": "2026-11-12T19:00:24.602Z",
-   "parsed_sha": "d5e557b6c1120886de5a38fec32c3a507446617f478543959e1e74221b537d36",
-   "sha256": "3de661e7533a817355b47b768195cd327aa2f033f49f26c29848d6b1b94ddd26"
+   "fetched_at": "2026-11-12T23:25:26.202Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-12T182526-0500.html.gz",
+   "saved_at": "2026-11-12T23:25:26.202Z",
+   "parsed_sha": "132c4f77039272dff4e0d484418cc3b143f239e2a62e11dd752558141af6985c",
+   "sha256": "f4ecf79430c803a98d35e8b968ed674995db0d3a71c085746bedce2118b3702d"
   },
   "rotogrinders": {
    "url": "https://rotogrinders.com/lineups/nba?site=draftkings",
    "status": "ok",
-   "fetched_at": "2026-11-12T22:58:53.958Z",
+   "fetched_at": "2026-11-12T23:25:30.361Z",
    "saved_as": "news/lineups/pages/rotogrinders-2026-11-12T131528-0500.html.gz",
    "saved_at": "2026-11-12T18:15:28.444Z",
    "unchanged_since": "2026-11-12T18:15:28.444Z",
    "parsed_sha": "0ba099b5e7021dc4c2794104ba44eeb92f6fecacb8975e861d60540932d13ca5",
-   "sha256": "9b601786538317ac912a36b5914464d5ba7d91e2b3edd7e91ef99e8469c8eff5"
+   "sha256": "2346fc2e29c80c3d3a4d78c3166121730d635de5a0c2bc1eef5ec6585296a794"
   }
  },
  "monster_news": {
@@ -1819,14 +1818,6 @@
     ],
     "label": "Expected Lineup",
     "may_not_play": [
-     {
-      "name": "Morez Johnson",
-      "pos": "F",
-      "flag": "Prob",
-      "status": "Probable",
-      "id": "44888020",
-      "match": "exact"
-     },
      {
       "name": "Tarik Biberovic",
       "pos": "F",
