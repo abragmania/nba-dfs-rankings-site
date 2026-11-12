@@ -2,7 +2,10 @@
 // last build, which a new build of either mode replaces, so a reload or a restart still shows it. Per slate, in
 // data/cache/builds/<slate>.json (beside the saved lineups and the spots; it stays on this machine, never on GitHub):
 //   { slate, builds: [ { id, mode, built_at, lineups: [{ ids: [8 dk ids in slot order] }], rows: { dk_id: row }, skipped, note,
-//                        partial, stamps } ] }   (one build at most; a file from before keeps up to ten, and only its newest is read)
+//                        partial, stamps, minutes_file } ] }   (one build at most; a file from before keeps up to ten, and only its newest is read)
+// `stamps.pullAt` is the pull the build used and `minutes_file` the newest minutes snapshot (data/slates/<slate>/minutes-history/<stamp>-<reason>.json)
+// at or before the time the server first kept the build, set by the server only (null when there is none); with those two, "what did that build see"
+// is answerable, except minutes typed after the last snapshot, which are in no file.
 // `rows` are the men the build answered with (one row per man however many lineups hold him), so a card keeps drawing the figures
 // it was built with. Saved lineups are another file and are never touched here. Pure file access and checks; the route is in server.js.
 import fs from "../../site/shim/fs.js";
@@ -10,6 +13,7 @@ import path from "../../site/shim/path.js";
 import { dataRoot } from "./store.js";
 import { writeFileAtomic } from "../../site/shim/atomic.js";
 import { SLOTS, MAX_COUNT } from "../board/slots.js";
+import * as log from "../../site/shim/log.js";
 
 import { ROW_KEYS, KEEP_BUILDS, keepRecent } from "../board/recent-builds.js";
 
@@ -37,7 +41,7 @@ function cleanRow(id, r) {
 }
 
 /** A build checked and cleaned: { ok: true, build } or { ok: false, message }. The server never keeps more than the shape below. */
-export function checkBuild(b) {
+export function checkBuild(b, fromDisk = false) {
   const bad = (message) => ({ ok: false, message });
   if (!plain(b)) return bad("A build must be an object.");
   if (!idOk(b.id)) return bad('"id" must be text of 1 to 40 characters.');
@@ -63,7 +67,9 @@ export function checkBuild(b) {
   if (!Array.isArray(skipped) || skipped.length > 300 || skipped.some((s) => !plain(s) || Object.values(s).some((v) => !scalar(v) || (typeof v === "string" && v.length > 300)))) return bad('"skipped" must be a list of short records.');
   if (b.partial != null && (!plain(b.partial) || Object.values(b.partial).some((v) => !scalar(v)))) return bad('"partial" must be a short record.');
   if (b.stamps != null && (!plain(b.stamps) || JSON.stringify(b.stamps).length > 8000)) return bad('"stamps" must be a short record.');
-  return { ok: true, build: { id: b.id, mode: b.mode, built_at: b.built_at, lineups, rows, skipped, note, partial: b.partial ?? null, stamps: b.stamps ?? null } };
+  // minutes_file is the server's own stamp: only our file on disk carries it (fromDisk); a request body's is dropped, never read.
+  if (fromDisk && b.minutes_file != null && (typeof b.minutes_file !== "string" || b.minutes_file.length > 200)) return bad('"minutes_file" must be a file name.');
+  return { ok: true, build: { id: b.id, mode: b.mode, built_at: b.built_at, lineups, rows, skipped, note, partial: b.partial ?? null, stamps: b.stamps ?? null, minutes_file: fromDisk ? b.minutes_file ?? null : null } };
 }
 
 /** The slate's latest build (a list of one), or none when there is no file. A file written before a slate kept one build holds up to
@@ -74,8 +80,7 @@ export function readBuilds(slate) {
   if (!fs.existsSync(file)) return { slate, builds: [] };
   const saved = JSON.parse(fs.readFileSync(file, "utf8"));
   if (!plain(saved) || !Array.isArray(saved.builds)) throw new Error(`cache/builds/${slate}.json has no builds list`);
-  const builds = keepRecent(saved.builds);
-  for (const b of builds) { const c = checkBuild(b); if (!c.ok) throw new Error(`cache/builds/${slate}.json: ${c.message}`); }
+  const builds = keepRecent(saved.builds).map((b) => { const c = checkBuild(b, true); if (!c.ok) throw new Error(`cache/builds/${slate}.json: ${c.message}`); return c.build; }); // checked, so an old build answers minutes_file: null
   return { slate, builds };
 }
 
@@ -104,8 +109,56 @@ export function applyBuilds(current, checked) {
   return { ok: true, builds: keepRecent(next) };
 }
 
-/** Writes the slate's builds (atomically) and returns what a GET answers. */
-export function writeBuilds(slate, builds) {
-  writeFileAtomic(buildsFile(slate), JSON.stringify({ slate, builds }) + "\n");
-  return { slate, builds };
+/** The time of a pull stamp ("2026-11-11T184641-0500" or an ISO time), in milliseconds, or null when it is neither. */
+export function stampMs(stamp) {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):?(\d{2}):?(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})$/.exec(String(stamp ?? ""));
+  if (!m) return null;
+  const off = m[5] === "Z" ? "Z" : `${m[5].slice(0, 3)}:${m[5].slice(-2)}`;
+  const t = Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}${off}`);
+  return Number.isFinite(t) ? t : null;
+}
+
+/** The minutes snapshot a build is stamped with: the newest file of the slate's minutes-history folder whose name starts with a stamp at or
+ *  before `atMs` (the server time the build is first kept). The writer names a file at save time, after the pull key, and also saves a
+ *  lineup-check snapshot every 5 minutes, so the pull time would pick a stale file. Same-second files: the higher -N suffix, then the later
+ *  mtime. Minutes typed after the last snapshot are in no file. Also returns the file's own `pull` field (null when it has none). Pure reading.
+ *  { file: null, why } when there is no folder or no file that early. */
+export function minutesFileFor(slate, atMs) {
+  if (!Number.isFinite(atMs)) return { file: null, why: "the build time is not a time" };
+  const dir = path.join(dataRoot(), "slates", slate, "minutes-history");
+  if (!fs.existsSync(dir)) return { file: null, why: "the slate has no minutes-history folder yet" };
+  let best = null;
+  for (const f of fs.readdirSync(dir)) {
+    const t = f.endsWith(".json") ? stampMs(/^(\d{4}-\d{2}-\d{2}T\d{6}(?:[+-]\d{4}|Z))/.exec(f)?.[1]) : null;
+    if (t == null || t > atMs) continue;
+    const n = Number(/-(\d+)\.json$/.exec(f)?.[1] ?? 0), mtime = fs.statSync(path.join(dir, f)).mtimeMs;
+    if (!best || t > best.t || (t === best.t && (n > best.n || (n === best.n && mtime > best.mtime)))) best = { t, n, mtime, f };
+  }
+  if (!best) return { file: null, why: "no minutes snapshot is at or before the build" };
+  let pull = null;
+  try { pull = JSON.parse(fs.readFileSync(path.join(dir, best.f), "utf8"))?.pull ?? null; } catch (e) { return { file: best.f, pull: null, why: `the file could not be read: ${e.message}` }; }
+  return { file: best.f, pull };
+}
+
+/** Writes the slate's builds (atomically) and returns what a GET answers. A build kept for the first time gets its minutes_file from the
+ *  server, from the time it is kept (min(built_at, now)); a held one keeps the one it had (null stays null); the body is never read for it.
+ *  After the write succeeds, one server-log line per new build, and a warning when no file is stamped or the file's pull differs from the build's. */
+export function writeBuilds(slate, builds, nowMs = Date.now()) {
+  const held = new Map((fs.existsSync(buildsFile(slate)) ? readBuilds(slate).builds : []).map((b) => [b.id, b]));
+  const notes = [];
+  const out = builds.map((b) => {
+    if (held.has(b.id)) return { ...b, minutes_file: held.get(b.id).minutes_file ?? null };
+    const m = minutesFileFor(slate, Math.min(b.built_at, nowMs));
+    notes.push({ b, m });
+    return { ...b, minutes_file: m.file };
+  });
+  writeFileAtomic(buildsFile(slate), JSON.stringify({ slate, builds: out }) + "\n");
+  for (const { b, m } of notes) {
+    const key = b.stamps?.pullAt?.key ?? null, extra = { id: b.id, pull: b.stamps?.pullAt?.label ?? null, key };
+    if (m.file == null) log.warn(`build ${slate} no minutes file stamped: ${m.why}`, extra);
+    else if (m.why) log.warn(`build ${slate} minutes file ${m.file}: ${m.why}`, extra);
+    else if (m.pull != null && key != null && m.pull !== key) log.warn(`build ${slate} minutes file ${m.file} is from pull ${JSON.stringify(m.pull).slice(0, 60)}, the build used another`, extra);
+    log.info(`build ${slate} mode=${b.mode} lineups=${b.lineups.length} minutes=${m.file ?? "none"}`, extra);
+  }
+  return { slate, builds: out };
 }
