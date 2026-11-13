@@ -26,6 +26,9 @@ export const startSnapshotRefresh = never("Our minutes engine's snapshot refresh
  *  and the route answers unknown with its reason. */
 export const withBoxFreshness = (data) => data;
 export const readBoxFreshness = ({ nowMs = Date.now() } = {}) => ({ checked_at: new Date(nowMs).toISOString(), state: "unknown", ok: false, stale: [], why: "the box scores are checked only in the app on the computer", season: null });
+/** The board's self-check (G65) checks our engine's figures, which the site does not run: the slate carries no board_check and the route is an unknown path. */
+export const runAndLogOnChange = () => undefined;
+export const handleBoardCheck = (req, res, slate, { fail }) => fail(res, 404, "NOT_FOUND", "The board self-check runs only in the app on the computer.");
 export const handlePullNow = never("The app's Pull now (the site's button asks GitHub's cloud job instead, site-src/site-pull.js)");
 
 /**

@@ -3,6 +3,7 @@
 import { paletteOf, teamColors } from "./teams.js";
 import { assignColours } from "./colours.js";
 import { sourceRows, sourcesHtml, badgeHtml } from "./sources-panel.js";
+import { checkFootHtml } from "./board-check-foot.js";
 import { esc, logo, tipWhen, tipMs, slateRefMs, shortTime, isoToEastern, ICON, topStamps, keepFocus } from "./board-util.js";
 import { createPanel, fullScreenPref } from "./panel.js";
 import { tiers, notes } from "./highlight.js";
@@ -217,7 +218,9 @@ function renderUpdLine() {
 const numbersLine = () => (S.upd.updatedMs == null || !S.slate ? "" : statusLine({ ...S.upd, pull: pullOf(S.slate).label, consoleOpen: scenarioConsole.isOn() && S.consolePull !== pullOf(S.slate).key }));
 /** The collapsed "Sources and pull times" list at the foot of the page: the stamps, projection source, numbers line and box score line. */
 function renderSources() {
-  const el = $("sources"), s = S.slate;
+  const el = $("sources"), s = S.slate, bc = $("bcheck");
+  const foot = checkFootHtml(s?.board_check); // the board's self-check (G65): at the foot of the Player list only (board.css hides it on the other tabs)
+  bc.innerHTML = foot; bc.hidden = !foot;
   if (!s) { el.hidden = true; return; }
   const t = (raw) => when(raw) ?? null;
   const { board, injuries } = topStamps(s);
@@ -583,6 +586,20 @@ function applyPlayers(players) {
   S.byId = new Map(S.players.map((p) => [p.dk_id, p]));
   renderRows(); renderPick();
   lineupBar.redraw(); // the News tab shows his applied minutes at once (it reads S.players, which this just updated)
+  refreshCheck();
+}
+let checkTimer = null;
+/** The foot's self-check follows a save or a console apply (G65): asked again a moment after the last one; nothing on the site, whose slate carries no check. */
+function refreshCheck() {
+  clearTimeout(checkTimer);
+  if (!S.slate?.board_check) return;
+  checkTimer = setTimeout(async () => {
+    const name = S.name;
+    try {
+      const bc = await api(`/api/board-check/${encodeURIComponent(name)}`);
+      if (name === S.name && S.slate) { S.slate = { ...S.slate, board_check: bc }; renderSources(); }
+    } catch (e) { console.warn("The board self-check could not be refreshed:", e.message); }
+  }, 1200);
 }
 // The typed Proj and Own boxes (cell-editor.js, standard A3).
 const editors = createEditors({

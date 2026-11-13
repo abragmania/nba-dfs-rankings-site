@@ -40,6 +40,7 @@ import { withRest } from "../site/shim/back-to-back.js";
 import { withBoxFreshness, readBoxFreshness } from "../site/shim/app-only.js";
 import { withStatusSince } from "../site/shim/status-since.js";
 import { lateswapHandler } from "./slate/lateswap-route.js";
+import { runAndLogOnChange, handleBoardCheck } from "../site/shim/app-only.js";
 
 const BOARD_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "board");
 const MAX_BODY = 64 * 1024;
@@ -445,6 +446,17 @@ async function handlePlayerLog(req, res, url) {
   }
 }
 
+/** The slate as the board shows it (before the season figures): our projections or TwoGun's, Adam's overrides on top, usual minutes, pull moves, rest, status and box freshness. Returns null after sending a 404 or 500. */
+function builtSlate(res, slate, opts) {
+  const data = readSlate(slate);
+  if (!data) { fail(res, 404, "NO_SLATE", "No such slate."); return null; }
+  const ours = withOurs(slate, data, opts); // our projections, or TwoGun's, per the minutes setting
+  const players = effectivePlayers(res, slate, ours); // the board shows the effective figures, each with its base
+  if (!players) return null;
+  const usual = withUsualMinutes(slate, { ...ours, players }, { nowMs: opts.now() }); // each man's usual minutes, the console's figure
+  return withBoxFreshness(withStatusSince(slate, withRest(slate, withPullMoves(slate, withOurMinutes(slate, usual), { nowMs: opts.now() })), { nowMs: opts.now() }), { nowMs: opts.now() }); // who the newest pull moved against the one before it; box_freshness: whether the stored box scores are behind the schedule
+}
+
 /** Decodes a path segment; a malformed escape (%E0) comes back as "" so the slate-name check refuses it with 400. */
 function safeDecode(s) {
   try {
@@ -478,7 +490,7 @@ async function route(req, res, opts) {
   if (p === "/api/pull-status") return (await routeModule("pullnow")).handlePullStatus(req, res, { send, fail, state: opts.pullNow, deps: opts.pullNowDeps, url }); // the Pull now status block
   // A machine with no league totals yet fetches them once (capped) before a board or minutes read, so a cold start is not a board of missing projections (minutes/inputs.js primeTotals).
   // Reads only: a write, a build or late swap never waits on Basketball-Reference.
-  const primeFor = req.method === "GET" ? /^\/api\/(?:slate|minutes)\/([^/]+)(?:\/team\/[A-Z]{2,4})?$/.exec(p) : null;
+  const primeFor = req.method === "GET" ? /^\/api\/(?:slate|minutes|board-check)\/([^/]+)(?:\/team\/[A-Z]{2,4})?$/.exec(p) : null;
   if (opts.primeTotals && primeFor && SLATE_NAME.test(safeDecode(primeFor[1]))) await opts.primeTotals(safeDecode(primeFor[1]), { nowMs: opts.now() });
   const mins = minutesHandler(p); // our minutes engine (minutes/route.js)
   if (mins) return mins.handler(req, res, mins, { send, fail, readJson, now: opts.now, decode: safeDecode });
@@ -525,6 +537,14 @@ async function route(req, res, opts) {
     const stamp = pullStamp(slate, opts.now());
     return stamp ? send(res, 200, stamp) : fail(res, 404, "NO_SLATE", "No such slate.");
   }
+  m = p.match(/^\/api\/board-check\/([^/]+)$/);
+  if (m) { // the board's self-check on the slate as it is shown now (slate/board-check-route.js); one call before lock
+    const slate = safeDecode(m[1]);
+    if (!SLATE_NAME.test(slate)) return fail(res, 400, "BAD_SLATE", "Slate names look like 2026-10-29-main.");
+    const refused = refuseCrossSiteRead(req.headers);
+    if (refused) return fail(res, refused.status, refused.code, refused.message);
+    return handleBoardCheck(req, res, slate, { send, fail, build: (r, s) => builtSlate(r, s, opts), now: opts.now });
+  }
   m = p.match(/^\/api\/slate\/([^/]+)$/);
   if (m) {
     if (req.method !== "GET") return fail(res, 405, "METHOD", "GET only.");
@@ -532,14 +552,11 @@ async function route(req, res, opts) {
     if (!SLATE_NAME.test(slate)) return fail(res, 400, "BAD_SLATE", "Slate names look like 2026-10-29-main.");
     const refused = refuseCrossSiteRead(req.headers);
     if (refused) return fail(res, refused.status, refused.code, refused.message);
-    const data = readSlate(slate);
-    if (!data) return fail(res, 404, "NO_SLATE", "No such slate.");
-    const ours = withOurs(slate, data, opts); // our projections, or TwoGun's, per the minutes setting
-    const players = effectivePlayers(res, slate, ours); // the board shows the effective figures, each with its base
-    if (!players) return;
-    const usual = withUsualMinutes(slate, { ...ours, players }, { nowMs: opts.now() }); // each man's usual minutes, the console's figure
-    const merged = withBoxFreshness(withStatusSince(slate, withRest(slate, withPullMoves(slate, withOurMinutes(slate, usual), { nowMs: opts.now() })), { nowMs: opts.now() }), { nowMs: opts.now() }); // who the newest pull moved against the one before it; box_freshness: whether the stored box scores are behind the schedule
-    return send(res, 200, opts.seasonFigures ? await opts.seasonFigures(merged) : merged);
+    const merged = builtSlate(res, slate, opts);
+    if (!merged) return;
+    const check = runAndLogOnChange(slate, merged, opts.now()); // the board checks itself before Adam sees it (G65); its foot shows the answer (none on the public site)
+    const out = check ? { ...merged, board_check: check } : merged;
+    return send(res, 200, opts.seasonFigures ? await opts.seasonFigures(out) : out);
   }
   if (p.startsWith("/api/")) return fail(res, 404, "NOT_FOUND", "Not found.");
   if (req.method !== "GET" && req.method !== "HEAD") return fail(res, 405, "METHOD", "GET only.");

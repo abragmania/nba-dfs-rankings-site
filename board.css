@@ -820,6 +820,11 @@ body.light .cedit.ctyped{background:#9a5b0018}
 body.console-on .syncnote{display:none}
 .pbadge{padding:4px 10px;color:var(--am);font-size:11.5px;border-right:1px solid var(--ln)}
 .pbadge:last-child{border-right:0}
+.bcheck{margin:16px 12px 0;color:var(--mu);font-size:12px;display:grid;gap:3px}
+.bcheck[hidden],body.lineups-on .bcheck,body.news-on .bcheck,body.console-on .bcheck{display:none}
+.bcheck .bc-head{color:var(--tx)}
+.bcheck .bc-bad,.bcheck .bc-conflict{color:var(--am)}
+.bcheck+.sources{margin-top:8px}
 .sources{margin:16px 12px 24px;color:var(--mu);font-size:12px}
 .sources summary{cursor:pointer;padding:4px 0;user-select:none}
 .sources ul{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:max-content 1fr;gap:3px 18px}
