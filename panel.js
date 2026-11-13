@@ -8,13 +8,14 @@ import { esc, ICON, keepFocus } from "./board-util.js";
 import { SLOTS, arrangeForLateSwap, checkLineup } from "./slots.js";
 import { totals, capLine, cardRowHtml, skippedList, lineupTag, lineupRefusals, isOutNow } from "./card-row.js";
 import { KEPT_NOTE, lsView, startSlots, lsLineupHtml, lsNotesHtml, enterLateSwap, lsPin, lsUnpin, lsBuild, refresh, runClock, lsDownloadRefusal, lsClick } from "./lateswap-panel.js";
-import { readSettings, loadRaw, pinRaw, saveRaw, addLowRule, loadOverrides, settingsHtml, countHtml, slateGames, liveOverrides } from "./settings-panel.js";
+import { readSettings, loadRaw, readRaw, pinRaw, saveRaw, addLowRule, readOverridesByMode, perModeOverrides, overridesKey, settingsHtml, countHtml, slateGames, liveOverrides } from "./settings-panel.js";
 import { savedClick, readSaved, retrySaved, pickedSaved, savedName, loadSavedNames, savedNameKey, savedNameBlur, savedNameInput } from "./saved-panel.js";
 import { workView, shownIds, rowClick, slotClick, dropMan, loadSaved, saveIds, readWork, retryWork, freshWork, workLineupHtml, buildHand, blockedRows, clearLineup, workAfterRoster, NOT_LOADED } from "./work-panel.js";
 import { rememberSlots } from "./lateswap.js";
+import { startedByTip } from "./swap-list.js";
 import { limitsMoved, oversMoved, picksMoved } from "./slate-refresh.js";
 import { workKey } from "./worklineup.js";
-import { limitOutcome, withLimit, loadLimits, saveLimits, sentLimits, limitCountHtml } from "./row-limits.js";
+import { limitOutcome, withLimit, readLimits, saveLimits, sentLimits, limitCountHtml } from "./row-limits.js";
 import { nextExposureSort, frozenMen } from "./lineups-list.js";
 import { renderTab, tabClick, tabInput, readSpotsFor, retrySpots, readBuildsFor, retryBuilds, keepBuild, refit } from "./lineups-panel.js";
 import { newBuild } from "./recent-builds.js";
@@ -140,7 +141,7 @@ const picksKeyOf = (c) => JSON.stringify([c.picks.locked, c.picks.excluded]);
 const picksStaleHtml = (res, c) => (res?.lineups.length && res.picksAt != null && picksMoved(res.picksAt, picksKeyOf(c), c.byId) ? `<div class="actnote">Built before your last lock change; build again.</div>` : "");
 
 /** The Min % and Max % a build would send, as one string: compared to say a result is out of date. */
-const limitsKey = (P, c) => JSON.stringify(sentLimits(P.limits, c.byId));
+const limitsKey = (P, c) => JSON.stringify(P.mode === "GPP" ? sentLimits(P.limits, c.byId) : null); // a Cash build sends none
 
 function notesHtml(P, c) {
   const res = P.results[P.mode];
@@ -189,7 +190,7 @@ function render(X) {
   keepFocus(el, () => {
     el.innerHTML = `<div class="oh"><h3>Optimizer</h3><div class="seg">${MODES.map((m) => `<button data-op="mode" data-m="${m}" class="${m === P.mode ? "on" : ""}">${m}</button>`).join("")}</div></div>
 ${settings}<div class="lu${v ? "" : " wk"}">${lineup}</div>
-<div class="act">${buildButtonsHtml(P, ICON.bolt, "Build")}${v || !built ? "" : `<button class="ol opentab" data-op="opentab">${built} lineup${built === 1 ? "" : "s"} built: open Lineups</button>`}${v ? "" : limitCountHtml(sentLimits(P.limits, c.byId))}
+<div class="act">${buildButtonsHtml(P, ICON.bolt, "Build")}${v || !built ? "" : `<button class="ol opentab" data-op="opentab">${built} lineup${built === 1 ? "" : "s"} built: open Lineups</button>`}${v ? "" : limitCountHtml(P.mode === "GPP" ? sentLimits(P.limits, c.byId) : null)}
 <div class="two"><button class="ol" data-op="save"${canSave ? "" : " disabled"}>Save working lineup</button>${v ? `<button class="ol" data-op="csv"${n ? "" : " disabled"}>Download DK CSV${n ? ` (${n})` : ""}</button>` : ""}</div></div>
 ${v ? lsNotesHtml(P, c, v) + ovStaleHtml(lsRes, c) + picksStaleHtml(lsRes, c) + pullStaleHtml(lsRes, c) : notesHtml(P, c)}`;
   });
@@ -204,7 +205,7 @@ ${v ? lsNotesHtml(P, c, v) + ovStaleHtml(lsRes, c) + picksStaleHtml(lsRes, c) + 
 // import this file back.
 // A full working lineup is saved in late-swap order, the rule a build's lineups follow, so every saved lineup is in one order.
 const workOrder = (men) => lateSwapOrder(men);
-const own = { render, post, loadSlots, showSlots, downloadSaved, loadSaved: (X, l) => { if (loadSaved(X, l, own)) { if (l.swapped) { X.P.loaded = null; render(X); } /* a swap not yet saved is not "saved already": the working lineup can be saved */ showSlots(X); X.onView("list"); } }, readSpots: (X) => readSpotsFor(X, X.ctx().name, own), notesHtml, savedRefusal, lateSwapSeat, dkCsv, saveFile, lateSwapFrom: (X, men) => toggleLateSwap(X, null, men), lateSwapOff: (X) => (X.P.ls ? toggleLateSwap(X) : null), saveIds: (X) => saveIds(X.P, X.ctx(), workOrder) };
+const own = { render, post, loadSlots, showSlots, downloadSaved, loadSaved: (X, l) => { if (loadSaved(X, l, own)) { if (l.swapped) { X.P.loaded = null; render(X); } /* a swap not yet saved is not "saved already": the working lineup can be saved */ showSlots(X); X.onView("list"); } }, readSpots: (X) => readSpotsFor(X, X.ctx().name, own), notesHtml, savedRefusal: (l, byId, nameOf, started) => savedRefusal(l, byId, nameOf, started), lateSwapSeat, dkCsv, saveFile, lateSwapFrom: (X, men) => toggleLateSwap(X, null, men), lateSwapOff: (X) => (X.P.ls ? toggleLateSwap(X) : null), saveIds: (X) => saveIds(X.P, X.ctx(), workOrder) };
 
 /** After a Load (A12): the page comes back to the slots, unless their sticky band is on screen already. */
 function showSlots(X) {
@@ -248,7 +249,7 @@ async function build(X) {
     // The working lineup's hand-picked men are held in every lineup of this build only, and may take any slot their
     // positions allow (work-panel.js; the server sends optimize only their ids).
     const hand = buildHand(P), wk = workKey(P.work);
-    const exposure = sentLimits(P.limits, X.ctx().byId), limAt = JSON.stringify(exposure); // a man's Min % and Max % (B10); never sent in late swap, where they do not apply
+    const exposure = mode === "GPP" ? sentLimits(P.limits, X.ctx().byId) : null, limAt = JSON.stringify(exposure); // a man's Min % and Max % (B10): GPP builds only; never sent in late swap, where they do not apply
     const out = await postBuild(X, { mode, settings: exposure ? { ...settings, exposure } : settings, ...(hand ? { handPicks: hand } : {}) }, watch);
     if (P.build !== watch) return; // an abandoned build's answer, even if the panel is back on its slate
     const prev = P.results[mode];
@@ -319,7 +320,7 @@ async function download(X) {
   }
   const c = X.ctx(), ls = X.P.ls, res = ls ? ls.res : X.P.results[X.P.mode];
   // A man a new pull took off the slate, or newly Out, is named before anything else is checked.
-  const refused = res.lineups.map((l, i) => { const words = lineupRefusals(l.men ?? l.slots ?? [], c.byId, c.outNames); return words.length ? `Lineup ${i + 1}: ${words.join(", ")}.` : null; }).find(Boolean);
+  const refused = res.lineups.map((l, i) => { const words = lineupRefusals(l.men ?? l.slots ?? [], c.byId, c.outNames, startedByTip(c)); return words.length ? `Lineup ${i + 1}: ${words.join(", ")}.` : null; }).find(Boolean);
   if (refused) return X.toast(`DK file not written. ${refused}`, "err");
   // In late swap mode a pinned man is written in his pinned slot, never re-seated; every other man is seated by the
   // late-swap rule.
@@ -337,10 +338,10 @@ function saveFile(text, name) {
 }
 
 /** Why a saved lineup cannot go in the DK file, naming its card and any man off the slate (a saved lineup keeps only his id); null when it can. */
-export function savedRefusal(l, byId, nameOf = null) {
+export function savedRefusal(l, byId, nameOf = null, started = null) {
   const gone = l.slots.filter((id) => !byId.has(id));
   if (gone.length) return `${savedName(l)}: ${gone.map((id) => nameOf?.(id) ?? `DraftKings id ${id}`).join(", ")} ${gone.length === 1 ? "is" : "are"} no longer on this slate.`;
-  const outNow = l.slots.map((id) => byId.get(id)).filter((p) => isOutNow(p));
+  const outNow = l.slots.map((id) => byId.get(id)).filter((p) => isOutNow(p) && !started?.has(p.dk_id)); // an Out man whose game has started is the card's note only
   if (outNow.length) return `${savedName(l)}: ${outNow.map((p) => p.name).join(", ")} ${outNow.length === 1 ? "is" : "are"} Out now.`;
   const out = dkCsv([l.slots.map((id) => byId.get(id))]);
   return out.ok ? null : `${savedName(l)}: ${out.problems[0].replace(/^Lineup 1: /, "")}`;
@@ -349,7 +350,7 @@ export function savedRefusal(l, byId, nameOf = null) {
 /** The DK file for the ticked saved lineups (A12), checked and seated as a build's are; one that is not legal now stops the file. */
 function downloadSaved(X) {
   const c = X.ctx(), picked = pickedSaved(X.P);
-  const refused = picked.map((l) => savedRefusal(l, c.byId, c.knownName)).find(Boolean);
+  const refused = picked.map((l) => savedRefusal(l, c.byId, c.knownName, startedByTip(c))).find(Boolean);
   if (refused) return X.toast(`DK file not written. ${refused}`, "err");
   const out = dkCsv(picked.map((l) => l.slots.map((id) => c.byId.get(id))));
   if (!out.ok) return X.toast(`DK file not written. ${out.problems[0]}`, "err");
@@ -358,7 +359,7 @@ function downloadSaved(X) {
 
 // Browser storage holds per-viewer conveniences only (the viewer's own typed settings and team limits), the one use
 // the storage rule allows; it never holds a figure or shared state, and a failed write only loses the convenience.
-const saveOverrides = (X) => X.tryStore(() => localStorage.setItem(`nbaboard.opt.teams.${X.ctx().name}`, JSON.stringify(X.P.overrides)));
+const saveOverrides = (X) => X.tryStore(() => localStorage.setItem(overridesKey(X.ctx().name, X.P.mode), JSON.stringify(X.P.overrides))); // the mode in force keeps its own set
 
 function addOverride(X) {
   const { P, el } = X;
@@ -461,7 +462,8 @@ function setSlate(X, name, view = null) {
   abandonBuild(X);
   if (X.P.ls) { X.P.ls = { ...X.P.ls, slots: new Array(N).fill(null), userPins: [], res: null, msg: null }; refresh(X); }
   if (view) Object.assign(X.P, { mode: view.mode ?? X.P.mode, expSort: view.expSort, expPos: view.expPos });
-  Object.assign(X.P, { raw: Object.fromEntries(MODES.map((m) => [m, pinRaw(X.tryStore, m, name)])), svNames: loadSavedNames(X.tryStore, name), svEdit: null, overrides: loadOverrides(X.tryStore, name), limits: loadLimits(X.tryStore, name), results: {}, swap: null, lt: freshLt(), spots: {}, spotsReady: false, spotsError: null, spotsReading: null, spotQueue: null, spotPending: 0, spotGen: (X.P.spotGen ?? 0) + 1, spotMenu: null, spotWarn: null, spotMove: null, spotUndo: null, orderWarn: null, builds: [], buildsReady: false, buildsError: null, buildsReading: null, buildQueue: null, buildGen: (X.P.buildGen ?? 0) + 1, cmp: null, loaded: null, saved: [], savedPick: new Set(), savedError: null, savedReady: false, savedReading: null, running: false, showSkipped: false, ovOpen: false, ovMsg: null, lrOpen: false, lrMsg: null, ...freshWork() });
+  const ovRead = readOverridesByMode(X.tryStore, name), limRead = readLimits(X.tryStore, name), rawBad = MODES.filter((m) => readRaw(X.tryStore, m, name).unreadable);
+  Object.assign(X.P, { raw: Object.fromEntries(MODES.map((m) => [m, pinRaw(X.tryStore, m, name)])), svNames: loadSavedNames(X.tryStore, name), svEdit: null, ovByMode: ovRead.byMode, ovBad: ovRead.bad, limits: limRead.limits, limBad: limRead.unreadable, rawBad, results: {}, swap: null, lt: freshLt(), spots: {}, spotsReady: false, spotsError: null, spotsReading: null, spotQueue: null, spotPending: 0, spotGen: (X.P.spotGen ?? 0) + 1, spotMenu: null, spotWarn: null, spotMove: null, spotUndo: null, orderWarn: null, builds: [], buildsReady: false, buildsError: null, buildsReading: null, buildQueue: null, buildGen: (X.P.buildGen ?? 0) + 1, cmp: null, loaded: null, saved: [], savedPick: new Set(), savedError: null, savedReady: false, savedReading: null, running: false, showSkipped: false, ovOpen: false, ovMsg: null, lrOpen: false, lrMsg: null, ...freshWork() });
   render(X);
   readSaved(X, name, own);
   readSpotsFor(X, name, own); // the slate's spots (lineups-panel.js)
@@ -503,7 +505,8 @@ async function toggleLateSwap(X, idx = null, from = null) {
  * memory() is what the panel adds to the page's remembered view, and onMemory() says it has changed (view-memory.js).
  */
 export function createPanel({ el, lineupsEl = null, onView = () => {}, onTabs = () => {}, isLineupsView = () => false, api, toast, tryStore, dash, ctx, onLateSwap = () => {}, onWork = () => {}, onMode = () => {}, onClearLocks = () => {}, onMemory = () => {}, confirm = askConfirm }) {
-  const P = { mode: "GPP", raw: Object.fromEntries(MODES.map((m) => [m, loadRaw(tryStore, m)])), overrides: {}, limits: {}, results: {}, swap: null, lt: freshLt(), spots: {}, spotsReady: false, spotsError: null, spotsReading: null, spotQueue: null, spotPending: 0, spotGen: 0, spotMenu: null, spotWarn: null, spotMove: null, builds: [], buildsReady: false, buildsError: null, buildsReading: null, buildQueue: null, buildGen: 0, setOpen: false, loaded: null, saved: [], savedPick: new Set(), savedError: null, savedReady: false, savedReading: null, running: false, showSkipped: false, ovOpen: false, ovMsg: null, lrOpen: false, lrMsg: null, ls: null, expSort: { ...DEFAULT_EXPOSURE_SORT }, expPos: "All", svNames: {}, svEdit: null, ...freshWork() };
+  const P = { mode: "GPP", raw: Object.fromEntries(MODES.map((m) => [m, loadRaw(tryStore, m)])), limits: {}, results: {}, swap: null, lt: freshLt(), spots: {}, spotsReady: false, spotsError: null, spotsReading: null, spotQueue: null, spotPending: 0, spotGen: 0, spotMenu: null, spotWarn: null, spotMove: null, builds: [], buildsReady: false, buildsError: null, buildsReading: null, buildQueue: null, buildGen: 0, setOpen: false, loaded: null, saved: [], savedPick: new Set(), savedError: null, savedReady: false, savedReading: null, running: false, showSkipped: false, ovOpen: false, ovMsg: null, lrOpen: false, lrMsg: null, ls: null, expSort: { ...DEFAULT_EXPOSURE_SORT }, expPos: "All", svNames: {}, svEdit: null, ...freshWork() };
+  perModeOverrides(P); // P.overrides: the team and game limits of the mode in force; Cash and GPP each keep their own
   const X = { P, el, lel: lineupsEl, onView, onTabs, isLineupsView, onMode, api, toast, tryStore, dash, ctx, onLateSwap, onWork, onClearLocks, onMemory, confirm, settle: pressSettle() };
   X.redraw = () => render(X);
   el.addEventListener("click", (e) => { const was = P.mode; onClick(X, e); if (P.mode !== was) { onMode(P.mode); onMemory(); } });

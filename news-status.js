@@ -8,6 +8,7 @@
 // numbers and S, and Adam's own Out is never touched: this file only changes the word shown. Pure.
 
 const WORDS = [[/^playing$/i, "Available"], [/^question/i, "Questionable"], [/^doubt/i, "Doubtful"], [/^probable$/i, "Probable"]];
+import { isOut } from "./figures.js";
 const same = (a, b) => String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
 const calm = (s) => !String(s ?? "").trim() || same(s, "Available");
 
@@ -20,7 +21,7 @@ export function newsRuling({ card, tgStatus, tgSince = null, viewOut = false }) 
   const word = cardWord(card);
   const at = Date.parse(card?.at ?? "");
   if (!word || !Number.isFinite(at) || viewOut) return null;
-  if (same(tgStatus, "Out")) return null;
+  if (isOut(tgStatus)) return null;
   if (Number.isFinite(tgSince) && tgSince > at) return null;
   if (same(word, tgStatus) || (calm(word) && calm(tgStatus))) return null;
   return { word, at, note: card.body ?? null };
@@ -30,7 +31,7 @@ export function newsRuling({ card, tgStatus, tgSince = null, viewOut = false }) 
 export function newestStatusCards(cards) {
   const by = new Map();
   for (const c of cards ?? []) {
-    if (c?.dk_id == null || !(cardWord(c) || /^out$/i.test(String(c.label ?? "")))) continue;
+    if (c?.dk_id == null || !(cardWord(c) || isOut(c.label))) continue;
     const t = Date.parse(c.at ?? "");
     if (!Number.isFinite(t)) continue;
     const old = by.get(String(c.dk_id));

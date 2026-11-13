@@ -4,6 +4,7 @@ import { SLOTS, checkLineup } from "../board/slots.js";
 import { slateRefMs, startedSplit, pinsOf } from "../board/lateswap.js";
 import { lineupOf, spotEntries, modeFromName } from "./maps.js";
 import { departedFrom } from "./salary-table.js";
+import { isOut } from "../board/figures.js";
 
 /**
  * The slate read at nowMs; { ctx } or { error }. slate = { name: "2026-11-04-main", players, departed? }. players is the newest
@@ -20,17 +21,15 @@ export function slateContext(slate, nowMs) {
   const byId = new Map(players.map((p) => [p.dk_id, p]));
   const departed = (slate.departed ?? []).filter((p) => !byId.has(p.dk_id));
   const departedById = new Map(departed.map((p) => [p.dk_id, p]));
-  const { started, untimed } = startedSplit([...players, ...departed], { nowMs, refMs });
-  const untimedIds = new Set(untimed.map((p) => p.dk_id));
-  const outNames = new Set((Array.isArray(slate.out) ? slate.out : []).filter((o) => isOutStatus(o?.status)).map((o) => o.name));
+  const split = startedSplit([...players, ...departed], { nowMs, refMs });
+  const untimedIds = new Set(split.untimed.map((p) => p.dk_id));
+  const started = new Set([...split.started].filter((id) => !untimedIds.has(id))); // startedSplit counts an untimed man as started; here he stays apart so the words say "tip unreadable"
+  const outNames = new Set((Array.isArray(slate.out) ? slate.out : []).filter((o) => isOut(o?.status)).map((o) => o.name));
   return { ctx: { name: slate.name, players, byId, departedById, started, untimed: untimedIds, outNames, nowMs, refMs, man: (id) => byId.get(id) ?? departedById.get(id) ?? null } };
 }
 
-/** A status that means a man is Out: "Out" or the bare "O" the board's own checks also use (tools/slate_checks.mjs). Doubtful and the rest do not count. */
-const isOutStatus = (v) => /^(out|o)$/i.test(String(v ?? "").trim());
-
-/** True for a man on the board marked Out. Questionable and the rest do not count. */
-export const isBoardOut = (p) => isOutStatus(p?.injury_status);
+/** True for a man on the board marked Out (figures.js isOut). Questionable and the rest do not count. */
+export const isBoardOut = (p) => isOut(p?.injury_status);
 
 /**
  * The alert for a lineup holding men who are Out or gone from the board and have not started, as plain data, or null: { kind: "out", men:
@@ -39,7 +38,7 @@ export const isBoardOut = (p) => isOutStatus(p?.injury_status);
 export function outAlert(lineup, ctx) {
   const men = lineup.filter((id) => id != null && (ctx.departedById.has(id) || isBoardOut(ctx.byId.get(id))) && !frozenWhy(id, ctx)).map((id) => {
     const name = nameOf(id, ctx), isOut = ctx.byId.has(id) || ctx.outNames.has(name);
-    return { dk_id: id, name, why: isOut ? "Out" : "gone from the board", text: isOut ? `${name} is Out.` : `${name} is no longer on the newest pull.` };
+    return { dk_id: id, name, why: isOut ? "Out" : "gone from the board", text: isOut ? `${name} is Out; the upload file will hold any row that writes him.` : `${name} is no longer on the newest pull.` };
   });
   return men.length ? { kind: "out", men, text: men.map((m) => m.text).join(" ") } : null;
 }
@@ -133,7 +132,16 @@ export function frozenProblems(entry, lineup, ctx, confirmed = []) {
 /** Everything that keeps this entry's changed row out of the upload file now, as sentences; none when it may go. */
 export function exportProblems(entry, lineup, ctx, confirmed = []) {
   const blocks = entryBlocks(entry, ctx);
-  return blocks.length ? blocks : [...frozenProblems(entry, lineup, ctx, confirmed), ...lineupProblems(lineup, ctx)];
+  return blocks.length ? blocks : [...frozenProblems(entry, lineup, ctx, confirmed), ...lineupProblems(lineup, ctx), ...outProblems(entry, lineup, ctx)];
+}
+
+/** A man Out on the board whose game has not started keeps the row out of the file, as the DK file refuses him (Adam, 11-13). A frozen man
+ *  (started, untimed, or marked LOCKED in this entry's file) stays where he is and only gets the screen's note. */
+function outProblems(entry, lineup, ctx) {
+  // Out on the board, or left the players for TwoGun's out list (departed, and his name on it): the same man outAlert calls Out.
+  const isOutMan = (id) => isBoardOut(ctx.byId.get(id)) || (ctx.departedById.has(id) && ctx.outNames.has(nameOf(id, ctx, [entry])));
+  return [...new Set(lineup)].filter((id) => id != null && isOutMan(id) && !frozenWhy(id, ctx, entry))
+    .map((id) => `${nameOf(id, ctx, [entry])} is Out and his game has not started, so entry ${entry.entryId} is not written.`);
 }
 
 /**

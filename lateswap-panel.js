@@ -160,12 +160,13 @@ export function savedLocksHtml(c) {
 /** The mode's notes: what has started, men with no tip, locks a started game took out, and the last build's notes. */
 export function lsNotesHtml(P, c, v) {
   const out = [];
-  const games = [...new Set(c.players.filter((p) => v.started.has(p.dk_id)).map((p) => p.game))].sort();
+  const untimedIds = new Set(v.untimed.map((p) => p.dk_id));
+  const games = [...new Set(c.players.filter((p) => v.started.has(p.dk_id) && !untimedIds.has(p.dk_id)).map((p) => p.game))].sort();
   const rule = "Frozen men keep their slot; started men outside the lineup cannot be added.\nThe lineup shown is treated as your DraftKings entry: once a man in it tips, he freezes in that slot.\nPaging changes which lineup is your entry; a man who tips while he is off the page is treated as not in your entry.";
   out.push(`<div class="actnote" title="${rule}">${games.length ? `Started: ${esc(games.join(", "))} · their men stay frozen or out` : "No game has started yet: pin men to slots, or build as usual"}</div>`);
   if (v.untimed.length) {
     const names = v.untimed.map((p) => p.name ?? p.dk_id).join(", ");
-    out.push(`<div class="actnote" title="${esc(names)}">No tip time for ${v.untimed.length} ${v.untimed.length === 1 ? "man" : "men"} (${nameLinks(v.untimed)}): treated as not started</div>`);
+    out.push(`<div class="actnote" title="${esc(names)}">No tip time for ${v.untimed.length} ${v.untimed.length === 1 ? "man" : "men"} (${nameLinks(v.untimed)}): treated as started, so they stay frozen or out</div>`);
   }
   const res = P.ls.res?.mode === P.mode ? P.ls.res : null; // a build's notes show under the mode it built
   if (P.ls.msg) out.push(`<div class="actnote">${lsMsgHtml(P.ls, c.byId)}</div>`);

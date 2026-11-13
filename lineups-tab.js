@@ -7,6 +7,7 @@
 import { esc, money, isoToEastern } from "./board-util.js";
 import { SLOTS } from "./slots.js";
 import { cardRowHtml, capLine, totals, lineupTag, isOutNow } from "./card-row.js";
+import { isOut } from "./figures.js";
 import { gameStacks } from "./corr.js";
 import { exposureRows, exposureHtml, setKey, savedKey, savedKeys, builtFigures } from "./lineups-list.js";
 import { swapButtonHtml, swapPanelHtml, swapOptions, lineupStarted } from "./swap-list.js";
@@ -65,7 +66,7 @@ export const outNamesOfCtx = (c) => new Set([...outNameSet(c.outList), ...[...(c
  *  is { name, why }. men: slate players, or { dk_id, stale, name?, out? } stubs for a man who left the players (his name kept with
  *  the saved lineup; out when the slate's out list names him). */
 export function unavailableMen(men) {
-  return men.filter((p) => p && (p.stale || String(p.injury_status ?? "").trim().toLowerCase() === "out"))
+  return men.filter((p) => p && (p.stale || isOut(p.injury_status)))
     .map((p) => (!p.stale ? { name: p.name, why: "Out" }
       : p.name ? { name: p.name, why: p.out ? "Out" : "off the board" } : { name: `a man off the board (id ${p.dk_id})`, why: "off the board", unnamed: true }));
 }

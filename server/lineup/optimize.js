@@ -9,9 +9,12 @@ import { SLOTS, SALARY_CAP, DEFAULT_COUNT, MAX_COUNT, slotMask, pinnedMask, assi
 import { EPS, BOUND_SLACK, WIDTH, SLOT_BITS, REACH_MAX, buildBound, extendReach } from "./bound.js";
 import { readExposure, countLimits, limitStart, buildLimited } from "./exposure.js";
 import { fastLineup, checkFastLineup, jitter, seededRandom } from "./fast-search.js";
+import { isOut } from "../board/figures.js";
 
 const N = SLOTS.length;
 const MAX_LOW_RULES = 8;
+/** The reason a man not playing is in the skipped list. */
+export const OUT_WHY = "Out";
 /** The note when every man this run may use (pool and locked or pinned men) is from one game. */
 export const ONE_GAME_NOTE = "Every player this run can use is from one game; DraftKings needs players from at least two games.";
 /** Search steps allowed per lineup before the run stops and says the lineup is not proven best; settings.maxSteps overrides. */
@@ -111,10 +114,15 @@ function readSettings(mode, settings, slateTeams, slateGames) {
   // A man's Min % and Max % (exposure.js). Late swap fills open slots around one entry, so they do not apply there.
   const limits = readExposure(st.exposure);
   if (limits.error) return { error: limits.error };
-  s.exposure = limits.exposure;
+  s.exposureIgnored = mode !== "GPP" && Object.keys(limits.exposure).length > 0; // Min % and Max % are GPP settings (the server holds the rule too): a Cash run ignores them and says so
+  s.exposure = s.exposureIgnored ? {} : limits.exposure;
   if (pinIds.length && Object.keys(s.exposure).length) return { error: "Min % and Max % do not apply in late swap." };
   return { s };
 }
+
+/** A man the board or our minutes say is not playing: Out by status (figures.js isOut), or our engine's playing === false. Whatever his projection, the
+ *  pool never holds him (RULES R4); a man the caller locks, hand-picks or pins is its explicit choice and is named in the run's note instead. */
+export const isNotPlaying = (p) => isOut(p?.injury_status) || p?.ours?.playing === false;
 
 /** What a man lacks for this run, as phrases ("no salary"); empty when he is eligible. */
 function gaps(p, mode, s) {
@@ -562,7 +570,8 @@ function preparePool(players, mode, s, lockSet, exSet) {
   const pool = [];
   for (const { p, g } of byId.values()) {
     if (exSet.has(p.dk_id) || lockSet.has(p.dk_id)) continue;
-    if (g.length) skipped.push({ dk_id: p.dk_id, name: p.name, why: `${g.join(", ")} in this slate file` });
+    if (isNotPlaying(p)) skipped.push({ dk_id: p.dk_id, name: p.name, why: OUT_WHY });
+    else if (g.length) skipped.push({ dk_id: p.dk_id, name: p.name, why: `${g.join(", ")} in this slate file` });
     else pool.push(p);
   }
   skipped.sort((a, b) => (a.dk_id == null) - (b.dk_id == null) || byIdOrder(a.dk_id ?? "", b.dk_id ?? "") || byIdOrder(a.name ?? "", b.name ?? ""));
@@ -615,7 +624,13 @@ export function optimize({ players, mode, settings, locked = [], excluded = [], 
   if (handProblem) return fail([], handProblem);
   s.hand = handPicked.length > 0;
   const lockIds = new Set([...locked, ...handPicked]);
-  return runSearch(players, mode, s, lockIds, exSet, refMs, onProgress);
+  const result = runSearch(players, mode, s, lockIds, exSet, refMs, onProgress);
+  // A man Out who is held anyway (locked, hand-picked or pinned: the caller's own choice) is named, never rostered silently.
+  const held = new Set([...lockIds, ...Object.keys(s.pinned)]);
+  const heldOut = players.filter((p) => held.has(p.dk_id) && isNotPlaying(p)).map((p) => p.name ?? p.dk_id);
+  if (heldOut.length && result.lineups.length) result.note = [result.note, `${heldOut.join(", ")} ${heldOut.length === 1 ? "is" : "are"} Out but held in every lineup because ${heldOut.length === 1 ? "he was" : "they were"} locked, hand-picked or already in the entry.`].filter(Boolean).join(" ");
+  if (s.exposureIgnored && !result.error) result.note = [result.note, "Min % and Max % are GPP settings; this Cash run ignored them."].filter(Boolean).join(" ");
+  return result;
 }
 
 /** The sentence when the step limit ended the search on lineup r + 1. */
@@ -670,7 +685,8 @@ function runLimited(limits, players, { lockedMen, pool, skipped }, mode, s, exSe
   const byId = new Map(players.map((p) => [p.dk_id, p]));
   const usable = new Set(pool.map((p) => p.dk_id));
   const nameOf = (id) => byId.get(id)?.name ?? id;
-  const why = (id) => (usable.has(id) ? null : exSet.has(id) ? "is excluded" : `cannot be scored (${skipped.find((x) => x.dk_id === id)?.why ?? "a figure is missing"})`);
+  const skipWhy = (id) => skipped.find((x) => x.dk_id === id)?.why;
+  const why = (id) => (usable.has(id) ? null : exSet.has(id) ? "is excluded" : skipWhy(id) === OUT_WHY ? "is Out" : `cannot be scored (${skipWhy(id) ?? "a figure is missing"})`);
   const held = new Set(lockedMen.map((p) => p.dk_id));
   const refused = limitStart(limits, s.count, { nameOf, held, why });
   if (refused) return { lineups: [], skipped, note: refused, error: null };
@@ -695,7 +711,8 @@ function runSearch(players, mode, s, lockIds, exSet, refMs, onProgress) {
   if (!pool.length && lockedMen.length < N && allPicked) return done([], "Every player is excluded.");
   if (!pool.length && !lockedMen.length) {
     const unusable = players.every((p) => typeof p.dk_id !== "string" || !p.dk_id || !Array.isArray(p.roster_positions) || !p.roster_positions.length);
-    return done([], unusable ? "No player has roster positions or a DraftKings id in this slate file." : "No player has every figure this run needs in this slate file.");
+    const allOut = skipped.length > 0 && skipped.every((x) => x.why === OUT_WHY);
+    return done([], unusable ? "No player has roster positions or a DraftKings id in this slate file." : allOut ? "Every player left is Out." : "No player has every figure this run needs in this slate file.");
   }
   const problem = startProblem(lockedMen, pool, s);
   if (problem) return done([], problem);

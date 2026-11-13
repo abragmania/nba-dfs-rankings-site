@@ -6,6 +6,7 @@
 import { esc, money, dec1 } from "./board-util.js";
 import { SLOTS, SALARY_CAP, checkLineup } from "./slots.js";
 import { slateRefMs, startedSplit } from "./lateswap.js";
+import { isOut } from "./figures.js";
 
 export const SWAP_COUNT = 5;
 
@@ -15,15 +16,22 @@ export function swapContext(c, seat, nowMs = Date.now()) {
   return { byId: c.byId, players: c.players, excludedIds: new Set(c.picks.excluded), lockedIds: new Set(c.picks.locked), started, untimed: new Set(untimed.map((p) => p.dk_id)), seat };
 }
 
-const FROZEN = "A man in this lineup has started; use Late swap.";
+/** The men whose game has started by the tip times (a man with an unreadable tip is not in it: for a DK file he is treated as not started). */
+export function startedByTip(c, nowMs = Date.now()) {
+  const { started, untimed } = startedSplit(c.players, { nowMs, refMs: slateRefMs(c.name) });
+  const none = new Set(untimed.map((p) => p.dk_id));
+  return new Set([...started].filter((id) => !none.has(id)));
+}
+
+const FROZEN = "A man in this lineup has started or has no readable tip time; use Late swap.";
 /** True when any man of the lineup (men: slate players or stale stubs) has started: a swap would re-seat him. */
 export const lineupStarted = (men, ctx) => men.some((p) => p && ctx.started.has(p.dk_id));
 
-const isOut = (p) => String(p?.injury_status ?? "").trim().toLowerCase() === "out";
 
 /** Why the man in a lineup cannot be swapped out, or null. */
 export function swapOutRefusal(p, ctx) {
   if (!p || p.stale) return "He is no longer on this slate.";
+  if (ctx.untimed?.has(p.dk_id)) return "His tip time can't be read."; // startedSplit counts him as started: the words must not say so
   if (ctx.started.has(p.dk_id)) return "His game has started.";
   if (ctx.lockedIds.has(p.dk_id)) return "He is locked; unlock him first.";
   return null;
@@ -47,7 +55,7 @@ export function swapOptions(ids, outId, ctx, limit = SWAP_COUNT) {
   const room = SALARY_CAP - men.reduce((t, m, j) => t + (j === k || !Number.isInteger(m.salary) ? 0 : m.salary), 0); // what the slot may cost
   const options = [];
   for (const p of ctx.players) {
-    if (inLineup.has(p.dk_id) || ctx.excludedIds.has(p.dk_id) || ctx.lockedIds.has(p.dk_id) || ctx.started.has(p.dk_id) || ctx.untimed?.has(p.dk_id) || isOut(p)) continue; // an unreadable tip fails closed
+    if (inLineup.has(p.dk_id) || ctx.excludedIds.has(p.dk_id) || ctx.lockedIds.has(p.dk_id) || ctx.started.has(p.dk_id) || ctx.untimed?.has(p.dk_id) || isOut(p.injury_status) || p.ours?.playing === false) continue; // an unreadable tip fails closed
     if (typeof p.projection !== "number" || !Number.isInteger(p.salary)) continue;
     const next = men.map((m, j) => (j === k ? p : m));
     if (!checkLineup(next).ok) continue;

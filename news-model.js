@@ -6,6 +6,7 @@
 // (who have no id on the slate) by the Out entry's name the read stored (out_as); Out claims are the proposals' own (lineup-proposals.js claimsFor); TwoGun's minutes are tgMin, never his applied number.
 import { staleOf, tgMin, claimsFor, NO_STATUS, BACKS_ONLY } from "./lineup-proposals.js";
 import { newsRuling, newestStatusCards } from "./news-status.js";
+import { isOut } from "./figures.js";
 
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
 const stampMs = (s) => { const m = /^(\d{4}-\d{2}-\d{2})T(\d{2})(\d{2})(\d{2})([+-]\d{2})(\d{2})$/.exec(String(s ?? "")); return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}${m[5]}:${m[6]}`) : NaN; };
@@ -43,9 +44,9 @@ export function statusChip(word) {
   return { word: w, cls: "xx" };
 }
 /** An Out-list man's chip: the word TwoGun gave, a dash when it gave none (never a green Active). */
-const outChip = (status) => (String(status ?? "").trim() ? (/^out$/i.test(status) ? { word: "Out", cls: "ou" } : statusChip(status)) : { word: "—", cls: "xx" });
+const outChip = (status) => (String(status ?? "").trim() ? (isOut(status) ? { word: "Out", cls: "ou" } : statusChip(status)) : { word: "—", cls: "xx" });
 
-const KINDS = [[/^out$/i, "OUT"], [/question/i, "Q"], [/doubt/i, "D"], [/probable/i, "PROB"], [/playing/i, "IN"], [/^note$/i, "NOTE"], [/^starting$/i, "START"]];
+const KINDS = [[{ test: isOut }, "OUT"], [/question/i, "Q"], [/doubt/i, "D"], [/probable/i, "PROB"], [/playing/i, "IN"], [/^note$/i, "NOTE"], [/^starting$/i, "START"]];
 const kindOf = (label) => KINDS.find(([re]) => re.test(String(label ?? "")))?.[1] ?? "INFO";
 const atOf = (c) => { const v = Date.parse(c?.at ?? ""); return Number.isNaN(v) ? null : v; };
 /** The newest card of each man, by his id and by team|out_as (the Out-list name): a card with no time is only used when he has no other. */

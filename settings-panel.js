@@ -3,6 +3,7 @@
 // low-owned rules (GPP only). Everything here is pure or touches browser storage only; the clicks live in panel.js.
 import { esc } from "./board-util.js";
 import { SLOTS, DEFAULT_COUNT, MAX_COUNT } from "./slots.js";
+import { readLimits, sentLimits, probeJson, ABSENT } from "./row-limits.js";
 
 const N = SLOTS.length;
 // No min salary setting (Adam's ruling, 2026-10-29): an older stored minSalary is ignored because FIELDS leaves it out.
@@ -94,16 +95,31 @@ export function readSettings(raw, mode, overrides = {}) {
  *  nbaboard.opt.<mode> for a slate not yet touched; team overrides per slate (nbaboard.opt.teams.<slate>). These are per-viewer
  *  conveniences, the one thing browser storage may hold here: the viewer's own inputs, never a figure. A missing or unreadable
  *  entry falls back to the defaults (tryStore warns in the console when storage throws). */
-export function loadRaw(tryStore, mode, slate = null) {
-  const own = slate ? tryStore(() => JSON.parse(localStorage.getItem(`nbaboard.opt.${mode}.${slate}`) ?? "null")) : null;
-  const saved = own ?? tryStore(() => JSON.parse(localStorage.getItem(`nbaboard.opt.${mode}`) ?? "null")) ?? {};
-  const raw = Object.fromEntries(FIELDS.map((f) => [f, typeof saved[f] === "string" ? saved[f] : DEFAULTS[f]]));
+export const loadRaw = (tryStore, mode, slate = null) => readRaw(tryStore, mode, slate).raw;
+
+/**
+ * { raw, unreadable }. Absent (getItem null) falls back: this slate's key, then the last used for the mode, then the defaults. An entry that cannot
+ * be read gives the defaults and unreadable true, never another slate's settings in its place; the panel says so.
+ */
+export function readRaw(tryStore, mode, slate = null) {
+  let unreadable = false, saved = null;
+  const take = (got) => {
+    if (got === null) { unreadable = true; return false; }
+    if (got === ABSENT || got.value == null) return true; // absent: go on to the next place
+    if (typeof got.value !== "object" || Array.isArray(got.value)) { unreadable = true; return false; }
+    saved = got.value;
+    return false;
+  };
+  if (take(slate ? probeJson(tryStore, `nbaboard.opt.${mode}.${slate}`) : ABSENT)) take(probeJson(tryStore, `nbaboard.opt.${mode}`));
+  if (unreadable) console.warn(`nbaboard.opt.${mode}${slate ? `.${slate}` : ""} cannot be read; the defaults are used`);
+  saved ??= {};
+  const raw =Object.fromEntries(FIELDS.map((f) => [f, typeof saved[f] === "string" ? saved[f] : DEFAULTS[f]]));
   // Every save wrote every field, so an older stored 1 is the old default, not a choice: it takes D9's once (d9 marks a save
   // from here on, where a 1 was typed).
   if (saved.count === "1" && !saved.d9) raw.count = DEFAULTS.count;
   raw.d9 = true;
   if (mode === "GPP") raw.lowRules = readLowRules(saved);
-  return raw;
+  return { raw, unreadable };
 }
 
 /** Writes a mode's typed settings (and, in GPP, its low-owned rules) back to storage: a per-viewer convenience. */
@@ -115,9 +131,9 @@ export function saveRaw(tryStore, mode, raw, slate = null) {
 /** A slate's settings as it opens. A slate with none of its own takes the last used and keeps them from now on, so a later
  *  change on another slate leaves this one as it was. */
 export function pinRaw(tryStore, mode, slate) {
-  const raw = loadRaw(tryStore, mode, slate);
+  const { raw, unreadable } = readRaw(tryStore, mode, slate);
   const key = `nbaboard.opt.${mode}.${slate}`;
-  tryStore(() => { if (localStorage.getItem(key) == null) localStorage.setItem(key, JSON.stringify(raw)); });
+  if (!unreadable) tryStore(() => { if (localStorage.getItem(key) == null) localStorage.setItem(key, JSON.stringify(raw)); }); // defaults stood in for an unreadable entry are not kept as if they were Adam's
   return raw;
 }
 
@@ -170,12 +186,49 @@ export function lowOwnedHtml(rules, { open = false, msg = null, typed = {} } = {
   const addBtn = `<button class="ov" data-op="lropen"${full ? ` disabled title="At most ${MAX_LOW_RULES} low-owned rules"` : ""}>+ rule</button>`;
   return `<div class="teams"><span class="tl">Low-owned:</span><span class="ovs">${chips || `<span>none</span>`}</span>${addBtn}</div>${form}`;
 }
-export function loadOverrides(tryStore, slate) {
-  const saved = tryStore(() => JSON.parse(localStorage.getItem(`nbaboard.opt.teams.${slate}`) ?? "null"));
-  if (saved == null) return {};
-  if (typeof saved !== "object" || Array.isArray(saved)) { console.warn(`nbaboard.opt.teams.${slate} is not a team map; ignored`); return {}; }
-  const ok =(v) => v == null || (Number.isInteger(v) && v >= 0 && v <= N);
-  return Object.fromEntries(Object.entries(saved).filter(([, o]) => o && typeof o === "object" && ok(o.min) && ok(o.max)));
+/** Storage key of a mode's team and game limits for a slate (Adam, 11-13: Cash and GPP each keep their own). */
+export const overridesKey = (slate, mode) => `nbaboard.opt.teams.${mode}.${slate}`;
+const LEGACY_OV_MODES = ["Cash", "GPP"];
+
+/** A mode's stored limits; a mode with none of its own takes the one set older versions saved for both (nbaboard.opt.teams.<slate>). */
+export const loadOverrides = (tryStore, slate, mode = null) => readOverrides(tryStore, slate, mode).overrides;
+
+/**
+ * { overrides, unreadable }. A key that is absent (getItem null) differs from one that cannot be read (storage throws, bad JSON, not a team map):
+ * absent falls back to the old shared set; unreadable applies none ({}) and says so (unreadable true), never a stale set in its place.
+ */
+export function readOverrides(tryStore, slate, mode = null) {
+  const ABSENT = { absent: true };
+  const read = (key) => tryStore(() => { const t = localStorage.getItem(key); return t == null ? ABSENT : { value: JSON.parse(t) }; }); // tryStore gives null when this throws
+  const bad = (key, why) => { console.warn(`${key} ${why}; none of its limits are applied`); return { overrides: {}, unreadable: true }; };
+  let key = mode ? overridesKey(slate, mode) : `nbaboard.opt.teams.${slate}`;
+  let got = read(key);
+  if (got === ABSENT && mode) { key = `nbaboard.opt.teams.${slate}`; got = read(key); }
+  if (got === null) return bad(key, "cannot be read");
+  if (got === ABSENT) return { overrides: {}, unreadable: false };
+  const saved = got.value;
+  if (saved == null) return { overrides: {}, unreadable: false };
+  if (typeof saved !== "object" || Array.isArray(saved)) return bad(key, "is not a team map");
+  const ok = (v) => v == null || (Number.isInteger(v) && v >= 0 && v <= N);
+  return { overrides: Object.fromEntries(Object.entries(saved).filter(([, o]) => o && typeof o === "object" && ok(o.min) && ok(o.max))), unreadable: false };
+}
+
+/** Both modes' limits for a slate: { byMode: { Cash, GPP }, bad: [modes whose stored limits could not be read] }. */
+export function readOverridesByMode(tryStore, slate) {
+  const byMode = {}, bad = [];
+  for (const m of LEGACY_OV_MODES) { const r = readOverrides(tryStore, slate, m); byMode[m] = r.overrides; if (r.unreadable) bad.push(m); }
+  return { byMode, bad };
+}
+
+/** Both modes' limits for a slate: { Cash, GPP }. */
+export const loadOverridesByMode = (tryStore, slate) => readOverridesByMode(tryStore, slate).byMode;
+
+/** Gives the panel state P its limits per mode: P.ovByMode holds both sets, and P.overrides reads and writes the set of the mode in force (P.mode). */
+export function perModeOverrides(P, byMode = { Cash: {}, GPP: {} }, bad = []) {
+  P.ovBad = [...bad]; // the modes whose stored limits could not be read (settingsHtml says so)
+  Object.defineProperty(P, "ovByMode", { value: { ...byMode }, writable: true, enumerable: false, configurable: true });
+  Object.defineProperty(P, "overrides", { get() { return this.ovByMode[this.mode] ?? {}; }, set(v) { this.ovByMode[this.mode] = v; }, enumerable: true, configurable: true });
+  return P;
 }
 
 /** The Lineups count box on its own (it sits beside Build on the player list; settingsHtml leaves it out there). */
@@ -202,11 +255,33 @@ export function settingsHtml(P, teams, games = [], { count = true } = {}) {
   const msg = Object.values(bad)[0] ?? "";
   // A stored game limit the slate has lost: said in the block, one line per bound, each with × to remove it.
   const gone = staleGames(P.overrides, games).sort().flatMap((g) => ["min", "max"].filter((b) => P.overrides[g][b] != null).map((b) => `<div class="teams"><span class="ovs"><span class="ovc">${esc(g)} ${b} ${P.overrides[g][b]} ignored: that game is no longer on this slate<button data-op="ovdel" data-team="${esc(g)}" data-b="${b}" title="Remove ${esc(g)} ${b} ${P.overrides[g][b]}">×</button></span></span></div>`)).join("");
+  const unreadable = (P.ovBad ?? []).includes(P.mode) ? `<div class="teams"><span class="ovc" title="The saved limits could not be read from this browser, so none are applied">Your saved ${esc(P.mode)} team and game limits could not be read; none are applied.</span></div>` : "";
+  const line = (text) => `<div class="teams"><span class="ovc" title="The saved entry could not be read from this browser">${esc(text)}</span></div>`;
+  const unreadableAll = unreadable + ((P.rawBad ?? []).includes(P.mode) ? line(`Your typed ${P.mode} settings could not be read; the defaults are shown.`) : "") + (P.limBad && gpp ? line("Your saved Min % and Max % could not be read; none are applied.") : "");
   const varOn = raw.varOn === "1";
   const variance = `<div class="teams"><span class="tl" title="Each lineup is searched on every player's projection varied at random; the numbers shown stay the real ones">Variance:</span><div class="seg">${[["", "Off"], ["1", "On"]].map(([v, w]) => `<button data-op="varsw" data-v="${v}" class="${(raw.varOn ?? "") === v ? "on" : ""}">${w}</button>`).join("")}</div><span class="tl">± <input data-f="varPct" value="${esc(raw.varPct ?? "")}" inputmode="decimal" autocomplete="off"${varOn ? "" : " disabled"}${varOn && bad.varPct ? ` class="bad" title="${esc(bad.varPct)}"` : ""}> % on all players</span></div>`;
   return `<div class="sec sethd">Settings</div><div class="set${count ? "" : " two"}">${count ? `<label>Lineups${input("count")}</label>` : ""}<label>Min unique${input("minUnique")}</label>`
     + (gpp ? `<label>Max total own${input("maxTotalOwn", "none")}</label>` : `<label title="Ownership limits are GPP settings">Max total own<input disabled placeholder="GPP only"></label>`) + `</div>`
     + (gpp ? lowOwnedHtml(raw.lowRules ?? [], { open: P.lrOpen, msg: P.lrMsg, typed: P.lrForm ?? {} }) + variance : "")
-    + `<div class="teams"><span class="tl">Teams: min ${input("teamMin")} · max ${input("teamMax")} per team</span><span class="ovs">${chips}</span><button class="ov" data-op="ovopen">+ override</button></div>${gone}${form}`
+    + `<div class="teams"><span class="tl">Teams: min ${input("teamMin")} · max ${input("teamMax")} per team</span><span class="ovs">${chips}</span><button class="ov" data-op="ovopen">+ override</button></div>${unreadableAll}${gone}${form}`
     + `<div class="setmsg"${msg ? "" : " hidden"} title="${esc(msg)}">${esc(msg)}</div>`;
+}
+
+/**
+ * What a Late swap screen re-optimize sends of the board's own state, read from the same browser storage the optimizer panel uses: each mode's
+ * typed settings with its own team and game limits ({ Cash, GPP }), and the men's Min % and Max % (applied server-side to GPP spots only).
+ * A field that cannot be read is left out and named in settingsBad ({ Cash: [names], GPP: [names] }) so the server can say so. { settings, settingsBad, exposure } (exposure null with none).
+ */
+export function refillState(tryStore, slate) {
+  const settings = {}, settingsBad = {};
+  for (const mode of LEGACY_OV_MODES) {
+    const ov = readOverrides(tryStore, slate, mode), typed = readRaw(tryStore, mode, slate);
+    const { settings: s, bad } = readSettings(typed.raw, mode, ov.overrides);
+    settingsBad[mode] = [...Object.keys(bad).filter((f) => !["count", "minUnique", "varPct"].includes(f)), // a re-fill builds one lineup, so these three are never used
+      ...(typed.unreadable ? ["typed settings"] : []), ...(ov.unreadable ? ["team and game limits"] : [])];
+    settings[mode] = s;
+  }
+  const lim = readLimits(tryStore, slate);
+  if (lim.unreadable) settingsBad.GPP.push("Max %"); // a Max % binds GPP spots only
+  return { settings, settingsBad, exposure: sentLimits(lim.limits, { has: () => true }) };
 }

@@ -11,7 +11,7 @@
 // overlapping POSTs each apply onto the other's saved result. Every answer carries ms, the time the server spent on it.
 import { refuseCrossSiteRead } from "../lib/origin.js";
 import { error } from "../../site/shim/log.js";
-import { SLATE_NAME, readLineups, readSlate } from "./store.js";
+import { SLATE_NAME, readLineups, readSlate, readPicks } from "./store.js";
 import { readSaved, writeSaved, saveUpload, saveExport, listUploads, readUpload } from "./lateswap-store.js";
 import { readSpotsShown, applySpots, writeSpots } from "./spots.js";
 import { applyOp, uploadText, syncSpots, exportFile, slateFor } from "../lateswap/screen-ops.js";
@@ -131,7 +131,10 @@ async function handle(req, res, slate, ctx) {
     }
     if (body.op === "export") return exportOp(res, ctx, slate, slateData, saved, body, { sl, nowMs, dirty, extra, t0 });
     const lineups = body.op === "setLineup" ? readLineups(slate, slateData).lineups : [];
-    const out = applyOp(saved, body, { slate: sl, nowMs, lineups, spotsFile });
+    // The board's excluded men, saved on the server: read only for a re-optimize; a failed read passes null, which the outcome's notes name.
+    let picks = null;
+    if (body.op === "remove") { try { picks = readPicks(slate, slateData); } catch (e) { error("late swap: the board's picks could not be read", { slate, message: e.message }); } }
+    const out = applyOp(saved, body, { slate: sl, nowMs, lineups, spotsFile, picks });
     if (out.error) { if (dirty) writeSaved(slate, saved); return respond(res, ctx, slate, slateData, saved, { ...extra, refused: out.error, outcomes: out.outcomes }, t0); }
     if (out.confirms?.length && !out.spotWrite && out.saved === saved) { if (dirty) writeSaved(slate, saved); return respond(res, ctx, slate, slateData, saved, { ...extra, outcomes: out.outcomes, confirms: out.confirms }, t0); } // nothing is written until the go-ahead
     let next = mergeNotes(out.saved, out.notes ?? []);

@@ -106,7 +106,14 @@ export function limitMisses(exposure, count, lineups, nameOf = (id) => id) {
     if (c < l.minC) parts.push(`${nameOf(id)} is in ${c} of the ${l.minC} lineups his Min % needs`);
     if (l.max != null && (c / n) * 100 > l.max + ROUND) parts.push(`${nameOf(id)} is in ${c} of these ${n}, over his Max % of ${l.max}`);
   }
-  return parts.length ? `${countedOn(count)}: ${parts.join("; ")}.` : "";
+  return [zeroMaxNote(exposure, count, nameOf), parts.length ? `${countedOn(count)}: ${parts.join("; ")}.` : ""].filter(Boolean).join(" ");
+}
+
+/** A Max % that rounds down to no lineup at all names the man it leaves out ("Max 30% of 3 lineups allows 0; he is left out."); "" with none. A typed Max of 0 is meant, so it is not named. */
+export function zeroMaxNote(exposure, count, nameOf = (id) => id) {
+  const parts = [];
+  for (const [id, l] of countLimits(exposure, count)) if (l.max != null && l.max > 0 && l.maxC === 0) parts.push(`${nameOf(id)}: Max ${l.max}% of ${count} lineups allows 0; he is left out.`);
+  return parts.join(" ");
 }
 
 /** The sentence when the plan cannot place the men owed lineups (every man still short is named); `done` lineups are already built. */
@@ -157,5 +164,5 @@ export function buildLimited({ exposure, count, limits, search, addLineup, nameO
     if (!proven) return stepped(r, Boolean(ids));
     if (!ids) return shortNote(r, count, misses());
   }
-  return null;
+  return zeroMaxNote(exposure, count, nameOf) || null;
 }

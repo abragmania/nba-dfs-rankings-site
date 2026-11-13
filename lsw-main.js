@@ -12,6 +12,7 @@ import { exportHtml } from "./lsw-export.js";
 import { logo, shortTime, slateRefMs, topStamps, centralToMs, keepFocus } from "./board-util.js";
 import { showActive } from "./lineups-panel.js";
 import { loadSavedNames } from "./saved-panel.js";
+import { refillState } from "./settings-panel.js";
 
 const POLL_MS = 20000;
 const $ = (id) => document.getElementById(id);
@@ -56,6 +57,12 @@ function take(j) {
   L.clockOffset = j.model.nowMs - Date.now();
   if (!L.blunt.spot || !j.model.spots.some((s) => s.name === L.blunt.spot)) L.blunt.spot = j.model.spots[0]?.name ?? "";
   if (L.spot && !j.model.spots.some((s) => s.name === L.spot)) L.spot = null;
+}
+
+/** The board's own settings and Min %/Max % for a re-optimize, from the browser storage the optimizer panel uses (settings-panel.js); {} when storage cannot be read, which the server names. */
+function boardState() {
+  const tryStore = (fn) => { try { return fn(); } catch (e) { console.warn("Browser storage unreadable:", e.message); return null; } }; // as the panel's: an unreadable entry falls back to the defaults
+  try { return refillState(tryStore, L.slate); } catch (e) { console.warn("The board's optimizer settings are unreadable here:", e.message); return {}; }
 }
 
 /** A poll or a reload: the model is always taken in; only the redraw waits while a box or menu has the keyboard. */
@@ -464,7 +471,7 @@ async function onClick(e) {
       if (!scope) { L.msg = { kind: "warn", text: "No spot on the screen holds that man now; pick him again." }; return render(); }
       const lab = a === "removeBackup" ? backupLabels(M).find((x) => x.label === L.backupText) : null;
       if (a === "removeBackup" && !lab) { L.msg = { kind: "warn", text: "Pick the backup from the list." }; return render(); }
-      return void (await act({ op: "remove", man: L.blunt.man, ...(lab ? { backup: lab.id } : {}), scope }, { label: lab ? `Remove ${manName(L.blunt.man)}, lock ${lab.label}` : `Remove ${manName(L.blunt.man)}` }));
+      return void (await act({ op: "remove", man: L.blunt.man, ...(lab ? { backup: lab.id } : {}), scope, ...boardState() }, { label: lab ? `Remove ${manName(L.blunt.man)}, lock ${lab.label}` : `Remove ${manName(L.blunt.man)}` }));
     }
     case "undoAll": return void (await act({ op: "undoAll" }, { label: "Undo all" }));
     case "undoSpot": return void (await act({ op: "undoSpot", spot: d.spot }, { label: `Undo ${d.spot}` }));

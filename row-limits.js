@@ -47,7 +47,19 @@ export function cleanLimits(saved) {
 }
 
 const storeKey = (slate) => `nbaboard.opt.limits.${slate}`;
-export const loadLimits = (tryStore, slate) => cleanLimits(tryStore(() => JSON.parse(localStorage.getItem(storeKey(slate)) ?? "null")));
+/** A stored JSON entry told three ways: ABSENT (getItem null), null (unreadable: storage threw or the text is not JSON; tryStore gives null for a throw), or { value }. */
+export const ABSENT = Object.freeze({ absent: true });
+export function probeJson(tryStore, key) {
+  return tryStore(() => { const t = localStorage.getItem(key); return t == null ? ABSENT : { value: JSON.parse(t) }; });
+}
+
+/** { limits, unreadable }: absent is no limits; unreadable is none applied, said so (unreadable true), never a stand-in. */
+export function readLimits(tryStore, slate) {
+  const got = probeJson(tryStore, storeKey(slate));
+  if (got === null) { console.warn(`${storeKey(slate)} cannot be read; no Min % or Max % is applied`); return { limits: {}, unreadable: true }; }
+  return { limits: got === ABSENT ? {} : cleanLimits(got.value), unreadable: false };
+}
+export const loadLimits = (tryStore, slate) => readLimits(tryStore, slate).limits;
 export const saveLimits = (tryStore, slate, limits) => tryStore(() => localStorage.setItem(storeKey(slate), JSON.stringify(limits)));
 
 /** What a build sends as settings.exposure: the limits of men on this slate, in one order so two builds compare; null when none. */

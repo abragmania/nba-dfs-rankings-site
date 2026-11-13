@@ -72,37 +72,52 @@ function readScope(state, scope, man) {
 
 /** The limits across the set: { maxOf: Map dk_id -> most entries } or { error }. Percent of the assigned entries; only a Max binds
  *  here; optimize() refuses limits alongside pins, so the count is kept here, spot by spot. */
-function readLimits(state, exposure, ctx) {
+function readLimits(state, exposure, ctx, isGpp) {
   const read = readExposure(exposure);
   if (read.error) return { error: read.error };
   const off = Object.keys(read.exposure).filter((id) => !ctx.man(id));
   if (off.length) return { error: `A Max % is set on ${off.join(", ")}, not on this slate.` };
-  const assigned = Object.values(state.entrySpots).filter((s) => s != null).length;
-  const maxOf = new Map();
+  const assigned = Object.values(state.entrySpots).filter((s) => s != null && isGpp(s)).length; // a Max % is a GPP rule (the main build sends it in GPP only)
+  const maxOf = new Map(), pct = new Map();
   for (const [id, l] of countLimits(read.exposure, assigned)) {
     if (l.minC > 0) return { error: "Only a Max % applies across a set of entries; a Min % does not." };
     maxOf.set(id, l.maxC);
+    pct.set(id, l.max);
   }
-  return { maxOf };
+  return { maxOf, pct, total: assigned };
+}
+
+/** The sentences naming every man a re-fill left out for his Max % ("Left out for his Max % (allows 1 of 3 entries): A, B."); a Max that rounds
+ *  down to none names him with the build's wording. barred: the men kept out for it. */
+function maxNotes(barred, limit, ctx) {
+  if (!limit || !barred.length) return [];
+  const byAllowed = new Map(), notes = [];
+  for (const id of barred) {
+    const most = limit.maxOf.get(id);
+    if (most === 0 && limit.pct.get(id) > 0) notes.push(`${nameOf(id, ctx)}: Max ${limit.pct.get(id)}% of ${limit.total} entries allows 0; he is left out.`);
+    else byAllowed.set(most, [...(byAllowed.get(most) ?? []), nameOf(id, ctx)]);
+  }
+  for (const [most, names] of byAllowed) notes.push(`Left out for his Max % (allows ${most} of ${limit.total} entries): ${names.join(", ")}.`);
+  return notes;
 }
 
 /** The men this spot's entries would carry past their Max: a Set of dk_ids. Every other spot counts with its lineup now, except a spot that
  *  will re-fill later in this action (pending): only its frozen men are sure, and the rest of its lineup is about to be decided. */
-function atLimit(maxOf, state, spot, pending, ctx) {
+function atLimit(maxOf, state, spot, pending, ctx, isGpp) {
   const out = new Set(), here = spotEntries(state, spot).length;
   for (const [id, most] of maxOf) {
     const counts = (s) => (pending.includes(s) ? id in spotPins(state, s, ctx) : lineupOf(state, s).includes(id));
-    const elsewhere = spotNames(state).filter((s) => s !== spot && counts(s)).reduce((t, s) => t + spotEntries(state, s).length, 0);
+    const elsewhere = spotNames(state).filter((s) => s !== spot && isGpp(s) && counts(s)).reduce((t, s) => t + spotEntries(state, s).length, 0);
     if (elsewhere + here > most) out.add(id);
   }
   return out;
 }
 
 /** Each man past his Max once the action is done: [{ dk_id, name, entries, most, spots }]. Frozen men and locked backups can put him there. */
-function overMax(maxOf, state, ctx) {
+function overMax(maxOf, state, ctx, isGpp) {
   const out = [];
   for (const [id, most] of maxOf) {
-    const spots = spotNames(state).filter((s) => lineupOf(state, s).includes(id));
+    const spots = spotNames(state).filter((s) => isGpp(s) && lineupOf(state, s).includes(id));
     const entries = spots.reduce((t, s) => t + spotEntries(state, s).length, 0);
     if (entries > most) out.push({ dk_id: id, name: nameOf(id, ctx), entries, most, spots });
   }
@@ -133,19 +148,19 @@ function fillAvoiding(args, taken) {
   const first = runFill({ ...args, settings: { ...args.settings, count: 1 } });
   if (!first.lineups) return first;
   const best = first.lineups[0], matchedSpot = taken.get(menKey(best.ids));
-  if (matchedSpot == null) return { lineup: best.ids, proven: best.proven, arranged: best.arranged, duplicate: null };
+  if (matchedSpot == null) return { lineup: best.ids, proven: best.proven, arranged: best.arranged, duplicate: null, note: first.note };
   const more = runFill({ ...args, settings: { ...args.settings, count: Math.min(MAX_LOOK, taken.size + 1) } });
   const other = more.lineups?.find((l) => !taken.has(menKey(l.ids)));
-  if (other) return { lineup: other.ids, proven: other.proven, arranged: other.arranged, duplicate: { altered: true, text: "Duplicate; altered", matchedSpot, reason: null } };
+  if (other) return { lineup: other.ids, proven: other.proven, arranged: other.arranged, note: first.note, duplicate: { altered: true, text: "Duplicate; altered", matchedSpot, reason: null } };
   const reason = more.note ?? more.why ?? (taken.size >= MAX_LOOK ? `The best ${MAX_LOOK} lineups all match other spots.` : "No different legal lineup exists.");
-  return { lineup: best.ids, proven: best.proven, arranged: best.arranged, duplicate: { altered: false, text: "Duplicate; no different legal lineup", matchedSpot, reason } };
+  return { lineup: best.ids, proven: best.proven, arranged: best.arranged, note: first.note, duplicate: { altered: false, text: "Duplicate; no different legal lineup", matchedSpot, reason } };
 }
 
 /**
  * Re-fills one spot: frozen men stay in the slots their entries hold them in, every other slot reopens on the newest figures, without
  * anyone in `out`. lock: men who must be in it, in any open slot. Returns { outcome, state? }.
  */
-function refill(state, spot, ctx, { out, lock, mode, settings, overLimit, taken }) {
+function refill(state, spot, ctx, { out, lock, mode, settings, settingsByMode = null, overLimit, limit = null, taken, extra = [] }) {
   const pinned = spotPins(state, spot, ctx), before = lineupOf(state, spot), entries = spotEntries(state, spot);
   // A pin with no projection still counts his salary, team, game and slot. The stand-in 0 goes only to this search, where every lineup
   // carries it alike, so it cannot change the pick; it is never stored, and spotView's total for him is missing, never zero (RULES R1).
@@ -155,19 +170,21 @@ function refill(state, spot, ctx, { out, lock, mode, settings, overLimit, taken 
   const stays = new Set([...Object.keys(pinned), ...lock]);
   const notAddable = new Set([...ctx.started, ...ctx.untimed]);
   const excluded = new Set(leftOut({ players: ctx.players, started: notAddable, pinned }).excluded);
-  for (const id of [...out, ...overLimit, ...ctx.players.filter(isBoardOut).map((p) => p.dk_id)]) excluded.add(id);
+  for (const id of [...out, ...overLimit]) excluded.add(id); // a man Out is left to optimize() itself, which skips him and says so
   const excludedList = [...excluded].filter((id) => typeof id === "string" && ctx.byId.has(id) && !stays.has(id));
   const runMode = mode ?? (Object.hasOwn(state.spots, spot) ? state.spots[spot].mode : modeFromName(spot));
-  const fill = fillAvoiding({ players: searchMen, mode: runMode, settings: { ...settings, pinned }, locked: lock, excluded: excludedList, refMs: ctx.refMs }, taken);
-  if (!fill.lineup) return { outcome: flagged(state, spot, `No legal fill: ${fill.why}`, { amber: true, proven: fill.proven }) };
+  const fill = fillAvoiding({ players: searchMen, mode: runMode, settings: { ...(settingsByMode?.[runMode] ?? settings), pinned }, locked: lock, excluded: excludedList, refMs: ctx.refMs }, taken);
+  if (!fill.lineup) return { outcome: flagged(state, spot, `No legal fill: ${fill.why}`, { amber: true, proven: fill.proven, notes: extra }) };
   const bad = [...entries.filter(holdsMen).flatMap((e) => frozenProblems(e, fill.lineup, ctx, lock)), ...lineupProblems(fill.lineup, ctx)];
-  if (bad.length) return { outcome: flagged(state, spot, `No legal fill: ${bad.join(" ")}`, { amber: true, proven: fill.proven }) };
-  const notes = [];
+  if (bad.length) return { outcome: flagged(state, spot, `No legal fill: ${bad.join(" ")}`, { amber: true, proven: fill.proven, notes: extra }) };
+  const notes = [...extra];
   if (fill.proven === false) notes.push("The search stopped early, so this lineup is legal but not proven best.");
   if (fill.arranged === false) notes.push("A man's tip time is unreadable, so the open men are in plain slot order, not late-swap order.");
   const leftUntimed = [...ctx.untimed].filter((id) => !stays.has(id));
   if (leftUntimed.length) notes.push(`Left out of the fill, tip time unreadable: ${leftUntimed.map((id) => nameOf(id, ctx)).join(", ")}.`);
   const over = [...overLimit].filter((id) => fill.lineup.includes(id));
+  if (fill.note) notes.push(fill.note); // optimize()'s own sentence: a man Out held anyway, a stopped search
+  notes.push(...maxNotes([...overLimit].filter((id) => !stays.has(id) && !notAddable.has(id) && !fill.lineup.includes(id) && ctx.byId.has(id) && !isBoardOut(ctx.byId.get(id))), limit, ctx));
   if (over.length) notes.push(`Held in this spot past his Max %: ${over.map((id) => nameOf(id, ctx)).join(", ")}.`);
   if (scoreless.length) notes.push(`No projection for ${scoreless.map((id) => nameOf(id, ctx, entries)).join(", ")}: he counts for salary, team and game, is left out of the score, and the spot's total is missing.`);
   const said = fill.duplicate ? [fill.duplicate.altered ? `Duplicate; altered: the best fill matched ${fill.duplicate.matchedSpot}, so this is the next-best legal lineup.` : `Duplicate kept: this matches ${fill.duplicate.matchedSpot}. ${fill.duplicate.reason}`] : [];
@@ -190,7 +207,7 @@ function noteOverMax(state, outcomes, over) {
 }
 
 /** The shared path of actions a and b; y is the backup or null. { state, outcomes, overMax, error }. */
-function removeAction(state, { man: x, backup: y = null, scope, slate, nowMs, mode = null, settings: given = null, exposure = null, excluded: barred = null, confirmOut = false }) {
+function removeAction(state, { man: x, backup: y = null, scope, slate, nowMs, mode = null, settings: given = null, exposure = null, excluded: barred = null, confirmOut = false, settingsByMode = null, notes: extra = [] }) {
   if (typeof x !== "string" || !x) return refused(state, "Say which man comes out, by DraftKings id.");
   if (y != null && y === x) return refused(state, "The man coming out and his backup are the same man.");
   const settings = given ?? {};
@@ -202,19 +219,20 @@ function removeAction(state, { man: x, backup: y = null, scope, slate, nowMs, mo
   if (error) return refused(state, error);
   const sc = readScope(state, scope, x);
   if (sc.error) return refused(state, sc.error);
-  const limits = readLimits(state, exposure, ctx);
+  const isGpp = (spot) => (mode ?? (Object.hasOwn(state.spots, spot) ? state.spots[spot].mode : modeFromName(spot))) === "GPP";
+  const limits = readLimits(state, exposure, ctx, isGpp);
   if (limits.error) return refused(state, limits.error);
   const backup = { x, y, yWhy: y == null ? null : notAddableWhy(y, ctx), yAlert: y == null || confirmOut ? null : outAlert([y], ctx) };
   let s = state;
   const outcomes = [], taken = new Map(); // spots go in map order, so the same action repeats exactly
   for (const [k, spot] of sc.names.entries()) {
     const pending = sc.names.slice(k + 1).filter((later) => !removeRefusal(s, later, ctx, backup)); // a spot that will not re-fill keeps its lineup, and counts whole
-    const r = removeRefusal(s, spot, ctx, backup) ?? refill(s, spot, ctx, { out: new Set([...unusableIn(s, spot), ...excluded, x]), lock: y == null ? [] : [y], mode, settings, overLimit: atLimit(limits.maxOf, s, spot, pending, ctx), taken });
+    const r = removeRefusal(s, spot, ctx, backup) ?? refill(s, spot, ctx, { out: new Set([...unusableIn(s, spot), ...excluded, x]), lock: y == null ? [] : [y], mode, settings, settingsByMode, extra, limit: limits, overLimit: isGpp(spot) ? atLimit(limits.maxOf, s, spot, pending, ctx, isGpp) : new Set(), taken });
     outcomes.push(r.outcome);
     if (r.state) s = r.state;
     if (r.outcome.status === "changed") s = { ...s, unusable: { ...s.unusable, [spot]: [...new Set([...unusableIn(s, spot), x])] } }; // only the spots this action changed
   }
-  const over = overMax(limits.maxOf, s, ctx);
+  const over = overMax(limits.maxOf, s, ctx, isGpp);
   return { state: noteOverMax(s, outcomes, over), outcomes, overMax: over, error: null };
 }
 

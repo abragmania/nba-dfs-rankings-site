@@ -4,7 +4,7 @@
 import { keepFocus } from "./board-util.js";
 import { lineupRefusals, isOutNow } from "./card-row.js";
 import { lineupsTabHtml, viewModel, builtAtText, viewOf, entriesOf, unavailableMen, unavailableLabel, savedLabel, heldSpots, outNamesOfCtx, SORTS,nextLtSort } from "./lineups-tab.js";
-import { swapContext, swapOptions, swapIds } from "./swap-list.js";
+import { swapContext, swapOptions, swapIds, startedByTip } from "./swap-list.js";
 import { savedCall, saveBatch, savedClick, savedNameInput } from "./saved-panel.js";
 import { cleanSpotName } from "./spot-name.js";
 import { planInOrder, orderSummary } from "./assign-order.js";
@@ -158,10 +158,11 @@ function download(X, entries, own) {
   const part = entries.every((e) => e.kind === "saved") ? "saved" : [...new Set(entries.map((e) => (e.kind === "saved" ? "saved" : e.mode)))].join("-");
   for (const e of entries) {
     const l = e.kind === "build" ? buildOf(X.P, e.bid)?.lineups[e.i] : null;
-    const named = e.kind === "build" ? lineupRefusals(l?.men ?? l?.slots ?? [], c.byId, c.outNames) : [];
-    const out = e.kind === "build" ? e.ids.map((id) => c.byId.get(id)).filter((p) => isOutNow(p) && !named.some((w) => w.startsWith(p.name))).map((p) => `${p.name} is Out`) : [];
+    const started = startedByTip(c); // an Out man whose game has started is the card's note only; any other Out man refuses the file
+    const named = e.kind === "build" ? lineupRefusals(l?.men ?? l?.slots ?? [], c.byId, c.outNames, started) : [];
+    const out = e.kind === "build" ? e.ids.map((id) => c.byId.get(id)).filter((p) => isOutNow(p) && !started.has(p.dk_id) && !named.some((w) => w.startsWith(p.name))).map((p) => `${p.name} is Out`) : [];
     const words = [...named, ...out];
-    const refused = e.kind === "build" ? (words.length ? `${labelOf(X, e)}: ${words.join(", ")}.` : null) : own.savedRefusal(e.l, c.byId, c.knownName);
+    const refused = e.kind === "build" ? (words.length ? `${labelOf(X, e)}: ${words.join(", ")}.` : null) : own.savedRefusal(e.l, c.byId, c.knownName, started);
     if (refused) return X.toast(`DK file not written. ${refused}`, "err");
   }
   const out = own.dkCsv(entries.map((e) => e.ids.map((id) => c.byId.get(id) ?? null)));

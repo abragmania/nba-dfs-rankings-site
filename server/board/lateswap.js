@@ -45,14 +45,14 @@ export { slateRefMs } from "./board-util.js";
 
 /**
  * Who has started at nowMs: a man whose tip (read with tipMs against refMs, the slate's date) is at or before nowMs.
- * Returns { started: Set of dk_id, untimed: [players with a missing or unreadable tip] }. An untimed man is treated as not
- * started, and the caller says so; his start is never guessed.
+ * Returns { started: Set of dk_id, untimed: [players with a missing or unreadable tip] }. An untimed man fails closed: he is in
+ * `started` too (frozen where he sits, never added), and the caller names him from `untimed`; his start is never guessed.
  */
 export function startedSplit(players, { nowMs, refMs }) {
   const started = new Set(), untimed = [];
   for (const p of players ?? []) {
     const t = tipMs(p?.tip, refMs);
-    if (t == null) untimed.push(p);
+    if (t == null) { untimed.push(p); started.add(p.dk_id); }
     else if (t <= nowMs) started.add(p.dk_id);
   }
   return { started, untimed };

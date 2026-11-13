@@ -192,7 +192,63 @@ export function applyOp(saved, body, args) {
   return { ...out, saved: settleStamps(saved, out.saved, body, out.outcomes, args.spotsFile ?? {}) };
 }
 
-function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {} }) {
+const MODES = ["Cash", "GPP"];
+// Settings a re-fill of one spot has no use for: it builds one lineup around the entry's frozen men.
+const NOT_FOR_REFILL = ["count", "minUnique", "pinned", "exposure", "variancePct"]; // variance is random: a repeated action must give the same lineup
+
+/**
+ * What the board holds that a re-optimize must honour (RULES R4): the excluded men (the saved picks, args.picks), the settings of each mode
+ * (body.settings = { Cash: {...}, GPP: {...} }, the optimizer panel's team and game limits, low-owned rules, max total ownership) and the
+ * Max % across the set (body.exposure). Returns the engine's { excluded, settingsByMode, exposure, notes }; whatever it cannot apply or was not
+ * given is named in notes, which the engine puts on every spot it re-fills. A Min % does not apply across a set of entries (actions.js refuses it), so it is dropped and named.
+ */
+function boardState(body, picks, state, slate, nowMs) {
+  const notes = [];
+  const excluded = Array.isArray(picks?.excluded) ? picks.excluded.map(String) : [];
+  if (!Array.isArray(picks?.excluded)) notes.push("The board's excluded men were not available to this re-fill, so none were left out for that reason.");
+  const ctx = contextFor(state, slate, nowMs).ctx; // the slate's teams, games and men: a stored limit on one that is not on it is dropped and named
+  const teams = new Set(ctx?.players.map((p) => p.team)), games = new Set(ctx?.players.map((p) => p.game));
+  const given = body.settings;
+  // The screen names the stored fields it could not read (settings-panel.js refillState); they were left out of what it sent.
+  if (body.settingsBad != null && typeof body.settingsBad === "object") {
+    for (const m of MODES) if (Array.isArray(body.settingsBad[m]) && body.settingsBad[m].length) notes.push(`The board's ${m} ${body.settingsBad[m].map(String).join(", ")} could not be read, so ${m} spots did not apply ${body.settingsBad[m].length === 1 ? "it" : "them"}.`);
+  }
+  let settingsByMode = null;
+  if (given == null) notes.push("The board's saved optimizer settings (team and game limits, low-owned rules, max total ownership) and Max % were not sent with this request, so this re-fill used none of them.");
+  else if (typeof given !== "object" || Array.isArray(given)) notes.push("The board's saved optimizer settings could not be read (not a Cash and GPP pair), so this re-fill used none of them.");
+  else {
+    settingsByMode = {};
+    for (const m of MODES) {
+      const one = given[m];
+      if (one == null) { notes.push(`The board's ${m} settings were not sent, so ${m} spots used none of them.`); continue; }
+      if (typeof one !== "object" || Array.isArray(one)) { notes.push(`The board's ${m} settings could not be read, so ${m} spots used none of them.`); continue; }
+      if (one.minUnique > 1) notes.push(`Min unique ${one.minUnique} (${m}) was not applied: a re-fill builds one lineup.`);
+      if (one.variancePct > 0) notes.push(`Variance ±${one.variancePct}% (${m}) was not applied: a re-fill repeats exactly.`);
+      const kept = Object.fromEntries(Object.entries(one).filter(([k]) => !NOT_FOR_REFILL.includes(k)));
+      if (ctx) {
+        for (const [key, set, word] of [["teamOverrides", teams, "team"], ["gameOverrides", games, "game"]]) {
+          if (!kept[key] || typeof kept[key] !== "object") continue;
+          const gone = Object.keys(kept[key]).filter((k) => !set.has(k));
+          if (gone.length) { notes.push(`${m} ${word} limit on ${gone.join(", ")} was not applied: not on this slate.`); kept[key] = Object.fromEntries(Object.entries(kept[key]).filter(([k]) => set.has(k))); }
+        }
+      }
+      settingsByMode[m] = kept;
+    }
+  }
+  let exposure = null;
+  if (body.exposure != null && typeof body.exposure === "object" && !Array.isArray(body.exposure)) {
+    exposure = {};
+    for (const [id, l] of Object.entries(body.exposure)) {
+      if (ctx && !ctx.man(id)) { notes.push(`Max % on ${id} was not applied: he is not on this slate.`); continue; }
+      if (l?.min != null) notes.push(`${ctx ? nameOf(id, ctx) : id}'s Min % of ${l.min} was not applied: a Min % does not apply across a set of entries.`);
+      if (l?.max != null) exposure[id] = { max: l.max };
+    }
+    if (!Object.keys(exposure).length) exposure = null;
+  }
+  return { excluded, settingsByMode, exposure, notes };
+}
+
+function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {}, picks = null }) {
   const s = saved.state;
   const done = (r, extra = {}) => {
     if (r.error) return refused(saved, r.error);
@@ -257,7 +313,7 @@ function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {} 
       return r.error ? refused(saved, r.error) : { saved: { ...saved, state: r.state }, outcomes: [], error: null };
     }
     case "remove": {
-      const base = { man: body.man, backup: body.backup ?? undefined, scope: spotsIn(s, body.scope), slate, nowMs };
+      const base = { man: body.man, backup: body.backup ?? undefined, scope: spotsIn(s, body.scope), slate, nowMs, ...boardState(body, picks, s, slate, nowMs) };
       return done(confirmable((ok) => (body.backup ? removeAndLockBackup(s, { ...base, confirmOut: ok }) : removeAndReoptimize(s, base)), body));
     }
     case "swap": return done(confirmable((ok) => handSwap(s, { spot: body.spot, slot: body.slot, inId: body.inId, confirmOut: ok, slate, nowMs }), body));

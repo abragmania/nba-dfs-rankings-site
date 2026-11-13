@@ -5,6 +5,7 @@
 // A missing figure is the board's dash with a reason, never zero (RULES R1). Pure: no DOM, tested in node.
 import { esc, money, dec1, logo, injBadge } from "./board-util.js";
 import { SALARY_CAP } from "./slots.js";
+import { isOut } from "./figures.js";
 
 /** A lineup's totals from the slate's current figures; each is null when any man (or his figure) is missing (RULES R1). */
 export function totals(men) {
@@ -20,7 +21,7 @@ export function totalValue(men) {
 }
 
 /** Whether a man's own row has him Out. Pure. */
-export const isOutNow = (p) => /^out$/i.test(p?.injury_status ?? "");
+export const isOutNow = (p) => isOut(p?.injury_status);
 
 /**
  * What has become of a man on a frozen lineup card, from the board now; null when nothing has. p: his row as the card holds it; live: dk_id to the row on the board;
@@ -31,12 +32,20 @@ export function lineupTag(p, live, outNames) {
   if (p.stale && !p.name) return null;
   const row = live.get(p.dk_id);
   if (!row) return outNames?.has(p.name) ? "now Out" : "off the slate";
-  return /^out$/i.test(row.injury_status ?? "") && !/^out$/i.test(p.injury_status ?? "") ? "now Out" : null;
+  if (!isOut(row.injury_status)) return null;
+  return isOut(p.injury_status) ? "Out" : "now Out"; // any Out man is flagged; "now Out" is one who was not Out when the card was built
 }
 
 /** The frozen men of one lineup a DK file must not hold, as a sentence's words ("Jalen Smith is now Out"); [] with none. Pure. */
-export function lineupRefusals(men, live, outNames) {
-  return men.flatMap((p) => { const tag = lineupTag(p, live, outNames); return tag ? [`${p.name} ${tag === "now Out" ? "is now Out" : "is no longer on this slate"}`] : []; });
+export function lineupRefusals(men, live, outNames, started = null) {
+  // Any Out man whose game has not started refuses the file; one whose game has started (`started`, a Set of dk_ids) cannot be swapped, so
+  // he gets the card's tag only. A man off the slate always refuses.
+  return men.flatMap((p) => {
+    const tag = lineupTag(p, live, outNames);
+    if (!tag) return [];
+    if (tag !== "off the slate") return started?.has(p.dk_id) ? [] : [`${p.name} is ${tag}`];
+    return [`${p.name} is no longer on this slate`];
+  });
 }
 
 /** A player's name as the button that opens his card (board.js reads data-dk-id from any click). `cls` adds a class. */
