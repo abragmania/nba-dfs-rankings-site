@@ -1,10 +1,10 @@
 {
-  "publishedAt": "2026-11-13T22:19:47.049Z",
-  "sourceCommit": "208d878c3a1c2f4b1571eaf852a42c668749d0a8",
+  "publishedAt": "2026-11-13T22:30:50.891Z",
+  "sourceCommit": "6123dbc3d245f8fbb9b75d5691ae5166ce457425",
   "latest": {
     "slate": "2026-11-13-main",
     "players": 165,
-    "pulled_at": "2026-11-13T17:18:34-05:00"
+    "pulled_at": "2026-11-13T17:29:56-05:00"
   },
   "slates": [
     "2026-11-13-main",
@@ -31,8 +31,8 @@
   "files_missing": [],
   "cards": {
     "log": 0,
-    "usage": 450,
-    "kept": 467,
+    "usage": 0,
+    "kept": 917,
     "none": 137
   },
   "pull_facts": {
