@@ -395,6 +395,8 @@ function onClick(X, e) {
   retryBuilds(X, own); // and a read of the recently generated builds
   const t = e.target.closest("[data-op]");
   if (!t || t.disabled) return;
+  const nm = e.target.closest("[data-dk-id],[data-out-name]");
+  if (nm && nm !== t && t.contains?.(nm)) return; // a man's name inside a row or card opens his card (board.js) and never fires the row's own action
   const { P } = X, d = t.dataset, res = P.results[P.mode];
   const set =(patch) => { Object.assign(P, patch); render(X); };
   // Late swap mode: its own switcher, unpin, save and load (lateswap-panel.js); build, CSV and the settings are shared below.

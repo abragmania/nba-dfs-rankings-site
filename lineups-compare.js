@@ -3,7 +3,7 @@
 // Pure: markup strings and a small state reducer; the panel draws it and routes clicks whose data-op is "cmp" into compareClick.
 // A lineup here is { key, name, mode, men } (men in slot order; a null or stale man makes every total that needs him a dash, RULES R1).
 // A figure the lineups do not carry shows a dash, never a stand-in. Cash only: the GPP items (stack, men under 5% / 10% own) are hidden.
-import { esc, money } from "./board-util.js";
+import { esc, money, nameOpen } from "./board-util.js";
 import { totals } from "./card-row.js";
 import { gameStacks } from "./corr.js";
 import { SLOTS, SALARY_CAP } from "./slots.js";
@@ -49,7 +49,7 @@ export function lineupStats(l, top = null) {
     // The gap is the difference of the figures as shown (one decimal), so 278.0 and 277.8 never read a gap of 0.3.
     proj: t.projection, gap: t.projection != null && topProj != null ? Math.round((r1(t.projection) - r1(topProj)) * 10) / 10 + 0 : null, // + 0 turns -0 into 0
     sal: t.salary, left: t.salary != null ? SALARY_CAP - t.salary : null, own: t.own,
-    lo: lo ? { name: lo.name, v: lo.proj_own } : null, hi: hi ? { name: hi.name, v: hi.proj_own } : null,
+    lo: lo ? { name: lo.name, v: lo.proj_own, id: lo.dk_id } : null, hi: hi ? { name: hi.name, v: hi.proj_own, id: hi.dk_id } : null,
     u5: own ? own.filter((p) => p.proj_own < 5).length : null, u10: own ? own.filter((p) => p.proj_own < 10).length : null,
     q: men.length && men.every((p) => p && !p.stale && p.injury_status !== undefined) ? men.filter((p) => isQ(p.injury_status)).length : null,
     min: sumOf(men, "minutes"),
@@ -69,8 +69,8 @@ export const COLS = [
   { k: "sal", label: "Salary used", best: 1, v: (s) => s.sal, fmt: money },
   { k: "left", label: "Salary left", best: -1, v: (s) => s.left, fmt: (v) => (v < 0 ? `<span class="over">−${money(-v)}</span>` : money(v)) },
   { k: "own", label: "Total own", best: -1, v: (s) => s.own, fmt: (v) => v.toFixed(1) + "%" },
-  { k: "lo", label: "Lowest own man", text: true, v: (s) => s.lo?.v ?? null, fmt: (v, s) => `${esc(s.lo.name)} <b>${v.toFixed(1)}%</b>`, wide: true },
-  { k: "hi", label: "Highest own man", text: true, v: (s) => s.hi?.v ?? null, fmt: (v, s) => `${esc(s.hi.name)} <b>${v.toFixed(1)}%</b>`, wide: true },
+  { k: "lo", label: "Lowest own man", text: true, v: (s) => s.lo?.v ?? null, fmt: (v, s) => `${nameOpen(s.lo.name, s.lo.id)} <b>${v.toFixed(1)}%</b>`, wide: true },
+  { k: "hi", label: "Highest own man", text: true, v: (s) => s.hi?.v ?? null, fmt: (v, s) => `${nameOpen(s.hi.name, s.hi.id)} <b>${v.toFixed(1)}%</b>`, wide: true },
   { k: "u5", label: "Under 5% own", best: 1, gpp: true, v: (s) => s.u5, fmt: String },
   { k: "u10", label: "Under 10% own", best: 1, gpp: true, v: (s) => s.u10, fmt: String },
   { k: "q", label: "Questionable", best: -1, v: (s) => s.q, fmt: String },
@@ -153,7 +153,7 @@ export function playerGrid(lineups) {
   return [...by.values()].sort((a, b) => b.count - a.count || (b.p.projection ?? -1) - (a.p.projection ?? -1) || String(a.p.name).localeCompare(String(b.p.name)));
 }
 
-const manCells = (p, dash) => `<td class="tx mn">${esc(p.name)}</td><td class="tx">${esc(p.team ?? "")}</td>`
+const manCells = (p, dash) => `<td class="tx mn">${nameOpen(p.name, p.dk_id)}</td><td class="tx">${esc(p.team ?? "")}</td>`
   + `<td class="n">${num(p.salary) ? money(p.salary) : dash("no salary for this man")}</td><td class="n">${num(p.projection) ? f1(p.projection) : dash("no projection for this man")}</td><td class="n">${num(p.proj_own) ? p.proj_own.toFixed(1) + "%" : dash("no projected ownership for this man")}</td>`;
 
 function gridHtml(lineups, state, dash) {

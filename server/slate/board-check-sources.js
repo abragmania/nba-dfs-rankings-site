@@ -4,9 +4,9 @@
 // The ranking is the code's own (server/board/lineup-proposals.js), written once here:
 //   Monster news Out (an injury card) 4 > TwoGun's board Out and a CONFIRMED Monster or RotoWire five 3 > a projected page, and RotoGrinders however confirmed (BACKS_ONLY: it never settles alone) 2;
 //   within a rank the page order Monster, RotoWire, RotoGrinders breaks the tie (lineup-proposals.js: Monster wins a tie), by 0.1 a place.
-// A man Adam marked Out himself passes. The lineup read is used only while fresh, as the engine does; otherwise each Out man is named as not compared.
+// A man Adam marked Out himself passes. A page's five is compared only while that page is fresh, as the engine does (its kept Outs stand in the engine); with no fresh page each Out man is named as not compared.
 import { nameKey } from "../lib/names.js";
-import { LINEUP_KEYS, LINEUP_LABEL, BACKS_ONLY, staleOf } from "../board/lineup-proposals.js";
+import { LINEUP_KEYS, LINEUP_LABEL, BACKS_ONLY, staleOf, withFreshness, blockFresh } from "../board/lineup-proposals.js";
 
 export const CHECK = "hidden_by_lower_source";
 const RANK_NEWS = 4, RANK_BOARD = 3, RANK_PAGE_CONFIRMED = 3, RANK_PAGE = 2;
@@ -28,7 +28,7 @@ export function fiveClaims(latest, team, name) {
   const k = nameKey(name), block = latest.teams?.[team] ?? {}, out = [];
   for (const key of LINEUP_KEYS) {
     const b = block[key];
-    if (ok(b) && b.men.some((m) => m.status !== "Out" && nameKey(m.name) === k)) out.push(claim(key, b.confirmed === true));
+    if (ok(b) && blockFresh(latest, key, b) && b.men.some((m) => m.status !== "Out" && nameKey(m.name) === k)) out.push(claim(key, b.confirmed === true));
   }
   return out;
 }
@@ -62,9 +62,9 @@ function outMen(slate, players) {
 export function checkHiddenByLowerSource({ slate, players, lineups, nowMs }, un, conflicts = []) {
   const men = outMen(slate, players), bad = [];
   if (!men.length) return bad;
-  const latest = lineups?.state === "ok" ? lineups.latest : null, stale = latest ? staleOf(latest, nowMs) : null;
+  const latest = lineups?.state === "ok" ? withFreshness(lineups.latest, nowMs) : null, stale = latest ? staleOf(latest, nowMs) : null; // a source no longer fresh has no five here (Adam 11-13)
   if (!latest || stale) {
-    const why = !lineups ? "no lineup read was given to the check" : stale ? `the lineup read is ${stale.ageMin ?? "of unknown"} minutes old and the engine does not use it` : `the lineup read is ${lineups.state}${lineups.why ? ` (${lineups.why})` : ""}`;
+    const why = !lineups ? "no lineup read was given to the check" : stale ? `the lineup read is ${stale.ageMin ?? "of unknown"} minutes without a good read from any lineup page, so the engine uses no five from them (their kept Outs it still does)` : `the lineup read is ${lineups.state}${lineups.why ? ` (${lineups.why})` : ""}`;
     for (const m of men) un.add(CHECK, `${why}, so a man shown Out cannot be compared with the lineup pages`, `${m.name} (${m.team})`, 1, 99);
     return bad;
   }

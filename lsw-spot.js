@@ -1,6 +1,6 @@
 // Screen 3, One spot (entries late swap): hand swaps in one spot, five replacements per slot, Reset per slot and for the whole spot, with the
 // before and after figures. A started man is dimmed and locked in his exact slot. A swap is only a request: the engine accepts or refuses it.
-import { esc, money, f1, signed, tint, feeText, spotColour, stacksOf, tipHtml, ICON_LOCK, outFlag, outChip } from "./lsw-common.js";
+import { esc, money, f1, signed, tint, feeText, spotColour, stacksOf, tipHtml, ICON_LOCK, outFlag, outChip, nameOpen } from "./lsw-common.js";
 import { slotRowHtml, stackChips, delta } from "./lsw-cards.js";
 import { logo, shortTime } from "./board-util.js";
 import { SALARY_CAP } from "./slots.js";
@@ -23,11 +23,11 @@ function swapPanel(spot, M, L) {
   const slot = L.swapSlot, cur = spot.slots.find((s) => s.slot === slot);
   if (!slot || !cur) return `<aside class="swp empty"><p>Pick Swap on an open slot to see the best replacements for it.</p><p class="muted">Use sets the slot in this spot and in all ${spot.nEntries} ${spot.nEntries === 1 ? "entry" : "entries"} that follow it.</p></aside>`;
   const r = replacements(spot, slot, M, L.swapSort);
-  const row = (p, isCur) => `<div class="rp${isCur ? " cur" : ""}" style="--tc:${tint(p.team)}">${logo(p.team, "sm")}<span class="rn"><b>${esc(p.name)}</b>${outChip(p)}${isCur ? '<i class="curb">CURRENT</i>' : ""}<small class="rn2">${esc((p.positions ?? []).join("/"))} · ${esc(p.team)} · ${esc(p.game ?? "")} · tips ${esc(shortTime(p.tip, M.refMs) ?? "—")}</small></span>
+  const row = (p, isCur) => `<div class="rp${isCur ? " cur" : ""}" style="--tc:${tint(p.team)}">${logo(p.team, "sm")}<span class="rn">${nameOpen(p.name, p.dk_id, "b")}${outChip(p)}${isCur ? '<i class="curb">CURRENT</i>' : ""}<small class="rn2">${esc((p.positions ?? []).join("/"))} · ${esc(p.team)} · ${esc(p.game ?? "")} · tips ${esc(shortTime(p.tip, M.refMs) ?? "—")}</small></span>
 <span class="sa">${money(p.salary)}${!isCur && cur.man ? `<small class="${Number.isFinite(p.salary) && Number.isFinite(cur.man.salary) && p.salary > cur.man.salary ? "up" : "dn"}">${delta(p.salary, cur.man.salary, money)}</small>` : ""}</span><span class="pj">${f1(p.proj)}${!isCur && cur.man ? `<small>${delta(p.proj, cur.man.proj, f1)}</small>` : ""}</span><span class="ow">${p.own != null ? `${f1(p.own)}%` : "—"}</span>
 <span class="lf">${r.room == null ? "—" : money(r.room - p.salary)}<small>left</small></span>${isCur ? '<button class="ol" data-lsw="swapClose">Keep</button>' : `<button class="go" data-lsw="swapUse" data-spot="${esc(spot.name)}" data-id="${esc(p.dk_id)}">Use</button>`}</div>`;
   return `<aside class="swp"><div class="swh"><h3>Swap ${esc(slot)} slot <i class="curb">OPEN</i></h3><button class="ol" data-lsw="swapClose">✕ close</button></div>
-<p class="muted">Now <b>${esc(cur.man?.name ?? "—")}</b>${cur.changed && cur.was ? ` (was ${esc(cur.was.name)})` : ""} · up to <b>${money(r.room)}</b> fits under the cap · open men only</p>
+<p class="muted">Now ${cur.man ? nameOpen(cur.man.name, cur.man.dk_id, "b") : "<b>—</b>"}${cur.changed && cur.was ? ` (was ${esc(cur.was.name)})` : ""} · up to <b>${money(r.room)}</b> fits under the cap · open men only</p>
 <div class="sorts"><span class="muted">SORT</span>${SORTS.map(([k, n]) => `<button class="${L.swapSort === k ? "on" : ""}" data-lsw="swapSort" data-k="${k}">${n}</button>`).join("")}<span class="grow"></span><span class="muted">${esc(slot)}, ${r.list.length} of ${r.total} shown</span></div>
 ${cur.man ? row(cur.man, true) : ""}${r.list.map((p) => row(p, false)).join("") || '<div class="rs">No open man fits this slot and the cap.</div>'}
 <p class="muted">Use sets the slot in this spot and in all ${spot.nEntries} ${spot.nEntries === 1 ? "entry" : "entries"} that follow it.</p></aside>`;

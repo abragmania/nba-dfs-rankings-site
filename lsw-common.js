@@ -1,10 +1,10 @@
 // The Late swap screen's shared drawing helpers (entries late swap). Pure strings; every figure comes from the server's model, a missing one
 // is an em dash with a title, never zero. Times show in Eastern.
-import { esc, logo, shortTime } from "./board-util.js";
+import { esc, logo, shortTime, nameOpen } from "./board-util.js";
 import { teamColors } from "./teams.js";
 import { gameStacks } from "./corr.js";
 
-export { esc };
+export { esc, nameOpen };
 export const money = (n) => (Number.isFinite(n) ? `${n < 0 ? "-" : ""}$${Math.abs(n).toLocaleString("en-US")}` : "—");
 export const f1 = (n) => (Number.isFinite(n) ? n.toFixed(1) : "—");
 export const signed = (n, fmt) => (Number.isFinite(n) ? `${n > 0 ? "+" : n < 0 ? "-" : ""}${fmt(Math.abs(n))}` : "—");
@@ -49,7 +49,7 @@ export const isOutMan = (m) => Boolean(m && !m.started && !m.untimed && (m.out |
 export const outChip = (m) => (isOutMan(m) ? `<i class="outchip" title="${m.gone ? "Gone from the board" : "Ruled Out"}">OUT</i>` : "");
 
 /** The name of a man with his logo and, when he is Out, his red OUT chip. */
-export const manLabel = (man) => (man ? `${man.team ? logo(man.team, "sm") : ""}<span class="mn">${esc(man.name)}</span>${outChip(man)}` : '<span class="mn dim">open</span>');
+export const manLabel = (man) => (man ? `${man.team ? logo(man.team, "sm") : ""}${nameOpen(man.name, man.dk_id, "span", "mn")}${outChip(man)}` : '<span class="mn dim">open</span>');
 
 /** The Eastern tip time without its AM/PM and zone, for a game chip: "7:30". */
 export const chipTime = (tip, refMs) => (shortTime(tip, refMs) ?? "").replace(/\s?[AP]M ET$/, "");
@@ -93,5 +93,5 @@ export function tidyReasons(text) {
 export function outFlag(spot) {
   const men = spot.alert?.men ?? [];
   const gone = new Set(spot.confirmedOut ?? []);
-  return men.length ? `<div class="redflag">${men.map((m) => `<b>${esc(m.name)}</b> ${m.why === "Out" ? "is Out" : "is gone from the board"}${gone.has(m.dk_id) ? " (you went ahead with him)" : ` <button class="lnk" data-lsw="confirmMan" data-spot="${esc(spot.name)}" data-man="${esc(m.dk_id)}" title="Let his entries be written with him in them">Go ahead with him</button>`}`).join("; ")}: this spot holds ${men.length === 1 ? "him" : "them"}.</div>` : "";
+  return men.length ? `<div class="redflag">${men.map((m) => `${nameOpen(m.name, m.dk_id, "b")} ${m.why === "Out" ? "is Out" : "is gone from the board"}${gone.has(m.dk_id) ? " (you went ahead with him)" : ` <button class="lnk" data-lsw="confirmMan" data-spot="${esc(spot.name)}" data-man="${esc(m.dk_id)}" title="Let his entries be written with him in them">Go ahead with him</button>`}`).join("; ")}: this spot holds ${men.length === 1 ? "him" : "them"}.</div>` : "";
 }

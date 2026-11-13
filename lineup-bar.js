@@ -161,7 +161,9 @@ export function createLineupBar({ el, api, slate, players, slateData = () => nul
     const dismissed = readDismissed(), keep = (sig) => (r) => dismissed[r.id ?? r.key] !== sig(r);
     const all = { applied: shown.applied.filter(keep((r) => r.entry.sig + r.entry.state)), info: shown.info.filter(keep((r) => r.signature)), conflicts: shown.conflicts.filter(keep((r) => r.signature)) };
     // A stale read hides everything that came from it, but a change that failed is not part of the read: it needs Adam, so it stays.
-    const bar = stale ? { applied: all.applied.filter((r) => r.entry.state === "failed"), info: [], conflicts: [] } : all;
+    const kept = (r) => r.kind === "out" && (r.sources ?? []).length > 0 && r.sources.every((x) => x.kept); // an Out kept from a stale source stays on the bar with its "kept from" words (Adam 11-13)
+    const keptApplied = (r) => kindOf(r.key) === "out" && r.entry.state === "applied" && /\(kept from [^)]*read\)/.test(r.entry.text ?? ""); // an applied Out whose sources were all kept says so in its words
+    const bar = stale ? { applied: all.applied.filter((r) => r.entry.state === "failed" || keptApplied(r)), info: all.info.filter(kept), conflicts: [] } : all;
     const shownState = stale ? { ...state, notes: [] } : state;
     const data = slateData();
     let model = null;

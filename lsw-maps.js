@@ -3,7 +3,7 @@
 // with Fill and Number in order, one-step undo, and the single-row picker for single changes. Lineups: one row per spot with its lineup, its
 // eight men on one line, a picker of saved lineups and the Out alert. An entry with no spot is red: "No lineup assigned"; it is never edited
 // or exported.
-import { esc, money, f1, spotColour, outFlag, outChip } from "./lsw-common.js";
+import { esc, money, f1, spotColour, outFlag, outChip, nameOpen } from "./lsw-common.js";
 import { logo } from "./board-util.js";
 import { savedLabel } from "./lineups-tab.js";
 
@@ -125,7 +125,7 @@ function spotRow(s, M, L) {
   const c = spotColour(s.name, M.spots);
   const ask = L.ask?.body.op === "setLineup" && L.ask.body.spot === s.name ? L.ask : null;
   const wait = ask && Date.now() - ask.armedAt < 500;
-  const men = s.blank ? '<span class="noteR">No lineup assigned: pick one from the list.</span>' : s.slots.map((x) => (x.man ? `<span class="mm">${x.man.team ? logo(x.man.team, "xs") : ""}${esc(x.man.name)}${outChip(x.man)}</span>` : "")).join("");
+  const men = s.blank ? '<span class="noteR">No lineup assigned: pick one from the list.</span>' : s.slots.map((x) => (x.man ? `<span class="mm">${x.man.team ? logo(x.man.team, "xs") : ""}${nameOpen(x.man.name, x.man.dk_id)}${outChip(x.man)}</span>` : "")).join("");
   return `<div class="lrow${s.alert ? " outc" : ""}${s.blank ? " nolu" : ""}" style="--sc:${c}">
 <span class="sc plain" style="--sc:${c}">${esc(s.name)}</span>
 <div class="lmid"><div class="lname">${esc(s.blank ? "" : sourceLabel(s, L))}</div><div class="lmen">${men}</div></div>

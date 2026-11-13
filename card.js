@@ -1,5 +1,4 @@
-// The player card: a modal over the page when a player's name is clicked (optimizer standard C3), in the optimizer column's place until
-// Adam picks the layout. Esc, its Close or a click outside ends it, and the keyboard goes back where it was.
+// The player card: a modal over the page when a player's name is clicked (optimizer standard C3). Esc, its Close or a click outside ends it, and the keyboard goes back where it was.
 // Header (Lock / Exclude reuse the board's own data-lock / data-excl click path, so there is no second save path), the
 // two figures his board row does not show (double-double and triple-double chance), the last-10 summary with a
 // sparkline, the whole season's game log (in its own scroll box) from /api/player-log, then the seasons table and the
@@ -9,7 +8,7 @@
 // The state (which player, which log) lives in createCardState and the markup in cardHtml, both DOM-free so the swap
 // rule is tested: opening a player shows Loading at once, and a log that arrives for a card since closed or swapped is
 // dropped (its request is also aborted).
-import { esc, money, dec1, logo, isoToEastern, ICON, injBadge, focusSelector, figSourceWord, hasHis } from "./board-util.js";
+import { esc, money, dec1, logo, isoToEastern, ICON, statusBadge, focusSelector, figSourceWord, hasHis } from "./board-util.js";
 import { gamesProblem, usgCell, usgNote, MONTHS } from "./gamerow.js";
 import { createUsageState, usageHtml, chartModel, fetchUsageHttp, closeUsageHttp, fetchedAt } from "./card-usage.js";
 import { wireChart } from "./card-chart.js";
@@ -125,15 +124,23 @@ export function cardFiguresHtml(p, figs, dash) {
     + `<div class="cfs">Source: ${figs?.source ? esc(figs.source) : dash("no source in this slate file")}, as of ${figs?.asOf ? esc(figs.asOf) : dash("no board time in this slate file")}.${yours}</div></div>`;
 }
 
+/** Swaps only the header's status badge inside its stable wrapper (a mark moved while the card is open); nothing else in the card is redrawn, so a role box being typed in stays. Returns whether a wrapper was found. */
+export function setBadge(root, p, inj) {
+  const slot = root.querySelector("[data-cbadge]");
+  if (!slot) return false;
+  slot.innerHTML = statusBadge(p, inj);
+  return true;
+}
+
 /** The card's markup for a player and log state. ctx: { dash(title), colourOf(team) -> {t1, t2}, picks: {locked, excluded},
  *  figs: {source, asOf} (the header's figures line), usage (card-usage.js state; default idle), ui (its tab choice) }.
  *  A man off the slate's player pool (the Out list: no dk_id) has no Lock or Exclude. */
-export function cardHtml(p, log, { dash, colourOf, picks, figs = null, usage = { state: "idle" }, ui = { tab: "career", by: null }, roleSlot = false }) {
+export function cardHtml(p, log, { dash, colourOf, picks, figs = null, usage = { state: "idle" }, ui = { tab: "career", by: null }, roleSlot = false, inj = null }) {
   const pct = (v, why) => (typeof v === "number" ? v.toFixed(1) + "%" : dash(why));
   const header = () => {
     const c = colourOf(p.team), lk = picks.locked.includes(p.dk_id), ex = picks.excluded.includes(p.dk_id);
     const acts = p.dk_id == null ? "" : `<div class="acts"><button class="a-lk${lk ? " on" : ""}" data-lock="${esc(p.dk_id)}">${ICON.lock}${lk ? "Locked" : "Lock"}</button><button class="a-ex${ex ? " on" : ""}" data-excl="${esc(p.dk_id)}">${ICON.x}${ex ? "Excluded" : "Exclude"}</button></div>`;
-    return `<div class="ch" style="--t1:${c.t1};--t2:${c.t2}">${logo(p.team, "xl")}<div class="id"><div class="l1"><span class="nm2" title="${esc(p.name)}">${esc(p.name)}</span>${injBadge(p.injury_status)}</div>`
+    return `<div class="ch" style="--t1:${c.t1};--t2:${c.t2}">${logo(p.team, "xl")}<div class="id"><div class="l1"><span class="nm2" title="${esc(p.name)}">${esc(p.name)}</span><span data-cbadge>${statusBadge(p, inj)}</span></div>`
       + `<div class="l2">${p.positions?.length ? `<span class="pos">${esc(p.positions.join("/"))}</span>` : ""}<span class="ddtd"><span title="Double-double chance">DD <b>${pct(p.dd_pct, "no double-double chance in this pull")}</b></span> · <span title="Triple-double chance">TD <b>${pct(p.td_pct, "no triple-double chance in this pull")}</b></span></span></div></div>`
       + acts
       + `<button class="close" data-card-close title="Close (Esc)"><kbd>ESC</kbd>&#10005;</button>${cardFiguresHtml(p, figs, dash)}</div>`;
@@ -181,7 +188,7 @@ export const cardLeft = ({ panelLeft, cardWidth, viewWidth, zoom }) => Math.max(
 /** Wires the card. ctx: { root (element the card is added to), dash(title), colourOf(team), picks() -> {locked, excluded},
  *  figs() -> {source, asOf}, current(p) -> the player as the board holds him now (his figures follow an override),
  *  roles(p, slot) -> draws his role and minutes block (card-role.js) into the slot under the header, when given }. */
-export function initCard({ root, dash, colourOf, picks, figs = () => null, current = (p) => p, roles = null }) {
+export function initCard({ root, dash, colourOf, picks, figs = () => null, current = (p) => p, roles = null, marks = () => null }) {
   const el = document.createElement("div");
   el.className = "card";
   el.id = "card";
@@ -209,7 +216,9 @@ export function initCard({ root, dash, colourOf, picks, figs = () => null, curre
     if (el.hidden) return;
     const r = el.getBoundingClientRect(), z = el.offsetWidth ? r.width / el.offsetWidth : 1;
     const panel = document.getElementById("opt")?.getBoundingClientRect();
-    if (panel) el.style.left = `${cardLeft({ panelLeft: panel.left, cardWidth: r.width, viewWidth: window.innerWidth, zoom: z })}px`;
+    // The panel column is hidden on the Console and Late swap screens: the card then sits at the right edge of the window.
+    if (panel?.width) el.style.left = `${cardLeft({ panelLeft: panel.left, cardWidth: r.width, viewWidth: window.innerWidth, zoom: z })}px`;
+    else el.style.left = `${cardLeft({ panelLeft: window.innerWidth, cardWidth: r.width, viewWidth: window.innerWidth, zoom: z })}px`;
     fitCard(el);
   };
   const render = () => {
@@ -222,7 +231,7 @@ export function initCard({ root, dash, colourOf, picks, figs = () => null, curre
     el.hidden = !p;
     bg.hidden = !p;
     document.body.classList.toggle("noscroll", Boolean(p)); // the page behind stays where it is
-    el.innerHTML = p ? cardHtml(p, state.log, { dash, colourOf, picks: picks(), figs: figs(), usage: usage.usage, ui: usage.ui, roleSlot: Boolean(roles) }) : "";
+    el.innerHTML = p ? cardHtml(p, state.log, { dash, colourOf, picks: picks(), figs: figs(), usage: usage.usage, ui: usage.ui, roleSlot: Boolean(roles), inj: marks(p.dk_id)?.inj ?? null }) : "";
     if (p && roles) roles(p, el.querySelector("[data-crole]"));
     place();
     if (p && !opening) {
@@ -262,5 +271,7 @@ export function initCard({ root, dash, colourOf, picks, figs = () => null, curre
     close,
     /** Redraws the header's Lock / Exclude state after picks change. */
     refresh() { if (state.player) render(); },
+    /** A mark moved (the news-aware status): only the header badge is swapped. */
+    badge() { const p = state.player && current(state.player); if (p) setBadge(el, p, marks(p.dk_id)?.inj ?? null); },
   };
 }

@@ -3,9 +3,10 @@
 import fs from "../../site/shim/fs.js";
 import path from "../../site/shim/path.js";
 import { dataRoot } from "./store.js";
+import { readLook } from "./lineup-look.js";
 
 /** { state: "ok", latest } , { state: "missing" } when this slate has no read yet, or { state: "unreadable", why } for a damaged file (never an empty answer). */
-export function readNewsLineups(slate) {
+export function readNewsLineups(slate, { look: withLook = true } = {}) {
   const file = path.join(dataRoot(), "slates", slate, "news", "lineups", "latest.json");
   if (!fs.existsSync(file)) return { state: "missing" };
   try {
@@ -16,6 +17,9 @@ export function readNewsLineups(slate) {
       const f = JSON.parse(fs.readFileSync(path.join(dataRoot(), "slates", slate, "lineup-finds.json"), "utf8"));
       if (Array.isArray(f?.finds)) { latest.found_by_check = f.finds; if (f.last_check) latest.last_check = f.last_check; } else latest.found_unreadable = "lineup-finds.json has no finds list";
     } catch (e) { if (e.code !== "ENOENT") latest.found_unreadable = `lineup-finds.json could not be read (${e.name})`; }
+    const look = withLook ? readLook(slate, dataRoot()) : {};
+    if (Object.keys(look).length || latest.look === undefined) latest.look = look; // the site has no cache file: the look baked into the copy stands
+    // the last look at each page (cache, git-ignored): a source is fresh by the later of its read and its look (lineup-proposals.js freshnessOf)
     return { state: "ok", latest };
   } catch (e) {
     return { state: "unreadable", why: `latest.json could not be read (${e.name})` };

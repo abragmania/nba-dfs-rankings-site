@@ -1,7 +1,7 @@
 // The Console's lineup news (Adam approved the mock-up 11-09): one slim strip above the tables (the team's starting five and who said it, the three newest lineup-news entries, the
 // injury report) and, on every man, the "Status and latest note" cell. All of it is the News tab's own data and words: newsModel / teamModel and the page's FIVE_WORD, fiveSaid and
 // feedRowHtml, never a second copy. Pure strings, tested in node. A figure the read does not have is a dash or a plain "not read", never a stand-in. Look: console.css (#console .cn, .sn).
-import { esc } from "./board-util.js";
+import { esc, nameOpen, outNameOpen } from "./board-util.js";
 import { plain } from "./console-model.js";
 import { newsModel, statusChip, timeLabel } from "./news-model.js";
 import { FIVE_WORD, feedRowHtml, fiveSaid } from "./news-page.js";
@@ -65,7 +65,7 @@ function matchLine(five, starters, ids) {
 
 function fiveSection(N, starterIds) {
   const T = N.team, five = T.five, said = fiveSaid(five, N.day).replace(/^ · /, "");
-  const men = [...T.starters].sort((a, b) => posRank(a) - posRank(b)).map((r) => `<span><b>${esc(posOf(r))}</b>${esc(r.name)}${chipHtml(r.status, true)}</span>`).join("");
+  const men = [...T.starters].sort((a, b) => posRank(a) - posRank(b)).map((r) => `<span><b>${esc(posOf(r))}</b>${nameOpen(r.name, r.id)}${chipHtml(r.status, true)}</span>`).join("");
   const oppFive = N.opp.five, oppSaid = fiveSaid(oppFive, N.day).replace(/^ · /, ""), match = matchLine(five, T.starters, starterIds);
   const note = !N.hasRead ? "No lineup read yet: the fives are TwoGun's" : N.stale ? "The lineup read is too old to act on: the fives are TwoGun's" : "";
   return `<section><h3>Starting five <em class="${five.kind}">${FIVE_WORD[five.kind]}</em>${said ? `<em class="n">${esc(said)}</em>` : ""}</h3>`
@@ -86,7 +86,7 @@ function injurySection(N) {
   const shown = [...list.filter((r) => r.status.cls !== "ou"), ...list.filter((r) => r.status.cls === "ou")].slice(0, SHOWN_INJURIES).sort(byRank); // men still in doubt first: the Out list has the rest
   const counts = [];
   for (const r of list) { const w = r.status.word.toLowerCase(), hit = counts.find((c) => c.w === w); if (hit) hit.n++; else counts.push({ w, n: 1 }); }
-  const row = (r) => { const at = timeOf(N, r); return `<div class="inj">${chipHtml(r.status)}<b title="${esc(r.name)}">${esc(r.name)}</b><span class="n"${r.note ? ` title="${esc(r.note)}"` : ""}>${r.note ? esc(r.note) : dash}</span><time>${at ? esc(at) : ""}</time></div>`; };
+  const row = (r) => { const at = timeOf(N, r); return `<div class="inj">${chipHtml(r.status)}${r.id ? nameOpen(r.name, r.id, "b") : outNameOpen(r.name, N.team.code, "b")}<span class="n"${r.note ? ` title="${esc(r.note)}"` : ""}>${r.note ? esc(r.note) : dash}</span><time>${at ? esc(at) : ""}</time></div>`; };
   const more = list.length > SHOWN_INJURIES ? `<div class="inj more"><span class="n">+${list.length - SHOWN_INJURIES} more on the News tab</span></div>` : "";
   return `<section><h3>Injury report${counts.length ? `<em class="n">${counts.map((c) => `${c.n} ${esc(c.w)}`).join(" &middot; ")}</em>` : ""}</h3>${shown.map(row).join("") || `<div class="inj none"><span class="n">Nobody on the injury report</span></div>`}${more}</section>`;
 }

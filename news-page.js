@@ -1,7 +1,7 @@
 // The News tab's markup (news-model.js has the data; lineup-bar.js owns the clicks and the proposals' rows): the games in slate order, the two teams of a game side by side, each
 // team's five, bench and Out men, one line a man; and the sticky log on the right, newest first, filterable to a team. Pure strings, tested in node. Look: lineup-bar.css (nw-).
 // teamHtml, gamesHtml and logHtml take their model and return their HTML, so the Console can reuse them without a second copy.
-import { esc, logo } from "./board-util.js";
+import { esc, logo, nameOpen, outNameOpen } from "./board-util.js";
 import { teamColors } from "./teams.js";
 import { timeLabel } from "./news-model.js";
 
@@ -17,11 +17,11 @@ const deltaHtml = (d) => {
   return [bit(d.min, "m", 1), bit(d.proj, "p", 1)].filter(Boolean).join(" ");
 };
 
-function playerRow(r, day) {
+function playerRow(r, day, team) {
   const tg = r.out ? (isNum(r.usual) ? `<s title="usual minutes">${f1(r.usual)}</s>` : dash) : f1(r.tg) ?? dash;
   const when = timeLabel(r.noteAt, { day, precision: r.notePrecision }), whenShort = timeLabel(r.noteAt, { day, precision: r.notePrecision, compact: true });
   const title = [r.note, when ? `reported ${when}${r.notePrecision === "day" ? "" : " ET"}` : ""].filter(Boolean).join(" · ");
-  return `<div class="nwr${r.out ? " out" : ""}"><span class="nwn" title="${esc(r.name)}">${esc(r.name)}</span><span class="nwp">${esc(r.pos ?? "") || dash}</span><span class="nws">${esc(r.salary ?? "") || dash}</span>`
+  return `<div class="nwr${r.out ? " out" : ""}">${r.id ? nameOpen(r.name, r.id, "span", "nwn") : outNameOpen(r.name, team, "span", "nwn")}<span class="nwp">${esc(r.pos ?? "") || dash}</span><span class="nws">${esc(r.salary ?? "") || dash}</span>`
     + `<span class="nwc ${r.status.cls}" title="${esc(r.status.word)}">${esc(r.status.word)}</span><span class="nwt" title="${esc(title)}">${r.note || when ? `<span class="nwtx">${esc(r.note ?? "")}</span>${when ? `<time class="nwat">${esc(whenShort)}</time>` : ""}` : dash}</span><span class="nwm">${tg}</span>`
     + `<span class="nwm nwo">${f1(r.ours) ?? dash}</span><span class="nwk">${r.mark ? `<i>${esc(r.mark)}</i>` : ""}</span><span class="nwl">${deltaHtml(r.delta)}</span></div>`;
 }
@@ -47,9 +47,9 @@ export function teamHtml(T, side, sel) {
   return `<div class="nwteam${sel === T.code ? " sel" : ""}" data-team="${esc(T.code)}" style="--t1:${esc(col.t1)}"><div class="nwth" data-nw-team="${esc(T.code)}" title="Show only ${esc(T.code)} in the log">${logo(T.code, "xs")}<b>${esc(T.code)}</b><span class="nwside">${side}</span><span class="nwgrow"></span>`
     + `<span class="nwcnt">${T.counts.onSlate} on slate · ${T.counts.out} out${q ? ` · ${q} questionable` : ""}</span></div>`
     + `<div class="nwch"><span>Player</span><span>Pos</span><span>Salary</span><span>Status</span><span>Injury note</span><span class="r" title="TwoGun minutes">TG</span><span class="r">Ours</span><span>Mark</span><span title="${esc(sinceTitle)}">${esc(sinceHead)}</span></div>`
-    + `<div class="nwsec"><span>Starting five</span><em class="${five.kind}">${FIVE_WORD[five.kind]}${esc(by)}</em></div>${T.starters.map((r) => playerRow(r, day)).join("")}${unmatched}`
-    + `<div class="nwsec"><span>Bench</span></div>${T.bench.map((r) => playerRow(r, day)).join("")}`
-    + `<div class="nwsec o"><span>Out</span><em class="n">usual minutes struck</em></div>${T.outs.length ? T.outs.map((r) => playerRow(r, day)).join("") : `<div class="nwr none">${dash}</div>`}</div>`;
+    + `<div class="nwsec"><span>Starting five</span><em class="${five.kind}">${FIVE_WORD[five.kind]}${esc(by)}</em></div>${T.starters.map((r) => playerRow(r, day, T.code)).join("")}${unmatched}`
+    + `<div class="nwsec"><span>Bench</span></div>${T.bench.map((r) => playerRow(r, day, T.code)).join("")}`
+    + `<div class="nwsec o"><span>Out</span><em class="n">usual minutes struck</em></div>${T.outs.length ? T.outs.map((r) => playerRow(r, day, T.code)).join("") : `<div class="nwr none">${dash}</div>`}</div>`;
 }
 
 /** The games, in the slate's order; a warning line for any team that has players or Out men but no game row. */

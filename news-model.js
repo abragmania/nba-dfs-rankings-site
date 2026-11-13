@@ -4,7 +4,7 @@
 // console; one that is not there is null and drawn as a dash, never a stand-in. A lineup read too old to act on (staleOf) gives no Confirmed or Expected and no sources' statuses: the
 // five is then TwoGun's own, and the board's status and the injury notes still show. Men are joined to cards by the DraftKings id the lineup read stored (matchMan), Out-list men
 // (who have no id on the slate) by the Out entry's name the read stored (out_as); Out claims are the proposals' own (lineup-proposals.js claimsFor); TwoGun's minutes are tgMin, never his applied number.
-import { staleOf, tgMin, claimsFor, NO_STATUS, BACKS_ONLY } from "./lineup-proposals.js";
+import { staleOf, withFreshness, blockFresh, outVsFive, tgMin, claimsFor, NO_STATUS, BACKS_ONLY } from "./lineup-proposals.js";
 import { newsRuling, newestStatusCards } from "./news-status.js";
 import { isOut } from "./figures.js";
 
@@ -171,15 +171,15 @@ const SOURCE = [["monster", "Monster"], ["rotowire", "RotoWire"], ["rotogrinders
  */
 export function teamModel({ code, players, out, latest, stale, cards, view, asOf = {}, day = null }) {
   const mine = (players ?? []).filter((p) => p.team === code);
-  const block = stale ? {} : latest?.teams?.[code] ?? {};
+  const block = latest?.teams?.[code] ?? {}; // with every source stale the fives are still not used (usable), but the kept Outs are (claims)
   const ok = (b) => b?.state === "ok" && Array.isArray(b.men);
-  const usable = SOURCE.filter(([k]) => ok(block[k]));
+  const usable = SOURCE.filter(([k]) => ok(block[k]) && blockFresh(latest, k, block[k])); // a source no longer fresh gives no five, only its kept Outs (claimsFor)
   const confirmed = usable.filter(([k]) => block[k].confirmed && (!BACKS_ONLY.includes(k) || usable.some(([j]) => j !== k && block[j].confirmed))); // a back-only page's confirmed mark never stands alone
   const use = confirmed.length ? confirmed : usable;
   const idsOf = (k) => new Set(block[k].men.filter((m) => m.id != null && m.status !== "Out").map((m) => String(m.id)));
   const same = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
-  const claims = stale || !latest ? null : claimsFor(latest, code);
-  const claimedOut = (id) => Boolean(claims?.out.has(String(id)));
+  const claims = !latest ? null : claimsFor(latest, code), contested = new Set(claims ? outVsFive(claims).map((c) => String(c.id)) : []); // a man two fresh feeds dispute, or a kept Out a fresh five cancelled, is not shown or counted as Out
+  const claimedOut = (id) => Boolean(claims?.out.has(String(id))) && !contested.has(String(id));
   // A man the five shows whom another feed says is Out is not settled: the Out claim comes from a different feed than a claim that he is in a five (the proposals' outVsFive test), or
   // every Out claim on him is a near-name match, which the proposals refuse to act on. The feeds saying Out are named.
   const FEED = { monster: "Monster", rotowire: "RotoWire", rotogrinders: "RotoGrinders", monster_news: "Monster news" };
@@ -225,7 +225,7 @@ export function teamModel({ code, players, out, latest, stale, cards, view, asOf
       delta: mv && (mv.min || mv.proj) ? { min: mv.min ?? null, proj: mv.proj ?? null } : null, out: false,
     };
   };
-  const inFive = (p) => (source.kind === "twogun" ? p.starter === true : five.has(String(p.dk_id)) && !claimedOut(p.dk_id));
+  const inFive = (p) => (source.kind === "twogun" ? p.starter === true : five.has(String(p.dk_id)) && !claimedOut(p.dk_id) && !contested.has(String(p.dk_id))); // a disputed man is neither Out nor in the five
   const byMin = (a, b) => (tgMin(b) ?? -1) - (tgMin(a) ?? -1) || a.name.localeCompare(b.name);
   const starters = mine.filter(inFive).sort(byMin).map(row), bench = mine.filter((p) => !inFive(p)).sort(byMin).map(row);
   const outs = (out ?? []).filter((o) => o.team === code).sort((a, b) => (b.usual_minutes ?? -1) - (a.usual_minutes ?? -1)).map((o) => {
@@ -245,7 +245,8 @@ export function teamModel({ code, players, out, latest, stale, cards, view, asOf
  * clock; view: the console's lineupView; tip(text) -> "7:30 PM ET" and tipAt(text) -> ms (board-util). Returns { games, log, stale, hasRead, asOf, day, orphans } where orphans lists
  * the teams that have players or Out men on the slate but no game row, so none of them vanish: [{ team, players, outs }].
  */
-export function newsModel({ slate, latest, nowMs, view, tip = (t) => t, tipAt = () => null }) {
+export function newsModel({ slate, latest: latestIn, nowMs, view, tip = (t) => t, tipAt = () => null }) {
+  const latest = withFreshness(latestIn, nowMs); // each source judged on its own
   const stale = latest ? Boolean(staleOf(latest, nowMs)) : true;
   const cards = Array.isArray(latest?.monster_news?.cards) ? latest.monster_news.cards : [];
   const asOf = asOfTimes({ slate, latest }), day = dayOf(slate);

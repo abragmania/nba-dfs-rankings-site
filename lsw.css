@@ -22,7 +22,7 @@ body.lsw-on .vtabs button.on:not([data-lswtab]){background:none;color:var(--mu)}
 #lsw select,#lsw input[type=text],#lsw input:not([type]){background:var(--p2);color:var(--tx);border:1px solid var(--ln);padding:6px 8px;font:600 13px "JetBrains Mono",monospace}
 #lsw .lnk{background:none;border:0;color:var(--bl);text-decoration:underline;padding:0;font:600 13px "Space Grotesk"}
 /* top bar: nav and figures on the first line, the games under them, the export buttons in the blank at the right at the strip's full height */
-#lsw .bar{position:sticky;top:0;z-index:20;display:flex;align-items:stretch;background:var(--bg);border:1px solid var(--ln);margin-bottom:10px}
+#lsw .bar{position:sticky;top:0;z-index:10;display:flex;align-items:stretch;background:var(--bg);border:1px solid var(--ln);margin-bottom:10px}
 #lsw .barl{flex:1;min-width:0;display:flex;flex-direction:column}
 #lsw .barr{display:flex;align-items:stretch}
 #lsw .sgm{display:flex;border-right:1px solid var(--ln)}

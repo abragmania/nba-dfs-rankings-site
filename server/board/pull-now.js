@@ -5,7 +5,7 @@
 // this module's state each time; the line's box is always there, its width fixed, so nothing moves when its words change.
 import { esc, shortTime, tipMs } from "./board-util.js";
 import { lastName } from "./console-model.js";
-import { staleOf, LINEUP_KEYS } from "./lineup-proposals.js";
+import { staleOf, withFreshness, claimsFor, outVsFive, keptWords, LINEUP_KEYS } from "./lineup-proposals.js";
 
 /** TwoGun's board stamp as the page shows every time: Eastern ("Fri, Nov 6, 2:37 PM CT" -> "3:37 PM ET"). Null when missing. Pure. */
 export function boardShort(text, refMs = Date.now()) {
@@ -331,7 +331,8 @@ export function badgeView(light) {
   const n = changes.length, words = changes.map((c) => c.text).join(", ");
   const text = light.site ? `The lineup read has ${n} ${n === 1 ? "man" : "men"} Out that the board still plays: ${words}` : `${n} change${n === 1 ? "" : "s"} since your pull: ${words}`;
   const unread = (light.unknown ?? []).map((u) => u.source);
-  return { text, title: [`${text}. Press to pull.`, light.note ?? null, unread.length ? `Not read: ${unread.join(", ")}` : null].filter(Boolean).join(" ") };
+  const kept = changes.filter((c) => c.kept).map((c) => `${c.text}: ${c.kept}`); // an Out kept from a source no longer fresh says so
+  return { text, title: [`${text}. Press to pull.`, kept.length ? `Kept Outs: ${kept.join("; ")}.` : null, light.note ?? null, unread.length ? `Not read: ${unread.join(", ")}` : null].filter(Boolean).join(" ") };
 }
 
 /**
@@ -341,12 +342,17 @@ export function badgeView(light) {
 export function publishedChanges({ latest, readWhy = null, players, nowMs }) {
   const gen = Date.parse(latest?.generated_at ?? "");
   const base = { atMs: Number.isNaN(gen) ? null : gen, changes: [], site: true, note: "From the published lineup read only; TwoGun, the NBA report and Monster's news page cannot be read from this site." };
-  if (!latest || staleOf(latest, nowMs)) return { ...base, unknown: [{ source: "Published lineup read", why: readWhy ?? (latest ? "it is too old to act on" : "the site has none for this slate") }] };
+  if (!latest) return { ...base, unknown: [{ source: "Published lineup read", why: readWhy ?? "the site has none for this slate" }] }; // a read with every source stale still gives its kept Outs (Adam 11-13)
   const playing = new Map((players ?? []).filter((p) => p.minutes > 0).map((p) => [String(p.dk_id), p]));
-  const men = [...(latest.monster_news?.status === "ok" ? latest.monster_news.out ?? [] : [])];
-  for (const block of Object.values(latest.teams ?? {})) for (const k of LINEUP_KEYS) if (block[k]?.state === "ok") men.push(...(block[k].men ?? []).filter((m) => m.status === "Out"), ...(block[k].may_not_play ?? []).filter((m) => m.status === "Out"));
-  const out = new Map();
-  for (const m of men) { const p = m.match !== "near" && m.id != null ? playing.get(String(m.id)) : null; if (p) out.set(p.dk_id, { key: `man:${p.dk_id}:OUT`, text: lastName(p.name), source: "lineups" }); }
+  const out = new Map(), wf = withFreshness(latest, nowMs); // the engine's own claims: kept Outs stand, one a fresh five cancels or two fresh feeds dispute does not count (Adam 11-13)
+  for (const team of Object.keys(latest.teams ?? {})) {
+    const claims = claimsFor(wf, team), contested = new Set(outVsFive(claims).map((c) => c.id));
+    for (const [id, cl] of claims.out) {
+      const p = !contested.has(id) && cl.some((c) => !c.near) ? playing.get(String(id)) : null; // a near-name match is left out
+      const keptBy = cl.every((c) => c.held) ? [...new Set(cl.map((c) => keptWords(wf, c.key, wf.teams?.[team]?.[c.key])).filter(Boolean))] : [];
+      if (p) out.set(p.dk_id, { key: `man:${p.dk_id}:OUT`, text: lastName(p.name), source: "lineups", ...(keptBy.length ? { kept: keptBy.join("; ") } : {}) });
+    }
+  }
   return { ...base, changes: [...out.values()], unknown: [] };
 }
 

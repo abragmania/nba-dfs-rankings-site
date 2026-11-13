@@ -28,10 +28,82 @@ export const NO_STATUS = Object.freeze(["rotogrinders"]);
 const ORDER = ["monster", "monster_news", "rotowire", "rotogrinders"]; // the order sources are named in
 const LABEL = { ...LINEUP_LABEL, monster_news: "Monster" };
 export const STALE_MIN = 90;
-/** The one age test of a lineup read: null while it is fresh, else { ageMin } (null when its time is unknown). Used by the proposals, the bar and the board's S chips. */
+const msOf = (iso) => { const t = Date.parse(iso ?? ""); return Number.isNaN(t) ? null : t; };
+/** The ET clock time of a read, for "kept from <source>'s <time> read". */
+export const etTime = (ms) => new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }).format(new Date(ms));
+/**
+ * Each source judged on its own (Adam 11-13): { monster|rotowire|rotogrinders|monster_news: { fresh, readMs (its last good read at or before nowMs: the latest of latest.json's fetched time and the ok looks), ageMin } }.
+ * A look is latest.look[key] = { at, ok, ok_at, history: [ok look times, oldest first] } (server/slate/lineup-look.js); only ok looks count, so a failed one refreshes nothing, and the newest one at or before nowMs is taken, so a replay between two looks sees the earlier.
+ * A time later than nowMs is ignored, never a negative age. A source whose latest.json entry is not ok counts through its last_good_at and its looks. A fixture with no sources entry falls back to generated_at.
+ */
+export function freshnessOf(latest, nowMs) {
+  const out = {}, gen = msOf(latest?.generated_at);
+  const upTo = (t) => (t !== null && t <= nowMs ? t : null);
+  for (const key of [...LINEUP_KEYS, "monster_news"]) {
+    const e = key === "monster_news" ? latest?.monster_news : latest?.sources?.[key];
+    if (key === "monster_news" && !e) continue;
+    const times = [];
+    if (e === undefined) times.push(upTo(gen));
+    else if (e && (e.status === undefined || e.status === "ok")) times.push(upTo(msOf(e.fetched_at) ?? gen));
+    else if (e?.last_good_at) times.push(upTo(msOf(e.last_good_at))); // a failed read's source keeps its blocks from its last good read (tools/lineups_read.mjs carryFailed)
+    const lk = latest?.look?.[key];
+    if (lk) {
+      const hist = Array.isArray(lk.history) ? lk.history.map(msOf) : [];
+      times.push(...hist.map(upTo), upTo(msOf(lk.ok_at) ?? (lk.ok === true ? msOf(lk.at) : null)));
+    }
+    const readMs = Math.max(-Infinity, ...times.filter((t) => t !== null));
+    const known = Number.isFinite(readMs);
+    out[key] = { fresh: known && (nowMs - readMs) / 60000 <= STALE_MIN, readMs: known ? readMs : null, ageMin: known ? Math.round((nowMs - readMs) / 60000) : null };
+  }
+  return out;
+}
+/** latest with its per-source freshness at nowMs attached (latest.freshness, and the moment as freshness_now); claimsFor, the vote and fiveFor read it. */
+export const withFreshness = (latest, nowMs) => (latest && typeof latest === "object" ? { ...latest, freshness: freshnessOf(latest, nowMs), freshness_now: nowMs } : latest);
+/** The read with its freshness: as it is when it already carries one, else worked out at nowMs. */
+export const ensureFreshness = (latest, nowMs) => (latest?.freshness ? latest : withFreshness(latest, nowMs));
+/** A latest that carries its freshness: the one it has, else worked out at its own moment, else now (a direct caller that passed a raw read). */
+const fresh0 = (latest) => (latest?.freshness ? latest : withFreshness(latest, Date.now()));
+/** Whether a source is fresh in this read. */
+export const isFresh = (latest, key) => fresh0(latest)?.freshness?.[key]?.fresh !== false;
+/**
+ * Whether one team's block of a source is fresh: its source is, and a block carried alone (check_failed on the block, the page gave no usable five for that team) is judged by its own last_good_at, never by the source's look.
+ * A block marked at the same moment as its source (a whole-source carry: carryAndMark, carryFailed) is judged by the source's freshness, looks included.
+ */
+export function blockFresh(latest, key, b) {
+  const l = fresh0(latest);
+  if (l?.freshness?.[key]?.fresh === false) return false;
+  if (!b?.check_failed) return true;
+  if (b.check_failed.at !== undefined && b.check_failed.at === l.sources?.[key]?.check_failed?.at) return true;
+  const at = msOf(b.last_good_at);
+  return at !== null && ((l.freshness_now ?? Date.now()) - at) / 60000 <= STALE_MIN;
+}
+/** The time (ms) a source's block was last read well: a block carried alone by its own last_good_at, else the source's. Null when unknown. */
+export function keptMs(latest, key, b = null) {
+  const l = fresh0(latest), f = l?.freshness?.[key];
+  const alone = b?.check_failed && msOf(b.last_good_at) !== null && !(b.check_failed.at !== undefined && b.check_failed.at === l.sources?.[key]?.check_failed?.at);
+  return alone ? msOf(b.last_good_at) : f?.readMs ?? null;
+}
+/** The words for an Out kept from a source that is no longer fresh, or null. */
+export const keptWords = (latest, key, b = null) => {
+  const l = fresh0(latest), f = l?.freshness?.[key];
+  if (f && f.fresh !== false && !(b && !blockFresh(l, key, b))) return null;
+  const ms = keptMs(l, key, b);
+  return `kept from ${LABEL[key]}'s ${ms == null ? "last (time unknown)" : etTime(ms)} read`;
+};
+/**
+ * The whole-read age test: null while any lineup source is fresh, else { ageMin } of the newest source read (null when unknown). A stale source drops only its own part (freshnessOf); the whole read is
+ * stale only when every lineup source is. Used by the bar's line, the news page and the checks that need some fresh source at all.
+ */
 export function staleOf(latest, nowMs) {
-  const gen = Date.parse(latest?.generated_at ?? "");
-  return Number.isNaN(gen) || (nowMs - gen) / 60000 > STALE_MIN ? { ageMin: Number.isNaN(gen) ? null : Math.round((nowMs - gen) / 60000) } : null;
+  const present = LINEUP_KEYS.filter((k) => latest?.sources?.[k] !== undefined || latest?.look?.[k]);
+  if (!present.length) {
+    const gen = Date.parse(latest?.generated_at ?? "");
+    return Number.isNaN(gen) || (nowMs - gen) / 60000 > STALE_MIN ? { ageMin: Number.isNaN(gen) ? null : Math.round((nowMs - gen) / 60000) } : null;
+  }
+  const f = freshnessOf(latest, nowMs);
+  if (present.some((k) => f[k].fresh)) return null;
+  const ages = present.map((k) => f[k].ageMin).filter((a) => a !== null);
+  return { ageMin: ages.length ? Math.min(...ages) : null };
 }
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -49,21 +121,31 @@ export const unknownStatus = (m) => String(m.status ?? "").startsWith("UNKNOWN")
 /** An unrecognised status as words only: "UNKNOWN(Q #123456 Questionable)" becomes "Q Questionable"; a colour code is never shown. */
 export const statusWords = (s) => String(s ?? "").replace(/^UNKNOWN\((.*)\)$/, "$1").replace(/\s*#[0-9A-Fa-f]{3,8}\b/g, "").replace(/\s+/g, " ").trim() || "unreadable";
 
-/** The Out claims and the in-five claims on one team, by man id: { out: Map(id -> [claim]), five: Map(id -> [claim]) }. A claim is { key, at, lineup, detail, name, near }. */
-export function claimsFor(latest, team, skip = new Set()) {
-  const out = new Map(), five = new Map();
+/**
+ * The Out claims and the in-five claims on one team, by man id: { out: Map(id -> [claim]), five: Map(id -> [claim]), dropped }. A claim is { key, at, lineup, detail, name, near, held }; held marks an Out kept from a source (or a team block)
+ * that is no longer fresh. A held Out stands only while no fresh status-bearing source (not RotoGrinders: NO_STATUS) lists the man in its five, projected or confirmed; one that does is set aside and listed in dropped: [{ id, key, by: [sources], name }], never a clash or a proposal.
+ */
+export function claimsFor(latestIn, team, skip = new Set()) {
+  const latest = fresh0(latestIn);
+  const out = new Map(), five = new Map(), dropped = [];
   const add = (map, m, claim) => { if (m.id != null) map.set(m.id, [...(map.get(m.id) ?? []), { ...claim, name: m.name, near: m.match === "near" }]); };
   const block = latest.teams?.[team] ?? {};
   for (const key of LINEUP_KEYS) {
     const b = block[key];
     if (skip.has(key) || !okBlock(b)) continue;
-    const at = sourceTime(latest, key), lineup = b.confirmed ? "confirmed" : "projected";
-    for (const m of b.men) add(m.status === "Out" ? out : five, m, { key, at, lineup, detail: m.status === "Out" ? `${String(m.flag ?? "Out").slice(0, DETAIL_MAX)} in its five` : null });
-    for (const m of Array.isArray(b.may_not_play) ? b.may_not_play : []) if (m.status === "Out") add(out, m, { key, at, lineup: null, detail: `${String(m.flag ?? "Out").slice(0, DETAIL_MAX)} on MAY NOT PLAY` });
+    const at = sourceTime(latest, key), lineup = b.confirmed ? "confirmed" : "projected", held = !blockFresh(latest, key, b); // a source no longer fresh keeps its Outs, never its five
+    for (const m of b.men) { if (m.status !== "Out" && held) continue; add(m.status === "Out" ? out : five, m, { key, at, lineup, held, detail: m.status === "Out" ? `${String(m.flag ?? "Out").slice(0, DETAIL_MAX)} in its five` : null }); }
+    for (const m of Array.isArray(b.may_not_play) ? b.may_not_play : []) if (m.status === "Out") add(out, m, { key, at, lineup: null, held, detail: `${String(m.flag ?? "Out").slice(0, DETAIL_MAX)} on MAY NOT PLAY` });
   }
-  const news = latest.monster_news;
-  if (news?.status === "ok") for (const m of Array.isArray(news.out) ? news.out : []) if (m.team === team) add(out, m, { key: "monster_news", at: news.fetched_at ?? null, lineup: null, detail: String(m.detail ?? "Out").slice(0, DETAIL_MAX) });
-  return { out, five };
+  const news = latest.monster_news; // a news read that failed or expired keeps its last good Out list (last_good_at, tools/lineups_read.mjs carryFailed)
+  if (news && (news.status === "ok" || (news.last_good_at && Array.isArray(news.out)))) for (const m of Array.isArray(news.out) ? news.out : []) if (m.team === team) add(out, m, { key: "monster_news", at: news.last_good_at ?? news.fetched_at ?? null, lineup: null, held: !isFresh(latest, "monster_news"), detail: String(m.detail ?? "Out").slice(0, DETAIL_MAX) });
+  for (const [id, cl] of out) {
+    const by = (five.get(id) ?? []).filter((c) => !NO_STATUS.includes(c.key)).map((c) => c.key);
+    const keep = by.length ? cl.filter((c) => !c.held) : cl;
+    if (by.length) for (const c of cl.filter((x) => x.held)) dropped.push({ id, key: c.key, by: [...new Set(by)], name: c.name });
+    if (keep.length) out.set(id, keep); else out.delete(id);
+  }
+  return { out, five, dropped };
 }
 
 /** Two feeds disagree about a man when one has him Out and a different feed lists him in its five. */
@@ -87,7 +169,7 @@ const sameSet = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
  */
 function qualifying(latest, team, skip = new Set()) {
   const b = latest.teams?.[team] ?? {};
-  const oks = LINEUP_KEYS.filter((k) => !skip.has(k) && okBlock(b[k]));
+  const oks = LINEUP_KEYS.filter((k) => !skip.has(k) && okBlock(b[k]) && blockFresh(latest, k, b[k])); // a source (or a team block carried alone) no longer fresh is left out of the vote
   const confs = oks.filter((k) => b[k].confirmed);
   const none = { q: new Set(), five: new Set(), used: oks, pages: oks, conflict: null };
   const pick = (used, q) => ({ q, five: q, used, pages: oks, conflict: null });
@@ -137,19 +219,21 @@ export function settledFive(latest, team, skip = new Set()) {
  * No five (ids empty, why set) on: the vote's conflict, a man Out on one page and in another's five (the bar's clash), a status not recognised, a man with no slate id, or no man two pages agree on.
  * skip: page keys not read (fetched at or after lock). names: id -> name for the words. Pure.
  */
-export function fiveFor(latest, team, { skip = new Set(), names = new Map() } = {}) {
-  const none = (why, refused = false) => ({ ids: [], used: [], kind: null, named: {}, outs: [], cut: [], dropped: null, why, refused });
+export function fiveFor(latestIn, team, { skip = new Set(), names = new Map() } = {}) {
+  const latest = fresh0(latestIn); // each source judged on its own: a read that carries no freshness is worked out here, never taken as fresh
+  const none = (why, refused = false) => ({ ids: [], used: [], kind: null, named: {}, outs: [], cut: [], dropped: null, contested: [], contestedIds: [], why, refused });
   const blocks = latest?.teams?.[team];
   if (!blocks) return none(null);
   const nameOf = (id, fb) => names.get(String(id)) ?? fb ?? "a man not on this slate";
   const { first, q, dropped } = settledFive(latest, team, skip); // the bar refuses on the first vote's conflict before it drops an unmatched page, so does this
-  const claims = claimsFor(latest, team, skip), clash = outVsFive(claims); // a page not read makes no claim
-  if (clash.length) return none(`${clash.map((c) => nameOf(c.id, c.outs[0].name)).join(", ")} ${clash.length > 1 ? "are" : "is"} Out in one feed and in the five in another; no five used`, true);
+  const claims = claimsFor(latest, team, skip), clash = outVsFive(claims), contested = new Set(clash.map((c) => c.id)); // a page not read makes no claim
+  // Fresh sources that clash on a man (Out in one, in another's five) flag that man only: he is neither Out nor in the five; the others stand (Adam 11-13).
+  const flagged = clash.map((c) => nameOf(c.id, c.outs[0].name));
   if (first.conflict || q.conflict) return none(`${first.conflict ?? q.conflict}; no five used`, true);
   const usedMen = q.used.flatMap((k) => blocks[k].men), unmatched = [...new Set(usedMen.filter((m) => m.id == null).map((m) => m.name))], unknown = [...new Set(usedMen.filter(unknownStatus).map((m) => m.name))];
   if (unmatched.length) return none(`${unmatched.join(", ")} in a lineup ${unmatched.length > 1 ? "are" : "is"} not matched to a slate player; no five used`, true);
   if (unknown.length) return none(`${unknown.join(", ")} in a lineup ${unknown.length > 1 ? "have" : "has"} a status that was not recognised; no five used`, true);
-  const outIds = [...q.five].filter((id) => claims.out.has(id)), ids = [...q.five].filter((id) => !claims.out.has(id));
+  const outIds = [...q.five].filter((id) => claims.out.has(id) && !contested.has(id)), ids = [...q.five].filter((id) => !claims.out.has(id) && !contested.has(id));
   if (!ids.length) {
     const read = q.used.map((k) => LABEL[k]);
     return none(q.five.size ? "every man in the five is Out; no five used" : !read.length ? "no lineup page could be used; no five used" : read.length === 1 ? `only ${read[0]}'s lineup was read; one page alone does not set the five`
@@ -157,7 +241,7 @@ export function fiveFor(latest, team, { skip = new Set(), names = new Map() } = 
   }
   const kind = q.used.every((k) => blocks[k].confirmed) ? "confirmed" : q.used.some((k) => blocks[k].confirmed) ? "partly confirmed" : "projected";
   const named = Object.fromEntries(ids.map((id) => [id, q.used.filter((k) => blocks[k].men.some((m) => m.id === id))]));
-  return { ids, used: q.used, kind, named, outs: outIds.map((id) => nameOf(id, claims.out.get(id)[0].name)), cut: (q.cut ?? []).map((id) => nameOf(id)), dropped, why: null, refused: false };
+  return { ids, used: q.used, kind, named, outs: outIds.map((id) => nameOf(id, claims.out.get(id)[0].name)), cut: (q.cut ?? []).map((id) => nameOf(id)), dropped, contested: flagged, contestedIds: [...contested], why: null, refused: false };
 }
 
 const sideText = (b, name) => (okBlock(b) ? `${name}${b.confirmed ? " (confirmed)" : " (projected)"}: ${b.men.map((m) => m.name).join(", ")}` : `${name}: ${b?.note ?? "not read"}`);
@@ -172,6 +256,17 @@ function conflictRow(slate, team, latest, why, names) {
   };
 }
 
+/** One man two fresh sources disagree on: a foot row naming him and both claims. The id carries his id, so the team's other rows are unaffected. */
+function contestedRow(slate, team, c, name) {
+  const words = (cl) => `${LABEL[cl.key]}${cl.lineup ? ` (${cl.lineup})` : ""}`;
+  const outs = c.outs.map(words).join(" + "), fives = c.fives.map(words).join(" + ");
+  return {
+    id: `${slate}|${team}|conflict|${c.id}`, kind: "conflict", team,
+    text: `${team}: ${name} is Out in ${outs} but in the five in ${fives}; he is neither marked Out nor started, the other men stand.`,
+    sides: [`Out: ${outs}`, `In the five: ${fives}`], signature: JSON.stringify({ kind: "contested", id: c.id, o: c.outs.map((x) => x.key), f: c.fives.map((x) => x.key) }),
+  };
+}
+
 function checkRow(slate, team, kind, text, detail) {
   return { id: `${slate}|${team}|${kind}`, kind, team, text, sides: [], signature: JSON.stringify({ kind, detail }) };
 }
@@ -181,9 +276,10 @@ function checkRow(slate, team, kind, text, detail) {
  * Each proposal: { id, kind, team, player: { id, name } (the first man), players?: [the men to start], bench?: [{ id, name }], text, sources: [{ key, label, at, lineup, detail }],
  * twogun: { minutes }, actions: [{ fn: "setRole", team, id, role: "out" } | { fn: "setStarters", team, starters: [id], bench: [id] }], noApply?, nearApply?, signature }.
  */
-export function makeProposals({ latest, players, view = null, nowMs = Date.now() }) {
+export function makeProposals({ latest: latestIn, players, view = null, nowMs = Date.now() }) {
   const none = { proposals: [], conflicts: [], stale: null };
-  if (!isObj(latest?.teams) || !Array.isArray(players) || !isObj(view)) return none;
+  if (!isObj(latestIn?.teams) || !Array.isArray(players) || !isObj(view)) return none;
+  const latest = withFreshness(latestIn, nowMs);
   const slate = latest.slate ?? "", byId = new Map(players.map((p) => [String(p.dk_id), p]));
   const stale = staleOf(latest, nowMs);
   const nameOf = (id, fallback) => byId.get(id)?.name ?? fallback ?? "a player not on this slate"; // never a raw id in the words (G62: said, not dropped)
@@ -195,21 +291,25 @@ export function makeProposals({ latest, players, view = null, nowMs = Date.now()
     const marks = v.marks ?? {}, markedOut = new Set(marks.out ?? []), markedS = new Set(marks.s ?? []), typed = new Set(marks.typed ?? []), markedIn = new Set(marks.in ?? []), benched = new Set(marks.benched ?? []);
     const settled = settledFive(latest, team);
     let q = settled.first;
-    const clash = outVsFive(claims);
-    if (q.conflict || clash.length) {
-      const names = clash.map((c) => nameOf(c.id, c.outs[0].name));
-      conflicts.push(conflictRow(slate, team, latest, q.conflict ?? `${names.join(", ")} ${clash.length > 1 ? "are" : "is"} Out in one feed and in the five in another`, names));
+    if (q.conflict) { // the confirmed fives differ and no two agree: the team's five cannot be told
+      conflicts.push(conflictRow(slate, team, latest, q.conflict, []));
       continue;
     }
+    // Fresh sources that clash on a man flag him alone, with both claims; he is neither Out nor started, and the team's other proposals go on (Adam 11-13).
+    const clash = outVsFive(claims), contested = new Set(clash.map((c) => c.id));
+    for (const c of clash) conflicts.push(contestedRow(slate, team, c, nameOf(c.id, c.outs[0].name)));
+    const without = (x) => ({ ...x, q: new Set([...x.q].filter((id) => !contested.has(id))), five: new Set([...x.five].filter((id) => !contested.has(id))) });
+    q = without(q);
     for (const [id, cl] of claims.out) {
+      if (contested.has(id)) continue;
       const p = byId.get(id), typedProj = isNum(p?.ovr?.projection) && v.appliedTo?.[id] !== p.ovr.projection; // his own number, not one an Apply wrote
       if (consoleOut.has(id) || !(v.min?.[id] > 0 || (roles[id] !== undefined && (typed.has(id) || typedProj || markedS.has(id))))) continue; // the console has him out, or does not know him, or he is on no minutes with nothing of Adam's holding a number or an S up
       if (markedIn.has(id)) continue; // he put him back in himself: no Out
-      const sources = [...new Map(cl.map((c) => [c.key, { key: c.key, label: LABEL[c.key], at: c.at, lineup: c.lineup, detail: c.detail }])).values()].sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key));
+      const sources = [...new Map(cl.map((c) => [c.key, { key: c.key, label: LABEL[c.key], at: c.at, lineup: c.lineup, detail: c.detail, ...(c.held ? { kept: keptWords(latest, c.key, latest.teams?.[team]?.[c.key]) } : {}) }])).values()].sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key));
       const name = nameOf(id, cl[0].name), near = cl.some((c) => c.near);
       proposals.push({
         id: `${slate}|${team}|out|${id}`, kind: "out", team, player: { id, name },
-        text: `${labelsOf(sources)}: Out: ${name}${typed.has(id) || typedProj || markedS.has(id) ? ` — overrides your ${[typed.has(id) || typedProj ? "typed numbers" : "", markedS.has(id) ? "S" : ""].filter(Boolean).join(" and ")}` : ""}`, // an override of his own marks is said in the row, not left to the hover
+        text: `${labelsOf(sources)}: Out: ${name}${typed.has(id) || typedProj || markedS.has(id) ? ` — overrides your ${[typed.has(id) || typedProj ? "typed numbers" : "", markedS.has(id) ? "S" : ""].filter(Boolean).join(" and ")}` : ""}${sources.some((x) => x.kept) ? ` (${sources.filter((x) => x.kept).map((x) => x.kept).join("; ")})` : ""}`, // an override of his own marks is said in the row, not left to the hover
         detail: `TwoGun still has him at ${mins(tgMin(p))} min`,
         sources, twogun: { minutes: tgMin(p) ?? null },
         actions: [{ fn: "setRole", team, id, role: "out" }],
@@ -220,7 +320,7 @@ export function makeProposals({ latest, players, view = null, nowMs = Date.now()
     // A page with a man not matched to a slate player is left out of the vote when two clean pages remain, and the check says so; with fewer it refuses (G62).
     if (settled.dropped) {
       conflicts.push(checkRow(slate, team, "unmatched", `${team}: ${settled.dropped.pages.map((k) => LABEL[k]).join(" + ")}'s lineup left out of the vote (${settled.dropped.names.join(", ")} not matched to a slate player); the other pages decide.`, settled.dropped.names));
-      q = settled.q;
+      q = without(settled.q);
     }
     const usedMen = q.used.flatMap((k) => latest.teams[team][k].men);
     const unmatched = [...new Set(usedMen.filter((m) => m.id == null).map((m) => m.name))];
@@ -229,7 +329,7 @@ export function makeProposals({ latest, players, view = null, nowMs = Date.now()
     if (unknown.length) conflicts.push(checkRow(slate, team, "unknown", `${team}: ${unknown.join(", ")} in a lineup ${unknown.length > 1 ? "have" : "has"} a status that was not recognised; no start proposed.`, unknown));
     if (unmatched.length || unknown.length) continue;
     if ([...markedS].some((id) => !q.five.has(id))) continue; // a man he marked S is not in the sources' five: their five contradicts his mark
-    const outNow = (id) => consoleOut.has(id) || markedOut.has(id) || claims.out.has(id);
+    const outNow = (id) => consoleOut.has(id) || markedOut.has(id) || claims.out.has(id) || contested.has(id); // a contested man is neither started nor benched here
     // A man he sent to the bench or out of the rotation is never proposed to start.
     const incoming = [...q.q].filter((id) => roles[id] !== undefined && roles[id] !== "starter" && !outNow(id) && !benched.has(id)).sort((a, b) => (v.min?.[b] ?? 0) - (v.min?.[a] ?? 0) || a.localeCompare(b));
     if (!incoming.length) continue;
@@ -253,7 +353,8 @@ export function makeProposals({ latest, players, view = null, nowMs = Date.now()
       signature: JSON.stringify({ kind: "starter", in: incoming, out: missing, s: sources.map((s) => [s.key, s.lineup]) }),
     });
   }
-  if (stale) for (const p of proposals) p.noApply = `the lineup read is ${stale.ageMin == null ? "of unknown age" : `${stale.ageMin} minutes old`}, so nothing from it is made by itself until the next pull`;
+  // an Out kept from a stale source stays in force (Adam 11-13): only the others wait
+  if (stale) for (const p of proposals.filter((x) => !(x.kind === "out" && x.sources.every((src) => src.kept)))) p.noApply = `the lineup read is ${stale.ageMin == null ? "of unknown age" : `${stale.ageMin} minutes old`}, so nothing from it is made by itself until the next pull`;
   for (const p of proposals) p.auto = isAuto(p);
   return { proposals, conflicts, stale };
 }

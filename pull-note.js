@@ -1,6 +1,6 @@
 // Changed since the last pull: the banner, its chip, and the tag and line a moved man's row wears. Pure strings from the slate route's
 // pull_changes and each man's pull_move (server/slate/pull-moves.js), tested in node; board.js owns the state and the events.
-import { esc } from "./board-util.js";
+import { esc, nameOpen } from "./board-util.js";
 import { lastName } from "./console-model.js";
 import { pullTime } from "./console-render.js";
 
@@ -22,7 +22,7 @@ export function moveLine(pm) {
   return [parts.length ? `<b>${parts.join(", ")}</b>` : "", pm.status ? `now ${esc(pm.status)}` : "", pm.figure_gone ? esc(pm.figure_gone) : ""].filter(Boolean).join(" · ");
 }
 
-const named = (list, digits) => list.map(({ p }) => `${esc(lastName(p.name))} ${signed(diff(p.pull_move.proj), digits)}`).join(", ");
+const named = (list, digits) => list.map(({ p }) => `${nameOpen(lastName(p.name), p.dk_id)} ${signed(diff(p.pull_move.proj), digits)}`).join(", ");
 
 /** The banner, or "" when there is nothing to say or he has dismissed this pull's. `filterOn`: the rows are showing only these men. */
 export function pullNoteHtml(ch, players, { dismissed = null, filterOn = false } = {}) {

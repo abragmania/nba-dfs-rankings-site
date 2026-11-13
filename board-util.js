@@ -2,6 +2,12 @@
 import { isKnownTeam } from "./teams.js";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+/** A man's name that opens his player card (board.js reads data-dk-id from any click, so the click reaches no row action); plain text when he has no id. tag: the element, cls: extra classes. A keyboard user reaches it by Tab and opens it with Enter or Space (board.js). One copy for every screen. */
+export const nameOpen = (name, id, tag = "span", cls = "") => (id != null ? `<${tag} class="nml${cls ? ` ${cls}` : ""}" data-dk-id="${esc(id)}" tabindex="0" role="button" title="Open ${esc(name)}'s card">${esc(name)}</${tag}>` : `<${tag}${cls ? ` class="${cls}"` : ""}>${esc(name)}</${tag}>`);
+/** The same for a man who is on the slate's Out list and so has no dk_id: board.js finds him by name and team (data-out-name, data-out-team). shown: the text when it is shorter than his name. */
+export const outNameOpen = (name, team, tag = "span", cls = "", shown = name) => `<${tag} class="nml${cls ? ` ${cls}` : ""}" data-out-name="${esc(name)}" data-out-team="${esc(team)}" tabindex="0" role="button" title="Open ${esc(name)}'s card">${esc(shown)}</${tag}>`;
+/** A console man's name: the card by id when he is on the board, by name and team when he is an Out-list man (board false, or an id made as "x-name"). */
+export const consoleNameOpen = (p, shown, tag = "span", cls = "") => (p && (p.board === false || String(p.id).startsWith("x-")) ? outNameOpen(p.name, p.team, tag, cls, shown) : nameOpen(shown, p?.id ?? null, tag, cls));
 /** A data warning (a string, or { player, field, values } from the slate checks) as one plain sentence; never raw JSON. Pure. */
 export function warningText(c) {
   if (typeof c === "string") return c;
@@ -171,6 +177,9 @@ export function injBadge(status, source = "injury report") {
   const [letter, bg] = INJ[s.toLowerCase()] ?? [s[0].toUpperCase(), "var(--dim)"];
   return `<span class="st" style="background:${bg}" title="${esc(s)} (${esc(source)})">${esc(letter)}</span>`;
 }
+
+/** A man's status badge as the board shows it: the news-aware word when the console's mark carries one (inj: { word, note }), else TwoGun's injury status. The Player list row and the card share it. */
+export const statusBadge = (p, inj = null) => (inj ? injBadge(inj.word, `Monster news${inj.note ? `: ${inj.note}` : ""}; TwoGun says ${p.injury_status || "nothing"}`) : injBadge(p.injury_status));
 
 /**
  * The header's Board and Injuries stamps from a slate file's as_of_by_source. A connector-built slate keeps them under

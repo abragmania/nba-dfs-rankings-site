@@ -3,7 +3,7 @@
 // Out, each row with his minutes, DK/min, projection, where his minutes come from, an S toggle and an Out toggle, and an undo chip on every
 // mark he made. A side column holds the team total, the notes and which minutes feed the optimizer. Pure strings, tested in node.
 import { oursUse } from "./console-ours.js";
-import { esc, logo } from "./board-util.js";
+import { esc, logo, nameOpen, consoleNameOpen } from "./board-util.js";
 import { calc } from "./console-model.js";
 import { keyOf, outsOf } from "./console-engine.js";
 import { marksOf, liveText } from "./console-marks.js";
@@ -61,7 +61,7 @@ function manRow(team, r, T, S, mk, rank, N) {
   const proj = isNum(r.proj) ? `<b class="pj${r.pinned.m || r.pinned.d ? " pin" : ""}">${f1(r.proj)}</b>` : miss(r.missing.join(", ") || "no projection");
   return `<div class="row${mk ? " marked" : ""}" data-row="${esc(r.id)}">
 <span class="ps">${esc(starter ? pos0(p) || "—" : rank)}</span>
-<span class="who"><span class="nm">${esc(p.name)}</span><span class="pp">${esc(p.pos ?? "")}</span></span>
+<span class="who">${consoleNameOpen(p, p.name, "span", "nm")}<span class="pp">${esc(p.pos ?? "")}</span></span>
 ${numBox(team, r, "m", mk?.m)}${numBox(team, r, "d", mk?.d)}
 <span class="r">${proj}</span>
 <span class="why" title="${esc(b.text)}">${b.flag ? `<span class="fl" title="${esc(b.flag.text)}">!</span>` : ""}<span class="stag k-${b.tag}">${b.word}</span>${esc(b.text)}</span>
@@ -76,7 +76,7 @@ function outRow(team, r, T, mk, N) {
   const p = r.p, theirs = T.tonight.includes(r.id), st = STATUS(p.status);
   const src = theirs ? `<span class="stag k-tg">TwoGun</span>${esc(st ? `${st.toLowerCase()} on TwoGun's board` : "out on TwoGun's board")}` : mk?.out?.news ? `<span class="stag k-ch">News</span>${esc(mk.out.news)}` : `<span class="stag k-you">Yours</span>you marked him Out`; // an Out the lineup news made is the news's, not his
   const omark = mk?.out ? chip(team, r.id, "out", mk.out, "in") : "";
-  return `<div class="oline" data-row="${esc(r.id)}"><span class="ps">${esc(pos0(p) || "—")}</span><span class="onm">${esc(p.name)}</span>
+  return `<div class="oline" data-row="${esc(r.id)}"><span class="ps">${esc(pos0(p) || "—")}</span>${consoleNameOpen(p, p.name, "span", "onm")}
 <span class="tgl"><button class="tg o on" type="button" data-out="${esc(r.id)}" data-team="${esc(team)}" title="Out. Click to bring him back in">Out</button><span class="cs">${omark}</span></span>
 ${outNote(N, p)}<div class="why">${src}${isNum(p.healthy) && p.healthy > 0 ? ` &middot; usual ${f1(p.healthy)} min` : ""}</div></div>`;
 }

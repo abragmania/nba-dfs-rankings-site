@@ -1,7 +1,7 @@
 // Screen 2, All entries (entries late swap): the blunt bar (pick a man, scope one spot or every spot holding him, Remove and re-optimize,
 // Remove and lock a backup, Undo all, restore a man removed by mistake), the spot filter, every spot's card, exposure by spot and
 // entries by spot. The bar only collects the request; the engine decides and the cards show its answer.
-import { esc, money, f1, spotColour, tint, feeText, outChip, ICON_LOCK } from "./lsw-common.js";
+import { esc, money, f1, spotColour, tint, feeText, outChip, ICON_LOCK, nameOpen } from "./lsw-common.js";
 import { spotCardHtml } from "./lsw-cards.js";
 import { logo } from "./board-util.js";
 
@@ -48,7 +48,7 @@ function bluntBar(M, L) {
 <button class="go big" data-lsw="remove"${can && !busy ? "" : " disabled"}>Remove and re-optimize</button>
 <div class="bkc"><button class="go big" data-lsw="removeBackup" title="Takes him out, locks the backup into every spot in scope, re-optimizes the rest"${can && backup && !busy ? "" : " disabled"}>Remove, lock backup</button><input id="lswBackup" list="lswBackups" placeholder="backup man" value="${esc(backup?.label ?? L.backupText ?? "")}" autocomplete="off"><datalist id="lswBackups">${lab.map((x) => `<option value="${esc(x.label)}"></option>`).join("")}</datalist></div>
 <button class="ol big" data-lsw="undoAll"${busy}>Undo all</button></div>
-${M.removals.length ? `<div class="removed"><span class="muted">Taken out, by spot:</span>${M.spots.filter((sp) => M.removals.some((r) => r.spot === sp.name)).map((sp) => `<span class="rm"><b style="color:${spotColour(sp.name, M.spots)}">${esc(sp.name)}</b> ${M.removals.filter((r) => r.spot === sp.name).map((r) => `${esc(r.name)}<button data-lsw="allow" data-spot="${esc(sp.name)}" data-man="${esc(r.id)}" title="Let the next re-fill of ${esc(sp.name)} use him again">Allow</button>`).join(" ")}<button data-lsw="undoSpot" data-spot="${esc(sp.name)}" title="Put ${esc(sp.name)} back exactly as uploaded">Undo ${esc(sp.name)}</button></span>`).join("")}</div>` : ""}`;
+${M.removals.length ? `<div class="removed"><span class="muted">Taken out, by spot:</span>${M.spots.filter((sp) => M.removals.some((r) => r.spot === sp.name)).map((sp) => `<span class="rm"><b style="color:${spotColour(sp.name, M.spots)}">${esc(sp.name)}</b> ${M.removals.filter((r) => r.spot === sp.name).map((r) => `${nameOpen(r.name, r.id)}<button data-lsw="allow" data-spot="${esc(sp.name)}" data-man="${esc(r.id)}" title="Let the next re-fill of ${esc(sp.name)} use him again">Allow</button>`).join(" ")}<button data-lsw="undoSpot" data-spot="${esc(sp.name)}" title="Put ${esc(sp.name)} back exactly as uploaded">Undo ${esc(sp.name)}</button></span>`).join("")}</div>` : ""}`;
 }
 
 export function filterChips(M, L) {
@@ -85,7 +85,7 @@ function exposure(M, L) {
   const cols = `style="--n:${shownSpots.length}"`;
   return `<section class="mapcol"><div class="mh"><span class="t">Exposure by spot</span><span class="grow"></span>${pager(pg)}</div>
 <div class="mx hd" ${cols}><span>Player</span>${shownSpots.map((s) => `<span class="c" style="color:${spotColour(s.name, M.spots)}">${esc(s.name)}</span>`).join("")}<span class="c">Entries</span></div>
-${rows.map((r) => `<div class="mx${r.man.started ? " stl" : ""}" ${cols} data-man="${esc(r.man.dk_id)}"><span class="mxn">${r.man.team ? logo(r.man.team, "xs") : ""}<span>${esc(r.man.name)}</span>${outChip(r.man)}${r.man.started ? `<span class="lkd">${ICON_LOCK}</span>` : ""}</span>${shownSpots.map((s) => `<span class="c">${r.spots.includes(s.name) ? `<i class="dt" style="background:${spotColour(s.name, M.spots)}"></i>` : '<i class="z">·</i>'}</span>`).join("")}<span class="c"><b>${r.entries}</b> of ${total}</span></div>`).join("")}</section>`;
+${rows.map((r) => `<div class="mx${r.man.started ? " stl" : ""}" ${cols} data-man="${esc(r.man.dk_id)}"><span class="mxn">${r.man.team ? logo(r.man.team, "xs") : ""}${nameOpen(r.man.name, r.man.dk_id)}${outChip(r.man)}${r.man.started ? `<span class="lkd">${ICON_LOCK}</span>` : ""}</span>${shownSpots.map((s) => `<span class="c">${r.spots.includes(s.name) ? `<i class="dt" style="background:${spotColour(s.name, M.spots)}"></i>` : '<i class="z">·</i>'}</span>`).join("")}<span class="c"><b>${r.entries}</b> of ${total}</span></div>`).join("")}</section>`;
 }
 
 function entriesBySpot(M, L) {

@@ -4,7 +4,7 @@
 // field, Filter, sort, swap buttons and download, plus the mode filter. Everything here is pure (markup strings and lists);
 // panel.js draws it and handles its clicks. A card row is the shared one (card-row.js) with the team logo leading, the team's
 // tint, the slot as small muted text and a CORR chip on a game stack (corr.js).
-import { esc, money, isoToEastern } from "./board-util.js";
+import { esc, money, isoToEastern, nameOpen, outNameOpen } from "./board-util.js";
 import { SLOTS } from "./slots.js";
 import { cardRowHtml, capLine, totals, lineupTag, isOutNow } from "./card-row.js";
 import { isOut } from "./figures.js";
@@ -67,12 +67,12 @@ export const outNamesOfCtx = (c) => new Set([...outNameSet(c.outList), ...[...(c
  *  the saved lineup; out when the slate's out list names him). */
 export function unavailableMen(men) {
   return men.filter((p) => p && (p.stale || isOut(p.injury_status)))
-    .map((p) => (!p.stale ? { name: p.name, why: "Out" }
-      : p.name ? { name: p.name, why: p.out ? "Out" : "off the board" } : { name: `a man off the board (id ${p.dk_id})`, why: "off the board", unnamed: true }));
+    .map((p) => (!p.stale ? { name: p.name, id: p.dk_id, why: "Out" }
+      : p.name ? { name: p.name, id: p.dk_id, team: p.team, why: p.out ? "Out" : "off the board", stale: true } : { name: `a man off the board (id ${p.dk_id})`, why: "off the board", unnamed: true }));
 }
 /** One unavailable man in words: "Name is Out", "Name is off the board". */
 export const unavailableLabel = (b) => (b.unnamed ? b.name : `${b.name} is ${b.why === "Out" ? "Out" : "off the board"}`);
-const badTag = (men) => { const bad = unavailableMen(men); return bad.length ? `<div class="lt-bad" title="This lineup holds a man who cannot play">${bad.map((b) => esc(unavailableLabel(b))).join(" · ")}</div>` : ""; };
+const badTag = (men) => { const bad = unavailableMen(men); return bad.length ? `<div class="lt-bad" title="This lineup holds a man who cannot play">${bad.map((b) => (b.unnamed ? esc(unavailableLabel(b)) : `${b.stale ? (b.why === "Out" && b.team ? outNameOpen(b.name, b.team) : esc(b.name)) : nameOpen(b.name, b.id)} is ${b.why === "Out" ? "Out" : "off the board"}`)).join(" · ")}</div>` : ""; };
 
 function spotMenuHtml(e, { spots, saved, names, warn, text }) {
   const id = esc(e.id);
@@ -282,7 +282,7 @@ export const heldRow = (p, held) => !!(held && p?.dk_id != null && held.has(p.dk
 /** The filtered men as chips (each with its own ×), the count of lineups holding all of them, and Clear all. "" with nobody filtered. */
 function filterChipsHtml(men, figures, shownN, totalN, gray = null) {
   if (!men.length) return "";
-  const chips = men.map((id) => `<span class="lt-chip"><b>${esc(figures.get(id)?.name ?? `DraftKings id ${id}`)}</b><button data-op="menoff" data-man="${esc(id)}" title="Take ${esc(figures.get(id)?.name ?? id)} out of the filter" aria-label="Remove from the filter">×</button></span>`).join("");
+  const chips = men.map((id) => `<span class="lt-chip">${nameOpen(figures.get(id)?.name ?? `DraftKings id ${id}`, figures.get(id) ? id : null, "b")}<button data-op="menoff" data-man="${esc(id)}" title="Take ${esc(figures.get(id)?.name ?? id)} out of the filter" aria-label="Remove from the filter">×</button></span>`).join("");
   return `<div class="lt-chips"><em>Holding all of</em>${chips}<span class="lt-count">${shownN} of ${totalN} lineup${totalN === 1 ? "" : "s"}</span>${gray === null ? "" : `<button class="ol sm lt-gray${gray ? " on" : ""}" data-op="ltgray" aria-pressed="${gray}" title="${gray ? "Turn off: show the held men in normal type again" : "Gray out the men held by the filter, so only the men who differ stand out"}">Compare</button>`}<button class="ol sm lt-clear" data-op="menclear">Clear all</button></div>`;
 }
 

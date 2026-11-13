@@ -3,7 +3,7 @@
 // is in every build already), not Out, not started, has a salary and a projection, and the whole lineup passes slots.js
 // checkLineup (the one validator: positions, no twin, the $50,000 cap, two games). Ranked by projection. Pure: no DOM except
 // the markup strings, tested in node.
-import { esc, money, dec1 } from "./board-util.js";
+import { esc, money, dec1, nameOpen } from "./board-util.js";
 import { SLOTS, SALARY_CAP, checkLineup } from "./slots.js";
 import { slateRefMs, startedSplit } from "./lateswap.js";
 import { isOut } from "./figures.js";
@@ -84,9 +84,9 @@ const sgn = (v, dash) => (v == null ? dash("the man being swapped out has no pro
 /** The panel under the slot: the options as rows with a Use button, or the plain "no legal replacement" line. */
 export function swapPanelHtml(o, i, dash) {
   if (o.why) return `<div class="swp"><div class="swn">Cannot swap ${esc(o.out?.name ?? o.out?.dk_id ?? "this man")}: ${esc(o.why)}</div></div>`;
-  const head = `<div class="swh">Swap <b>${esc(o.out.name)}</b> (${esc(o.slot)}): ${o.options.length ? `${o.options.length} best` : "none"} at ${money(o.room)} or less<span>Left = salary left after</span></div>`;
+  const head = `<div class="swh">Swap ${nameOpen(o.out.name, o.out.dk_id, "b")} (${esc(o.slot)}): ${o.options.length ? `${o.options.length} best` : "none"} at ${money(o.room)} or less<span>Left = salary left after</span></div>`;
   if (!o.options.length) return `<div class="swp">${head}<div class="swn">No legal replacement for ${esc(o.out.name)}: nobody who fits the ${esc(o.slot)} slot, is not already in the lineup, not excluded, not Out, not started and keeps the lineup under ${money(SALARY_CAP)}.</div></div>`;
-  const rows = o.options.map(({ p, diff, left }) => `<tr><td class="swl">${esc(p.name)} <span class="pos">${esc((p.positions ?? []).join("/"))}</span> <small>${esc(p.team)}</small></td>`
+  const rows = o.options.map(({ p, diff, left }) => `<tr><td class="swl">${nameOpen(p.name, p.dk_id)} <span class="pos">${esc((p.positions ?? []).join("/"))}</span> <small>${esc(p.team)}</small></td>`
     + `<td>${money(p.salary)}</td><td class="swpj">${dec1(p.projection)}</td><td>${sgn(diff, dash)}</td>`
     + `<td>${typeof p.value === "number" ? p.value.toFixed(2) : dash("no value in this pull")}</td>`
     + `<td class="swo">${typeof p.proj_own === "number" ? p.proj_own.toFixed(1) + "%" : dash("no projected ownership in this pull")}</td>`

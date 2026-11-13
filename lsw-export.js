@@ -1,7 +1,7 @@
 // Screen 4, Export (entries late swap): Export changed, Export all (only the changed ones edited), Export this spot, and several spots at
 // once. An entry that differs from its spot is simply corrected and shown as changed. A row that fails a real check (a started man, legality,
 // an unknown man) stays out of the file with its reason shown. Entries with no lineup are named: they are in no file.
-import { esc, money, f1, signed, spotColour, feeText, outFlag, isOutMan, outChip, livePicks } from "./lsw-common.js";
+import { esc, money, f1, signed, spotColour, feeText, outFlag, isOutMan, outChip, livePicks, nameOpen } from "./lsw-common.js";
 import { logo } from "./board-util.js";
 
 const delta = (moves) => (moves.every((m) => Number.isFinite(m.in?.proj) && Number.isFinite(m.out?.proj)) ? moves.reduce((t, m) => t + m.in.proj - m.out.proj, 0) : null);
@@ -9,7 +9,7 @@ const delta = (moves) => (moves.every((m) => Number.isFinite(m.in?.proj) && Numb
 /** Repeats, before any download, every spot that holds a man who is Out or off the board. */
 const outBanner = (M) => {
   const bad = M.spots.filter((s) => s.alert);
-  return bad.length ? `<div class="outban"><b>Before you download:</b> ${bad.length === 1 ? "this spot holds" : "these spots hold"} a man who is Out or off the board.${bad.map((s) => `<div><span class="sc plain" style="--sc:${spotColour(s.name, M.spots)}">${esc(s.name)}</span> ${s.alert.men.map((m) => `<b>${esc(m.name)}</b> (${esc(m.why)})`).join(", ")}, ${s.nEntries} ${s.nEntries === 1 ? "entry" : "entries"}</div>`).join("")}</div>` : "";
+  return bad.length ? `<div class="outban"><b>Before you download:</b> ${bad.length === 1 ? "this spot holds" : "these spots hold"} a man who is Out or off the board.${bad.map((s) => `<div><span class="sc plain" style="--sc:${spotColour(s.name, M.spots)}">${esc(s.name)}</span> ${s.alert.men.map((m) => `${nameOpen(m.name, m.dk_id, "b")} (${esc(m.why)})`).join(", ")}, ${s.nEntries} ${s.nEntries === 1 ? "entry" : "entries"}</div>`).join("")}</div>` : "";
 };
 
 export function exportHtml(M, L) {

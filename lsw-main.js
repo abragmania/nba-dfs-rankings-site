@@ -3,7 +3,7 @@
 // here: every action is a request to the engine through the route, and the screen draws what comes back. The server reads the slate fresh on
 // every request, so a refreshed board shows here on the next one (the screen asks again every 20 seconds while it is open). A reply that
 // belongs to another slate, or is older than one already drawn, is thrown away.
-import { esc, money, outcomeLine, chipTime, replyVerdict, tidyReasons, livePicks } from "./lsw-common.js";
+import { esc, money, outcomeLine, chipTime, replyVerdict, tidyReasons, livePicks, nameOpen } from "./lsw-common.js";
 import { uploadHtml } from "./lsw-upload.js";
 import { allHtml, backupLabels, scopeFor } from "./lsw-all.js";
 import { spotHtml } from "./lsw-spot.js";
@@ -169,7 +169,7 @@ function bannerHtml() {
   if (L.exportAsk) {
     const bad = M.spots.filter((s) => s.alert);
     const armedX = Date.now() - L.exportAsk.armedAt >= 500;
-    parts.push(`<div class="outban"><b>Before you download:</b> ${bad.map((s) => `${esc(s.name)} holds ${s.alert.men.map((m) => `<b>${esc(m.name)}</b> (${esc(m.why)})`).join(", ")}`).join("; ")}. <button class="go red2" data-lsw="exportGo"${armedX ? "" : " disabled"}>Download anyway</button> <button class="ol" data-lsw="exportCancel">Cancel</button></div>`);
+    parts.push(`<div class="outban"><b>Before you download:</b> ${bad.map((s) => `${esc(s.name)} holds ${s.alert.men.map((m) => `${nameOpen(m.name, m.dk_id, "b")} (${esc(m.why)})`).join(", ")}`).join("; ")}. <button class="go red2" data-lsw="exportGo"${armedX ? "" : " disabled"}>Download anyway</button> <button class="ol" data-lsw="exportCancel">Cancel</button></div>`);
   }
   if (L.banner) parts.push(`<div class="result"><div class="rh"><b>${esc(L.banner.title)}</b>${L.banner.summary ? `<span class="sum">${esc(L.banner.summary)}</span>` : ""}<span class="muted">${L.lastMs ? `took ${L.lastMs.server} ms on the server, ${L.lastMs.trip} ms in all` : ""}</span><button data-lsw="dismissBanner">✕</button></div><ul>${(L.banner.lines ?? []).map((l) => `<li>${esc(l)}</li>`).join("")}${L.banner.outcomes.map(outcomeLine).join("")}</ul></div>`);
   return parts.join("");

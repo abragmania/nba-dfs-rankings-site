@@ -79,9 +79,9 @@ const dash = (title) => `<span class="miss" title="${esc(title)}">—</span>`;
 const when = (s) => tipWhen(S.name)(s);
 // The player card (card.js); it closes itself on Esc. A man's header figures follow the board's copy of him (a man from the
 // Out list has none and stays as he was opened).
-const card = initCard({ root: document.querySelector(".work"), dash, colourOf, picks: () => S.picks,
+const card = initCard({ root: document.body, dash, colourOf, picks: () => S.picks,
   figs: () => ({ source: figureSource(S.slate), asOf: when(topStamps(S.slate).board) }),
-  current: (p) => S.byId.get(p.dk_id) ?? p, roles: cardRoles({ api: () => scenarioConsole, slate: () => S.name, toast }) });
+  current: (p) => S.byId.get(p.dk_id) ?? p, marks: (id) => boardMarks.of(id), roles: cardRoles({ api: () => scenarioConsole, slate: () => S.name, toast }) });
 // The optimizer panel (panel.js); settled() lets a build wait for picks and override saves in flight, since the server
 // reads the saved locks and the saved overrides.
 // Late swap mode lives in the panel; onLateSwap redraws the header switch and the table's slot pickers when it changes.
@@ -96,7 +96,7 @@ const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: 
   onNews: (team) => { card.close(); setConsole(false); setView("news"); const chip = document.querySelector(`#lineupbar .nwchip[data-nw-team="${CSS.escape(team ?? "")}"]`); if (chip && !chip.classList.contains("on")) chip.click(); }, // the News tab opens on that team (its chip, unless already picked)
   onWork: () => { boardMarks.refresh({ news: false }); lineupBar.newsOnly(); } });
 // The console's word on each row (board-marks.js): the S chip, and his typed Min and DK/m TON with their undo chips; those cells write through the console.
-const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, players: () => S.players, onChange: () => { if (!S.slate) return; if (formHasFocus()) { S.rowsLater = true; return; } renderRows(); }, noteEl: $("pullnote").insertAdjacentElement("afterend", Object.assign(document.createElement("div"), { hidden: true })) });
+const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, players: () => S.players, onChange: () => { if (!S.slate) return; card.badge(); if (formHasFocus()) { S.rowsLater = true; return; } renderRows(); }, noteEl: $("pullnote").insertAdjacentElement("afterend", Object.assign(document.createElement("div"), { hidden: true })) });
 // The lineup bar above the list (lineup-bar.js): an Out or a confirmed start from the Monster, RotoWire and RotoGrinders pages applies itself through the console, with an undo X; a projected start is words only.
 const lineupBar = createLineupBar({ el: $("lineupbar"), api, slate: () => S.name, players: () => S.players, slateData: () => S.slate, tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; }, console: scenarioConsole, toast, tryStore, tick: true, onLabel: (l) => { S.news = l; renderTop(); }, applyInPage: Boolean(globalThis.nbadfsSitePull) });
 // Full screen (Player list header): hides the optimizer panel so the table takes the width. Remembered per viewer; under 900 px
@@ -622,7 +622,7 @@ $("tbody").addEventListener("click", (e) => {
 
 // ---------- events ----------
 document.addEventListener("click", (e) => {
-  const t = e.target.closest("[data-sort],[data-tab],[data-game],[data-dk-id],[data-out-i],[data-lock],[data-excl],[data-unpick],[data-chip],[data-view],[data-theme],[data-star],[data-reset],[data-edit],[data-unmark],[data-fteam],[data-shade],#ovReset,#clearF,#notesBtn,#lsBtn,#csBtn,#outTog,#pullDismiss");
+  const t = e.target.closest("[data-sort],[data-tab],[data-game],[data-dk-id],[data-out-i],[data-out-name],[data-lock],[data-excl],[data-unpick],[data-chip],[data-view],[data-theme],[data-star],[data-reset],[data-edit],[data-unmark],[data-fteam],[data-shade],#ovReset,#clearF,#notesBtn,#lsBtn,#csBtn,#outTog,#pullDismiss");
   if (!t) { const l = $("notesList"); if (l && !e.target.closest(".notes")) l.hidden = true; return; }
   const d = t.dataset;
   if (t.id === "notesBtn") { const l = $("notesList"); l.hidden = !l.hidden; }
@@ -639,6 +639,7 @@ document.addEventListener("click", (e) => {
   else if (d.game) { S.game = S.game === d.game ? null : d.game; renderGames(); renderRows(); }
   else if (d.dkId) { const man = S.byId.get(d.dkId); if (man) card.open(man); else toast("He is not in the slate on this page."); }
   else if (d.outI) card.open(outMan(S.slate.out[+d.outI]));
+  else if (d.outName) { const o = (S.slate.out ?? []).find((x) => x.name === d.outName && x.team === d.outTeam), on = S.players.find((p) => p.name === d.outName && p.team === d.outTeam); if (o) card.open(outMan(o)); else if (on) card.open(on); else toast("He is not on this slate's Out list."); }
   else if (d.lock) toggle(d.lock, "locked");
   else if (d.excl) toggle(d.excl, "excluded");
   else if (d.unpick) { const live = livePicks(); savePicks({ locked: live.locked.filter((x) => x !== d.unpick), excluded: live.excluded.filter((x) => x !== d.unpick) }); }
@@ -649,6 +650,12 @@ document.addEventListener("click", (e) => {
   else if (d.unmark) boardMarks.drop(d.id, d.unmark);
   else if (d.edit) editors.openNumber(t);
   else if (t.id === "ovReset") askConfirm(CONFIRM.resetAll, { ok: "Reset" }).then((yes) => { if (yes) saveOverride({ resetAll: true }, "the reset"); });
+});
+// A name that opens a card is a tab stop (role button); Enter or Space on it is the same click.
+document.addEventListener("keydown", (e) => {
+  if ((e.key !== "Enter" && e.key !== " ") || e.target.tagName === "BUTTON" || !e.target.matches?.("[role=button][data-dk-id],[role=button][data-out-name]")) return;
+  e.preventDefault();
+  e.target.click();
 });
 document.addEventListener("focusout", (e) => {
   if (e.target.id !== "slateSel" || !S.topStale) return;

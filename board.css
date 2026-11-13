@@ -835,3 +835,6 @@ body.console-on .syncnote{display:none}
 .gapw{font-style:normal;font-weight:800;font-size:13px;color:var(--rd);margin-right:4px;cursor:help}
 .chip.gapchip{margin-right:6px;border-color:var(--rd);color:var(--rd)}.chip.gapchip b{color:var(--rd);margin-left:2px}
 .chip.gapchip.on{background:var(--rd);color:#000}.chip.gapchip.on b{color:#000}
+
+/* A man's name that opens his card (board.js reads data-dk-id from any click): the Out list names' look. */
+.nml{cursor:pointer}.nml:hover{color:var(--am);text-decoration:underline}

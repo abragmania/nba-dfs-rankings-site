@@ -1,7 +1,7 @@
 // The console's HTML: the team table with its compare block, slate sweep and side readout. There is no picker bar or Apply box: each change sends itself (console-auto.js).
 // Strings only; console.js puts them on the page. A missing figure is the one mark saying why, never zero.
 import { oursUse } from "./console-ours.js";
-import { esc, isoToEastern } from "./board-util.js";
+import { esc, isoToEastern, consoleNameOpen } from "./board-util.js";
 import { keyOf, outsOf, handoutShares, teamFor, TEAM_USAGE } from "./console-engine.js";
 import { calc, chipName, dcls, f1, fullLabel, label, savedFor, sgn, tableName, tonightMin, tonightProj, tonightUsg, usualMin, usualProj } from "./console-model.js";
 import { FN, fmtv } from "./console-cmd.js";
@@ -44,7 +44,7 @@ function rowCells(T, t, r) {
 /** The role buttons for a man: the one he holds is lit; amber when he flipped it, plain when the rule gave it. Out is his scenario's out list. */
 export const roleSeg = (t, r) => `<span class="seg">${ROLES.map((k) => `<button class="rs${r.role === k ? ` on ${k}${r.pinned?.r || (k === "out" && r.out) ? " set" : ""}` : ""}" data-role="${k}" data-ri="${esc(r.id)}" data-team="${esc(t)}" title="${ROLE_LABEL[k]}" tabindex="-1">${ROLE_SHORT[k]}</button>`).join("")}</span>`;
 const roleCell = (t, r) => `<td class="rl x-role">${roleSeg(t, r)}</td>`;
-const nameCell = (T, p) => `<td class="nm x-name" title="${esc(p.name)}"><span class="n">${esc(tableName(T, p))}</span>${posTag(p)}</td>`;
+const nameCell = (T, p) => `<td class="nm x-name" title="${esc(p.name)}">${consoleNameOpen(p, tableName(T, p), "span", "n")}${posTag(p)}</td>`;
 /** Where a man's minutes come from, in words: what he typed, his role's figure, or TwoGun's board and its hand-outs. */
 export function basisText(r) {
   if (r.out) return "out";
@@ -167,7 +167,7 @@ function handoutHtml(T, S, p) {
   const entries = Object.entries(weights).filter(([id, v]) => v > 0 && T.byId[id] && !S.outs.includes(id) && id !== p.id);
   const total = entries.reduce((s, [, v]) => s + v, 0);
   if (!total) return `<div class="dimc pr">no one to hand his minutes to</div>`;
-  const top = entries.sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, v]) => `<span class="ho"><b>${esc(chipName(T, T.byId[id]))}</b> ${Math.round((v / total) * 100)}%</span>`).join("");
+  const top = entries.sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, v]) => `<span class="ho">${consoleNameOpen(T.byId[id], chipName(T, T.byId[id]), "b")} ${Math.round((v / total) * 100)}%</span>`).join("");
   return `<div class="hos">${top}<span class="mu">from ${esc(SOURCE_NAME[source] ?? "nowhere")}</span></div>`;
 }
 
@@ -213,7 +213,7 @@ export function sideHtml(model, G, colourOf) {
   const last = p.season ? `2025-26 <b>${num(p.season.mpg) ? f1(p.season.mpg) : MISS}</b> MPG, started <b>${num(p.season.st) ? Math.round(p.season.st * 100) : MISS}%</b> of ${p.season.g} games${p.season.team === "TOT" ? " (traded)" : p.season.team !== f.team ? ` (${esc(p.season.team)})` : ""}` : "2025-26: no row";
   const line3 = `<div class="facts">Role <b>${esc(ROLE_LABEL[r.role] ?? "")}</b>${r.pinned.r ? " (yours)" : ""} · minutes from <b title="${esc(basisText(r))}">${esc(basisText(r))}</b></div><div class="facts">${last}</div>`;
   const missing = [...Object.entries(p.missing ?? {}).map(([k, why]) => `<div class="mis"><b>${esc(k)}</b> missing: ${esc(why)}</div>`), ...(r.clamped ? [`<div class="mis"><b>rate</b> held at the end of its range</div>`] : []), ...(r.back_on_zero ? [`<div class="mis"><b>back on 0 minutes</b>; pin his minutes</div>`] : [])].join("");
-  return `<div class="cside" style="--t1:${colourOf(f.team)}"><div class="ph"><span class="code">${esc(f.team)}</span><b class="sname" title="${esc(p.name)}">${esc(tableName(T, p))}</b>${posTag(p)}<span class="mu slabel" title="${esc(fullLabel(T, key))}">${esc(label(T, key))}</span></div><div class="kvs">${headFigures(T, p, r, f)}</div><div class="facts">${line1}</div><div class="facts">${line2}</div>${line3}${missing}`
+  return `<div class="cside" style="--t1:${colourOf(f.team)}"><div class="ph"><span class="code">${esc(f.team)}</span>${consoleNameOpen(p, tableName(T, p), "b", "sname")}${posTag(p)}<span class="mu slabel" title="${esc(fullLabel(T, key))}">${esc(label(T, key))}</span></div><div class="kvs">${headFigures(T, p, r, f)}</div><div class="facts">${line1}</div><div class="facts">${line2}</div>${line3}${missing}`
     + `<h4>By scenario</h4><table class="ts2"><thead><tr><th>Scenario</th><th>Min</th><th>Usg</th><th>DK</th><th>Proj</th></tr></thead><tbody>${byScenarioRows(T, S, f, key)}</tbody></table>`
     + `<h4>His pins</h4>${pinsList(T, S, f)}`
     + `<h4>If he sits, his minutes go to</h4>${handoutHtml(T, S, p)}`

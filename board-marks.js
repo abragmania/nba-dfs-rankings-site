@@ -5,7 +5,7 @@
 import { esc, isoToEastern } from "./board-util.js";
 import { liveText } from "./console-marks.js";
 import { syncWords } from "./console-auto.js";
-import { staleOf, LINEUP_KEYS, LINEUP_LABEL, BACKS_ONLY } from "./lineup-proposals.js";
+import { staleOf, withFreshness, blockFresh, LINEUP_KEYS, LINEUP_LABEL, BACKS_ONLY } from "./lineup-proposals.js";
 import { newsRuling, newestStatusCards } from "./news-status.js";
 
 const okBlock = (b) => b?.state === "ok" && Array.isArray(b.men);
@@ -14,7 +14,7 @@ const at = (iso) => (iso ? isoToEastern(iso) ?? iso : "time unknown");
 /** The lineup sources naming a man in their five: [{ key, label, confirmed, at }]. latest: news/lineups/latest.json, or null. */
 export function lineupClaims(latest, team, id) {
   const block = latest?.teams?.[team] ?? {};
-  return LINEUP_KEYS.filter((k) => okBlock(block[k]) && block[k].men.some((m) => m.id != null && String(m.id) === String(id) && m.status !== "Out"))
+  return LINEUP_KEYS.filter((k) => okBlock(block[k]) && blockFresh(latest, k, block[k]) && block[k].men.some((m) => m.id != null && String(m.id) === String(id) && m.status !== "Out"))
     .map((k) => ({ key: k, label: LINEUP_LABEL[k], confirmed: block[k].confirmed === true, at: latest.sources?.[k]?.fetched_at ?? null }));
 }
 
@@ -25,7 +25,7 @@ export function lineupClaims(latest, team, id) {
 export function starterChip(v, latest, id, pullAt) {
   if (!v || v.role !== "starter") return null;
   const claims = lineupClaims(latest, v.team, id), conf = claims.filter((c) => c.confirmed);
-  const mon = latest?.teams?.[v.team]?.monster, monAgainst = okBlock(mon) && mon.confirmed === true && !claims.some((c) => c.key === "monster"); // a confirmed Monster five that leaves him out
+  const mon = latest?.teams?.[v.team]?.monster, monAgainst = okBlock(mon) && blockFresh(latest, "monster", mon) && mon.confirmed === true && !claims.some((c) => c.key === "monster"); // a confirmed Monster five that leaves him out
   const solid = monAgainst ? conf.filter((c) => !BACKS_ONLY.includes(c.key)).length >= 2 : conf.some((c) => !BACKS_ONLY.includes(c.key)) || conf.length >= 2; // a back-only page's confirmed mark never stands alone
   if (v.starterBy === "yours") return { state: "confirmed", title: "Starting: yours (you marked him S in the console)" };
   if (solid) return { state: "confirmed", title: `Confirmed starter: ${conf.map((c) => `${c.label} confirmed lineup, ${at(c.at)}`).join("; ")}` };
@@ -55,7 +55,7 @@ export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onC
   async function refresh({ news = true } = {}) {
     const name = slate(), g = ++gen;
     if (!name) return;
-    const read = !news ? Promise.resolve(latest) : api(`/api/slate/${encodeURIComponent(name)}/news-lineups`).then((r) => (r?.state === "ok" && !staleOf(r.latest, Number.isFinite(r.now_ms) ? r.now_ms : Date.now()) ? r.latest : null), (e) => { console.warn("lineup read for the S chips:", e.message); return null; });
+    const read = !news ? Promise.resolve(latest) : api(`/api/slate/${encodeURIComponent(name)}/news-lineups`).then((r) => (r?.state === "ok" && !staleOf(r.latest, Number.isFinite(r.now_ms) ? r.now_ms : Date.now()) ? withFreshness(r.latest, Number.isFinite(r.now_ms) ? r.now_ms : Date.now()) : null), (e) => { console.warn("lineup read for the S chips:", e.message); return null; });
     try {
       const [v, l] = await Promise.all([cons.boardView(name), read]);
       if (g !== gen || name !== slate()) return;
