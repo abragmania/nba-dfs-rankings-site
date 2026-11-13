@@ -5,6 +5,8 @@
 //  2. His own figure is ROLE DEPENDENT: the mean of his minutes in this season's games he played in tonight's role (started, or came off the bench). Last season's role games would fill a
 //     thin sample, but no source on file carries last season's per-game role (the ESPN logs have no starter flag), so only this season's are read. No game in the role: TwoGun's number for
 //     tonight, flagged "no games in this role" (R1: missing when TwoGun has none). Never his usual across roles, a blend across roles, or a slot or rung average.
+//     Exception (Adam 11-13): a man with NO played game this season in any role, matched to the box scores, whose depth chart carries a usual above 0 (m.chart_usual) takes that usual as figure
+//     and ceiling (source and basis "chart", flag "no_games_chart" naming TwoGun's number); with no chart usual he keeps TwoGun's number as above. A man with games, none in tonight's role, keeps TwoGun's. Kept on TwoGun's number too, with the reason: the box scores (m.seen_played) or the chart's own basis (m.chart_games) show a game, or no usual above 0.
 //  3. His ceiling: the CEILING_QUANTILE of his same-role games; fewer than CEILING_MIN_GAMES, his best; none, TwoGun's number. Never a single-game high otherwise.
 //  4. Pot: the team's figures against 240. Under 240 (the Out men's minutes): starters are filled first, each up to his ceiling; then Bench+ up to theirs, men sharing a position with an Out man
 //     first; then Bench in order of recent minutes, a man with no recent game last. Over 240: trimmed in reverse tier order (Bench, fewest recent minutes first, toward 0; then Bench+ in proportion; starters last), each trim said in the team's notes. What nobody can take is named, never dropped (G62).
@@ -14,6 +16,8 @@
 import { isNum } from "./figures.js";
 
 const GAME_MINUTES = 240; // no import from tools/: the console page runs this file in the browser (server/board is what the page can load)
+/** Whether the chart's usual stands in only for a man Out most of the team's games. true is the lead's pick, 11-13, because Adam deferred the scope; false: any matched man with no game this season. */
+export const CHART_NEEDS_OUT_MOST = true;
 export const RETURN_LAST_GAMES = 20; // a returning rotation man needs this many games last season (a working value)
 export const RECENT_GAMES = 10;
 export const BENCH_PLUS_GAMES = 6;
@@ -85,7 +89,7 @@ export function ovGate(value, meta, rows, role) {
   return { ok: false, for_role: forRole, text: `your override of ${value} is for his ${forRole} role; tonight he ${role === "starter" ? "starts" : "is on the bench"}` };
 }
 
-/** One man's figure and ceiling for a role from his rows ({ min, started }): { value, ceiling, n, source: "role" | "twogun" | "none" }. Pure. */
+/** One man's figure and ceiling for a role from his rows ({ min, started }): { value, ceiling, n, source: "role" | "twogun" | "none" }. Pure. (The chart exception for a man with no games is tierPlan's.) */
 export function roleFigure(rows, role, tg) {
   const mine = rows.filter((r) => r.started === (role === "starter")).map((r) => r.min);
   if (mine.length) {
@@ -119,9 +123,9 @@ const tierWords = { starter: "Starter", bench_plus: "Bench+", bench: "Bench" };
  * lists those it did not apply [{ field, text }] and `minutes_gate` is the minutes override's gate (null with none; its use stays with figures.js and console-tier.js).
  * Returns { byId: Map id -> { auto (null when missing), figure, computed, ceiling, computed_ceiling, tier, basis, why, used, skipped, minutes_gate, flag, n }, notes, total (null when a figure is missing), pot }. Pure.
  */
-export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, teamMinutes: TEAM_MINUTES = GAME_MINUTES, since: sinceIn, teamGames: teamGamesIn }) {
+export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, teamMinutes: TEAM_MINUTES = GAME_MINUTES, since: sinceIn, teamGames: teamGamesIn, chartNeedsOutMost = CHART_NEEDS_OUT_MOST }) {
   // since / teamGames: given by the console's payload (no ledger games there); else read from `games`
-  const notes = [], by = new Map(), unmatched = [], noLast = [], since = sinceIn === undefined ? (games ?? []).slice(-RECENT_GAMES)[0]?.date ?? null : sinceIn, teamGames = teamGamesIn ?? (games ?? []).length;
+  const notes = [], by = new Map(), unmatched = [], chartMen = [], noLast = [], since = sinceIn === undefined ? (games ?? []).slice(-RECENT_GAMES)[0]?.date ?? null : sinceIn, teamGames = teamGamesIn ?? (games ?? []).length;
   if (five?.note) notes.push(five.note);
   notes.push(`Starters: ${five.kind === "expected" ? `expected, TwoGun's starter flags (${five.why ? `the lineup pages' five was not used: ${five.why}` : "the lineup pages have not posted a five"})` : `the lineup pages' ${five.kind} five`}`);
   if (boxNote) notes.push(boxNote);
@@ -140,14 +144,25 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
         returning = `back from injury: ${r1(allMean)} a game over ${rows.length} earlier game${rows.length === 1 ? "" : "s"} this season, Out for ${m.out_recent} of the team's last ${window}`;
     }
     const tier = m.tier_force ?? (m.in_five ? "starter" : recent.big >= BENCH_PLUS_GAMES || returning ? "bench_plus" : "bench");
-    const role = tier === "starter" ? "starter" : "bench", f = roleFigure(rows, role, m.tg);
+    const role = tier === "starter" ? "starter" : "bench";
+    let f = roleFigure(rows, role, m.tg);
+    // no game at all this season (a known man, boxes read): his depth chart's usual, unless the box scores (m.seen_played) or the chart's own basis (m.chart_games) show a game, or the scope switch excludes him
+    const noGames = !rows.length && Boolean(m.lid) && !boxNote, usable = isNum(m.chart_usual) && m.chart_usual > 0;
+    const mismatch = m.seen_played ? "the season's box scores show a game of his, so the depth chart's usual is not used" : (m.chart_games ?? 0) > 0 ? `his depth chart's own usual rests on ${m.chart_games} game${m.chart_games === 1 ? "" : "s"} this season, so "no games" is not trusted and the chart's usual is not used` : null;
+    const inScope = !chartNeedsOutMost || (m.out_season ?? 0) * 2 > teamGames;
+    const chartOk = noGames && usable && !mismatch && inScope;
+    const noUsualText = "No games this season and his depth chart has no usual above 0: TwoGun's number is used";
+    const outText = isNum(m.out_season) ? `Out for only ${m.out_season} of the team's ${teamGames} games` : "his Out count is not on file";
+    const tail = noGames && usable && mismatch ? mismatch : noGames && !usable ? noUsualText : noGames && usable && !inScope ? `no games this season but ${outText}, so his depth chart's usual (${r1(m.chart_usual)}) is not used: only an injured or inactive man takes it` : null; // said on the TwoGun-number row
+    if (chartOk) f = { value: m.chart_usual, ceiling: m.chart_usual, n: 0, source: "chart" };
     let value = f.value, ceiling = f.ceiling;
     const computed = value, computedCeiling = ceiling, used = [];
     let words;
     const pre = returning ? `${returning}; ` : noFile ? "last season's minutes are not on file, so he cannot be recognized as a returning rotation man; " : "";
     if (f.source === "role") words = `${pre}${tierWords[tier]}: mean ${r1(f.value)} over ${f.n} game${f.n === 1 ? "" : "s"} he played ${ROLE_WORD[role]} this season, ceiling ${r1(f.ceiling)} (${f.n < CEILING_MIN_GAMES ? `his best: under ${CEILING_MIN_GAMES} games` : `the ${Math.round(CEILING_QUANTILE * 100)}th percentile of them`})${f.n < CEILING_MIN_GAMES ? "; last season's role games are not on file" : ""}`;
-    else if (f.source === "twogun") words = `${pre}${tierWords[tier]}${m.replaces.length ? ` (takes ${m.replaces.join(", ")}'s place in the five)` : ""}: no games ${ROLE_WORD[role]} this season, so TwoGun's ${r1(f.value)} minutes, his ceiling too (flag: no games in this role; last season's role games are not on file)`;
-    else words = `${pre}${tierWords[tier]}: no games ${ROLE_WORD[role]} this season and TwoGun has no minutes for him: minutes missing, not guessed (RULES R1)`;
+    else if (f.source === "chart") words = `${pre}${tierWords[tier]}${m.replaces.length ? ` (takes ${m.replaces.join(", ")}'s place in the five)` : ""}: no games this season, so his depth chart's usual ${r1(f.value)} minutes, his ceiling too; TwoGun has ${isNum(m.tg) ? m.tg : "none"}`;
+    else if (f.source === "twogun") words = `${pre}${tierWords[tier]}${m.replaces.length ? ` (takes ${m.replaces.join(", ")}'s place in the five)` : ""}: no games ${ROLE_WORD[role]} this season, so TwoGun's ${r1(f.value)} minutes, his ceiling too (flag: no games in this role; last season's role games are not on file)${tail ? `; ${tail}` : ""}`;
+    else words = `${pre}${tierWords[tier]}: no games ${ROLE_WORD[role]} this season and TwoGun has no minutes for him: minutes missing, not guessed (RULES R1)${tail ? `; ${tail}` : ""}`;
     const meta = m.ov.meta ?? {}, skipped = [], ovNow = {};
     for (const f of ["usual", "cap"]) {
       if (!isNum(m.ov[f])) continue;
@@ -161,18 +176,21 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
     if (used.length) words += `; your standing override sets his ${used.map((u) => (u === "usual" ? "figure" : "ceiling")).join(" and ")}`;
     if (skipped.length) words += `; ${skipped.map((x) => x.text).join("; ")}`;
     const overridden = used.includes("usual");
-    const basis = overridden ? "override" : f.source === "none" ? "none" : f.source === "twogun" ? "twogun" : m.replaces.length && tier === "starter" ? "replaces" : tier;
+    const basis = overridden ? "override" : f.source === "none" ? "none" : f.source === "twogun" ? "twogun" : f.source === "chart" ? "chart" : m.replaces.length && tier === "starter" ? "replaces" : tier;
     let flag = null;
-    if (f.source === "role" && isNum(m.tg) && isNum(value) && m.tg < value * (1 - FAR_BELOW) && value - m.tg >= FAR_BELOW_MIN)
+    if ((f.source === "role" || f.source === "chart") && isNum(m.tg) && isNum(value) && m.tg < value * (1 - FAR_BELOW) && value - m.tg >= FAR_BELOW_MIN)
       flag = { kind: "twogun_far_below", twogun: m.tg, own: r1(value), text: `Minutes limit: TwoGun has ${m.tg}, far below his own ${r1(value)} (over ${Math.round(FAR_BELOW * 100)}% and ${FAR_BELOW_MIN}+ minutes under); both are shown, ours is used` };
-    if (!overridden && f.source === "twogun") flag = m.lid || boxNote ? { kind: "no_role_games", twogun: m.tg, own: null, text: "No games in this role: TwoGun's number is used" } : { kind: "not_matched", twogun: m.tg, own: null, text: "Not matched to the box scores, so no games of his were read: TwoGun's number is used" };
-    if (!overridden && f.source === "none") flag = m.lid || boxNote ? { kind: "no_figure", twogun: null, own: null, text: "No games in this role and no TwoGun minutes: his minutes are missing" } : { kind: "not_matched", twogun: null, own: null, text: "Not matched to the box scores and TwoGun has no minutes: his minutes are missing" };
+    if (!overridden && f.source === "chart") flag = { kind: "no_games_chart", twogun: m.tg ?? null, own: r1(value), text: `No games this season: his depth chart's usual ${r1(f.value)}${used.includes("cap") ? `, capped by your override at ${r1(ceiling)},` : ""} is used; TwoGun has ${isNum(m.tg) ? m.tg : "none"}${flag ? `; ${flag.text}` : ""}` };
+    if (!overridden && f.source === "twogun") flag = m.lid || boxNote ? { kind: "no_role_games", twogun: m.tg, own: null, text: tail === noUsualText ? noUsualText : `${noGames ? "No games this season" : "No games in this role"}: TwoGun's number is used${tail ? `; ${tail}` : ""}` } : { kind: "not_matched", twogun: m.tg, own: null, text: "Not matched to the box scores, so no games of his were read: TwoGun's number is used" };
+    if (!overridden && f.source === "none") flag = m.lid || boxNote ? { kind: "no_figure", twogun: null, own: null, text: `No games in this role and no TwoGun minutes: his minutes are missing${tail ? `; ${tail}` : ""}` } : { kind: "not_matched", twogun: null, own: null, text: "Not matched to the box scores and TwoGun has no minutes: his minutes are missing" };
+    if (!overridden && f.source === "chart") chartMen.push(`${m.name} (chart ${r1(f.value)}, TwoGun ${isNum(m.tg) ? m.tg : "none"})`);
     by.set(m.id, { m, tier, recent, skipped, minutes_gate: minutesGate, figure: value, computed, ceiling, computed_ceiling: computedCeiling, basis, words, used, flag, n: f.n, source: f.source });
   }
   const all = [...by.values()], known = all.filter((x) => isNum(x.figure)), missing = all.filter((x) => !isNum(x.figure));
   const sum = known.reduce((s, x) => s + x.figure, 0), out = new Map(), gap = TEAM_MINUTES - sum;
   const outWords = outs.length ? ` (Out: ${outs.map((o) => o.name).join(", ")})` : "", potWord = outs.length ? "Out men's pot" : "team's pot";
   if (noLast.length) notes.push(`${noLast.length} ${noLast.length === 1 ? "man" : "men"} Out for most of this season ha${noLast.length === 1 ? "s" : "ve"} no row in last season's totals, so cannot be recognized as returning: ${noLast.join(", ")}`);
+  if (chartMen.length) notes.push(`${chartMen.length} ${chartMen.length === 1 ? "man" : "men"} with no game this season take${chartMen.length === 1 ? "s" : ""} their depth chart's usual instead of TwoGun's: ${chartMen.join(", ")}`);
   if (unmatched.length) notes.push(`${unmatched.length} ${unmatched.length === 1 ? "man" : "men"} not matched to the box scores, so no games were read (TwoGun's number is used): ${unmatched.join(", ")}`);
   const potState = { sum: r1(sum), gap: r1(gap), out: outs.map((o) => o.name), by_tier: { starter: 0, bench_plus: 0, bench: 0 }, trimmed: null, unassigned: 0 };
   const extra = new Map(known.map((x) => [x.m.id, 0]));

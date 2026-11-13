@@ -44,7 +44,7 @@ export function tierScenario(team, outSet, flips = {}, typed = {}, edits = false
   const typedIn = Object.entries(typedNow).filter(([id, v]) => playing.includes(id) && isNum(v));
   const men = order.filter((id) => !typedIn.some(([t]) => t === id)).map((id) => {
     const m = T.men[id];
-    return { id, key: id, name: m.name, lid: m.matched ? id : null, tg: m.tg, positions: m.positions ?? [], in_five: five.has(id), replaces: five.has(id) && !m.top5 ? outStarters : [], last_mpg: m.last_mpg, last_games: m.last_games,
+    return { id, key: id, name: m.name, lid: m.matched ? id : null, tg: m.tg, chart_usual: m.chart_usual ?? null, chart_games: m.chart_games ?? null, seen_played: m.seen_played === true, positions: m.positions ?? [], in_five: five.has(id), replaces: five.has(id) && !m.top5 ? outStarters : [], last_mpg: m.last_mpg, last_games: m.last_games,
       last_unknown: m.last_unknown === true, last_missing: m.last_missing === true, out_season: m.out_season, out_recent: m.out_recent, ov: { usual: m.ov?.usual ?? undefined, cap: m.ov?.cap ?? undefined, minutes: m.ov?.minutes ?? undefined, meta: m.ov?.meta ?? {} }, tier_force: FORCE[mark[id]] };
   });
   const typedSum = typedIn.reduce((s, [, v]) => s + v, 0);
