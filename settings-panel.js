@@ -91,26 +91,24 @@ export function readSettings(raw, mode, overrides = {}) {
   return { settings, bad };
 }
 
-/** Storage: settings per mode and slate (nbaboard.opt.<mode>.<slate>, standard A9), with the last ones used under
- *  nbaboard.opt.<mode> for a slate not yet touched; team overrides per slate (nbaboard.opt.teams.<slate>). These are per-viewer
+/** Storage: settings per mode and slate (nbaboard.opt.<mode>.<slate>, standard A9); a slate with none of its own starts from the
+ *  defaults, never another slate's (Adam, 11-13); team overrides per mode and slate (nbaboard.opt.teams.<mode>.<slate>). These are per-viewer
  *  conveniences, the one thing browser storage may hold here: the viewer's own inputs, never a figure. A missing or unreadable
  *  entry falls back to the defaults (tryStore warns in the console when storage throws). */
 export const loadRaw = (tryStore, mode, slate = null) => readRaw(tryStore, mode, slate).raw;
 
 /**
- * { raw, unreadable }. Absent (getItem null) falls back: this slate's key, then the last used for the mode, then the defaults. An entry that cannot
+ * { raw, unreadable }. Absent (getItem null) gives the defaults. An entry that cannot
  * be read gives the defaults and unreadable true, never another slate's settings in its place; the panel says so.
  */
 export function readRaw(tryStore, mode, slate = null) {
   let unreadable = false, saved = null;
-  const take = (got) => {
-    if (got === null) { unreadable = true; return false; }
-    if (got === ABSENT || got.value == null) return true; // absent: go on to the next place
-    if (typeof got.value !== "object" || Array.isArray(got.value)) { unreadable = true; return false; }
-    saved = got.value;
-    return false;
-  };
-  if (take(slate ? probeJson(tryStore, `nbaboard.opt.${mode}.${slate}`) : ABSENT)) take(probeJson(tryStore, `nbaboard.opt.${mode}`));
+  const got = slate ? probeJson(tryStore, `nbaboard.opt.${mode}.${slate}`) : ABSENT;
+  if (got === null) unreadable = true;
+  else if (got !== ABSENT && got.value != null) {
+    if (typeof got.value !== "object" || Array.isArray(got.value)) unreadable = true;
+    else saved = got.value;
+  }
   if (unreadable) console.warn(`nbaboard.opt.${mode}${slate ? `.${slate}` : ""} cannot be read; the defaults are used`);
   saved ??= {};
   const raw =Object.fromEntries(FIELDS.map((f) => [f, typeof saved[f] === "string" ? saved[f] : DEFAULTS[f]]));
@@ -124,12 +122,11 @@ export function readRaw(tryStore, mode, slate = null) {
 
 /** Writes a mode's typed settings (and, in GPP, its low-owned rules) back to storage: a per-viewer convenience. */
 export function saveRaw(tryStore, mode, raw, slate = null) {
-  tryStore(() => localStorage.setItem(`nbaboard.opt.${mode}`, JSON.stringify(raw)));
-  if (slate) tryStore(() => localStorage.setItem(`nbaboard.opt.${mode}.${slate}`, JSON.stringify(raw)));
+  if (!slate) { console.warn(`${mode} settings not saved: no slate given`); return; }
+  tryStore(() => localStorage.setItem(`nbaboard.opt.${mode}.${slate}`, JSON.stringify(raw)));
 }
 
-/** A slate's settings as it opens. A slate with none of its own takes the last used and keeps them from now on, so a later
- *  change on another slate leaves this one as it was. */
+/** A slate's settings as it opens. A slate with none of its own opens at the defaults and keeps them from now on. */
 export function pinRaw(tryStore, mode, slate) {
   const { raw, unreadable } = readRaw(tryStore, mode, slate);
   const key = `nbaboard.opt.${mode}.${slate}`;
