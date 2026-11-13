@@ -19,7 +19,7 @@
 // Pins: { m: minutes, u: usage, d: rate, p: projection }, each { id: value }, and r: { id: role } (his role flips). A pin always wins, the ceiling included.
 import { isNum } from "./figures.js";
 import { FLIP_ROLES, liveFlips, resolveRoles } from "./console-roles.js";
-import { oursUse, rolesFromEngine, chartUse, oursFor, sourceOf, injuredPlayNote } from "./console-ours.js";
+import { oursUse, rolesFromEngine, fiveIsSet, chartUse, oursFor, sourceOf, injuredPlayNote, chartUsualNote } from "./console-ours.js";
 import { settleTyped } from "./depth-chart.js";
 
 export const TEAM_USAGE = 100;
@@ -300,7 +300,7 @@ const OFF_SCENARIO = { m: false, u: false, d: false, p: false, r: false };
 
 /** Men a flip moved without his touching them (a starter pushed out of the five, a backup pulled in): where the chart names the five, whoever's resolved role differs from the same outs with no flips and who is not flipped himself. Outs stay out. { id: role }. */
 function implicitFlips(team, outSet, flips, roles) {
-  if (!(rolesFromEngine(team) || chartUse(team).ok) || !Object.keys(flips).length) return {};
+  if (!fiveIsSet(team) || !Object.keys(flips).length) return {};
   const plain = resolveRoles(team, outSet, {}).roles, out = {};
   for (const p of team.men) if (!outSet.has(p.id) && !Object.hasOwn(flips, p.id) && roles[p.id] !== plain[p.id] && FLIP_ROLES.includes(roles[p.id])) out[p.id] = roles[p.id];
   return out;
@@ -356,6 +356,7 @@ export function scenario(team, outs = [], pins = emptyPins()) {
       proj_missing: rows.filter((r) => r.proj === null).length,
     },
     roles_note: [rolesNote, oursNote, totalNote ?? clean?.totalNote, plainNote].filter(Boolean).join(" ") || null,
-    injured_note: injuredPlayNote(team, outSet), // its own field, for the panel foot: never joined into roles_note, whose readers split on periods
+    chart_note: clean ? chartUsualNote(clean, (id) => team.men.find((p) => p.id === id)?.name ?? id, sourceOf(team), (id) => team.tier?.men?.[id]?.chart_usual ?? null) : null, // the no-games chart usual's own foot note (Ours against the table)
+    injured_note: injuredPlayNote(team, outSet, roles, clean), // its own field, for the panel foot: never joined into roles_note, whose readers split on periods
   };
 }

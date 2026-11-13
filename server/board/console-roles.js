@@ -1,5 +1,6 @@
-// A team with the minutes engine's inputs takes its roles from the engine (resolveFromTier below); the formula that follows is only for a team
-// without them, and says so in its note.
+// A team on an engine source (Ours) takes its roles from the engine (resolveFromTier below). On the TwoGun source, a team with the engine's inputs takes its five from them
+// (the lineup pages' agreed five, else TwoGun's flags) and its other roles from the saved chart, or the rule when the chart is missing (resolveFromChart); a team with neither
+// uses the formula (resolveByRule), which says so in its note.
 // The console's roles (Adam, 11-06): Starter, Bench+, Bench, Out of rotation, Out. Pure ES module shared by the page and the
 // server, as console-engine.js is. A man's role is Out when he is out in the scenario (its key); otherwise the role he flipped
 // him to (pins.r), else the rule below. Exactly five starters, always: the flipped starters count first, the rest are filled
@@ -10,7 +11,7 @@
 // now a Starter. A starter marked Out flips nobody: the rule fills the five. Each such
 // move is a flip of its own, named so the page can show it and Ctrl+Z takes it back.
 import { isNum } from "./figures.js";
-import { oursUse, rolesFromEngine, tierStarters, chartUse, chartStarters, unmatchedNote, playsDespiteInjured } from "./console-ours.js";
+import { oursUse, rolesFromEngine, fiveIsSet, tierStarters, chartUse, chartStarters, unmatchedNote, playsDespiteInjured } from "./console-ours.js";
 import { tierScenario } from "./console-tier.js";
 
 export const STARTERS = 5;
@@ -38,24 +39,28 @@ export function liveFlips(team, outSet, flips) {
 export function resolveRoles(team, outSet, flips) {
   const use = oursUse(team);
   if (rolesFromEngine(team)) return resolveFromTier(team, outSet, flips);
-  if (chartUse(team).ok) return resolveFromChart(team, outSet, flips);
+  if (chartUse(team).ok || use.ok) return resolveFromChart(team, outSet, flips); // a team with the engine's inputs takes its five from them even when its chart is missing or fails its check
   const res = resolveByRule(team, outSet, flips);
   const why = use.why ?? chartUse(team).why;
   if (why) res.note = `Starters by TwoGun's flag and Tonight's minutes: ${why}.${res.note ? ` ${res.note}` : ""}`;
   return res;
 }
 
-/** Roles only, from the saved depth chart's five (console-ours.js chartStarters): for inputs baked before the engine's tiers existed. A chart man keeps his chart role; a man not on the chart gets the rule's bench role. */
+/** Roles for a team on the TwoGun source (or with no engine inputs): the five is the engine's (the lineup pages' agreed five, else TwoGun's starter flags, his S marks first; tierStarters) when the team has the inputs, else the saved depth chart's (console-ours.js chartStarters). With the engine's five the chart fills only places it leaves open, so a chart-injured man the pages start starts. A man outside the five keeps his chart role; a man not on the chart gets the rule's bench role. */
 function resolveFromChart(team, outSet, flips) {
   const flipped = liveFlips(team, outSet, flips), roles = {};
-  const { ids, notes } = chartStarters(team, outSet, flipped);
+  const hasChart = chartUse(team).ok, chart = hasChart ? chartStarters(team, outSet, flipped) : { ids: [], notes: [] };
+  const tier = oursUse(team).ok ? tierStarters(team, outSet, flipped) : null;
+  const base = tier ? [...new Set([...Object.keys(flipped).filter((id) => flipped[id] === "starter"), ...tier.ids])] : null, short = base !== null && base.length < 5; // an S-marked man with no engine inputs is still in the five
+  const ids = base ? (short ? [...new Set([...base, ...chart.ids])].slice(0, 5) : base) : chart.ids;
+  const notes = base ? [...tier.notes, ...(short && ids.length < 5 ? chart.notes : [])] : chart.notes; // the chart's count notes (Only N / N marked) describe its own set, not the merged one: kept only while the merged five is still short
   const five = new Set(ids), toRole = { bench_plus: "bench_plus", bench: "bench", oor: "oor", injured: "oor", starter: "bench" };
   for (const p of team.men) {
     if (outSet.has(p.id)) roles[p.id] = "out";
     else if (Object.hasOwn(flipped, p.id)) roles[p.id] = flipped[p.id];
     else if (five.has(p.id)) roles[p.id] = "starter";
     else {
-      const m = p.depth_key ? team.depth.men[p.depth_key] : null;
+      const m = hasChart && p.depth_key ? team.depth.men[p.depth_key] : null;
       roles[p.id] = m && !playsDespiteInjured(team, p, outSet) ? toRole[m.role] : p.bench_plus_ok ? "bench_plus" : isNum(p.min) && p.min > 0 ? "bench" : "oor";
     }
   }
@@ -106,7 +111,7 @@ export function roleMove(team, outs, flips, id, role, minutes = {}) {
   const nextOuts = new Set(outs), nextFlips = { ...(flips ?? {}) };
   if (role === "out") { nextOuts.add(id); delete nextFlips[id]; } else { nextOuts.delete(id); nextFlips[id] = role; }
   const moved = [];
-  if (rolesFromEngine(team) || chartUse(team).ok) { // the engine's five is a set: marking a man never moves another; only a man the five fills in for can change, and the move names him
+  if (fiveIsSet(team)) { // the five (the engine's where the team has its inputs, else the chart's) is a set: marking a man never moves another, only a man a fill place went to can change, and the move names him
     const after = resolveRoles(team, nextOuts, nextFlips).roles;
     for (const p of team.men) if (p.id !== id && after[p.id] !== "out" && before[p.id] !== after[p.id] && (before[p.id] === "starter" || after[p.id] === "starter")) moved.push({ id: p.id, from: before[p.id], to: after[p.id] });
     return { outs: [...nextOuts], flips: nextFlips, moved };
@@ -134,7 +139,7 @@ export function roleMove(team, outs, flips, id, role, minutes = {}) {
  * Returns null when nothing is left to do, { call: { id, role } } when the plain role move is the answer (nobody named to leave, or he already starts
  * and only the man to drop has a move), { backIn: { id, role: "bench" } } when the man in is Out in this scenario (he comes back in on a non-starting role
  * first, then the swap is asked again in the scenario he is back in, so both flips land there), else { outs, flips, moved } for the scenario's new flips.
- *   Engine team: the man out is flipped to Bench and the man in marked S; the starters are a set (console-tier.js), so exactly those two change.
+ *   Team with the engine's inputs or a chart, on either source: the man out is flipped to Bench and the man in marked S; S-marked men take fill places before the order's fill (console-tier.js tierFive), so exactly those two change.
  *   Team without the engine's inputs: roleMove's five-starter rule, with any flip it made for a man other than the one named put back as it was.
  * `minutes`: { id: minutes on screen now }, used only by the no-chart rule.
  */
@@ -145,7 +150,7 @@ export function swapStarterMove(team, outs, flips, inId, outId, minutes = {}) {
   if (before[inId] === "starter") return dropOut ? { call: { id: dropOut, role: "bench" } } : null;
   if (!dropOut) return { call: { id: inId, role: "starter" } };
   if (outSet.has(inId)) return { backIn: { id: inId, role: "bench" } };
-  if (rolesFromEngine(team) || chartUse(team).ok) {
+  if (fiveIsSet(team)) {
     const next = { ...(flips ?? {}), [inId]: "starter", [dropOut]: "bench" };
     const after = resolveRoles(team, outSet, next).roles;
     const moved = team.men.filter((p) => p.id !== inId && after[p.id] !== "out" && before[p.id] !== after[p.id] && (before[p.id] === "starter" || after[p.id] === "starter")).map((p) => ({ id: p.id, from: before[p.id], to: after[p.id] }));

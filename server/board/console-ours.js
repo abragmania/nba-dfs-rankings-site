@@ -3,7 +3,7 @@
 // team.source says which minutes feed the optimizer: "twogun" (the default, the engine's own), "ours" (the tier engine with the scenario's outs), or "ours_edits" (the tier engine that also knows his marks
 // and typed minutes, so the other men move with them). His typed minutes and marks always win on their own man whichever source is on. The tier engine's inputs are team.tier (server/minutes/tier-inputs.js).
 import { MINUTE_SOURCES, badChart, chartFive, fiveNotes } from "./depth-chart.js";
-import { tierUse, tierScenario } from "./console-tier.js";
+import { tierUse, tierScenario, tierFive } from "./console-tier.js";
 import { isNum } from "./figures.js";
 
 export const sourceOf = (team) => (MINUTE_SOURCES.includes(team.source) ? team.source : "twogun");
@@ -22,8 +22,8 @@ export function oursFor(team, outSet, flips = {}, typed = {}, withEdits = false)
 
 /** The five as man ids, and notes: { ids, notes }. The engine's five (the lineup pages' five, else TwoGun's flags), with every man he marked S. */
 export function tierStarters(team, outSet, flips) {
-  const res = tierScenario(team, outSet, flips, {}, true);
-  return { ids: res.five, notes: res.notes.filter((n) => /starters marked|Only \d+ starters/.test(n)) };
+  const f = tierFive(team, outSet, flips); // the five alone, no plan run
+  return { ids: [...f.five], notes: f.notes };
 }
 
 // ---- the saved depth chart's five: roles only, for inputs baked before the engine's `tier` existed (an older published console-inputs.json) and for a team the engine could not read. It gives no minutes. ----
@@ -46,10 +46,23 @@ export function playsDespiteInjured(team, p, outSet) {
 }
 
 /** One foot note per team (G68) for the chart-injured men who play tonight on this path (chart roles, TwoGun's minutes), names after a colon; null when none or when the roles come from the engine. Never split on its periods. */
-export function injuredPlayNote(team, outSet) {
+export function injuredPlayNote(team, outSet, roles = {}, ours = null) {
   if (rolesFromEngine(team) || !chartUse(team).ok) return null;
-  const names = team.men.filter((p) => playsDespiteInjured(team, p, outSet)).map((p) => p.name);
+  // one rule for a man in two features (Adam 11-13): the no-games chart usual wins (chartUsualNote names him); a man the five starts is no bench role
+  const names = team.men.filter((p) => playsDespiteInjured(team, p, outSet) && roles[p.id] !== "starter" && ours?.[p.id]?.flag?.kind !== "no_games_chart").map((p) => p.name);
   return names.length ? `On the ${team.depth.team} chart's injured list but playing tonight, in a bench role on TwoGun's minutes: ${names.join(", ")}` : null;
+}
+
+/** One foot note per team for the men whose Ours figure is their depth chart's usual (flag no_games_chart; the same test as injuredPlayNote's, so no such man is in neither note): the chart's usual (chartOf(id), the inputs' own number), the plain Ours figure after the engine's cuts (the trim note says why), and the table's source. null when none. `ours`: oursFor's map. */
+export function chartUsualNote(ours, nameOf, source, chartOf = () => null) {
+  const r1 = (v) => Math.round(v * 10) / 10;
+  const parts = Object.entries(ours ?? {}).filter(([, o]) => o.flag?.kind === "no_games_chart").map(([id, o]) => {
+    const chart = chartOf(id), tg = `TwoGun ${o.flag.twogun ?? "none"}`;
+    if (!isNum(o.min)) return `${nameOf(id)} (no Ours figure; ${tg})`;
+    const off = isNum(chart) && Math.abs(chart - o.min) > 0.05;
+    return `${nameOf(id)} ${off ? `chart's usual ${r1(chart)}, plain Ours figure ${r1(o.min)} after the ${chart > o.min ? "cuts (see the trim note)" : "pot"}` : r1(o.min)} (${tg})`;
+  });
+  return parts.length ? `No game this season, so Ours uses the depth chart's usual${source === "twogun" ? "; the table shows TwoGun's minutes while the source is TwoGun" : ""}: ${parts.join("; ")}` : null;
 }
 
 /** The chart's five as man ids, and notes: { ids, notes }. A set (depth-chart.js chartFive): the named starters who play and are not flipped away, every man marked S, and while fewer than five the named backup of a starter not playing. */
@@ -76,7 +89,10 @@ export function unmatchedNote(team) {
   return `Not matched to the chart (${parts.join("; ")}).`;
 }
 
-/** Whether the roles come from the engine: it has inputs and Ours feeds the optimizer. With the TwoGun source the roles stay the chart's or the formula's, so a confirmed new starter can still be flipped and sent (news-apply). */
+/** Whether the team's five is a set (marking a man never moves another): it has the engine's inputs (its five) or a valid saved chart (the chart's five). */
+export const fiveIsSet = (team) => oursUse(team).ok || chartUse(team).ok;
+
+/** Whether the roles come from the engine: it has inputs and Ours feeds the optimizer. With the TwoGun source the roles come from console-roles.js resolveFromChart (the engine's five where the team has its inputs, the chart's otherwise), so a confirmed new starter can still be flipped and sent (news-apply). */
 export const rolesFromEngine = (team) => oursUse(team).ok && sourceOf(team) !== "twogun";
 
 /** The roles of a scenario from the engine: { id: "starter" | "bench_plus" | "bench" | "oor" | "out" }. */

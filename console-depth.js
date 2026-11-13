@@ -85,8 +85,17 @@ const HEAD = (first) => `<div class="hd"><span>${first}</span><span>Player</span
 const sumMin = (rows) => rows.reduce((s, r) => s + (isNum(r.min) ? r.min : 0), 0);
 
 /** A roles note in the side column's width: the no-chart sentence says the same in fewer words, so it holds one line. */
-/** The minutes engine's plain statements (the five, the pot, the trim): muted in the Team total box; every other note is a warning and stays red. */
-const ENGINE_INFO = /^Starters: |^The team's figures add to [\d.]+(?:, over| and|;)|^TwoGun flags \d+ starter|^the lineup pages' five names|^\d+ of \w+'s box scores give no overtime count/;
+/** Only a wrong number of starters needs action and stays red; every other team note is information, muted. */
+const WARN_NOTE = /starters marked|^Only \d+ starters|TwoGun's minutes are in use|no minutes engine inputs|is not used/;
+/** The foot's "Starters" sentence when the header says the sources disagree (news five kind "disagree"): the pages the engine's own five came from (confirmed.sources, tier inputs), the others differ; null when the engine's line should stand. */
+export function disagreeNote(five, confirmed) {
+  const used = (confirmed?.sources ?? []).map((s) => String(s).replace(/ lineups$/, "")); // without the engine's own sources the news five could be a different one
+  if (five?.kind !== "disagree" || !used.length) return null;
+  const differs = [...(five.by ?? []), ...(five.differs ?? [])].filter((s) => !used.includes(s)); // every page the engine did not use
+  return `Starters: ${used.length === 1 ? `${used[0]}'s five` : `the five ${used.join(" and ")} agree on`} is used${differs.length ? `; ${differs.join(" and ")} differ${differs.length === 1 ? "s" : ""}` : ""}`;
+}
+/** The team's notes at the foot of its block (global rule: explanations go at the bottom). The last word is held to the line before it with a no-break space, so a lone "0" never wraps. */
+export const noteList = (notes) => (notes.length ? `<section class="box"><ul class="notes">${notes.map((n) => `<li${WARN_NOTE.test(n) ? "" : ' class="info"'}>${esc(n).replace(/ (\S+)$/, "&nbsp;$1")}</li>`).join("")}</ul></section>` : "");
 const shortNote =(n) => (/^Starters by TwoGun's flag and Tonight's minutes: no depth chart for (?:[A-Z]{2,4}|this team)\.$/.test(n) ? "No depth chart: starters by TwoGun's flag and minutes." : n);
 
 /**
@@ -117,7 +126,9 @@ function teamBody(model, code, news) {
   const notes = [];
   if (starters.length > 5) notes.push(`${starters.length} starters marked: unmark one.`);
   else if (starters.length < 5) notes.push(`Only ${starters.length} starters: mark a man S.`);
-  for (const n of String(res.roles_note ?? "").split(/\n+|(?<=\.)\s+/).filter(Boolean).map(shortNote)) if (!notes.some((x) => x.slice(0, 12) === n.slice(0, 12)) && !/starters marked|Only \d starters/.test(n)) notes.push(n);
+  const disagree = disagreeNote(N?.team?.five, T.tier?.confirmed); // the foot says what was really used when the header says the sources disagree
+  for (const n of String(res.roles_note ?? "").split(/\n+|(?<=\.)\s+/).filter(Boolean).map(shortNote).map((x) => (disagree && /^Starters: the lineup pages' (?:agreed|confirmed) five/.test(x) ? disagree : x))) if (!notes.some((x) => x.slice(0, 12) === n.slice(0, 12)) && !/starters marked|Only \d starters/.test(n)) notes.push(n);
+  if (res.chart_note) notes.push(res.chart_note); // one note per team (G68), added whole
   if (res.injured_note) notes.push(res.injured_note); // one note per team, added whole (G68)
   const auto = calc(T, { ...S, pins: {} }, T.tonight).totals;
   const typedAdd = (res.totals.min ?? 0) - (auto.min ?? 0);
@@ -130,8 +141,8 @@ function teamBody(model, code, news) {
 <div><span>Without your marks</span><b>${f1(auto.min) ?? "—"} min</b></div>
 ${Math.abs(typedAdd) >= 0.05 ? `<div class="warn"><span>Your marks add</span><b>${typedAdd > 0 ? "+" : ""}${f1(typedAdd)}</b></div>` : ""}
 <div><span>Team projection</span><b>${f1(res.totals.proj) ?? "—"} pts</b></div></div>
-${notes.length ? `<ul class="notes">${notes.map((n) => `<li${ENGINE_INFO.test(n) ? ' class="info"' : ""}>${esc(n)}</li>`).join("")}</ul>` : ""}</section>
-<section class="box"><h2>Out / injured <small>${outs.length} ${outs.length === 1 ? "man" : "men"}</small></h2>${outs.map((r) => outRow(code, r, T, marks[r.id], N)).join("") || `<div class="none">Nobody is out.</div>`}</section>${srcBox}`;
+</section>
+<section class="box"><h2>Out / injured <small>${outs.length} ${outs.length === 1 ? "man" : "men"}</small></h2>${outs.map((r) => outRow(code, r, T, marks[r.id], N)).join("") || `<div class="none">Nobody is out.</div>`}</section>${srcBox}${noteList(notes)}`;
   return { main, side, marks: Object.keys(marks).length, starterIds: starters.map((r) => r.id) };
 }
 

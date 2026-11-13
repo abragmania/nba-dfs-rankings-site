@@ -20,23 +20,39 @@ export function tierUse(team) {
 const mean = (rows) => (rows.length ? rows.reduce((s, r) => s + r[0], 0) / rows.length : null);
 
 /**
+ * Tonight's five on a scenario, with no plan run: { gone, order, five: Set of ids, base (chooseFive's), conf, notes, fixed }. The pages' five without the men gone, else TwoGun's flags; a man he marked off the five leaves it,
+ * a man marked S joins it and takes a fill place first (so a swap or bench-then-S never gives six: six comes only from S marks on top of a real five).
+ */
+export function tierFive(team, outSet, mark = {}) {
+  const T = team.tier, known = (id) => Object.hasOwn(T.men, id), onTeam = new Set(team.men.map((p) => p.id));
+  const fixed = (T.base_outs ?? []).filter((o) => !onTeam.has(o.id)); // Out men the console has no row for: Out in every scenario, named
+  const gone = new Set([...outSet, ...Object.entries(mark).filter(([, r]) => r === "oor").map(([id]) => id)]);
+  const order = T.order.filter((id) => known(id) && onTeam.has(id) && !gone.has(id));
+  const off = new Set(Object.entries(mark).filter(([, r]) => r === "bench" || r === "bench_plus").map(([id]) => id));
+  const pool = order.filter((id) => !off.has(id)), want = Object.entries(mark).filter(([id, r]) => r === "starter" && pool.includes(id)).map(([id]) => id);
+  const conf = T.confirmed ? { ids: T.confirmed.ids.filter((id) => pool.includes(id)), kind: T.confirmed.kind } : null;
+  const flag = (id) => T.men[id].starter_flag === true, base0 = chooseFive(pool.map((id) => ({ id, starter_flag: flag(id) })), conf), isReal = (id) => (conf?.ids?.length ? conf.ids.includes(id) : flag(id)); // chooseFive ignores an empty pages' five
+  let base = base0;
+  if (want.length) { // the real five (pages' or flagged, cut to five) stays and the S-marked men join it; only a short one is filled, S marks taking fill places before the order does
+    const real = [...base0.ids].filter(isReal), five0 = new Set([...real, ...want]), fill = pool.filter((id) => !five0.has(id)).slice(0, Math.max(0, 5 - five0.size));
+    const took = want.filter((id) => !real.includes(id)).length, cut = base0.note ? base0.note.split("; ").filter((n) => !/ available starters?: \d+ filled/.test(n)) : [];
+    const fillNote = fill.length ? `${base0.kind === "expected" ? "TwoGun flags" : "the lineup pages' five names"} ${real.length} available starter${real.length === 1 ? "" : "s"}${took ? `; S marks took ${took} place${took === 1 ? "" : "s"}` : ""}: ${fill.length} filled from the top of tonight's order` : null;
+    base = { ...base0, ids: new Set([...five0, ...fill]), note: [...cut, fillNote].filter(Boolean).join("; ") || null };
+  }
+  const five = new Set([...base.ids, ...want]), notes = [];
+  if (five.size > 5) notes.push(`${five.size} starters marked: unmark one.`);
+  return { gone, order, five, base, conf, notes, fixed };
+}
+
+/**
  * One scenario worked by the engine: { minutes: { id: { min, basis (the engine's why), median: false, tier, flag } }, roles: { id: "starter" | "bench_plus" | "bench" | "oor" }, five: [ids], notes: [text], total_note }.
  * outSet: the scenario's Outs; flips: { id: role } (his marks: starter, bench_plus, bench, oor); typed: { id: minutes } (taken off the 240, the rest shared around them). A man the engine has no inputs for has no entry
  * (the caller leaves his minutes missing) and is counted in the notes. With `edits` false the marks and typed minutes are ignored (the plain Ours column). His standing minutes override replaces a Starter's or Bench+ man's figure, as figures.js does.
  */
 export function tierScenario(team, outSet, flips = {}, typed = {}, edits = false) {
   const T = team.tier, mark = edits ? flips : {}, typedNow = edits ? typed : {};
-  const known = (id) => Object.hasOwn(T.men, id), onTeam = new Set(team.men.map((p) => p.id));
-  const fixed = (T.base_outs ?? []).filter((o) => !onTeam.has(o.id)); // Out men the console has no row for: Out in every scenario, named
-  const gone = new Set([...outSet, ...Object.entries(mark).filter(([, r]) => r === "oor").map(([id]) => id)]);
-  const order = T.order.filter((id) => known(id) && onTeam.has(id) && !gone.has(id));
-  // the five: the pages' five without the men gone, else TwoGun's flags; a man he marked off the five leaves it, a man marked S joins it
-  const off = new Set(Object.entries(mark).filter(([, r]) => r === "bench" || r === "bench_plus").map(([id]) => id));
-  const pool = order.filter((id) => !off.has(id)), want = Object.entries(mark).filter(([id, r]) => r === "starter" && pool.includes(id)).map(([id]) => id);
-  const conf = T.confirmed ? { ids: T.confirmed.ids.filter((id) => pool.includes(id)), kind: T.confirmed.kind } : null;
-  const base = chooseFive(pool.map((id) => ({ id, starter_flag: T.men[id].starter_flag === true })), conf);
-  const five = new Set([...base.ids, ...want]), notes = [];
-  if (five.size > 5) notes.push(`${five.size} starters marked: unmark one.`);
+  const known = (id) => Object.hasOwn(T.men, id);
+  const { gone, order, five, base, conf, notes, fixed } = tierFive(team, outSet, mark);
   const outs = [...gone].filter(known).map((id) => ({ name: T.men[id].name, lid: id, positions: T.men[id].positions ?? [], starter: T.men[id].top5 === true, avg: mean(T.men[id].rows), starter_fig: roleFigure(T.men[id].rows.map(([min, s]) => ({ min, started: s === 1 })), "starter", null).value }))
     .concat(fixed.map((o) => ({ ...o, lid: null })));
   const outStarters = outs.filter((o) => o.starter).map((o) => o.name);
