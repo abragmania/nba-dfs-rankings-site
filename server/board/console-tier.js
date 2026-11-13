@@ -2,7 +2,7 @@
 // and the server. The inputs carry, per team, `tier` (server/minutes/tier-inputs.js): each man's role games, TwoGun's figure and flags, his standing overrides, tonight's order and the lineup pages' five, so any
 // scenario is worked here with no call to the server (tests/minutes_parity.test.mjs holds this equal to the board's engine). Roles are the engine's: Starter (the five), Bench+, Bench; Out of rotation is his mark.
 // A man he marked S joins the five (six or more marked all start, said); Bench+ or Bench forces that tier.
-import { chooseFive, tierPlan, ROLE_OF_TIER } from "./tiers.js";
+import { chooseFive, tierPlan, roleFigure, ROLE_OF_TIER } from "./tiers.js";
 import { isNum } from "./figures.js";
 
 const ROLE_OF = { starter: "starter", bench_plus: "bench_plus", bench: "bench" };
@@ -35,7 +35,7 @@ export function tierScenario(team, outSet, flips = {}, typed = {}, edits = false
   const base = chooseFive(pool.map((id) => ({ id, starter_flag: T.men[id].starter_flag === true })), conf);
   const five = new Set([...base.ids, ...want]), notes = [];
   if (five.size > 5) notes.push(`${five.size} starters marked: unmark one.`);
-  const outs = [...gone].filter(known).map((id) => ({ name: T.men[id].name, lid: id, positions: T.men[id].positions ?? [], starter: T.men[id].top5 === true, avg: mean(T.men[id].rows) }))
+  const outs = [...gone].filter(known).map((id) => ({ name: T.men[id].name, lid: id, positions: T.men[id].positions ?? [], starter: T.men[id].top5 === true, avg: mean(T.men[id].rows), starter_fig: roleFigure(T.men[id].rows.map(([min, s]) => ({ min, started: s === 1 })), "starter", null).value }))
     .concat(fixed.map((o) => ({ ...o, lid: null })));
   const outStarters = outs.filter((o) => o.starter).map((o) => o.name);
   const playing = team.men.filter((p) => !gone.has(p.id)).map((p) => p.id);
@@ -44,7 +44,7 @@ export function tierScenario(team, outSet, flips = {}, typed = {}, edits = false
   const typedIn = Object.entries(typedNow).filter(([id, v]) => playing.includes(id) && isNum(v));
   const men = order.filter((id) => !typedIn.some(([t]) => t === id)).map((id) => {
     const m = T.men[id];
-    return { id, key: id, name: m.name, lid: m.matched ? id : null, tg: m.tg, chart_usual: m.chart_usual ?? null, chart_games: m.chart_games ?? null, seen_played: m.seen_played === true, positions: m.positions ?? [], in_five: five.has(id), replaces: five.has(id) && !m.top5 ? outStarters : [], last_mpg: m.last_mpg, last_games: m.last_games,
+    return { id, key: id, name: m.name, lid: m.matched ? id : null, tg: m.tg, chart_usual: m.chart_usual ?? null, chart_games: m.chart_games ?? null, seen_played: m.seen_played === true, positions: m.positions ?? [], in_five: five.has(id), replaces: five.has(id) && !m.top5 ? outStarters : [], last_mpg: m.last_mpg, last_games: m.last_games, last_gs: m.last_gs ?? null,
       last_unknown: m.last_unknown === true, last_missing: m.last_missing === true, out_season: m.out_season, out_recent: m.out_recent, ov: { usual: m.ov?.usual ?? undefined, cap: m.ov?.cap ?? undefined, minutes: m.ov?.minutes ?? undefined, meta: m.ov?.meta ?? {} }, tier_force: FORCE[mark[id]] };
   });
   const typedSum = typedIn.reduce((s, [, v]) => s + v, 0);
