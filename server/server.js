@@ -10,7 +10,8 @@ import { routeModule, routeMods, loadRouteModules } from "./route-modules.js";
 import { readNowSetting, optimizeErrorKind } from "./server-util.js";
 export { readNowSetting, optimizeErrorKind };
 import { refuseNonJsonPost, refuseCrossSiteRead } from "./lib/origin.js";
-import { info, error } from "../site/shim/log.js";
+import { info, warn, error } from "../site/shim/log.js";
+import { readScenarios, heldTeams } from "./slate/scenarios.js";
 import { checkLogQuery, getPlayerLog, PlayerLogError } from "../site/shim/app-only.js";
 import { withSeasonFigures, seasonUsageTable } from "../site/shim/app-only.js";
 import { slateRefMs, startedSplit, leftOut } from "./board/lateswap.js";
@@ -29,6 +30,7 @@ import { heldSpotNames } from "./lateswap/maps.js";
 import { readBuilds, writeBuilds, checkBuildsBody, applyBuilds } from "./slate/builds.js";
 import { readOverrides, writeOverrides, checkChanges, applyChanges, resetPlayer, resetAll, mergeOverrides, minutesBase, publicOverrides } from "./slate/overrides.js";
 import { consoleHandler } from "./slate/console-route.js";
+import { handleResend } from "./slate/resend-route.js";
 import { depthHandler } from "./slate/depth-store.js";
 import { minutesHandler, consoleBenchPlus } from "../site/shim/app-only.js";
 import { withOurProjection, primeTotals, startSnapshotRefresh } from "../site/shim/app-only.js";
@@ -159,6 +161,16 @@ async function handlePicks(req, res, slate) {
   send(res, 200, savePicks(slate, checked.locked, checked.excluded));
 }
 
+/** The teams the board is held for, for mergeOverrides' guard on the teams it is not (R4); null when the scenarios file cannot be read, so no comparison is made (the board foot names held numbers a resend did not refresh). */
+function heldFor(slate) {
+  try { return heldTeams(readScenarios(slate)); } catch (e) {
+    warn("the scenarios file could not be read, so no stored send number is compared with the engine", { slate, message: e.message });
+    return null;
+  }
+}
+/** Players with the overrides merged, as the board, the optimizer and the console's answers all build them. */
+export const mergedFor = (slate, players, overrides) => mergeOverrides(players, overrides, { held: heldFor(slate) });
+
 /**
  * The slate's players with Adam's overrides applied (server/slate/overrides.js): the effective projection, value and
  * ownership every reader uses. Returns null after sending a 500 when the overrides file cannot be read (never the base
@@ -166,7 +178,7 @@ async function handlePicks(req, res, slate) {
  */
 function effectivePlayers(res, slate, slateData, opts = null) {
   try {
-    return mergeOverrides(withOurs(slate, slateData, opts).players ?? [], readOverrides(slate));
+    return mergedFor(slate, withOurs(slate, slateData, opts).players ?? [], readOverrides(slate));
   } catch (e) {
     if (!e?.code?.startsWith?.("OVERRIDES_")) throw e;
     error("overrides unreadable", { slate, message: e.message });
@@ -214,7 +226,7 @@ async function handleOverrides(req, res, slate, opts) {
     return fail(res, 400, e.code, e.message);
   }
   const written = writeOverrides(slate, next);
-  send(res, 200, { overrides: publicOverrides(written), players: mergeOverrides(base.players ?? [], written) });
+  send(res, 200, { overrides: publicOverrides(written), players: mergedFor(slate, base.players ?? [], written) });
 }
 
 /** GET the slate's saved lineups; POST { slots, mode } saves one, POST { batch: [{ slots, mode }] } saves many (Save all), each checked
@@ -497,10 +509,12 @@ async function route(req, res, opts) {
   const depth = depthHandler(p); // the saved depth charts (slate/depth-store.js)
   if (depth) return depth.handler(req, res, depth.team, { send, fail, readJson, now: opts.now });
   const cons = consoleHandler(p); // the scenario console (slate/console-route.js)
-  if (cons) return cons.handler(req, res, safeDecode(cons.encodedSlate), { send, fail, readJson, openSlate, usageTable: opts.usageTable, benchPlus: consoleBenchPlus, now: opts.now });
+  if (cons) return cons.handler(req, res, safeDecode(cons.encodedSlate), { send, fail, readJson, openSlate, usageTable: opts.usageTable, benchPlus: consoleBenchPlus, now: opts.now, effectivePlayers: (res, slate, slateData) => effectivePlayers(res, slate, slateData, opts), ourPlayers: (slate, slateData) => withOurs(slate, slateData, opts) });
   const lsw = lateswapHandler(p); // the Late swap screen (slate/lateswap-route.js)
   if (lsw) return lsw.handler(req, res, safeDecode(lsw.encodedSlate), { send, fail, readJson, openSlate, effectivePlayers: (res, slate, slateData) => effectivePlayers(res, slate, slateData, opts), now: opts.now, injected: opts.injected });
-  let m = p.match(/^\/api\/slate\/([^/]+)\/picks$/);
+  let m = p.match(/^\/api\/slate\/([^/]+)\/resend$/);
+  if (m) return handleResend(req, res, safeDecode(m[1]), { send, fail, readJson, openSlate, usageTable: opts.usageTable, ourPlayers: (slate, slateData) => withOurs(slate, slateData, opts), now: opts.now }); // held teams' numbers re-sent on the new Tonight, inside the app (update_cycle.mjs)
+  m = p.match(/^\/api\/slate\/([^/]+)\/picks$/);
   if (m) return handlePicks(req, res, safeDecode(m[1]));
   m = p.match(/^\/api\/slate\/([^/]+)\/lineups$/);
   if (m) return handleLineups(req, res, safeDecode(m[1]));

@@ -14,6 +14,7 @@ import { buildInputs } from "../../site/shim/app-only.js";
 import { readScenarios, writeScenarios, checkTeamBody } from "./scenarios.js";
 import { planApply, applyRecord, reverseChanges, checkKeys, checkTeams } from "./console-apply.js";
 import { readOverrides, writeOverrides, applyChanges, mergeOverrides } from "./overrides.js";
+import { basePlayers } from "./base-players.js";
 
 export const USAGE_OFF = { state: "off", message: "The usage table is not connected on this server." };
 
@@ -102,7 +103,8 @@ async function handleApply(req, res, slate, ctx) {
   const checked = checkKeys(read.body?.scenarios, inputs), teams = checkTeams(read.body?.teams, inputs);
   if (!checked.ok) return ctx.fail(res, 400, "BAD_SCENARIO", checked.message);
   if (!teams.ok) return ctx.fail(res, 400, "BAD_SCENARIO", teams.message);
-  const players = slateData.players ?? [];
+  const players = basePlayers(slate, slateData, ctx.now(), ctx.ourPlayers).players; // the board's own figures (the engine's on), the same base the server's resend plans against
+  const shown = () => (ctx.effectivePlayers ? ctx.effectivePlayers(res, slate, slateData) : mergeOverrides(players, readOverrides(slate))); // the answer's players are built as the board builds them (null after a 500)
   try {
     const file = readScenarios(slate), overrides = readOverrides(slate);
     const plan = planApply(inputs, file, overrides, players, checked.keys, teams.only);
@@ -112,11 +114,15 @@ async function handleApply(req, res, slate, ctx) {
     if (!plan.changes.length && !plan.min_moves && !plan.flag_moves) {
       if (plan.holds) writeScenarios(slate, { ...file, applied: applyRecord(plan, overrides, file.applied, new Date(ctx.now()).toISOString()).applied }); // no number moved, but the mark is held: only the record is written
       const held = plan.holds ? readScenarios(slate).applied : file.applied;
-      return ctx.send(res, 200, { applied: appliedView(held, overrides), changed: 0, min_changed: 0, refused: plan.refused, players: mergeOverrides(players, overrides) });
+      const now = shown();
+      if (!now) return;
+      return ctx.send(res, 200, { applied: appliedView(held, overrides), changed: 0, min_changed: 0, refused: plan.refused, players: now });
     }
     const rec = applyRecord(plan, overrides, file.applied, new Date(ctx.now()).toISOString());
     const written = writeApply(slate, file, overrides, rec, players);
-    ctx.send(res, 200, { applied: appliedView(rec.applied, written), changed: plan.changes.length, min_changed: plan.min_moves, refused: plan.refused, players: mergeOverrides(players, written) });
+    const now = shown();
+    if (!now) return;
+    ctx.send(res, 200, { applied: appliedView(rec.applied, written), changed: plan.changes.length, min_changed: plan.min_moves, refused: plan.refused, players: now });
   } catch (e) {
     if (!answerFileError(res, ctx, slate, e)) throw e;
   }
@@ -128,15 +134,17 @@ async function handleReverse(req, res, slate, ctx) {
   if (!slateData) return;
   const read = await ctx.readJson(req, res);
   if (!read) return;
-  const players = slateData.players ?? [];
+  const players = basePlayers(slate, slateData, ctx.now(), ctx.ourPlayers).players;
   try {
     const file = readScenarios(slate), overrides = readOverrides(slate);
     if (!file.applied) return ctx.fail(res, 409, "NOTHING_APPLIED", "Nothing has been applied on this slate.");
     const rev = reverseChanges(file.applied, overrides, players);
     if (read.body?.preview === true) return ctx.send(res, 200, { restored: rev.restored, restored_min: rev.restored_min, kept: rev.kept, at: file.applied.at });
-    const written = writeOverrides(slate, applyChanges(overrides, rev.changes, players));
+    writeOverrides(slate, applyChanges(overrides, rev.changes, players));
     writeScenarios(slate, { ...file, applied: null });
-    ctx.send(res, 200, { applied: null, restored: rev.restored, restored_min: rev.restored_min, kept: rev.kept, players: mergeOverrides(players, written) });
+    const now = ctx.effectivePlayers ? ctx.effectivePlayers(res, slate, slateData) : mergeOverrides(players, readOverrides(slate));
+    if (!now) return;
+    ctx.send(res, 200, { applied: null, restored: rev.restored, restored_min: rev.restored_min, kept: rev.kept, players: now });
   } catch (e) {
     if (!answerFileError(res, ctx, slate, e)) throw e;
   }

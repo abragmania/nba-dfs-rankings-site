@@ -109,7 +109,7 @@ const oversOnSlate = (key, byId) => onSlateText(key, (rows) => rows.filter(([id]
 /** Whether his override inputs differ from a build's, likewise. Pure. */
 export const oversMoved = (atKey, nowKey, byId) => oversOnSlate(atKey, byId) !== oversOnSlate(nowKey, byId);
 /** The row fields an overrides or console answer owns (`auto`: which of a row's figures news or the engine wrote, so the marks follow every answer). */
-export const OV_KEYS = ["projection", "value", "proj_own", "base", "ovr", "auto", "starred", "minutes", "base_minutes"];
+export const OV_KEYS = ["projection", "value", "proj_own", "base", "ovr", "auto", "stale_auto", "proj_note", "starred", "minutes", "base_minutes"]; // stale_auto / proj_note: a send's number the board did not use, and why
 /** A board row with the server's answer for him taken onto it: the override fields come from the answer, and a field the answer lacks is dropped. Pure. */
 export function takeAnswer(p, f) {
   const next = { ...p };

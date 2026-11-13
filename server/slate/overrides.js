@@ -40,7 +40,10 @@ const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const AUTO_SECTIONS = ["proj", "min"]; // proj, min: figures a send wrote from news or the engine. pin: projections a send wrote from his console marks (not typed on the board, so a board reset leaves them)
 const AUTO_LISTS = [...AUTO_SECTIONS, "pin"];
 const EMPTY_AUTO = () => ({ proj: [], min: [], pin: [] });
-const EMPTY = () => ({ proj: {}, own: {}, bump: {}, min: {}, stars: [], notes: {}, updated_at: null });
+// A slate with no file yet is flag-aware from its first write (auto present, empty), so every number a send writes is told from a typed one; only a file already on disk without the key stays a pre-flag file.
+const EMPTY = () => ({ proj: {}, own: {}, bump: {}, min: {}, auto: EMPTY_AUTO(), stars: [], notes: {}, updated_at: null });
+export const PROJ_TOL = 0.05; // DK points: the engine rounds minutes x rate to hundredths and the rate to four places
+export const MIN_TOL = 0.05; // minutes: stored minutes are kept to thousandths, shown ones to hundredths
 /** `{ auto }` for a record that has any flag or is flag-aware (`aware`: its source already had the key), else `{}`. A file with no `auto` key is a pre-flag file, which a send may re-mark freely; once the key is written, even empty, it stays. */
 const autoPart = (auto, rec, aware = auto !== undefined) => { const a = cleanAuto(auto, rec); return aware || a.proj.length || a.min.length || a.pin.length ? { auto: a } : {}; };
 /** The auto lists of a record: both sections always, ids only for a number the record holds (a flag never outlives its number). */
@@ -278,7 +281,31 @@ export function valueFrom(projection, salary) {
 }
 
 /** The players with only the applied minutes merged: the figures a typed number or a bump works on (under our engine, the projection after applied minutes). For applyChanges' base. */
-export const minutesBase = (players, overrides) => mergeOverrides(players, { ...EMPTY(), min: { ...(overrides?.min ?? {}) } });
+export const minutesBase = (players, overrides) => mergeOverrides(players, { ...EMPTY(), min: { ...(overrides?.min ?? {}) }, auto: overrides?.auto ?? EMPTY_AUTO() });
+
+/**
+ * Which of one man's stored send numbers does not stand (R4, Adam 11-13): { proj, min, no_figure }. Only a number listed in auto.proj / auto.min is ever set aside; Adam's own numbers and his
+ * console marks (auto.pin) always stand. A send's numbers come from the console's scenario maths (console-engine.js: scenario Outs, pins, flips, usage-scaled DK/min), which the minutes
+ * engine (`ours`) never sees, so on a team the board is held for (`held`, scenarios.js heldTeams) they are never compared with it: the server resend refreshes them (resend.js) and the
+ * board foot says when it could not. Two cases only:
+ *  - no_figure: under our engine the man has no figure (ours.projection not a number, not Out), so a send's projection stands in for nothing (shown null, said).
+ *  - a team NOT held (held is a Set without it): a send's number that no longer equals the engine's goes, and the man's stored 0 and stored minutes are one decision (both go or both stand).
+ * `held` null means the caller cannot tell the teams, so no comparison is made. Minutes stored for a man the engine has Out are already set aside by mergeOverrides.
+ */
+export function staleSendOf(p, o, held = null) {
+  const none = { proj: false, min: false, no_figure: false };
+  if (p.proj_source !== "ours") return none;
+  const id = String(p.dk_id), auto = cleanAuto(o.auto, { proj: o.proj ?? {}, min: o.min ?? {} });
+  const sp = has(o.proj ?? {}, id) && auto.proj.includes(id) && !auto.pin.includes(id) ? o.proj[id] : null;
+  const sm = has(o.min ?? {}, id) && auto.min.includes(id) ? o.min[id] : null;
+  if (sp == null && sm == null) return none;
+  const ours = p.ours, outTonight = ours?.playing === false;
+  if (!outTonight && !isNum(ours?.projection)) return { proj: sp != null, min: sm != null, no_figure: true }; // stored minutes x the rate would stand in for the figure the engine lacks, so they go with the projection
+  if (!(held instanceof Set) || held.has(p.team) || !ours) return none;
+  const projOff = sp != null && Math.abs(sp - (outTonight ? 0 : ours.projection)) > PROJ_TOL;
+  const minOff = sm != null && !outTonight && isNum(ours.minutes) && Math.abs(sm - ours.minutes) > MIN_TOL;
+  return projOff || minOff ? { proj: sp != null, min: sm != null && !outTonight, no_figure: false } : none;
+}
 
 /**
  * The slate's players with the overrides applied, without adding or dropping anyone and without touching the inputs.
@@ -288,25 +315,28 @@ export const minutesBase = (players, overrides) => mergeOverrides(players, { ...
  * gets minutes as those and base_minutes as the slate's own; they alone leave his projection, value, ownership and ovr as they are, except under our minutes engine
  * (proj_source "ours" with a rate), where his projection becomes those minutes x our DK/min and the typed number and bump work on that.
  */
-export function mergeOverrides(players, overrides) {
+export function mergeOverrides(players, overrides, { held = null } = {}) {
   const o = overrides ?? EMPTY();
   const stars = new Set(o.stars ?? []);
   return (players ?? []).map((p) => {
     const id = String(p.dk_id);
-    const typedProj = has(o.proj ?? {}, id) ? o.proj[id] : null;
+    const stale = staleSendOf(p, o, held); // a send's number the engine's figure has moved off (a team not held), or one the engine has no figure for: not used, and said (stale_auto)
+    const typedProj = has(o.proj ?? {}, id) && !stale.proj ? o.proj[id] : null;
+    const storedMin = has(o.min ?? {}, id) && !stale.min;
     const typedOwn = has(o.own ?? {}, id) ? o.own[id] : null;
     const steps = has(o.bump ?? {}, id) ? o.bump[id] : 0; // the real steps, on a typed row too
-    const out = { ...p, starred: stars.has(id) };
+    const out = { ...p, starred: stars.has(id), ...(stale.proj || stale.min ? { stale_auto: stale } : {}) };
+    if (stale.no_figure) out.proj_note = `A ${stale.proj ? `projection (${o.proj[id]})` : "minutes number"} a send wrote is not used: the engine has no figure for him`;
     // auto: this figure came from a send's news or engine numbers, not his hand; the board marks and resets only his (the figure itself is the same).
     // Minutes count only when they are applied: under our engine a man it has Out ignores them (the proj_note below), so they carry no mark. pin: the projection is the console's, from his marks.
-    const minApplied = has(o.min ?? {}, id) && !(p.proj_source === "ours" && p.ours?.playing === false);
+    const minApplied = storedMin && !(p.proj_source === "ours" && p.ours?.playing === false);
     const autoProj = typedProj != null && (o.auto?.proj ?? []).includes(id), autoMin = minApplied && (o.auto?.min ?? []).includes(id), pin = typedProj != null && (o.auto?.pin ?? []).includes(id);
     if (autoProj || autoMin || pin) out.auto = { proj: autoProj, min: autoMin, pin };
     let q = p; // the figures the typed number and bump work on
-    if (has(o.min ?? {}, id) && p.proj_source === "ours" && p.ours?.playing === false) {
+    if (storedMin && p.proj_source === "ours" && p.ours?.playing === false) {
       // Under our engine the Minutes page decides who plays: console minutes on a man it has Out are ignored, and said (the console is being retired).
       out.proj_note = `Your console minutes (${o.min[id]}) are ignored: he is Out tonight on the Minutes page`;
-    } else if (has(o.min ?? {}, id)) {
+    } else if (storedMin) {
       out.minutes = o.min[id]; out.base_minutes = p.minutes ?? null;
       // Under our minutes engine the projection is minutes x DK/min (Adam 11-10), so applied minutes carry it: the shown minutes times our rate, never the engine's minutes' projection.
       if (p.proj_source === "ours" && isNum(p.ours?.rate)) {

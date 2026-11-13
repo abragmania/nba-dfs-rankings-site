@@ -174,6 +174,12 @@ export function readScenarios(slate) {
   return { ...parsed, applied: parsed.applied ?? null };
 }
 
+/** The teams the board is held for (R4): those with an Apply recorded (applied.keys) or a lineup-news entry applied. Their stored send numbers come from the console's scenario maths, which only a resend can refresh; the one definition the resend, the board's stale guard and the self-check share. */
+export const heldTeams = (file) => new Set([
+  ...Object.keys(file?.applied?.keys ?? {}),
+  ...Object.entries(file?.teams ?? {}).filter(([, rec]) => Object.values(rec?.news ?? {}).some((e) => e.state === "applied")).map(([t]) => t),
+]);
+
 /** Writes the file atomically, stamped. Returns what was written. */
 export function writeScenarios(slate, doc) {
   const out = { schema: SCENARIOS_SCHEMA, slate, teams: doc.teams, applied: doc.applied ?? null, updated_at: new Date().toISOString() };

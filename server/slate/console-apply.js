@@ -6,7 +6,7 @@ import { hasPins, label, pinsSame, tableName } from "../board/console-model.js";
 import { effectiveProjection, mergeOverrides } from "./overrides.js";
 import { PROJ_MAX } from "../board/override-limits.js";
 import { isNum, isPlain, round2, tonightRate } from "../board/figures.js";
-import { validKey } from "./scenarios.js";
+import { validKey, heldTeams } from "./scenarios.js";
 import { newsOwned } from "../board/console-marks.js";
 
 const MOVE_FLOOR = 0.05; // the console shows tenths
@@ -228,7 +228,7 @@ function changedRows(plan, ctx) {
 export function planApply(inputs, file, overrides, players, keys, only = null) {
   const ctx = {
     overrides, applied: file.applied, men: new Map(),
-    board: new Map(mergeOverrides(players, overrides).map((p) => [String(p.dk_id), p])),
+    board: new Map(mergeOverrides(players, overrides, { held: heldTeams(file) }).map((p) => [String(p.dk_id), p])),
     base: new Map(players.map((p) => [String(p.dk_id), p])),
   };
   const plan = { changes: [], typed: {}, min: {}, auto: { proj: {}, min: {} }, flag_ids: new Set(), restoring: new Set(), teams: [], refused: [], kept: [], missing: [], clamped: [], back_on_zero: [], not_on_board: [], back_in: [], unchanged: 0 };
