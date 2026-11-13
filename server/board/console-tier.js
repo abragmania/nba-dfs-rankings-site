@@ -2,6 +2,8 @@
 // and the server. The inputs carry, per team, `tier` (server/minutes/tier-inputs.js): each man's role games, TwoGun's figure and flags, his standing overrides, tonight's order and the lineup pages' five, so any
 // scenario is worked here with no call to the server (tests/minutes_parity.test.mjs holds this equal to the board's engine). Roles are the engine's: Starter (the five), Bench+, Bench; Out of rotation is his mark.
 // A man he marked S joins the five (six or more marked all start, said); Bench+ or Bench forces that tier.
+// Typed minutes (Adam 11-13): a typed man stays in the plan pinned at his typed minutes (no pot stage, no trim; typed at his auto figure, nobody changes); the difference between his typed figure and his own auto figure (the plan with nothing typed) goes FIRST to the bench men at his position
+// (a cut gives to them, a raise takes from them; tiers.js shiftTyped), the rest through the usual pot or trim order. The board's player-list typing is not this path.
 import { chooseFive, tierPlan, roleFigure, ROLE_OF_TIER } from "./tiers.js";
 import { isNum } from "./figures.js";
 
@@ -42,15 +44,31 @@ export function tierScenario(team, outSet, flips = {}, typed = {}, edits = false
   const noInputs = playing.filter((id) => !known(id));
   if (noInputs.length) notes.push(`${noInputs.length} ${noInputs.length === 1 ? "man has" : "men have"} no minutes engine inputs, so no figure of ours: ${noInputs.map((id) => team.men.find((p) => p.id === id).name).join(", ")}`);
   const typedIn = Object.entries(typedNow).filter(([id, v]) => playing.includes(id) && isNum(v));
-  const men = order.filter((id) => !typedIn.some(([t]) => t === id)).map((id) => {
+  const pinOf = new Map(typedIn);
+  const mkMen = (ids) => ids.map((id) => {
     const m = T.men[id];
-    return { id, key: id, name: m.name, lid: m.matched ? id : null, tg: m.tg, chart_usual: m.chart_usual ?? null, chart_games: m.chart_games ?? null, seen_played: m.seen_played === true, positions: m.positions ?? [], in_five: five.has(id), replaces: five.has(id) && !m.top5 ? outStarters : [], last_mpg: m.last_mpg, last_games: m.last_games, last_gs: m.last_gs ?? null,
+    return { pinned: pinOf.get(id), id, key: id, name: m.name, lid: m.matched ? id : null, tg: m.tg, chart_usual: m.chart_usual ?? null, chart_games: m.chart_games ?? null, seen_played: m.seen_played === true, positions: m.positions ?? [], in_five: five.has(id), replaces: five.has(id) && !m.top5 ? outStarters : [], last_mpg: m.last_mpg, last_games: m.last_games, last_gs: m.last_gs ?? null,
       last_unknown: m.last_unknown === true, last_missing: m.last_missing === true, out_season: m.out_season, out_recent: m.out_recent, ov: { usual: m.ov?.usual ?? undefined, cap: m.ov?.cap ?? undefined, minutes: m.ov?.minutes ?? undefined, meta: m.ov?.meta ?? {} }, tier_force: FORCE[mark[id]] };
   });
-  const typedSum = typedIn.reduce((s, [, v]) => s + v, 0);
   const why = T.confirmed ? (conf.ids.length ? null : "the lineup pages' five are all Out in this scenario") : T.five_why;
-  const plan = tierPlan({ men, rowsOf: (id) => T.men[id].rows.map(([min, s, date]) => ({ min, started: s === 1, date })), games: null, since: T.since, teamGames: T.team_games, outs, boxNote: T.box_note,
-    five: { ...base, ids: five, why }, teamMinutes: Math.max(0, 240 - typedSum) });
+  const run = (teamMinutes, shifts, pin) => tierPlan({ men: mkMen(order).map((m) => (pin ? m : { ...m, pinned: undefined })), rowsOf: (id) => T.men[id].rows.map(([min, s, date]) => ({ min, started: s === 1, date })), games: null, since: T.since, teamGames: T.team_games, outs, boxNote: T.box_note,
+    five: { ...base, ids: five, why }, teamMinutes, shifts });
+  const ovFor = (id, e) => { const ov = T.men[id].ov?.minutes; return isNum(ov) && e.tier !== "bench" && e.minutes_gate?.ok !== false ? ov : null; }; // a standing minutes override replaces a Starter's or Bench+ man's figure
+  // Adam 11-13: a typed man stays in the plan, pinned at his typed minutes (so he gives and takes a returning man's cut exactly as untyped); the difference between his own auto figure (the plan with nothing typed,
+  // or his standing minutes override when that applies) and his typed minutes goes first to the bench men at his position. A man with no figure of ours, or no engine inputs, moves nobody, said.
+  const shifts = [], unshifted = [], noRow = typedIn.filter(([t]) => !order.includes(t)).map(([t]) => t);
+  if (typedIn.length) {
+    const first = run(240, [], false);
+    for (const [id, v] of typedIn.filter(([t]) => order.includes(t))) {
+      const e = first.byId.get(id), ovm = ovFor(id, e), auto = ovm ?? e.auto;
+      if (ovm !== null && isNum(e.auto) && Math.abs(ovm - e.auto) > 1e-9) notes.push(`${T.men[id].name}: your standing minutes override ${ovm} now comes off the 240 (the plan had ${Math.round(e.auto * 10) / 10})`);
+      if (isNum(auto)) shifts.push({ name: T.men[id].name, typed: v, auto, delta: auto - v, positions: T.men[id].positions ?? [], in_five: five.has(id), override: ovm !== null }); else unshifted.push(T.men[id].name);
+    }
+  }
+  const listed = (ids, f) => ids.map((id) => f(id)).join(", ");
+  if (unshifted.length) notes.push(`${unshifted.join(", ")} typed, but ${unshifted.length === 1 ? "he has" : "they have"} no auto figure of ours: ${unshifted.length === 1 ? "his" : "their"} typed minutes stand and nothing was moved first to the bench men at ${unshifted.length === 1 ? "his" : "their"} position; the rest share through the usual order`);
+  if (noRow.length) notes.push(`${listed(noRow, (id) => team.men.find((p) => p.id === id).name)} typed, but has no minutes engine inputs: ${noRow.length === 1 ? "his" : "their"} typed minutes came off the 240 and nothing was moved first; the rest share through the usual order`);
+  const plan = run(Math.max(0, 240 - noRow.reduce((s, id) => s + typedNow[id], 0)), shifts, true);
   const minutes = {}, roles = {};
   for (const id of order) {
     const typedMin = typedIn.find(([t]) => t === id);

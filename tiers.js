@@ -13,7 +13,7 @@
 //  4b. A standing usual or cap override applies only in the role it was set for (Starter, or off the bench; ovGate): its stored role, else the role he held most often before its set date.
 //  5. Minutes limit: TwoGun far below his own figure (FAR_BELOW share and FAR_BELOW_MIN minutes) flags the row; both figures are shown, ours stands.
 //     Adam 11-13: a returning man's minutes (chart basis, returning rotation man, back from injury) come FIRST off the bench men at his position who covered for him (coverReturns: in proportion to their
-//     figures, none below 0, a usual, minutes or typed figure never reduced, each coverer's ceiling lowered by what he gave so the pot cannot refill the cut), before this pot step; what they cannot give is left to the usual order, and each team's note and each coverer's why say it.
+//     figures, none below 0, a usual or minutes figure never reduced, each coverer's ceiling lowered by what he gave so the pot cannot refill the cut), before this pot step; what they cannot give is left to the usual order, and each team's note and each coverer's why say it.
 //     A returning man who is in tonight's five is not cut from the bench (his place already moves the man he displaced to the bench figure), said in the note.
 //     Adam 11-13: any man in the five with fewer than CEILING_MIN_GAMES starter games takes the larger of TwoGun's number and his own starter figure, with a ceiling up to the Out starter he replaces (m.replaces, read from the outs' starter_fig; unknown: the team's median starter figure).
 //     The chart's usual (step 2) stands in only when last season's majority role (m.last_gs of m.last_games) is tonight's role; a mismatch keeps TwoGun's number, said; last_gs unknown keeps the chart's usual, said.
@@ -120,6 +120,8 @@ export function shareOut(men, amount) {
 
 const POS_EXPAND = { G: ["PG", "SG"], F: ["SF", "PF"] };
 const posSet = (m) => new Set((m.positions ?? []).flatMap((p) => POS_EXPAND[p] ?? [p]).filter((p) => p !== "UTIL"));
+/** Why a bench man's minutes are not moved for someone else (null: he can be). `takes` true: minutes are taken from him (a returning man is refused too); false: he receives (refused only for a standing override). */
+const standsWhy = (c, takes) => (takes && c.returning ? "returning himself" : c.used.includes("usual") ? "your usual override stands" : isNum(c.m.ov?.minutes) && c.tier !== "bench" && c.minutes_gate?.ok !== false ? "your minutes override stands" : null);
 const poss = (n) => (/s$/i.test(n) ? `${n}'` : `${n}'s`);
 
 /**
@@ -131,12 +133,11 @@ export function coverReturns(known) {
   const live = new Map(known.map((x) => [x.m.id, x.figure])), pos = new Map(known.map((x) => [x.m.id, posSet(x.m)])), cuts = new Map(), moves = [];
   for (const r of known.filter((x) => x.returning && x.figure > EPS).sort((a, b) => b.figure - a.figure)) {
     const base = { name: r.m.name, figure: r.figure, taken: 0, left: r.figure, from: [], skipped: [] };
-    if (r.m.typed) { moves.push({ ...base, typed: true }); continue; } // his minutes are typed tonight: nobody is cut for him
     if (r.tier === "starter") { moves.push({ ...base, inFive: true }); continue; } // promoted into the five: his place already moves the man he displaced to the bench figure; a bench cut as well would count it twice
     const rp = pos.get(r.m.id);
     if (!rp.size) { moves.push({ ...base, noPositions: true }); continue; }
-    const sharing = known.filter((c) => c !== r && c.tier !== "starter" && [...pos.get(c.m.id)].some((p) => rp.has(p)));
-    const why = (c) => (c.returning ? "returning himself" : c.m.typed ? "your typed minutes stand" : c.used.includes("usual") ? "your usual override stands" : isNum(c.m.ov?.minutes) && c.tier !== "bench" && c.minutes_gate?.ok !== false ? "your minutes override stands" : null);
+    const sharing = known.filter((c) => c !== r && !c.pinFill && c.tier !== "starter" && [...pos.get(c.m.id)].some((p) => rp.has(p)));
+    const why = (c) => standsWhy(c, true);
     const cov = sharing.filter((c) => !why(c)), skipped = sharing.filter((c) => why(c)).map((c) => ({ name: c.m.name, why: why(c) }));
     const res = shareOut(cov.map((c) => ({ id: c.m.id, w: live.get(c.m.id), room: live.get(c.m.id) })), r.figure);
     const from = [];
@@ -151,10 +152,46 @@ export function coverReturns(known) {
   return { cuts, moves };
 }
 
+/**
+ * Adam 11-13: the console's typed man. shifts: [{ name, typed, auto, delta (auto - typed), positions }]. A cut (delta > 0) goes first to the non-starter men sharing a DraftKings position with him, in proportion to their figures, none past his ceiling;
+ * a raise takes first from the same men, in proportion, none below 0. A man with a standing override and a typed position-mate are skipped, named. Biggest change first. Returns { moved: Map id -> signed minutes the man received, ceilUp: Map id -> ceiling given back, by: Map id -> [{ name, typed, auto, minutes }], moves }.
+ * Pure; does not change `known`.
+ */
+export function shiftTyped(known, shifts, gives = new Map()) {
+  const live = new Map(known.map((x) => [x.m.id, x.figure])), pos = new Map(known.map((x) => [x.m.id, posSet(x.m)])), moved = new Map(), by = new Map(), moves = [], ceilUp = new Map();
+  // a typed returning man set below his figure hands back what he took from each coverer: that much is room again (the ceiling he lowered is raised), so the cut that sticks still holds against the pot
+  const regain = (c, s) => (gives.get(c.m.id) ?? []).filter((g) => g.from === s.name).reduce((t, g) => t + g.minutes, 0);
+  for (const s of shifts.filter((x) => Math.abs(x.delta) > EPS).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))) {
+    const give = s.delta > 0, amt = Math.abs(s.delta), base = { name: s.name, typed: s.typed, auto: s.auto, override: s.override, give, amount: amt, to: [], left: amt, skipped: [] }, rp = posSet(s);
+    if (!rp.size) { moves.push({ ...base, noPositions: true }); continue; }
+    const near = known.filter((c) => !isNum(c.m.pinned) && c.tier !== "starter" && [...pos.get(c.m.id)].some((p) => rp.has(p))), ok = near.filter((c) => !standsWhy(c, !give));
+    const skipped = near.filter((c) => standsWhy(c, !give)).map((c) => ({ name: c.m.name, why: standsWhy(c, !give) }))
+      .concat(shifts.filter((o) => o !== s && !o.in_five && [...posSet(o)].some((p) => rp.has(p))).map((o) => ({ name: o.name, why: "your typed minutes stand" })));
+    const res = shareOut(ok.map((c) => ({ id: c.m.id, w: live.get(c.m.id) + (give ? regain(c, s) : 0), room: give ? Math.max(0, (c.ceiling ?? live.get(c.m.id)) + regain(c, s) - live.get(c.m.id)) : live.get(c.m.id) })), amt), to = [];
+    for (const c of ok) {
+      const v = res.added.get(c.m.id) ?? 0;
+      if (v <= EPS) continue;
+      if (give) { const back = Math.min(v, regain(c, s)); if (back > EPS) ceilUp.set(c.m.id, (ceilUp.get(c.m.id) ?? 0) + back); }
+      live.set(c.m.id, live.get(c.m.id) + (give ? v : -v)); moved.set(c.m.id, (moved.get(c.m.id) ?? 0) + (give ? v : -v)); to.push({ name: c.m.name, minutes: v });
+      by.set(c.m.id, [...(by.get(c.m.id) ?? []), { name: s.name, typed: s.typed, auto: s.auto, minutes: give ? v : -v }]);
+    }
+    moves.push({ ...base, to, left: res.left, skipped, noSharer: !near.length });
+  }
+  return { moved, by, moves, ceilUp };
+}
+
+/** The team note for one typed man's move (shiftTyped). */
+export function shiftNote(mv) {
+  const head = `You typed ${mv.name} ${r1(mv.typed)} (auto ${r1(mv.auto)}${mv.override ? ", his standing minutes override" : ""}): ${r1(mv.amount)} ${mv.give ? "to" : "from"} the bench men at his position first`;
+  const sk = mv.skipped.length ? `; not changed: ${mv.skipped.map((x) => `${x.name} (${x.why})`).join(", ")}` : "";
+  if (mv.noPositions) return `${head}: no position of his is on file, so none could be matched and all ${r1(mv.amount)} are left to the usual order`;
+  if (mv.to.length) return `${head}: ${mv.to.map((f) => `${f.name} ${mv.give ? "+" : "-"}${r1(f.minutes)}`).join(", ")}; ${r1(mv.left)} left to the usual order${sk}`;
+  return `${head}: ${mv.noSharer ? "no bench man left to move shares his position" : "none could take or give them"}, all ${r1(mv.amount)} left to the usual order${sk}`;
+}
+
 /** The team note for one returning man's move (coverReturns): what was taken from whom, who was skipped and why, what is left. */
 export function returnNote(mv) {
   const sk = mv.skipped.length ? `; not cut: ${mv.skipped.map((s) => `${s.name} (${s.why})`).join(", ")}` : "";
-  if (mv.typed) return `${mv.name} back: your typed minutes stand, so nobody is cut for him`;
   if (mv.inFive) return `${mv.name} back in the five: his ${r1(mv.figure)} minutes are not also cut from the bench men at his position, because his place in the five already moves the man he displaced down to the bench`;
   if (mv.noPositions) return `${mv.name} back: ${r1(mv.figure)} minutes; no position of his is on file, so no bench man could be matched and all ${r1(mv.figure)} are left to the usual order`;
   if (mv.from.length) return `${mv.name} back: ${r1(mv.figure)} minutes taken from the bench men at his position first: ${mv.from.map((f) => `${f.name} -${r1(f.minutes)}`).join(", ")}; ${r1(mv.left)} left to the usual order${sk}`;
@@ -171,7 +208,7 @@ const tierWords = { starter: "Starter", bench_plus: "Bench+", bench: "Bench" };
  * lists those it did not apply [{ field, text }] and `minutes_gate` is the minutes override's gate (null with none; its use stays with figures.js and console-tier.js).
  * Returns { byId: Map id -> { auto (null when missing), figure, computed, ceiling, computed_ceiling, tier, basis, why, used, skipped, minutes_gate, flag, n }, notes, total (null when a figure is missing), pot }. Pure.
  */
-export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, teamMinutes: TEAM_MINUTES = GAME_MINUTES, since: sinceIn, teamGames: teamGamesIn, chartNeedsOutMost = CHART_NEEDS_OUT_MOST }) {
+export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, teamMinutes: TEAM_MINUTES = GAME_MINUTES, shifts = [], since: sinceIn, teamGames: teamGamesIn, chartNeedsOutMost = CHART_NEEDS_OUT_MOST }) {
   // since / teamGames: given by the console's payload (no ledger games there); else read from `games`
   const notes = [], by = new Map(), unmatched = [], chartMen = [], noLast = [], since = sinceIn === undefined ? (games ?? []).slice(-RECENT_GAMES)[0]?.date ?? null : sinceIn, teamGames = teamGamesIn ?? (games ?? []).length;
   if (five?.note) notes.push(five.note);
@@ -252,15 +289,22 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
     if (!overridden && f.source === "chart") chartMen.push(`${m.name} (chart ${r1(f.value)}, TwoGun ${isNum(m.tg) ? m.tg : "none"})`);
     by.set(m.id, { m, tier, recent, skipped, minutes_gate: minutesGate, figure: value, computed, ceiling, computed_ceiling: computedCeiling, basis, words, used, flag, n: f.n, source: f.source, returning: Boolean(returning) || f.source === "chart" });
   }
+  for (const x of by.values()) if (isNum(x.m.pinned) && !isNum(x.figure)) { x.figure = x.m.pinned; x.ceiling = x.m.pinned; x.returning = false; x.pinFill = true; } // typed with no figure of ours: he is pinned at his typed minutes, nothing to move first
   const all = [...by.values()], known = all.filter((x) => isNum(x.figure)), missing = all.filter((x) => !isNum(x.figure));
   const { cuts: gives, moves } = coverReturns(known), given = new Map(); // Adam 11-13: a returning man's minutes come off his position's bench men first
   for (const x of known) { const g = (gives.get(x.m.id) ?? []).reduce((s, c) => s + c.minutes, 0); if (g > 0) { given.set(x.m.id, g); x.figure -= g; if (isNum(x.ceiling)) x.ceiling -= g; } } // the cut sticks (Adam 11-13): his pot room is measured from his figure before the cut, i.e. his ceiling is lowered by what he gave
+  const { moved, by: shiftBy, moves: shiftMoves, ceilUp } = shiftTyped(known, shifts, gives); // Adam 11-13: a typed man's difference from his auto figure goes first to the bench men at his position; the cut sticks as for a returning man
+  for (const x of known) { const v = moved.get(x.m.id) ?? 0; if (v !== 0) { x.figure += v; if (v < 0 && isNum(x.ceiling)) x.ceiling += v; if (isNum(x.ceiling)) x.ceiling += ceilUp.get(x.m.id) ?? 0; } }
+  for (const x of known) if (isNum(x.m.pinned)) x.figure = x.m.pinned; // a typed man stands as typed (Adam 11-13): in every figure above like any man, in no pot stage and no trim list
+  const free = known.filter((x) => !isNum(x.m.pinned)), room = (x) => Math.max(0, x.figure - Math.max(0, moved.get(x.m.id) ?? 0)); // a man's shift receipt is never trimmed back
   const sum = known.reduce((s, x) => s + x.figure, 0), out = new Map(), gap = TEAM_MINUTES - sum;
   const outWords = outs.length ? ` (Out: ${outs.map((o) => o.name).join(", ")})` : "", potWord = outs.length ? "Out men's pot" : "team's pot";
   if (noLast.length) notes.push(`${noLast.length} ${noLast.length === 1 ? "man" : "men"} Out for most of this season ha${noLast.length === 1 ? "s" : "ve"} no row in last season's totals, so cannot be recognized as returning: ${noLast.join(", ")}`);
   if (chartMen.length) notes.push(`${chartMen.length} ${chartMen.length === 1 ? "man" : "men"} with no game this season take${chartMen.length === 1 ? "s" : ""} their depth chart's usual instead of TwoGun's: ${chartMen.join(", ")}`);
   if (unmatched.length) notes.push(`${unmatched.length} ${unmatched.length === 1 ? "man" : "men"} not matched to the box scores, so no games were read (TwoGun's number is used): ${unmatched.join(", ")}`);
   for (const mv of moves) notes.push(returnNote(mv));
+  if (shiftMoves.length > 1) notes.push(`Typed minutes worked in order of size of change, biggest first (the order typed is not kept): ${shiftMoves.map((m) => m.name).join(", ")}`);
+  for (const mv of shiftMoves) notes.push(shiftNote(mv));
   const potState = { returning: moves.map((mv) => ({ name: mv.name, figure: r1(mv.figure), taken: r1(mv.taken), left: r1(mv.left), from: mv.from.map((f) => ({ name: f.name, minutes: r1(f.minutes) })) })), sum: r1(sum), gap: r1(gap), out: outs.map((o) => o.name), by_tier: { starter: 0, bench_plus: 0, bench: 0 }, trimmed: null, unassigned: 0 };
   const extra = new Map(known.map((x) => [x.m.id, 0]));
   const cut = new Map(known.map((x) => [x.m.id, 0])), tail = new Map();
@@ -269,17 +313,18 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
     let over = -gap;
     const trimmed = { bench: 0, bench_plus: 0, starter: 0 };
     const take = (tier, list, how) => {
-      for (const x of list) { if (over <= EPS) break; const c = Math.min(x.figure, over); cut.set(x.m.id, c); over -= c; trimmed[tier] += c; tail.set(x.m.id, how); }
+      for (const x of list) { if (over <= EPS) break; const c = Math.min(room(x), over); cut.set(x.m.id, c); over -= c; trimmed[tier] += c; tail.set(x.m.id, how); }
     };
-    const benchUp = known.filter((x) => x.tier === "bench").sort((a, b) => (a.recent.n > 0) - (b.recent.n > 0) || a.recent.total - b.recent.total);
+    const benchUp = free.filter((x) => x.tier === "bench").sort((a, b) => (a.recent.n > 0) - (b.recent.n > 0) || a.recent.total - b.recent.total);
     take("bench", benchUp, "Bench trimmed first, the fewest recent minutes first");
     for (const t of ["bench_plus", "starter"]) {
-      const list = known.filter((x) => x.tier === t), tot = list.reduce((s, x) => s + x.figure, 0), amount = Math.min(over, tot);
+      const list = free.filter((x) => x.tier === t), tot = list.reduce((s, x) => s + room(x), 0), amount = Math.min(over, tot);
       if (over <= EPS || !tot) continue;
-      for (const x of list) { const c = (amount * x.figure) / tot; cut.set(x.m.id, c); trimmed[t] += c; tail.set(x.m.id, t === "starter" ? "starters last: Bench and Bench+ already at 0" : "Bench+ trimmed in proportion"); }
+      for (const x of list) { const c = (amount * room(x)) / tot; cut.set(x.m.id, c); trimmed[t] += c; tail.set(x.m.id, t === "starter" ? "starters last: Bench and Bench+ already at 0" : "Bench+ trimmed in proportion"); }
       over -= amount;
     }
     potState.trimmed = trimmed;
+    if (over > 0.005) notes.push(`${r1(over)} minutes over ${TEAM_MINUTES} could not be trimmed: your typed minutes and the men no trim may touch add to ${r1(TEAM_MINUTES + over)}`);
     notes.push(`The team's figures add to ${r1(sum)}, over ${TEAM_MINUTES}${outWords}: trimmed in reverse tier order: Bench ${r1(trimmed.bench)}, Bench+ ${r1(trimmed.bench_plus)}, starters ${r1(trimmed.starter)}`);
   } else if (gap > EPS && missing.length) {
     // a man with no figure is not 0 in the pot: nothing is handed out while any figure is missing (R1), said
@@ -293,11 +338,11 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
     };
     const outPos = new Set(outs.filter((o) => o.starter || (isNum(o.avg) && o.avg >= OUT_RELEVANT_AVG)).flatMap((o) => o.positions ?? []));
     const shares = (x) => (x.m.positions ?? []).some((p) => outPos.has(p));
-    stage("starter", known.filter((x) => x.tier === "starter"), "starters first");
-    const bp = known.filter((x) => x.tier === "bench_plus");
+    stage("starter", free.filter((x) => x.tier === "starter"), "starters first");
+    const bp = free.filter((x) => x.tier === "bench_plus");
     if (left > EPS) stage("bench_plus", bp.filter(shares), "Bench+, a position the Out men play");
     if (left > EPS) stage("bench_plus", bp.filter((x) => !shares(x)), "Bench+");
-    const bench = known.filter((x) => x.tier === "bench").sort((a, b) => (b.recent.n > 0) - (a.recent.n > 0) || b.recent.total - a.recent.total);
+    const bench = free.filter((x) => x.tier === "bench").sort((a, b) => (b.recent.n > 0) - (a.recent.n > 0) || b.recent.total - a.recent.total);
     for (const x of bench) { if (left <= EPS) break; stage("bench", [x], "Bench, in order of recent minutes"); }
     potState.unassigned = left;
     notes.push(`The team's figures add to ${r1(sum)}; the ${r1(gap)} left${outWords} goes in tier order: starters ${r1(potState.by_tier.starter)}, Bench+ ${r1(potState.by_tier.bench_plus)}, Bench ${r1(potState.by_tier.bench)}`);
@@ -305,9 +350,9 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
   }
   for (const x of known) {
     const e = extra.get(x.m.id) ?? 0, c = cut.get(x.m.id) ?? 0, auto = x.figure + e - c, t = tail.get(x.m.id);
-    const gv = given.get(x.m.id) ?? 0, cutWords = (gives.get(x.m.id) ?? []).map((c) => `; minus ${r1(c.minutes)} for ${poss(c.from)} return`).join("");
-    out.set(x.m.id, { auto, figure: x.figure + gv, computed: x.computed, ceiling: x.ceiling, computed_ceiling: x.computed_ceiling, tier: x.tier, basis: x.basis, used: x.used, skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: x.n,
-      why: `${x.words}${cutWords}${e > 0 ? `; plus ${r1(e)} from the ${potWord} (${t})` : ""}${c > 0 ? `; minus ${r1(c)}: the team's figures are over ${TEAM_MINUTES} (${t})` : ""} = ${r1(auto)}` });
+    const gv = given.get(x.m.id) ?? 0, sv = moved.get(x.m.id) ?? 0, shiftWords = (shiftBy.get(x.m.id) ?? []).map((c) => `; ${c.minutes > 0 ? "plus" : "minus"} ${r1(Math.abs(c.minutes))} for ${poss(c.name)} typed ${r1(c.typed)} (auto ${r1(c.auto)})`).join(""), cutWords = (gives.get(x.m.id) ?? []).map((c) => `; minus ${r1(c.minutes)} for ${poss(c.from)} return`).join("");
+    out.set(x.m.id, { auto, figure: x.figure + gv - sv, computed: x.computed, ceiling: x.ceiling, computed_ceiling: x.computed_ceiling, tier: x.tier, basis: x.basis, used: x.used, skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: x.n,
+      why: `${x.words}${cutWords}${shiftWords}${e > 0 ? `; plus ${r1(e)} from the ${potWord} (${t})` : ""}${c > 0 ? `; minus ${r1(c)}: the team's figures are over ${TEAM_MINUTES} (${t})` : ""} = ${r1(auto)}` });
   }
   for (const x of missing) out.set(x.m.id, { auto: null, figure: null, computed: null, ceiling: null, computed_ceiling: null, tier: x.tier, basis: x.basis, used: x.used, skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: 0, why: x.words });
   return { byId: out, notes, total: missing.length ? null : sum + [...extra.values()].reduce((s, v) => s + v, 0) - [...cut.values()].reduce((s, v) => s + v, 0), pot: potState };
