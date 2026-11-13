@@ -15,20 +15,13 @@ export const withSeasonFigures = never("The season figures reader");
 export const seasonUsageTable = never("The season usage reader");
 export const handlePlayerUsage = never("The usage lookup");
 export const handlePullStatus = never("The app's pull status (the site's status block reads GitHub and its own baked files, site-src/site-pull.js)");
-/** Our minutes engine runs only in the app for now: on the site its routes are unknown paths (404) and the board keeps TwoGun's projections (makeServer is given no ourProjection). */
+/** Our minutes engine runs at publish, not in the browser: its routes are unknown paths (404) here, and the board's figures are the ones baked in site.json (static-api.js hands makeServer an ourProjection). */
 export const minutesHandler = () => null;
-/** The console's Bench+ suggestions read the stored boxes: app only, so on the site the console shows none. */
+/** The console's Bench+ suggestions are baked into the console inputs at publish (site-src/bake.mjs), so nothing is added here. */
 export const consoleBenchPlus = () => {};
 export const withOurProjection = never("Our minutes engine");
 export const primeTotals = never("Our minutes engine's totals fetch");
 export const startSnapshotRefresh = never("Our minutes engine's snapshot refresh");
-/** The box score freshness check reads the stored boxes and the schedule, which the site does not carry: the slate passes through with no box_freshness (the board shows no line),
- *  and the route answers unknown with its reason. */
-export const withBoxFreshness = (data) => data;
-export const readBoxFreshness = ({ nowMs = Date.now() } = {}) => ({ checked_at: new Date(nowMs).toISOString(), state: "unknown", ok: false, stale: [], why: "the box scores are checked only in the app on the computer", season: null });
-/** The board's self-check (G65) checks our engine's figures, which the site does not run: the slate carries no board_check and the route is an unknown path. */
-export const runAndLogOnChange = () => undefined;
-export const handleBoardCheck = (req, res, slate, { fail }) => fail(res, 404, "NOT_FOUND", "The board self-check runs only in the app on the computer.");
 export const handlePullNow = never("The app's Pull now (the site's button asks GitHub's cloud job instead, site-src/site-pull.js)");
 
 /**

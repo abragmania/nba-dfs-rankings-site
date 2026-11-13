@@ -294,11 +294,12 @@ export const minutesBase = (players, overrides) => mergeOverrides(players, { ...
  */
 export function staleSendOf(p, o, held = null) {
   const none = { proj: false, min: false, no_figure: false };
-  if (p.proj_source !== "ours") return none;
+  if (p.proj_source !== "ours" && p.ours_changed !== true) return none;
   const id = String(p.dk_id), auto = cleanAuto(o.auto, { proj: o.proj ?? {}, min: o.min ?? {} });
   const sp = has(o.proj ?? {}, id) && auto.proj.includes(id) && !auto.pin.includes(id) ? o.proj[id] : null;
   const sm = has(o.min ?? {}, id) && auto.min.includes(id) ? o.min[id] : null;
   if (sp == null && sm == null) return none;
+  if (p.ours_changed === true) return { proj: sp != null, min: sm != null, no_figure: true }; // the public site shows him with TwoGun's numbers (a carried read: his status or TwoGun minutes changed since): a send's numbers were made on figures that no longer stand for him
   const ours = p.ours, outTonight = ours?.playing === false;
   if (!outTonight && !isNum(ours?.projection)) return { proj: sp != null, min: sm != null, no_figure: true }; // stored minutes x the rate would stand in for the figure the engine lacks, so they go with the projection
   if (!(held instanceof Set) || held.has(p.team) || !ours) return none;
@@ -326,7 +327,7 @@ export function mergeOverrides(players, overrides, { held = null } = {}) {
     const typedOwn = has(o.own ?? {}, id) ? o.own[id] : null;
     const steps = has(o.bump ?? {}, id) ? o.bump[id] : 0; // the real steps, on a typed row too
     const out = { ...p, starred: stars.has(id), ...(stale.proj || stale.min ? { stale_auto: stale } : {}) };
-    if (stale.no_figure) out.proj_note = `A ${stale.proj ? `projection (${o.proj[id]})` : "minutes number"} a send wrote is not used: the engine has no figure for him`;
+    if (stale.no_figure) out.proj_note = `A ${stale.proj ? `projection (${o.proj[id]})` : "minutes number"} a send wrote is not used: ${p.ours_changed === true ? (p.ours?.missing ?? "our figure for him is carried from an earlier pull and no longer stands") : "the engine has no figure for him"}`;
     // auto: this figure came from a send's news or engine numbers, not his hand; the board marks and resets only his (the figure itself is the same).
     // Minutes count only when they are applied: under our engine a man it has Out ignores them (the proj_note below), so they carry no mark. pin: the projection is the console's, from his marks.
     const minApplied = storedMin && !(p.proj_source === "ours" && p.ours?.playing === false);

@@ -19,10 +19,14 @@ const storage = () => {
   }
 };
 
+let layer = null; // { decode(stored, path) -> the file the app reads, encode(text, path) -> what is stored }: a visitor's overrides and scenarios as differences from the published baseline (../layers.js)
 function readKept(p) {
   try {
-    const text = storage()?.getItem(PREFIX + p) ?? null;
-    if (text === null) return null;
+    let stored = storage()?.getItem(PREFIX + p) ?? null;
+    if (stored === null) return null;
+    const moved = layer?.migrate ? layer.migrate(stored, p) : null; // an earlier version's whole file, converted once into the visitor's own differences
+    if (moved !== null) { storage().setItem(PREFIX + p, moved); stored = moved; }
+    const text = layer ? layer.decode(stored, p) : stored;
     if (!NOT_JSON.test(p)) JSON.parse(text);
     return text;
   } catch (e) {
@@ -41,6 +45,12 @@ function removeKept(p) {
 
 /** Puts a published file in memory (the stand-in, after it fetches one). */
 export function seed(p, text) { memory.set(p, text); }
+/** What this page's memory holds at p, or null. */
+export const peek = (p) => memory.get(p) ?? null;
+/** What this browser's storage holds at p, as stored (before the layer reads it), or null. */
+export function readRaw(p) { try { return storage()?.getItem(PREFIX + p) ?? null; } catch { return null; } }
+/** Sets the layer that reads and writes a visitor's overrides and scenarios against the published baseline (layers.js). */
+export function setLayer(l) { layer = l; }
 /** Tells `fn` when a write could not be kept in this browser. */
 export function onKeepFailure(fn) { keepFailed = fn; }
 /** Removes a visitor's kept file from memory and storage (one that fails its own check). */
@@ -63,7 +73,7 @@ function writeFileSync(p, text) {
   try {
     const s = storage();
     if (!s) throw new Error("no storage");
-    s.setItem(PREFIX + p, String(text));
+    s.setItem(PREFIX + p, layer ? layer.encode(String(text), p) : String(text));
   } catch (e) {
     console.warn("Browser storage would not keep a change:", e.message);
     removeKept(p); // memory now holds the newest; an older copy must not win the next read

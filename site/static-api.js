@@ -6,7 +6,10 @@
 import "./shim/globals.js";
 import { makeServer } from "../server/server.js";
 import { nameKey } from "../server/lib/names.js";
-import { seed, dropKept } from "./shim/fs.js";
+import fs, { seed, dropKept, peek, setLayer } from "./shim/fs.js";
+import { setBaseline, setRoster, layeredPath, encode, decode, migrate } from "./layers.js";
+import { applyOursDoc, baselineFiles } from "./site-doc.js";
+import { siteDoc } from "./shim/site-data.js";
 
 const DATA = "/data/slates";
 const JSON_TYPE = { "content-type": "application/json; charset=utf-8" };
@@ -49,7 +52,38 @@ async function bakedFigures(slate) {
   return { ...slate, players: slate.players.map((p) => ({ ...p, ...(f?.players?.[p.dk_id] ?? blank) })), ...(f?.season_figures ? { season_figures: f.season_figures } : {}) };
 }
 
-const SLATE_FILES = ["slate.json", "figures.json", "console-inputs.json", "pull-moves.json"];
+const SLATE_FILES = ["slate.json", "figures.json", "console-inputs.json", "pull-moves.json", "site.json"];
+
+// ---------- the slate's site.json: our figures, and his overrides, scenarios and saved work as the starting point (site-src/site-doc.js) ----------
+setLayer({ encode, decode, migrate });
+const baselineSeeded = new Map(); // file -> the text last put in memory from the baseline
+/**
+ * His overrides, scenarios, picks, working lineup, saved lists, builds and spots are put under the visitor's own: a file this browser holds (its storage, or a change made on this page) is
+ * never replaced, and a baseline file not yet changed here is replaced by a newer publish. Nothing here is ever written back to the site.
+ */
+function seedBaseline(slate, site) {
+  const b = site?.baseline;
+  // Overrides and scenarios are layered per man and per team (layers.js): the newest baseline is always the base and this browser keeps only its own differences from it.
+  setBaseline(slate, b ? { overrides: b.overrides ?? null, scenarios: b.scenarios ?? null, version: b.version ?? null } : null);
+  for (const { file, text } of baselineFiles(site, slate)) {
+    let held = null;
+    if (layeredPath(file) !== null) held = peek(file); // memory holds the baseline itself (storage is read through the layer)
+    else { try { held = fs.readFileSync(file); } catch (e) { if (e?.code !== "ENOENT") throw e; } }
+    if (held === null || held === baselineSeeded.get(file)) { seed(file, text); baselineSeeded.set(file, text); }
+  }
+}
+const rosterText = new Map();
+/** The slate's roster, for telling an Apply record's men by team (layers.js); parsed again only when the slate file changed. */
+function rosterOf(slate, text) {
+  if (text === null || rosterText.get(slate) === text) return;
+  rosterText.set(slate, text);
+  setRoster(slate, JSON.parse(text).players);
+}
+const siteOf = (slate) => loadOnce(`slates/${slate}/site.json`, async () => {
+  const text = await readBaked(`slates/${slate}/site.json`);
+  if (text !== null) { seed(`${DATA}/${slate}/site.json`, text); seedBaseline(slate, JSON.parse(text)); }
+  return text;
+});
 
 // ---------- files newer than Pages serves: the site's Pull now (site-pull.js) read them from the site repo the moment the cloud job pushed ----------
 const adopted = new Map(); // site path -> text
@@ -136,7 +170,7 @@ async function freshLineups(slate) {
 /** The published files a path needs, in memory before the app's handler reads them. */
 async function loadFor(pathname) {
   if (pathname === "/api/slates") return freshSlates();
-  const m = /^\/api\/slate\/([^/]+)(\/.*)?$/.exec(pathname);
+  const m = /^\/api\/(?:slate|board-check)\/([^/]+)(\/.*)?$/.exec(pathname);
   if (!m) return null;
   let slate;
   try {
@@ -147,12 +181,15 @@ async function loadFor(pathname) {
   if (!/^[a-z0-9-]+$/.test(slate)) return null;
   if (m[2] === "/pull-stamp") return freshStamp(slate);
   if (m[2] === "/news-lineups") return freshLineups(slate);
-  const jobs = [seedBaked(`slates/${slate}/slate.json`, `${DATA}/${slate}/slate.json`), seedBaked(`slates/${slate}/pull-moves.json`, `${DATA}/${slate}/pull-moves.json`), figuresOf(slate)];
+  const jobs = [seedBaked(`slates/${slate}/slate.json`, `${DATA}/${slate}/slate.json`).then((t) => { rosterOf(slate, t); return t; }), seedBaked(`slates/${slate}/pull-moves.json`, `${DATA}/${slate}/pull-moves.json`), figuresOf(slate), siteOf(slate)];
   if (/^\/console/.test(m[2] ?? "")) jobs.push(seedBaked(`slates/${slate}/console-inputs.json`, `${DATA}/${slate}/console-inputs.json`));
   return Promise.all(jobs);
 }
 
-const server = makeServer({ seasonFigures: bakedFigures });
+/** The app's ourProjection hook (server/server.js withOurs): our engine's figures as baked at publish; with none baked, TwoGun's numbers, marked on every man and in the slate's proj_problem. */
+const bakedOurs = (slate, slateData) => applyOursDoc(slateData, siteDoc(slate));
+
+const server = makeServer({ seasonFigures: bakedFigures, ourProjection: bakedOurs });
 
 /** A request as the app's handler reads one. The body arrives once its reader is listening. */
 function makeRequest(method, url, headers, body) {

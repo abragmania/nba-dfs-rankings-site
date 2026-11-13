@@ -39,10 +39,10 @@ import { withUsualMinutes } from "../site/shim/app-only.js";
 import { withOurMinutes } from "./slate/our-minutes.js";
 import { pullStamp, withPullMoves } from "../site/shim/pull-moves.js";
 import { withRest } from "../site/shim/back-to-back.js";
-import { withBoxFreshness, readBoxFreshness } from "../site/shim/app-only.js";
+import { withBoxFreshness, readBoxFreshness } from "../site/shim/site-data.js";
 import { withStatusSince } from "../site/shim/status-since.js";
 import { lateswapHandler } from "./slate/lateswap-route.js";
-import { runAndLogOnChange, handleBoardCheck } from "../site/shim/app-only.js";
+import { runAndLogOnChange, handleBoardCheck } from "../site/shim/site-data.js";
 
 const BOARD_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "board");
 const MAX_BODY = 64 * 1024;
