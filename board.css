@@ -72,13 +72,18 @@ thead tr{background:var(--p2)}th.pl{text-align:left}th.s{color:var(--am)}th.ctl{
 /* The sort arrow hangs after the label and takes no width (its negative margin cancels it), so a sort moves no column and the label stays over its numbers; the sorted header sits one layer up so the arrow shows over the next header's padding. */
 th[data-sort]::after{content:"▾";display:inline-block;width:8px;margin:0 -10px 0 2px;font-size:8px;text-align:left;visibility:hidden}th.s::after{visibility:visible}th.s.up::after{content:"▴"}
 #thead th.s{z-index:2}
+#thead th{padding-top:17px;vertical-align:bottom}
+/* Band names (player-table.js BAND): a small label above the first column of the Tonight and Season Stats families. */
+#thead th[data-band]{z-index:2}
+#thead th[data-band]::before{content:attr(data-band);position:absolute;top:3px;left:8px;font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--am);pointer-events:none}
+#thead th.ctl,#thead th.bmp{padding-top:17px}
 td{padding:2px 12px;border-bottom:1px solid #18181c;text-align:right;white-space:nowrap}
 tbody tr:hover td{background:#ffffff0d}
 tr.team:hover td{background:color-mix(in srgb,var(--t1) 7%,transparent)}
 /* Row buttons (optimizer standard C1): at least 24px square, resting in the look the NFL row buttons gave the thumbs pair (.bump-btn). */
-td.ctl,th.ctl{padding:0 2px;width:28px}
+td.ctl,th.ctl{padding:0 1px;width:26px}
 td.ctl:first-child,th.ctl:first-child{padding-left:10px;width:36px}
-td.bmp,th.bmp{padding:0 4px 0 12px;cursor:default}
+td.bmp,th.bmp{padding:0 2px;cursor:default}
 .ctl button{width:24px;height:24px;border:1px solid #2a2a30;background:var(--p2);color:var(--mu);display:inline-grid;place-items:center;padding:0}
 .ctl button:hover{color:var(--tx);border-color:var(--am)}
 .ctl .lk.on{border-color:var(--gr);color:var(--gr);background:#39e58c18}
@@ -136,7 +141,7 @@ td.num:has(>.tagslot){position:relative}
   td.pl{padding-right:8px}
   /* Ours beside Min and the Min % / Max % boxes give back 24px so the table fits its box beside the panel at 1920 with season figures and their markers filled in. The Player column is left alone. */
   #tbody td.num.alt,#thead th.num.alt{min-width:36px;padding-left:2px;padding-right:2px}
-  #tbody td.lim,#thead th.lim{width:43px;padding:0 2px}
+  #tbody td.lim,#thead th.lim{width:43px;min-width:62px;padding:0 3px}
   #tbody .limb{width:37px;padding:0 3px}
 }
 .dtag.up{background:#39e58c1f;color:var(--gr)}.dtag.dn{background:#ff4d5e1f;color:var(--rd)}
@@ -658,7 +663,7 @@ td.proj,td.own{position:relative}
 /* The bar's measured height rounds, so the header tucks 1px under the bar and no row shows through between them. */
 #thead th{position:sticky;top:calc(var(--fbarh,0px) - 1px);z-index:1;box-shadow:inset 0 -1px var(--ln)}
 /* A row's Min % and Max % boxes (row-limits.js, standard B10): a figure's box that opens the one typed box over itself. */
-td.lim,th.lim{padding:0 3px;width:50px}
+td.lim,th.lim{padding:0 3px;width:50px;min-width:66px;text-align:left}
 td.lim{position:relative}
 th.lim{cursor:default}
 .limb{width:44px;height:24px;background:var(--p);border:1px solid #2a2a30;color:var(--tx);padding:0 4px;font-size:12px;text-align:right;vertical-align:middle;cursor:text}

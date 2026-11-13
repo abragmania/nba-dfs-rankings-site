@@ -5,41 +5,42 @@ import { esc, keepFocus } from "./board-util.js";
 
 // The player column is always on: a row with no name cannot be read.
 export const COLUMNS = [
+  // The five row controls sit together at the far left (Adam, 11-13): star, thumbs, lock, exclude, then Player.
   { key: "star", label: "Star" },
-  { key: "name", label: "Player", required: true },
-  { key: "salary", label: "Sal" },
-  // Tonight's projections, one tinted band (player-table.js famOf): Proj, Val, Own, Min, Ours, DK/m TON.
-  { key: "projection", label: "Proj" },
-  { key: "value", label: "Val" },
-  { key: "proj_own", label: "Own" },
-  { key: "minutes", label: "Min" },
-  { key: "min_other", label: "Ours / TG" },
-  { key: "dk_tonight", label: "DK/m TON" },
-  // Stats, what happened; DK/m SZN meets DK/m TON at the family boundary.
-  { key: "dk_per_min", label: "DK/m SZN" },
-  { key: "usage", label: "Usg" },
-  { key: "min_usual", label: "Usual" },
-  { key: "min_chg", label: "Chg" },
-  // Controls, one block at the far right.
   { key: "thumbs", label: "Thumbs" },
   { key: "lock", label: "Lock" },
   { key: "exclude", label: "Exclude" },
-  { key: "min_pct", label: "Min %" },
-  { key: "max_pct", label: "Max %" },
+  { key: "name", label: "Player", required: true },
+  { key: "salary", label: "Salary" },
+  // Tonight's projections, one tinted band (player-table.js famOf): Proj, Value, Own %, Min, Our Min, DK/min Tonight.
+  { key: "projection", label: "Proj" },
+  { key: "value", label: "Value" },
+  { key: "proj_own", label: "Own %" },
+  { key: "minutes", label: "Min" },
+  { key: "min_other", label: "Our / TG Min" },
+  { key: "dk_tonight", label: "DK/min Tonight" },
+  // Stats, what happened; DK/min Season meets DK/min Tonight at the family boundary.
+  { key: "dk_per_min", label: "DK/min Season" },
+  { key: "usage", label: "Usage %" },
+  { key: "min_usual", label: "Mins (usual)" },
+  { key: "min_chg", label: "Chg (Min vs Usual)" },
+  // The lineup limits, side by side at the right end.
+  { key: "min_pct", label: "Min Exp %" },
+  { key: "max_pct", label: "Max Exp %" },
 ];
 const BY_KEY = new Map(COLUMNS.map((c) => [c.key, c]));
 const STANDARD = COLUMNS.map((c) => c.key);
 
-/** The remembered state's version. 3 (Adam, 11-09): projections, then stats, then the controls; a state from before 3 takes the standard's
+/** The remembered state's version. 4 (Adam, 11-13): the five controls first, then Player, the limits last; 3 (11-09) put projections, stats, then controls. A state from before 4 takes the standard's
  *  order once (its ticks kept, so what he hid stays hidden) and can be reordered from the Columns list afterwards. 2 (11-07) put Min and DK/m TON beside Val. */
-export const COLUMNS_VERSION = 3;
+export const COLUMNS_VERSION = 4;
 const BESIDE_VAL = ["minutes", "min_other", "dk_tonight"];
 
 /** The standard's order with every column ticked. */
 export const defaultColumns = () => ({ v: COLUMNS_VERSION, order: [...STANDARD], hidden: [] });
 
 /** A remembered state made safe: unknown and repeated keys dropped, a column it does not know put back after its standard
- *  neighbour, a required column never hidden. A state from before version 3 takes the standard's order, once, with its ticks kept
+ *  neighbour, a required column never hidden. A state from before version 4 takes the standard's order, once, with its ticks kept
  *  (before version 2 Min and DK/m TON were also ticked on). Anything that is not a state gives the standard's. */
 export function cleanColumns(saved) {
   if (!saved || typeof saved !== "object" || !Array.isArray(saved.order)) return defaultColumns();

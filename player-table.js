@@ -13,35 +13,41 @@ import { starterChipHtml, undoChipHtml } from "./board-marks.js";
 import { tgMin } from "./lineup-proposals.js";
 
 export const FIG_COLS = {
-  salary: { key: "salary", label: "Sal", cls: "num sal", title: "no salary in this slate file" },
-  minutes: { key: "minutes", label: "Min", cls: "num", title: "no minutes in this pull" },
+  salary: { key: "salary", label: "Salary", cls: "num sal", title: "no salary in this slate file", head: "DraftKings salary" },
+  minutes: { key: "minutes", label: "Min", cls: "num", title: "no minutes in this pull", head: "Minutes: tonight's minutes on this board (click a figure to type your own)" },
   // The other source's minutes, beside Min (Adam, 11-09): Ours while TwoGun's is in force, TG if ours ever is. Blank, dim and with its reason on hover until a figure exists.
-  min_other: { key: "min_other", label: "Ours", cls: "num alt", title: "no figure from the other source for him", head: "The other source's minutes, beside Min. While TwoGun's is the number in force this is Ours: our minutes engine's three-tier model (Starter, Bench+ or Bench; his own minutes in tonight's role; the Out men's minutes shared by tier), recorded before lock; TwoGun's number stands in only for a man with no games in his role, flagged; each figure's hover names its basis. It feeds nothing" },
-  min_usual: { key: "min_usual", label: "Usual", cls: "num fig", title: "no usual minutes for him in this slate", head: "Usual minutes: his healthy-minutes figure, the one the console shows as Usual" },
-  min_chg: { key: "min_chg", label: "Chg", cls: "num fig chg", title: "needs both Min and Usual", head: "Min minus Usual: how far tonight's minutes sit from his usual" },
+  min_other: { key: "min_other", label: "Our Min", cls: "num alt", title: "no figure from the other source for him" },
+  min_usual: { key: "min_usual", label: "Mins", cls: "num fig", title: "no usual minutes for him in this slate", head: "Usual minutes (Mins): his healthy-minutes figure, the one the console shows as Usual" },
+  min_chg: { key: "min_chg", label: "Chg", cls: "num fig chg", title: "needs both Min and Usual", head: "Chg: Min minus Usual minutes, how far tonight's minutes sit from his usual" },
   // This season's figures from Basketball-Reference, attached by the server (usage/board_figures.js); each player's
   // *_note says why a figure is missing, and *_tag marks last season's figure ("LY") or a 1-2 game sample ("1g", "2g").
-  dk_per_min: { key: "dk_per_min", label: "DK/m SZN", cls: "num fig", title: "no DK points per minute from the server", head: "Season average DraftKings points per minute, which doesn't change with tonight's news: +3 per triple-double; the +1.5 double-double bonus is left out (Basketball-Reference season totals carry no double-double count). 2026-27 regular season" },
-  dk_tonight: { key: "dk_tonight", label: "DK/m TON", cls: "num ton", head: "Tonight's expected DraftKings points per minute: Proj divided by Min as the board shows them, so it follows minutes set in the console and typed numbers. The arrow compares tonight with the season figure; the small signed number is the move since the last pull" },
-  usage: { key: "usage", label: "Usg", cls: "num fig", title: "no usage rate from the server", head: "Usage rate, 2026-27 regular season" },
-  projection: { key: "projection", label: "Proj", cls: "num proj", title: "no projection in this pull" },
-  value: { key: "value", label: "Val", cls: "num val", title: "no value in this pull" },
-  proj_own: { key: "proj_own", label: "Own", cls: "num own", title: "no projected ownership in this pull" },
+  dk_per_min: { key: "dk_per_min", label: "DK/min", cls: "num fig", title: "no DK points per minute from the server", head: "DK/min, season: average DraftKings points per minute, which doesn't change with tonight's news: +3 per triple-double; the +1.5 double-double bonus is left out (Basketball-Reference season totals carry no double-double count). 2026-27 regular season" },
+  dk_tonight: { key: "dk_tonight", label: "DK/min", cls: "num ton", head: "DK/min, tonight: expected DraftKings points per minute: Proj divided by Min as the board shows them, so it follows minutes set in the console and typed numbers. The arrow compares tonight with the season figure; the small signed number is the move since the last pull" },
+  usage: { key: "usage", label: "Usage %", cls: "num fig", title: "no usage rate from the server", head: "Usage rate (usage %), 2026-27 regular season" },
+  projection: { key: "projection", label: "Proj", cls: "num proj", title: "no projection in this pull", head: "Projected DraftKings points tonight (click a figure to type your own)" },
+  value: { key: "value", label: "Value", cls: "num val", title: "no value in this pull", head: "Value: projected points per $1,000 of salary" },
+  proj_own: { key: "proj_own", label: "Own %", cls: "num own", title: "no projected ownership in this pull", head: "Projected ownership: the share of lineups that will hold him (click a figure to type your own)" },
 };
 /** The three groups of figure columns (Adam, 11-09): "p" tonight's projections, tinted as one band; "s" stats, what happened, quieter; "c" the controls.
  *  Sal, Star and Player belong to none. A column that opens a group after another group or after Sal gets the divider. */
 const FAM = { projection: "p", value: "p", proj_own: "p", minutes: "p", min_other: "p", dk_tonight: "p", dk_per_min: "s", usage: "s", min_usual: "s", min_chg: "s", thumbs: "c", lock: "c", exclude: "c", min_pct: "c", max_pct: "c" };
+/** The band names over the projection and stats families. */
+const BAND = { p: "Tonight", s: "Season Stats" };
 export const famOf = (k) => FAM[k] ?? "";
 /** The classes a column's cell and header carry for its group: " gp"/" gs"/" gc", and " gd" where the group starts. */
 export function famClass(keys, i) {
   const f = famOf(keys[i]);
-  return f ? ` g${f}${i > 0 && famOf(keys[i - 1]) !== f ? " gd" : ""}` : "";
+  // The controls at the far left (after Star or nothing) get no divider; the limits at the right end do.
+  const before = i > 0 ? famOf(keys[i - 1]) : "";
+  return f ? ` g${f}${i > 0 && before !== f && !(f === "c" && !before) ? " gd" : ""}` : "";
 }
 const addClass = (html, add) => (add ? html.replace(/^(<t[dh] class=")([^"]*)"/, `$1$2${add}"`) : html);
 /** Which source the Min column shows, "twogun" unless the slate says otherwise. Nothing switches it yet. */
 export const minSourceOf = (slate) => (slate?.min_source === "ours" ? "ours" : "twogun");
 /** The header of the beside column: the source that is NOT in force. */
-export const minOtherLabel = (source = "twogun") => (source === "ours" ? "TG" : "Ours");
+/** The Our Min header hover (TwoGun in force); the TG Min header (ours in force) has none. */
+const MIN_OTHER_HEAD = "Our own minutes estimate for tonight, for comparison with Min; it feeds nothing.";
+export const minOtherLabel = (source = "twogun") => (source === "ours" ? "TG Min" : "Our Min");
 /** The beside column's figure and hover for a man: { value, note }. While TwoGun's is in force it is ours (min_ours); if ours were in force it is TwoGun's own figure (the base under any minutes set in the console). */
 export function minOtherOf(p, source = "twogun") {
   if (source === "ours") {
@@ -119,7 +125,10 @@ export const hasResettable = (p) => boardTyped(p);
 /** Every key the table can sort on. A remembered sort must be one of these (view-memory.js). */
 export const SORT_KEYS = ["name", ...Object.keys(FIG_COLS)];
 const CTL_HEAD = { star: "Star", lock: "Lock", exclude: "Exclude" };
-const LIMIT_HEAD = { min_pct: "Min %", max_pct: "Max %" };
+const LIMIT_HEAD = {
+  min_pct: ["Min Exp %", "Min Exp %: the least share of the optimizer's lineups he must be in (type a percent in the box)"],
+  max_pct: ["Max Exp %", "Max Exp %: the most share of the optimizer's lineups he may be in (type a percent in the box)"],
+};
 
 /** The header row. sort: { key, dir }; headTitle(col) is a season-figure column's tooltip. */
 export function headHtml(keys, sort, headTitle, minSource = "twogun") {
@@ -129,11 +138,14 @@ export function headHtml(keys, sort, headTitle, minSource = "twogun") {
     if (k === "name") return `<th class="pl${on("name")}" data-sort="name">Player</th>`;
     if (k in CTL_HEAD) return `<th class="ctl" title="${CTL_HEAD[k]}"></th>`;
     if (k === "thumbs") return `<th class="bmp" title="Thumbs: raise or lower his projection"></th>`;
-    if (k in LIMIT_HEAD) return `<th class="lim">${LIMIT_HEAD[k]}</th>`;
+    if (k in LIMIT_HEAD) return `<th class="lim" title="${esc(LIMIT_HEAD[k][1])}">${LIMIT_HEAD[k][0]}</th>`;
     const c = FIG_COLS[k];
-    return `<th class="${c.cls}${on(k)}" data-sort="${k}"${c.head ? ` title="${esc(headTitle(c))}"` : ""}>${k === "min_other" ? minOtherLabel(minSource) : c.label}</th>`;
+    return `<th class="${c.cls}${on(k)}" data-sort="${k}"${k === "min_other" ? (minSource === "ours" ? "" : ` title="${MIN_OTHER_HEAD}"`) : c.head ? ` title="${esc(headTitle(c))}"` : ""}>${k === "min_other" ? minOtherLabel(minSource) : c.label}</th>`;
   };
-  return `<tr>${keys.map((k, i) => addClass(cell(k), famClass(keys, i))).join("")}</tr>`;
+  // A small band name over the first shown column of the projection family ("Tonight") and the stats family ("Season Stats"), drawn by board.css from data-band.
+  const band = (k, i) => (i > 0 && famOf(keys[i - 1]) === famOf(k) ? "" : BAND[famOf(k)] ?? "");
+  const withBand = (html, b) => (b ? html.replace(/^(<th[^>]*)>/, `$1 data-band="${b}">`) : html);
+  return `<tr>${keys.map((k, i) => withBand(addClass(cell(k), famClass(keys, i)), band(k, i))).join("")}</tr>`;
 }
 
 /** A number he typed on a man who is Out: kept, drawn struck, and used once he is In (figures.js outFor). */
@@ -158,7 +170,7 @@ function figCell(k, p, x) {
   }
   if (k === "min_other") {
     const o = minOtherOf(p, x.minSource);
-    return o.value === null ? `<td class="${col.cls} dim" title="${esc(withWhy(o.note))}"></td>` : `<td class="${col.cls}" title="${esc(withWhy(o.note))}">${o.value.toFixed(1)}</td>`;
+    return o.value === null ? `<td class="${col.cls} dim"${x.minSource === "ours" ? "" : ` title="${esc(withWhy(o.note))}"`}></td>` : `<td class="${col.cls}" title="${esc(withWhy(o.note))}">${o.value.toFixed(1)}</td>`;
   }
   if (k === "min_usual") return `<td class="${col.cls}">${v == null ? dash(p.min_usual_note ?? col.title) : v.toFixed(1)}</td>`;
   if (k === "min_chg") {
