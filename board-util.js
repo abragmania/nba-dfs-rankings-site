@@ -172,12 +172,6 @@ export function injBadge(status, source = "injury report") {
   return `<span class="st" style="background:${bg}" title="${esc(s)} (${esc(source)})">${esc(letter)}</span>`;
 }
 
-/** The minutes note a man's slate row carries (twoway-cap.js: "capped: two-way, 2 games" or "bench bump") as the row's own note text, with the detail in its tooltip; "" with none. */
-export function minNoteHtml(p) {
-  const n = p?.min_note;
-  return n?.text ? ` · <span class="mnote" title="${esc(n.title ?? "")}">${esc(n.text)}</span>` : "";
-}
-
 /**
  * The header's Board and Injuries stamps from a slate file's as_of_by_source. A connector-built slate keeps them under
  * board.csv / get_nba_projections / get_nba_slate; a database-row slate keeps them under twogun_row, whose injury_report

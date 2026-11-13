@@ -9,7 +9,7 @@
 // The state (which player, which log) lives in createCardState and the markup in cardHtml, both DOM-free so the swap
 // rule is tested: opening a player shows Loading at once, and a log that arrives for a card since closed or swapped is
 // dropped (its request is also aborted).
-import { esc, money, dec1, logo, isoToEastern, ICON, injBadge, focusSelector, minNoteHtml, figSourceWord, hasHis } from "./board-util.js";
+import { esc, money, dec1, logo, isoToEastern, ICON, injBadge, focusSelector, figSourceWord, hasHis } from "./board-util.js";
 import { gamesProblem, usgCell, usgNote, MONTHS } from "./gamerow.js";
 import { createUsageState, usageHtml, chartModel, fetchUsageHttp, closeUsageHttp, fetchedAt } from "./card-usage.js";
 import { wireChart } from "./card-chart.js";
@@ -134,7 +134,7 @@ export function cardHtml(p, log, { dash, colourOf, picks, figs = null, usage = {
     const c = colourOf(p.team), lk = picks.locked.includes(p.dk_id), ex = picks.excluded.includes(p.dk_id);
     const acts = p.dk_id == null ? "" : `<div class="acts"><button class="a-lk${lk ? " on" : ""}" data-lock="${esc(p.dk_id)}">${ICON.lock}${lk ? "Locked" : "Lock"}</button><button class="a-ex${ex ? " on" : ""}" data-excl="${esc(p.dk_id)}">${ICON.x}${ex ? "Excluded" : "Exclude"}</button></div>`;
     return `<div class="ch" style="--t1:${c.t1};--t2:${c.t2}">${logo(p.team, "xl")}<div class="id"><div class="l1"><span class="nm2" title="${esc(p.name)}">${esc(p.name)}</span>${injBadge(p.injury_status)}</div>`
-      + `<div class="l2">${p.positions?.length ? `<span class="pos">${esc(p.positions.join("/"))}</span>` : ""}<span class="ddtd"><span title="Double-double chance">DD <b>${pct(p.dd_pct, "no double-double chance in this pull")}</b></span> · <span title="Triple-double chance">TD <b>${pct(p.td_pct, "no triple-double chance in this pull")}</b></span></span>${minNoteHtml(p)}</div></div>`
+      + `<div class="l2">${p.positions?.length ? `<span class="pos">${esc(p.positions.join("/"))}</span>` : ""}<span class="ddtd"><span title="Double-double chance">DD <b>${pct(p.dd_pct, "no double-double chance in this pull")}</b></span> · <span title="Triple-double chance">TD <b>${pct(p.td_pct, "no triple-double chance in this pull")}</b></span></span></div></div>`
       + acts
       + `<button class="close" data-card-close title="Close (Esc)"><kbd>ESC</kbd>&#10005;</button>${cardFiguresHtml(p, figs, dash)}</div>`;
   };

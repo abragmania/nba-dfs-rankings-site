@@ -2,7 +2,7 @@
 // Every figure is read from the slate file as given (Usual and Chg from the slate route's min_usual, the board row's usual minutes); a
 // missing one is the board's dash with a title, never zero (RULES R1).
 // Pure strings, tested in node; board.js owns the state and the events.
-import { esc, money, logo, ICON, injBadge, minNoteHtml, figSourceWord, hisProj, hisMin, boardTyped } from "./board-util.js";
+import { esc, money, logo, ICON, injBadge, figSourceWord, hisProj, hisMin, boardTyped } from "./board-util.js";
 import { bumpControlHtml, bumpFigureHtml } from "./bump-control.js";
 import { rowPin } from "./lateswap-panel.js";
 import { limitCellHtml } from "./row-limits.js";
@@ -204,7 +204,7 @@ export function rowHtml(p, keys, x) {
   const cell = (k) => {
     switch (k) {
       case "star": return `<td class="ctl"><button class="fav${p.starred ? " on" : ""}" data-star="${id}" title="${p.starred ? "Unstar" : "Star"}">${p.starred ? "★" : "☆"}</button></td>`;
-      case "name": return `<td class="pl"><div class="who">${logo(p.team)}<div class="nm"><div class="l1"><button class="name" data-dk-id="${id}">${esc(p.name)}</button>${starterChipHtml(x.mark?.chip)}${x.tag ? `<span class="pos">${esc(x.tag)}</span>` : ""}${x.mark?.inj ? injBadge(x.mark.inj.word, `Monster news${x.mark.inj.note ? `: ${x.mark.inj.note}` : ""}; TwoGun says ${p.injury_status || "nothing"}`) : injBadge(p.injury_status)}</div><div class="l2${p.pull_move ? " why" : ""}"${p.pull_move && p.tip ? ` title="Tip ${esc(x.when(p.tip))}"` : ""}>${esc(p.team)} ${p.oppText ? esc(p.oppText) : dash("no opponent in this slate file")} · ${p.pull_move ? moveLine(p.pull_move) : p.tip ? esc(x.when(p.tip)) : dash("no tip time in this slate file")}${minNoteHtml(p)}</div></div>${tools}</div></td>`;
+      case "name": return `<td class="pl"><div class="who">${logo(p.team)}<div class="nm"><div class="l1"><button class="name" data-dk-id="${id}">${esc(p.name)}</button>${starterChipHtml(x.mark?.chip)}${x.tag ? `<span class="pos">${esc(x.tag)}</span>` : ""}${x.mark?.inj ? injBadge(x.mark.inj.word, `Monster news${x.mark.inj.note ? `: ${x.mark.inj.note}` : ""}; TwoGun says ${p.injury_status || "nothing"}`) : injBadge(p.injury_status)}</div><div class="l2${p.pull_move ? " why" : ""}"${p.pull_move && p.tip ? ` title="Tip ${esc(x.when(p.tip))}"` : ""}>${esc(p.team)} ${p.oppText ? esc(p.oppText) : dash("no opponent in this slate file")} · ${p.pull_move ? moveLine(p.pull_move) : p.tip ? esc(x.when(p.tip)) : dash("no tip time in this slate file")}</div></div>${tools}</div></td>`;
       case "thumbs": return `<td class="bmp">${bumpControlHtml(p)}</td>`;
       // Late swap mode: the slot picker takes the lock button's place; a lock is still set from the player card.
       case "lock": return `<td class="ctl${L ? " ls" : ""}">${L ? rowPin(p, L) : `<button class="lk${lk ? " on" : ""}" data-lock="${id}"${btn("Lock")}>${ICON.lock}</button>`}</td>`;
