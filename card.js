@@ -116,7 +116,7 @@ export function cardFiguresHtml(p, figs, dash) {
   const off = p.dk_id == null ? "he is on the Out list, not in this slate's player pool" : null;
   const num = (v, f, why) => (typeof v === "number" ? f(v) : dash(off ?? why));
   const sal = typeof p.salary === "number" ? money(p.salary) : p.salary_text ? esc(p.salary_text) : dash(off ?? "no salary in this slate file");
-  const yours = hasHis(p) ? " Proj and Own include your changes." : "";
+  const yours = (hasHis(p) ? " Proj and Own include your changes." : "") + (p.his_in_note ? ` ${esc(p.his_in_note)}` : "");
   const item = (label, html, src = "") => `<span>${label} <b>${html}</b>${src ? ` <small class="cfsrc">${src}</small>` : ""}</span>`;
   const srcOf = (kind, v) => (typeof v === "number" ? figSourceWord(p, kind) : "");
   const gap = minGapOf(p), gapHtml = gap ? `<span class="cfgap" title="${esc(gapTitle(gap))}">⚠ ${esc(gap.word ?? "Ours")} ${dec1(gap.ours)} vs TwoGun ${dec1(gap.tg)}</span>` : "";

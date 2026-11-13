@@ -3,7 +3,7 @@
 import { paletteOf, teamColors } from "./teams.js";
 import { assignColours } from "./colours.js";
 import { sourceRows, sourcesHtml, badgeHtml } from "./sources-panel.js";
-import { checkFootHtml } from "./board-check-foot.js";
+import { checkFootHtml, hisPoolHtml } from "./board-check-foot.js";
 import { esc, logo, tipWhen, tipMs, slateRefMs, shortTime, isoToEastern, ICON, topStamps, keepFocus } from "./board-util.js";
 import { createPanel, fullScreenPref } from "./panel.js";
 import { tiers, notes } from "./highlight.js";
@@ -219,7 +219,7 @@ const numbersLine = () => (S.upd.updatedMs == null || !S.slate ? "" : statusLine
 /** The collapsed "Sources and pull times" list at the foot of the page: the stamps, projection source, numbers line and box score line. */
 function renderSources() {
   const el = $("sources"), s = S.slate, bc = $("bcheck");
-  const foot = checkFootHtml(s?.board_check); // the board's self-check (G65): at the foot of the Player list only (board.css hides it on the other tabs)
+  const foot = checkFootHtml(s?.board_check) + hisPoolHtml(s?.his_in_pool); // the board's self-check (G65): at the foot of the Player list only (board.css hides it on the other tabs)
   bc.innerHTML = foot; bc.hidden = !foot;
   if (!s) { el.hidden = true; return; }
   const t = (raw) => when(raw) ?? null;
@@ -496,7 +496,7 @@ function renderPullNote() {
 /** A man from the Out list as the card opens him: on the slate's player pool when he is there, else only what the list says. */
 function outMan(o) {
   const on = S.players.find((p) => p.name === o.name && p.team === o.team);
-  return on ?? { dk_id: null, name: o.name, team: o.team, positions: [], injury_status: o.status ?? "Out", salary_text: o.salary_text ?? null };
+  return on ?? { dk_id: null, name: o.name, team: o.team, positions: [], injury_status: o.status ?? "Out", salary_text: o.salary_text ?? null, his_in_note: o.his_in_note ?? null };
 }
 function renderOuts() {
   const out = S.slate.out ?? [];
@@ -576,6 +576,8 @@ function ovKeyOf() {
 function applyPlayers(players) {
   ovSaves++;
   const fresh = new Map((players ?? []).map((p) => [p.dk_id, p]));
+  // His In or Out call can add or drop a man from the server's pool (out-pool.js): when the server's men are not the board's, the slate is read again instead of patched.
+  if (S.name && fresh.size && (fresh.size !== S.byId.size || [...fresh.keys()].some((id) => !S.byId.has(id)))) { loadSlate(S.name); return; }
   const withAnswer = (p) => {
     const f = fresh.get(p.dk_id);
     if (!f) return p;

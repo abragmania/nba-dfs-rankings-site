@@ -4,7 +4,7 @@
 // build into the record it stores, and a stored record back into a build the tab draws. Browser and node both load it.
 
 /** The figures of a man a card draws, as stored: scalars and short lists only (the server keeps nothing else, builds.js). */
-export const ROW_KEYS = ["dk_id", "name", "team", "opponent", "oppText", "game", "tip", "positions", "roster_positions", "salary", "projection", "proj_own", "value", "minutes", "injury_status", "starred"];
+export const ROW_KEYS = ["dk_id", "name", "team", "opponent", "oppText", "game", "tip", "positions", "roster_positions", "salary", "projection", "proj_own", "value", "minutes", "injury_status", "his", "starred"];
 /** Builds kept per slate: one (Adam, 2026-11-12: "not keep any except the ones I saved"); a new build of either mode replaces it, Cash and GPP never share a list, and only Save keeps lineups. */
 export const KEEP_BUILDS = 1;
 /** The newest build, in a list of one: what a slate keeps (an older file holding two or more reads as its newest only). */

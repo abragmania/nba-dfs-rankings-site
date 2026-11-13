@@ -41,6 +41,7 @@ function checkProjection(players, c) {
     if (has(o.proj, id) && held.has(p.team) && !p.stale_auto?.proj) { ex.add("projection_math", HELD_WHY, p.name); continue; } // the console's scenario maths, not minutes x the engine's rate: the resend keeps it current, checkResend says when it did not
     if (!ours) { un.add("projection_math", "the engine has no figures for him", p.name); continue; }
     if (ours.playing === false) {
+      if (p.his === "in") { ex.add("projection_math", "you put him In against our minutes engine, so his figure is yours or TwoGun's", p.name); continue; }
       if (isNum(p.projection) && p.projection !== 0) bad.push(fail("projection_math", p, p.projection, 0, `${p.name} is not playing tonight but shows ${f2(p.projection)} DK points`));
       continue;
     }
@@ -88,6 +89,7 @@ function checkStored(players, c) {
 
 /** Who plays, for check 5: the engine's word under our projections; under TwoGun's, the shown figures (minutes above 0 and not on the Out list). */
 function playsOf(p, slate, outKeys) {
+  if (p.his) return p.his === "in"; // his own call (out-pool.js) decides who plays
   if (slate.proj_source === "ours") return p.ours?.playing !== false;
   return isNum(p.minutes) ? p.minutes > 0 && !isOut(p.injury_status) && !outKeys.has(`${p.team}|${p.name}`) : null; // null: no minutes shown, cannot tell
 }

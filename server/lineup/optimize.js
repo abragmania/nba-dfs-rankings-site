@@ -9,7 +9,7 @@ import { SLOTS, SALARY_CAP, DEFAULT_COUNT, MAX_COUNT, slotMask, pinnedMask, assi
 import { EPS, BOUND_SLACK, WIDTH, SLOT_BITS, REACH_MAX, buildBound, extendReach } from "./bound.js";
 import { readExposure, countLimits, limitStart, buildLimited } from "./exposure.js";
 import { fastLineup, checkFastLineup, jitter, seededRandom } from "./fast-search.js";
-import { isOut } from "../board/figures.js";
+import { outFor } from "../board/figures.js";
 
 const N = SLOTS.length;
 const MAX_LOW_RULES = 8;
@@ -120,9 +120,9 @@ function readSettings(mode, settings, slateTeams, slateGames) {
   return { s };
 }
 
-/** A man the board or our minutes say is not playing: Out by status (figures.js isOut), or our engine's playing === false. Whatever his projection, the
+/** A man the board or our minutes say is not playing: Out by status or our engine's playing === false (figures.js outFor), unless he put him In himself; his own Out always holds. Whatever his projection, the
  *  pool never holds him (RULES R4); a man the caller locks, hand-picks or pins is its explicit choice and is named in the run's note instead. */
-export const isNotPlaying = (p) => isOut(p?.injury_status) || p?.ours?.playing === false;
+export const isNotPlaying = (p) => outFor(p, { engine: true });
 
 /** What a man lacks for this run, as phrases ("no salary"); empty when he is eligible. */
 function gaps(p, mode, s) {
@@ -629,6 +629,9 @@ export function optimize({ players, mode, settings, locked = [], excluded = [], 
   const held = new Set([...lockIds, ...Object.keys(s.pinned)]);
   const heldOut = players.filter((p) => held.has(p.dk_id) && isNotPlaying(p)).map((p) => p.name ?? p.dk_id);
   if (heldOut.length && result.lineups.length) result.note = [result.note, `${heldOut.join(", ")} ${heldOut.length === 1 ? "is" : "are"} Out but held in every lineup because ${heldOut.length === 1 ? "he was" : "they were"} locked, hand-picked or already in the entry.`].filter(Boolean).join(" ");
+  // A man he put In from the Out list has no projected ownership of his own (TwoGun's was made while he was Out and is not used): GPP names him, since its ownership totals count him as 0.
+  const noOwn = mode === "GPP" ? [...new Set(result.lineups.flatMap((l) => l.slots ?? []).filter((p) => p.his === "in" && p.out_pool && !isNum(p.proj_own)).map((p) => p.name ?? p.dk_id))] : [];
+  if (noOwn.length) result.note = [result.note, `${noOwn.join(", ")} ${noOwn.length === 1 ? "has" : "have"} no projected ownership (TwoGun's was made while ${noOwn.length === 1 ? "he was" : "they were"} Out and is not used), so the ownership totals count ${noOwn.length === 1 ? "him" : "them"} as 0%; type one to change that.`].filter(Boolean).join(" ");
   if (s.exposureIgnored && !result.error) result.note = [result.note, "Min % and Max % are GPP settings; this Cash run ignored them."].filter(Boolean).join(" ");
   return result;
 }

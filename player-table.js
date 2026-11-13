@@ -7,7 +7,7 @@ import { bumpControlHtml, bumpFigureHtml } from "./bump-control.js";
 import { rowPin } from "./lateswap-panel.js";
 import { limitCellHtml } from "./row-limits.js";
 import { sgn, dcls } from "./console-model.js";
-import { tonightRate } from "./figures.js";
+import { tonightRate, outFor, isNum } from "./figures.js";
 import { moveLine, moveTag } from "./pull-note.js";
 import { starterChipHtml, undoChipHtml } from "./board-marks.js";
 import { tgMin } from "./lineup-proposals.js";
@@ -136,6 +136,9 @@ export function headHtml(keys, sort, headTitle, minSource = "twogun") {
   return `<tr>${keys.map((k, i) => addClass(cell(k), famClass(keys, i))).join("")}</tr>`;
 }
 
+/** A number he typed on a man who is Out: kept, drawn struck, and used once he is In (figures.js outFor). */
+const struckOut = (p) => isNum(p?.ovr?.projection) && p.ovr.projection > 0 && outFor(p, { engine: true });
+
 /** Adam's overrides (server/slate/overrides.js): a click on Proj or Own opens its editor; a typed number wears the marker
  *  with the base on hover; Val follows the effective projection. */
 function figCell(k, p, x) {
@@ -143,7 +146,7 @@ function figCell(k, p, x) {
   // A figure's own hover keeps its use and carries why the row is greyed after it, as it hides the row's own hover.
   const also = x.why ?? "";
   const withWhy = (t) => (also ? `${t} · ${also}` : t);
-  if (k === "projection") return `<td class="${col.cls}"${projTitle(p) ? ` title="${esc(projTitle(p))}"` : ""}>${bumpFigureHtml(p, v == null ? dash(p.proj_note ?? col.title) : v.toFixed(1), also)}${moveTag(p.pull_move?.proj, 1, "TwoGun's projection")}</td>`;
+  if (k === "projection") return `<td class="${col.cls}${struckOut(p) ? " ostruck" : ""}"${projTitle(p) || struckOut(p) ? ` title="${esc([projTitle(p), struckOut(p) ? "Your number is kept while he is Out; it counts once he is In" : ""].filter(Boolean).join(" · "))}"` : ""}>${bumpFigureHtml(p, v == null ? dash(p.proj_note ?? col.title) : v.toFixed(1), also)}${moveTag(p.pull_move?.proj, 1, "TwoGun's projection")}</td>`;
   if (k === "dk_tonight") return tonightCell(p, col, dash, withWhy, x.mark?.d);
   if (k === "value" || k === "proj_own") {
     const own = k === "proj_own", typed = own && p.ovr?.proj_own != null;

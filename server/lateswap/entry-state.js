@@ -4,7 +4,7 @@ import { SLOTS, checkLineup } from "../board/slots.js";
 import { slateRefMs, startedSplit, pinsOf } from "../board/lateswap.js";
 import { lineupOf, spotEntries, modeFromName } from "./maps.js";
 import { departedFrom } from "./salary-table.js";
-import { isOut } from "../board/figures.js";
+import { isOut, outFor } from "../board/figures.js";
 
 /**
  * The slate read at nowMs; { ctx } or { error }. slate = { name: "2026-11-04-main", players, departed? }. players is the newest
@@ -28,8 +28,8 @@ export function slateContext(slate, nowMs) {
   return { ctx: { name: slate.name, players, byId, departedById, started, untimed: untimedIds, outNames, nowMs, refMs, man: (id) => byId.get(id) ?? departedById.get(id) ?? null } };
 }
 
-/** True for a man on the board marked Out (figures.js isOut). Questionable and the rest do not count. */
-export const isBoardOut = (p) => isOut(p?.injury_status);
+/** True for a man on the board marked Out (figures.js outFor: his own In beats an outside Out). Questionable and the rest do not count. */
+export const isBoardOut = (p) => outFor(p, { engine: true });
 
 /**
  * The alert for a lineup holding men who are Out or gone from the board and have not started, as plain data, or null: { kind: "out", men:

@@ -12,6 +12,7 @@
 import { refuseCrossSiteRead } from "../lib/origin.js";
 import { error } from "../../site/shim/log.js";
 import { SLATE_NAME, readLineups, readSlate, readPicks } from "./store.js";
+import { hisProblem } from "./out-pool.js";
 import { readSaved, writeSaved, saveUpload, saveExport, listUploads, readUpload } from "./lateswap-store.js";
 import { readSpotsShown, applySpots, writeSpots } from "./spots.js";
 import { applyOp, uploadText, syncSpots, exportFile, slateFor } from "../lateswap/screen-ops.js";
@@ -165,6 +166,8 @@ async function handle(req, res, slate, ctx) {
 /** An export: refused on a copy running on a test clock without its own data folder, and made only for the screen the page drew. */
 function exportOp(res, ctx, slate, slateData, saved, body, { sl, nowMs, dirty, extra, t0 }) {
   if (ctx.injected && !process.env.NBADFS_DATA_DIR) return ctx.fail(res, 403, "TEST_CLOCK", "This server runs on a test clock without a data folder of its own, so it will not make an upload file.");
+  const unknown = hisProblem(slateData); // his In and Out calls unreadable: who is Out is unknown, so no file is made (fail closed)
+  if (unknown) return ctx.fail(res, 409, "HIS_MARKS_UNREADABLE", unknown);
   const model = modelFor(res, ctx, slate, slateData, saved, extra);
   if (!model) return;
   if (typeof body.fp !== "string") return ctx.fail(res, 400, "BAD_EXPORT", "Send the fingerprint of the screen the export was asked from (fp).");

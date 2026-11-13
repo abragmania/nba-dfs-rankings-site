@@ -19,3 +19,18 @@ export function checkFootHtml(bc) {
   const lines = checkFootLines(bc);
   return lines.length ? lines.map((l) => `<div class="bc-${l.cls}">${esc(l.text)}</div>`).join("") : "";
 }
+
+/** The foot's lines for the Out men he put In (slate.his_in_pool, server/slate/out-pool.js): who was brought into the pool, and who could not be and why (G62: said, never a silent hide). Empty with nothing to say. */
+export function hisPoolLines(pool) {
+  if (!pool || typeof pool !== "object") return [];
+  const lines = [];
+  if (pool.added?.length) lines.push({ cls: "note", text: `Out men you put In or typed a number on, brought into the player pool from the board row: ${pool.added.map((m) => m.name).join(", ")}` });
+  for (const m of pool.unbuildable ?? []) lines.push({ cls: "bad", text: m.typed ? `A number you typed on ${m.name ?? `a man (id ${m.dk_id})`} is kept but cannot be shown, because he is not in the player pool: ${m.why}` : `${m.name ?? `A man (id ${m.dk_id})`} is In by your call but cannot be built with: ${m.why}` });
+  for (const t of pool.problems ?? []) lines.push({ cls: "bad", text: `Your In and Out calls were not all read: ${t}` });
+  return lines;
+}
+
+/** The foot's html for those lines; "" when there are none. */
+export function hisPoolHtml(pool) {
+  return hisPoolLines(pool).map((l) => `<div class="bc-${l.cls}">${esc(l.text)}</div>`).join("");
+}

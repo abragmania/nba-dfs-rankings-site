@@ -168,7 +168,7 @@ export const ICON = {
   bolt: '<svg viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M9.5 1L3 9h4l-1 6 6.5-8h-4z"/></svg>',
 };
 
-const INJ = { probable: ["P", "var(--gr)"], questionable: ["Q", "var(--bl)"], doubtful: ["D", "var(--or)"], out: ["O", "var(--rd)"] };
+const INJ = { probable: ["P", "var(--gr)"], questionable: ["Q", "var(--bl)"], doubtful: ["D", "var(--or)"], out: ["O", "var(--rd)"], in: ["In", "var(--gr)"] };
 /** Injury-status letter badge in Basketball Monster's colours (P green, Q blue, D orange, O red); other statuses show
  *  their first letter dimmed. The title keeps the full word. Missing status renders nothing. */
 export function injBadge(status, source = "injury report") {
@@ -179,7 +179,7 @@ export function injBadge(status, source = "injury report") {
 }
 
 /** A man's status badge as the board shows it: the news-aware word when the console's mark carries one (inj: { word, note }), else TwoGun's injury status. The Player list row and the card share it. */
-export const statusBadge = (p, inj = null) => (inj ? injBadge(inj.word, `Monster news${inj.note ? `: ${inj.note}` : ""}; TwoGun says ${p.injury_status || "nothing"}`) : injBadge(p.injury_status));
+export const statusBadge = (p, inj = null) => (p?.his === "in" ? injBadge("In", `you put him In; ${p.injury_status ? `the injury report says ${p.injury_status}` : "no outside Out stands"}`) : p?.his === "out" ? injBadge("Out", "you put him Out") : inj ? injBadge(inj.word, `Monster news${inj.note ? `: ${inj.note}` : ""}; TwoGun says ${p.injury_status || "nothing"}`) : injBadge(p.injury_status));
 
 /**
  * The header's Board and Injuries stamps from a slate file's as_of_by_source. A connector-built slate keeps them under

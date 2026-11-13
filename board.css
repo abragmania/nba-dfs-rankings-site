@@ -615,6 +615,7 @@ tr.started td.ctl button{visibility:hidden}
 td.own .v.ov-typed{padding-right:4px;margin-right:-4px}
 td.own .v.ov-own{cursor:text}
 /* Typed and bumped: the marker outline keeps the bump's colour, so the direction still reads. */
+td.ostruck .bump-fig{text-decoration:line-through}
 .bump-fig.bump-typed.bump-up{color:var(--gr)}.bump-fig.bump-typed.bump-down{color:var(--rd)}
 /* The editor is laid over the figure (cell-editor.js sets right and top), so opening it never moves a column. */
 td.proj,td.own{position:relative}

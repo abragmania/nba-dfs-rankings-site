@@ -6,7 +6,7 @@
 import { esc, money, dec1, nameOpen } from "./board-util.js";
 import { SLOTS, SALARY_CAP, checkLineup } from "./slots.js";
 import { slateRefMs, startedSplit } from "./lateswap.js";
-import { isOut } from "./figures.js";
+import { outFor } from "./figures.js";
 
 export const SWAP_COUNT = 5;
 
@@ -55,7 +55,7 @@ export function swapOptions(ids, outId, ctx, limit = SWAP_COUNT) {
   const room = SALARY_CAP - men.reduce((t, m, j) => t + (j === k || !Number.isInteger(m.salary) ? 0 : m.salary), 0); // what the slot may cost
   const options = [];
   for (const p of ctx.players) {
-    if (inLineup.has(p.dk_id) || ctx.excludedIds.has(p.dk_id) || ctx.lockedIds.has(p.dk_id) || ctx.started.has(p.dk_id) || ctx.untimed?.has(p.dk_id) || isOut(p.injury_status) || p.ours?.playing === false) continue; // an unreadable tip fails closed
+    if (inLineup.has(p.dk_id) || ctx.excludedIds.has(p.dk_id) || ctx.lockedIds.has(p.dk_id) || ctx.started.has(p.dk_id) || ctx.untimed?.has(p.dk_id) || outFor(p, { engine: true })) continue; // an unreadable tip fails closed
     if (typeof p.projection !== "number" || !Number.isInteger(p.salary)) continue;
     const next = men.map((m, j) => (j === k ? p : m));
     if (!checkLineup(next).ok) continue;

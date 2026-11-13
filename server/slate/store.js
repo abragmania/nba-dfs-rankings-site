@@ -6,6 +6,7 @@ import { dataDir } from "../../site/shim/log.js";
 import { writeFileAtomic } from "../../site/shim/atomic.js";
 import { SLOTS, checkLineup, setKey, arrangeForLateSwap } from "../board/slots.js";
 import { slateRefMs } from "../board/board-util.js";
+import { applyHis } from "./out-pool.js";
 
 export const SLATE_NAME = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+$/;
 export const MAX_LOCKED = 8; // DraftKings classic has eight roster slots
@@ -28,8 +29,14 @@ export function listSlates() {
   return [...manifest.slates].sort((a, b) => String(b.slate).localeCompare(String(a.slate)));
 }
 
-/** slate.json as built, or null when this slate has none. The caller has already checked the name against SLATE_NAME. */
+/** slate.json as built, or null when this slate has none, with his own In and Out calls on it (out-pool.js applyHis: p.his, and the Out men he put In added to the pool). The caller has already checked the name against SLATE_NAME. */
 export function readSlate(slate) {
+  const built = readSlateAsBuilt(slate);
+  return built ? applyHis(slate, built) : null;
+}
+
+/** slate.json exactly as built, with none of his calls on it (the site bake reads this, so its figures are the same on every machine), or null. */
+export function readSlateAsBuilt(slate) {
   const file = slateFile(slate);
   if (!fs.existsSync(file)) return null;
   return readJson(file);

@@ -28,6 +28,7 @@ import { readSpots, readSpotsShown, writeSpots, checkSpotsBody, applySpots, vaca
 import { readSaved } from "./slate/lateswap-store.js";
 import { heldSpotNames } from "./lateswap/maps.js";
 import { readBuilds, writeBuilds, checkBuildsBody, applyBuilds } from "./slate/builds.js";
+import { withInFigures, hisProblem } from "./slate/out-pool.js";
 import { readOverrides, writeOverrides, checkChanges, applyChanges, resetPlayer, resetAll, mergeOverrides, minutesBase, publicOverrides } from "./slate/overrides.js";
 import { consoleHandler } from "./slate/console-route.js";
 import { handleResend } from "./slate/resend-route.js";
@@ -169,7 +170,7 @@ function heldFor(slate) {
   }
 }
 /** Players with the overrides merged, as the board, the optimizer and the console's answers all build them. */
-export const mergedFor = (slate, players, overrides) => mergeOverrides(players, overrides, { held: heldFor(slate) });
+export const mergedFor = (slate, players, overrides) => withInFigures(mergeOverrides(players, overrides, { held: heldFor(slate) }));
 
 /**
  * The slate's players with Adam's overrides applied (server/slate/overrides.js): the effective projection, value and
@@ -351,6 +352,8 @@ async function handleOptimize(req, res, slate, opts) {
   if (opts.build) return fail(res, 409, "BUSY", "Lineups are already being made; try again when that finishes.");
   const picks = readPicks(slate, slateData);
   // Adam's overrides (typed numbers and bumps) are what the build scores, late swap included.
+  const unknownMarks = hisProblem(slateData); // his In and Out calls unreadable: who is Out is unknown, so nothing is built (fail closed)
+  if (unknownMarks) return fail(res, 409, "HIS_MARKS_UNREADABLE", unknownMarks);
   const players = effectivePlayers(res, slate, slateData, opts);
   if (!players) return;
   let { locked, excluded } = picks, lateOut = null;
