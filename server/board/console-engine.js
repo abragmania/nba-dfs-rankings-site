@@ -19,7 +19,7 @@
 // Pins: { m: minutes, u: usage, d: rate, p: projection }, each { id: value }, and r: { id: role } (his role flips). A pin always wins, the ceiling included.
 import { isNum } from "./figures.js";
 import { FLIP_ROLES, liveFlips, resolveRoles } from "./console-roles.js";
-import { oursUse, rolesFromEngine, chartUse, oursFor, sourceOf } from "./console-ours.js";
+import { oursUse, rolesFromEngine, chartUse, oursFor, sourceOf, injuredPlayNote } from "./console-ours.js";
 import { settleTyped } from "./depth-chart.js";
 
 export const TEAM_USAGE = 100;
@@ -356,5 +356,6 @@ export function scenario(team, outs = [], pins = emptyPins()) {
       proj_missing: rows.filter((r) => r.proj === null).length,
     },
     roles_note: [rolesNote, oursNote, totalNote ?? clean?.totalNote, plainNote].filter(Boolean).join(" ") || null,
+    injured_note: injuredPlayNote(team, outSet), // its own field, for the panel foot: never joined into roles_note, whose readers split on periods
   };
 }

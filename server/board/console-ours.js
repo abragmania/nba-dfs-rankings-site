@@ -4,6 +4,7 @@
 // and typed minutes, so the other men move with them). His typed minutes and marks always win on their own man whichever source is on. The tier engine's inputs are team.tier (server/minutes/tier-inputs.js).
 import { MINUTE_SOURCES, badChart, chartFive, fiveNotes } from "./depth-chart.js";
 import { tierUse, tierScenario } from "./console-tier.js";
+import { isNum } from "./figures.js";
 
 export const sourceOf = (team) => (MINUTE_SOURCES.includes(team.source) ? team.source : "twogun");
 
@@ -38,20 +39,30 @@ export function chartUse(team) {
   return bad ? { ok: false, why: `the ${team.depth.team} depth chart fails its check (${bad})` } : { ok: true };
 }
 
+/** Whether a man is on the chart's injured list and still plays tonight: on the board with TwoGun minutes, and not Out in the scenario (TwoGun's status, applied news and Adam's marks all land in outSet). */
+export function playsDespiteInjured(team, p, outSet) {
+  const k = keyOfMan(team, p);
+  return Boolean(k) && team.depth.men[k].role === "injured" && !outSet.has(p.id) && isNum(p.min) && p.min > 0;
+}
+
+/** One foot note per team (G68) for the chart-injured men who play tonight on this path (chart roles, TwoGun's minutes), names after a colon; null when none or when the roles come from the engine. Never split on its periods. */
+export function injuredPlayNote(team, outSet) {
+  if (rolesFromEngine(team) || !chartUse(team).ok) return null;
+  const names = team.men.filter((p) => playsDespiteInjured(team, p, outSet)).map((p) => p.name);
+  return names.length ? `On the ${team.depth.team} chart's injured list but playing tonight, in a bench role on TwoGun's minutes: ${names.join(", ")}` : null;
+}
+
 /** The chart's five as man ids, and notes: { ids, notes }. A set (depth-chart.js chartFive): the named starters who play and are not flipped away, every man marked S, and while fewer than five the named backup of a starter not playing. */
 export function chartStarters(team, outSet, flips) {
   const keyOf = {}, idOf = {};
   for (const p of team.men) { const k = keyOfMan(team, p); if (k) { keyOf[p.id] = k; idOf[k] = p.id; } }
   const flipKeys = {};
   for (const [id, role] of Object.entries(flips)) if (keyOf[id]) flipKeys[keyOf[id]] = role;
-  const active = (k) => idOf[k] !== undefined && !outSet.has(idOf[k]) && !(team.depth.men[k].role === "injured" && flipKeys[k] === undefined);
+  const manOf = (k) => team.men.find((p) => p.id === idOf[k]); // G68: a chart-injured man tonight's sources have playing is a normal rotation man; one Out (outSet) or with no minutes stays out
+  const active = (k) => idOf[k] !== undefined && !outSet.has(idOf[k]) && (team.depth.men[k].role !== "injured" || flipKeys[k] !== undefined || playsDespiteInjured(team, manOf(k), outSet));
   const extra = team.men.filter((p) => !keyOfMan(team, p) && flips[p.id] === "starter" && !outSet.has(p.id)).map((p) => ({ key: `~${p.id}` }));
   const { five, why, notes } = chartFive(team.depth, active, flipKeys, extra);
   const ids = five.map((k) => (k.startsWith("~") ? k.slice(1) : idOf[k]));
-  for (const p of team.men) {
-    const k = keyOf[p.id];
-    if (k && team.depth.men[k].role === "injured" && !outSet.has(p.id) && flips[p.id] === undefined && (p.min ?? 0) > 0) notes.push(`${p.name} is on the chart's injured list but TwoGun has him playing: flip his role or update the chart.`);
-  }
   return { ids, notes: [...notes, ...fiveNotes(team.depth, five, active, why, flipKeys)] };
 }
 

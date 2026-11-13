@@ -10,7 +10,7 @@
 // now a Starter. A starter marked Out flips nobody: the rule fills the five. Each such
 // move is a flip of its own, named so the page can show it and Ctrl+Z takes it back.
 import { isNum } from "./figures.js";
-import { oursUse, rolesFromEngine, tierStarters, chartUse, chartStarters, unmatchedNote } from "./console-ours.js";
+import { oursUse, rolesFromEngine, tierStarters, chartUse, chartStarters, unmatchedNote, playsDespiteInjured } from "./console-ours.js";
 import { tierScenario } from "./console-tier.js";
 
 export const STARTERS = 5;
@@ -56,7 +56,7 @@ function resolveFromChart(team, outSet, flips) {
     else if (five.has(p.id)) roles[p.id] = "starter";
     else {
       const m = p.depth_key ? team.depth.men[p.depth_key] : null;
-      roles[p.id] = m ? toRole[m.role] : p.bench_plus_ok ? "bench_plus" : isNum(p.min) && p.min > 0 ? "bench" : "oor";
+      roles[p.id] = m && !playsDespiteInjured(team, p, outSet) ? toRole[m.role] : p.bench_plus_ok ? "bench_plus" : isNum(p.min) && p.min > 0 ? "bench" : "oor";
     }
   }
   return { roles, flipped, note: [...notes, unmatchedNote(team)].filter(Boolean).join(" ") || null };

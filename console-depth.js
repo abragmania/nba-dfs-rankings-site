@@ -118,6 +118,7 @@ function teamBody(model, code, news) {
   if (starters.length > 5) notes.push(`${starters.length} starters marked: unmark one.`);
   else if (starters.length < 5) notes.push(`Only ${starters.length} starters: mark a man S.`);
   for (const n of String(res.roles_note ?? "").split(/\n+|(?<=\.)\s+/).filter(Boolean).map(shortNote)) if (!notes.some((x) => x.slice(0, 12) === n.slice(0, 12)) && !/starters marked|Only \d starters/.test(n)) notes.push(n);
+  if (res.injured_note) notes.push(res.injured_note); // one note per team, added whole (G68)
   const auto = calc(T, { ...S, pins: {} }, T.tonight).totals;
   const typedAdd = (res.totals.min ?? 0) - (auto.min ?? 0);
   const main = `<section class="box"><h2>Starters <small>${starters.length} &middot; ${f1(sumMin(starters))} min</small></h2>${HEAD("Pos")}${starters.map((r) => manRow(code, r, T, S, marks[r.id], "", N)).join("") || `<div class="none">Nobody is starting. Mark five men S.</div>`}</section>

@@ -123,7 +123,7 @@ export function teamHtml(model, G, code, colour) {
     return `<tr${r.out ? ' class="out"' : ""}>${roleCell(code, r)}${nameCell(T, p)}${usual}${c.m}${chg(r.min, tonightMin(T, p), "x-chg")}${basisCell(r)}${oursCell(r)}${usualU}${c.u}${chg(r.usg, tonightUsg(T, p), "x-uchg")}${c.d}${c.p}</tr>`;
   }).join("");
   const list = `<div class="tlx"><table class="tl">${COLGROUP}<thead>${GROUP_ROW}${HEAD_ROW}</thead><tbody>${rows}</tbody><tfoot><tr><td class="x-fteam">Team</td><td></td><td></td>${minTotalCell(R.totals.min)}<td></td><td></td><td></td><td class="gs"></td>${totalCell(R.totals.usg, TEAM_USAGE, R.totals.usg_why)}<td></td><td class="gs"></td>${projTotal(R, tonightTotal(T))}</tr></tfoot></table></div>`;
-  return `<div class="cwork"><div class="panel main" style="--t1:${colour}">${teamHead(T, S, code, key)}${roleLines(G, code, R)}${list}${missLines(R.totals)}</div>${compareHtml(T, S, key, colour)}</div>`;
+  return `<div class="cwork"><div class="panel main" style="--t1:${colour}">${teamHead(T, S, code, key)}${roleLines(G, code, R)}${list}${missLines(R.totals)}${R.injured_note ? `<div class="rnote">${esc(R.injured_note)}</div>` : ""}</div>${compareHtml(T, S, key, colour)}</div>`;
 }
 
 /** Which minutes feed the optimizer for this team: TwoGun's (the default), the saved depth chart's, or the chart with his edits. "All" sets every team. Only where the team has a chart. */
