@@ -267,8 +267,8 @@ function applyFresh(slate) {
   // The table holds a measured width; a man added or removed may change it. The console hides the table, and measures on the way back.
   if (changed && !scenarioConsole.isOn()) fixTableWidth();
   if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
-  lineupBar.refresh(); boardMarks.refresh(); // a new pull: the lineup read and TwoGun's flags may both have moved
-  scenarioConsole.onPull(S.name).then((ok) => { if (ok && S.slate) { S.consolePull = pullOf(S.slate).key; renderUpdLine(); } }).catch((e) => toast(`The console could not check the new pull: ${e.message}`, "err")); // the console has the new pull, so its line stops asking to reopen it; his marks are sent over the new pull with no click (console.js onPull)
+  boardMarks.refresh(); // a new pull: TwoGun's flags may have moved; the lineup bar follows the console's new inputs below, so it never reads the old model
+  scenarioConsole.onPull(S.name).then((ok) => { if (ok && S.slate) { S.consolePull = pullOf(S.slate).key; renderUpdLine(); } }).catch((e) => toast(`The console could not check the new pull: ${e.message}`, "err")).then(() => lineupBar.refresh()); // the console has the new pull, so its line stops asking to reopen it; his marks are sent over the new pull with no click (console.js onPull)
 }
 /** He has left the box: the row that waited takes its new figures, and whatever named a man it dropped follows. */
 function flushHeld() {
@@ -296,7 +296,7 @@ const refresher = createRefresher({
     S.slate = { ...S.slate, box_freshness: f };
     renderBoxNote(); drawTop();
   },
-  onNews: () => Promise.all([lineupBar.refresh(), boardMarks.refresh()]), // a lineup-only update: the News tab and the S chips; the rows redraw for the chips only, and wait while a form has focus (boardMarks' onChange)
+  onNews: () => Promise.all([scenarioConsole.onPull(S.name).catch((e) => toast(`The console could not read the new inputs: ${e.message}`, "err")).then(() => lineupBar.refresh()), boardMarks.refresh()]), // the console's inputs first, so the bar's chart order is from this read; a lineup-only update: the News tab and the S chips; the rows redraw for the chips only, and wait while a form has focus (boardMarks' onChange)
 });
 document.addEventListener("focusout", () => setTimeout(() => { if (S.rowsLater && S.slate && !formHasFocus()) { S.rowsLater = false; renderRows(); } }, 0)); // the redraw that waited for him to leave the form
 /** Re-reads the slate list: a slate that appeared joins the menu, and the board moves to it when he was on the previous newest (slate-refresh.js followNewest); an older pick stays. */

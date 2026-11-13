@@ -244,6 +244,17 @@ export function fiveFor(latestIn, team, { skip = new Set(), names = new Map() } 
   return { ids, used: q.used, kind, named, outs: outIds.map((id) => nameOf(id, claims.out.get(id)[0].name)), cut: (q.cut ?? []).map((id) => nameOf(id)), dropped, contested: flagged, contestedIds: [...contested], why: null, refused: false };
 }
 
+/**
+ * The men who fill the places a short five leaves open (Adam 11-13): the first `open` ids of tonight's order that are not in the five (`taken`), not disputed and not in `skip` (Out, benched). One copy:
+ * the minutes engine (minutes/order.js tonightOrder) and the lineup bar (makeProposals) both pick the fifth starter here, so they name the same man. Pure; ids compared as strings.
+ */
+export function openPlaces(orderIds, { taken = [], disputed = [], skip = [], open = 0 } = {}) {
+  const no = new Set([...taken, ...disputed, ...skip].map(String));
+  return orderIds.map(String).filter((id) => !no.has(id)).slice(0, Math.max(0, open));
+}
+
+const OLD_ORDER = "the console's chart order is from an older lineup read; it refreshes at the next pull";
+
 const sideText = (b, name) => (okBlock(b) ? `${name}${b.confirmed ? " (confirmed)" : " (projected)"}: ${b.men.map((m) => m.name).join(", ")}` : `${name}: ${b?.note ?? "not read"}`);
 
 function conflictRow(slate, team, latest, why, names) {
@@ -257,12 +268,12 @@ function conflictRow(slate, team, latest, why, names) {
 }
 
 /** One man two fresh sources disagree on: a foot row naming him and both claims. The id carries his id, so the team's other rows are unaffected. */
-function contestedRow(slate, team, c, name) {
+function contestedRow(slate, team, c, name, starts = false) {
   const words = (cl) => `${LABEL[cl.key]}${cl.lineup ? ` (${cl.lineup})` : ""}`;
   const outs = c.outs.map(words).join(" + "), fives = c.fives.map(words).join(" + ");
   return {
     id: `${slate}|${team}|conflict|${c.id}`, kind: "conflict", team,
-    text: `${team}: ${name} is Out in ${outs} but in the five in ${fives}; he is neither marked Out nor started, the other men stand.`,
+    text: `${team}: ${name} is Out in ${outs} but in the five in ${fives}; he is not marked Out and the pages do not start him${starts ? ", but the console still shows him as a starter" : ""}; the other men stand.`,
     sides: [`Out: ${outs}`, `In the five: ${fives}`], signature: JSON.stringify({ kind: "contested", id: c.id, o: c.outs.map((x) => x.key), f: c.fives.map((x) => x.key) }),
   };
 }
@@ -283,11 +294,12 @@ export function makeProposals({ latest: latestIn, players, view = null, nowMs = 
   const slate = latest.slate ?? "", byId = new Map(players.map((p) => [String(p.dk_id), p]));
   const stale = staleOf(latest, nowMs);
   const nameOf = (id, fallback) => byId.get(id)?.name ?? fallback ?? "a player not on this slate"; // never a raw id in the words (G62: said, not dropped)
-  const proposals = [], conflicts = [];
+  const proposals = [], conflicts = [], stuck = [];
   for (const team of Object.keys(latest.teams)) {
     const v = view[team];
     if (!v) continue;
     const claims = claimsFor(latest, team), consoleOut = new Set(v.outs ?? []), roles = v.roles ?? {};
+    const undone = new Set(Object.values(v.news ?? {}).filter((e) => e?.state === "undone").flatMap((e) => (e.men ?? []).filter((m) => m.kind === "out").map((m) => String(m.id))));
     const marks = v.marks ?? {}, markedOut = new Set(marks.out ?? []), markedS = new Set(marks.s ?? []), typed = new Set(marks.typed ?? []), markedIn = new Set(marks.in ?? []), benched = new Set(marks.benched ?? []);
     const settled = settledFive(latest, team);
     let q = settled.first;
@@ -297,7 +309,7 @@ export function makeProposals({ latest: latestIn, players, view = null, nowMs = 
     }
     // Fresh sources that clash on a man flag him alone, with both claims; he is neither Out nor started, and the team's other proposals go on (Adam 11-13).
     const clash = outVsFive(claims), contested = new Set(clash.map((c) => c.id));
-    for (const c of clash) conflicts.push(contestedRow(slate, team, c, nameOf(c.id, c.outs[0].name)));
+    for (const c of clash) conflicts.push(contestedRow(slate, team, c, nameOf(c.id, c.outs[0].name), roles[c.id] === "starter" && !consoleOut.has(c.id)));
     const without = (x) => ({ ...x, q: new Set([...x.q].filter((id) => !contested.has(id))), five: new Set([...x.five].filter((id) => !contested.has(id))) });
     q = without(q);
     for (const [id, cl] of claims.out) {
@@ -329,29 +341,64 @@ export function makeProposals({ latest: latestIn, players, view = null, nowMs = 
     if (unknown.length) conflicts.push(checkRow(slate, team, "unknown", `${team}: ${unknown.join(", ")} in a lineup ${unknown.length > 1 ? "have" : "has"} a status that was not recognised; no start proposed.`, unknown));
     if (unmatched.length || unknown.length) continue;
     if ([...markedS].some((id) => !q.five.has(id))) continue; // a man he marked S is not in the sources' five: their five contradicts his mark
-    const outNow = (id) => consoleOut.has(id) || markedOut.has(id) || claims.out.has(id) || contested.has(id); // a contested man is neither started nor benched here
+    const hardOut = (id) => consoleOut.has(id) || markedOut.has(id) || (claims.out.has(id) && !contested.has(id));
+    const outNow = (id) => hardOut(id) || contested.has(id); // a contested man is neither started nor benched here, unless the five is short and a man fills in (below)
+    // A disputed man leaves the five short: the open place goes to the next man in tonight's chart order (view.order, the engine's), as in minutes/order.js; the disputed man goes to the head of the bench.
+    const idFive = [...q.five];
+    // A man he put back in (a mark, or a news Out he undid) plays in the engine though a source claims him Out (engine.js whoIsGone putIn): he counts as playing and may fill.
+    const putBack = (id) => markedIn.has(id) || undone.has(id);
+    // The engine's five leaves out every man a source claims Out, put back or not (fiveFor), so the open places are counted that way; a put-back man may then be a fill by his place on the chart.
+    const live = [...q.five].filter((id) => !consoleOut.has(id) && !markedOut.has(id) && !contested.has(id) && !claims.out.has(id)).length;
+    // The chart order is the console's tonight order; it is used only when it was built from this very read (view.orderAt = the read's generated_at), never an older one (a page that loaded its inputs earlier), and only when the engine used the pages' five.
+    const orderOk = Array.isArray(v.order) && v.orderAt != null && v.orderAt === latest.generated_at;
+    const engineNo = v.five && v.five.applied === false ? `the engine did not use this five${v.five.why ? ` (${v.five.why})` : ""}` : null;
+    const short = contested.size > 0 && live < 5;
+    const fill = short && orderOk && !engineNo ? openPlaces(v.order.filter((id) => roles[String(id)] !== undefined), { taken: [...q.five].filter((id) => !claims.out.has(id)), disputed: contested, skip: [...consoleOut, ...markedOut, ...[...claims.out.keys()].filter((id) => !putBack(id)), ...benched], open: 5 - live }) : [];
+    const s = { team, ids: [...contested].filter((id) => roles[id] === "starter" && !consoleOut.has(id) && !markedOut.has(id)), why: Array.isArray(v.order) ? (orderOk ? engineNo : OLD_ORDER) : "the console carries no chart order for this team", old: Array.isArray(v.order) && !orderOk, head: Boolean(v.five?.applied), skip: false };
+    if (short) stuck.push(s);
+    if (fill.length) q = { ...q, q: new Set([...q.q, ...fill]), five: new Set([...q.five, ...fill]) };
     // A man he sent to the bench or out of the rotation is never proposed to start.
-    const incoming = [...q.q].filter((id) => roles[id] !== undefined && roles[id] !== "starter" && !outNow(id) && !benched.has(id)).sort((a, b) => (v.min?.[b] ?? 0) - (v.min?.[a] ?? 0) || a.localeCompare(b));
-    if (!incoming.length) continue;
-    const missing = Object.entries(roles).filter(([id, r]) => r === "starter" && !outNow(id) && !q.five.has(id)).map(([id]) => id).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
-    if (missing.some((id) => typed.has(id))) continue; // the five would bench a man whose numbers he typed: his mark wins
-    if (Object.entries(roles).filter(([id, r]) => r === "starter" && !outNow(id) && q.five.has(id)).length + incoming.length > 5) continue; // never a start with no one going to the bench
+    const incoming = [...q.q].filter((id) => roles[id] !== undefined && roles[id] !== "starter" && (!outNow(id) || fill.includes(id)) && !benched.has(id)).sort((a, b) => (v.min?.[b] ?? 0) - (v.min?.[a] ?? 0) || a.localeCompare(b));
+    if (!incoming.length) { s.why ??= fill.length ? "the man to fill the place already starts in the console" : "no man on the chart's order is free to fill the place"; continue; }
+    const missing = Object.entries(roles).filter(([id, r]) => r === "starter" && !hardOut(id) && (fill.length || !contested.has(id)) && !q.five.has(id)).map(([id]) => id).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+    if (missing.some((id) => typed.has(id))) { s.why ??= `his typed numbers on ${missing.filter((id) => typed.has(id)).map((id) => nameOf(id)).join(", ")} hold the five`; continue; } // the five would bench a man whose numbers he typed: his mark wins
+    if (Object.entries(roles).filter(([id, r]) => r === "starter" && !outNow(id) && q.five.has(id)).length + incoming.length > 5) { s.why ??= "starting the fill would leave six starters"; continue; } // never a start with no one going to the bench
     if (missing.length && missing.length !== incoming.length) {
       conflicts.push(conflictRow(slate, team, latest, `the console starts ${missing.map((id) => nameOf(id)).join(", ")}, not in the five, and ${incoming.length} men are to start`, missing));
+      s.skip = true; // this team already has a row with its reason
       continue;
     }
-    const sources = q.used.filter((k) => incoming.some((id) => idsOf(latest.teams[team][k]).has(id))).map((k) => ({ key: k, label: LABEL[k], at: sourceTime(latest, k), lineup: latest.teams[team][k].confirmed ? "confirmed" : "projected", detail: null }));
+    const named = fill.length ? [...idFive, ...incoming] : incoming; // a fill man is on no page: the pages behind the start are those naming the agreed men
+    const sources = q.used.filter((k) => named.some((id) => idsOf(latest.teams[team][k]).has(id))).map((k) => ({ key: k, label: LABEL[k], at: sourceTime(latest, k), lineup: latest.teams[team][k].confirmed ? "confirmed" : "projected", detail: null }));
     const word = sources.every((s) => s.lineup === "confirmed") ? "confirmed" : sources.some((s) => s.lineup === "confirmed") ? "one confirmed" : "projected";
+    const allFill = fill.length > 0 && incoming.every((id) => fill.includes(id));
     const ins = incoming.map((id) => ({ id, name: nameOf(id) })), outs = missing.map((id) => ({ id, name: nameOf(id) }));
     const tg = incoming.map((id) => mins(tgMin(byId.get(id)))).join(", ");
     proposals.push({
-      id: `${slate}|${team}|starter|${hashOf(JSON.stringify([...q.five].sort()))}`, kind: "starter", team, player: ins[0], players: ins, bench: outs,
-      text: `${labelsOf(sources)}: START: ${ins.map((m) => m.name).join(", ")}${outs.length ? ` · Bench: ${outs.map((m) => m.name).join(", ")}` : ""}`,
-      detail: `${word[0].toUpperCase()}${word.slice(1)}; TwoGun has ${ins.length > 1 ? "them at" : "him at"} ${tg} min${ins.length === 1 ? `; the console has him on ${roles[incoming[0]] === "bench_plus" ? "Bench+" : roles[incoming[0]]}` : ""}`,
+      id: `${slate}|${team}|starter|${hashOf(JSON.stringify(idFive.sort()))}`, kind: "starter", team, player: ins[0], players: ins, bench: outs,
+      text: allFill ? `START: ${ins.map((m) => m.name).join(", ")} (next on the chart; ${[...contested].map((id) => nameOf(id)).join(", ")} disputed)${outs.length ? ` · Bench: ${outs.map((m) => m.name).join(", ")}` : ""}` // no page named him: none is credited
+        : `${labelsOf(sources)}: START: ${ins.map((m) => m.name).join(", ")}${outs.length ? ` · Bench: ${outs.map((m) => m.name).join(", ")}` : ""}`,
+      detail: `${allFill ? "" : `${word[0].toUpperCase()}${word.slice(1)}; `}${fill.length && !allFill ? `${fill.map((id) => nameOf(id)).join(", ")} fills the open place (next on the chart; ${[...contested].map((id) => nameOf(id)).join(", ")} disputed); ` : ""}TwoGun has ${ins.length > 1 ? "them at" : "him at"} ${tg} min${ins.length === 1 ? `; the console has him on ${roles[incoming[0]] === "bench_plus" ? "Bench+" : roles[incoming[0]]}` : ""}`,
       sources, twogun: { minutes: tgMin(byId.get(incoming[0])) ?? null },
       actions: [{ fn: "setStarters", team, starters: incoming, bench: missing }], // console-card.js autoApplyProposal: the five-starter move that puts these men in and those out
       signature: JSON.stringify({ kind: "starter", in: incoming, out: missing, s: sources.map((s) => [s.key, s.lineup]) }),
     });
+  }
+  // A disputed man the console still starts, whom no offered proposal benches (a start for this five was already applied, a typed number holds him, or no chart order was usable): said, never silent (G62).
+  const news = Object.fromEntries(Object.entries(view).map(([t, v]) => [t, v?.news ?? {}])), offered = autoPlan({ proposals }, news);
+  const offeredIds = new Set([...offered.apply, ...offered.info].map((p) => p.id));
+  for (const { team, ids, why, old, head, skip } of stuck) {
+    if (skip) continue;
+    for (const id of ids) {
+      if (proposals.some((p) => p.kind === "starter" && p.team === team && offeredIds.has(p.id) && p.bench.some((b) => b.id === id))) continue;
+      const name = nameOf(id, null);
+      conflicts.push({
+        id: `${slate}|${team}|conflict|${id}|starts`, kind: "conflict", team,
+        text: old ? `${team}: ${name} is disputed between the pages; ${OLD_ORDER}.`
+          : `${team}: the console still starts ${name}, whom the pages dispute; ${head ? "the engine has him at the head of the bench, but " : ""}no start is offered to move him (${why ?? "a start for this five may already have been applied"}).`,
+        sides: [], signature: JSON.stringify({ kind: "contested-starts", id, why: why ?? null }),
+      });
+    }
   }
   // an Out kept from a stale source stays in force (Adam 11-13): only the others wait
   if (stale) for (const p of proposals.filter((x) => !(x.kind === "out" && x.sources.every((src) => src.kept)))) p.noApply = `the lineup read is ${stale.ageMin == null ? "of unknown age" : `${stale.ageMin} minutes old`}, so nothing from it is made by itself until the next pull`;

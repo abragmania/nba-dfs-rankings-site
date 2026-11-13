@@ -23,7 +23,7 @@ function backOut(c, base, sets) {
 
 /**
  * The scenario each team is on, his marks included, for the lineup proposals (lineup-proposals.js): { team: { roles: { id: role }, outs: [id],
- * min: { id: minutes }, marks, news } }. marks are his own: { out: [men he marked Out beyond TwoGun's], s: [men he marked S], typed: [men with typed
+ * min: { id: minutes }, order: [ids: tonight's chart order, the engine's], orderAt (the lineup read it was built from), five: { applied: whether the engine used the pages' five, why }, marks, news } }. marks are his own: { out: [men he marked Out beyond TwoGun's], s: [men he marked S], typed: [men with typed
  * minutes or DK/min], in: [men he put back in], benched: [men he sent to the bench or out of the rotation] }; how news treats them is the rule in lineup-proposals.js.
  * newsOut: the men an applied news Out still holds exactly as it left them; tonightOut: TwoGun's own Out list (both for server/slate/news-reverse.js). appliedTo: { id: the number an Apply wrote }, so a number an Apply wrote is not called his.
  * A move the lineup news made (an applied news entry's men) is the news's, never his mark. No page: the app's server reads it too (server/slate/news-apply.js).
@@ -40,7 +40,7 @@ export function lineupViewOf(c) {
       in: [...tonight].filter((id) => !S.outs.includes(id)), benched: flips(["bench_plus", "bench", "oor"]), // a man he put back in; a man he sent to the bench or out of the rotation
       typedMin: { ...(mine.m ?? {}) }, typedRate: { ...(mine.d ?? {}) }, // which he typed, and the number: minutes (m) or DK per minute (d); `typed` above is both
     };
-    view[code] = { outs: [...outs], roles: Object.fromEntries(rows.map((r) => [r.id, r.role])), min: Object.fromEntries(rows.filter((r) => typeof r.min === "number").map((r) => [r.id, r.min])), marks, news: structuredClone(S.news ?? {}), newsOut: [...byNews.out], tonightOut: [...tonight], appliedTo: c.applied?.set ?? {} };
+    view[code] = { order: Array.isArray(T.tier?.order) ? T.tier.order.map(String) : [], orderAt: T.tier?.lineup_at ?? null, five: T.tier && !T.tier.missing ? { applied: Boolean(T.tier.confirmed), why: T.tier.five_why ?? null } : null, outs: [...outs], roles: Object.fromEntries(rows.map((r) => [r.id, r.role])), min: Object.fromEntries(rows.filter((r) => typeof r.min === "number").map((r) => [r.id, r.min])), marks, news: structuredClone(S.news ?? {}), newsOut: [...byNews.out], tonightOut: [...tonight], appliedTo: c.applied?.set ?? {} };
   }
   return view;
 }
