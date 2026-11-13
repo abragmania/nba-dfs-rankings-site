@@ -26,6 +26,7 @@ import { loadTheme, saveTheme, themeClasses, themeHtml } from "./theme.js";
 import { createConsole } from "./console.js";
 import { createLineupBar } from "./lineup-bar.js";
 import { createBoardMarks } from "./board-marks.js";
+import { confirmedByGame, borderStyle } from "./game-borders.js";
 import { mountLateSwap } from "./lsw-main.js";
 
 const $ = (id) => document.getElementById(id);
@@ -98,7 +99,7 @@ const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: 
 // The console's word on each row (board-marks.js): the S chip, and his typed Min and DK/m TON with their undo chips; those cells write through the console.
 const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, players: () => S.players, onChange: () => { if (!S.slate) return; card.badge(); if (formHasFocus()) { S.rowsLater = true; return; } renderRows(); }, noteEl: $("pullnote").insertAdjacentElement("afterend", Object.assign(document.createElement("div"), { hidden: true })) });
 // The lineup bar above the list (lineup-bar.js): an Out or a confirmed start from the Monster, RotoWire and RotoGrinders pages applies itself through the console, with an undo X; a projected start is words only.
-const lineupBar = createLineupBar({ el: $("lineupbar"), api, slate: () => S.name, players: () => S.players, slateData: () => S.slate, tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; }, console: scenarioConsole, toast, tryStore, tick: true, onLabel: (l) => { S.news = l; renderTop(); }, applyInPage: Boolean(globalThis.nbadfsSitePull) });
+const lineupBar = createLineupBar({ el: $("lineupbar"), api, slate: () => S.name, players: () => S.players, slateData: () => S.slate, tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; }, console: scenarioConsole, toast, tryStore, tick: true, onLabel: (l) => { S.news = l; renderTop(); }, onModel: (m) => { const f = confirmedByGame(m); if (JSON.stringify(f) !== JSON.stringify(S.fives)) { S.fives = f; if (S.slate) renderGames(); } }, applyInPage: Boolean(globalThis.nbadfsSitePull) });
 // Full screen (Player list header): hides the optimizer panel so the table takes the width. Remembered per viewer; under 900 px
 // wide with nothing stored it starts on. Pin slots (late swap) needs the panel, so the button and the hiding step aside then.
 const FS_KEY = "nbaboard.fullscreen";
@@ -373,7 +374,8 @@ function renderGames() {
     const note = typeof sp !== "number" || !g.favourite ? "" : (fav ? "" : "+") + (fav ? sp : Math.abs(sp)).toFixed(1);
     return `<div class="side${fav ? " fav" : ""}" style="--t1:${c.t1}">${logo(t, "lg")}<b class="code">${esc(t)}</b><small class="spr" title="${fav ? "Favourite" : "Underdog"}">${esc(note)}</small>${ip === null ? `<span class="ip">${dash("no implied points in this slate file")}</span>` : `<span class="ip t-${it[k]}" style="--tc:${c.t1}"${inotes[k] ? ` title="${esc(inotes[k])}"` : ""}>${ip.toFixed(1)}</span>`}</div>`;
   };
-  $("games").innerHTML = games.map((g, gi) => `<div class="game${S.game === g.game ? " sel" : ""}" data-game="${esc(g.game)}"><div class="gh"><span class="tip">${esc(when(g.tip) ?? "—")}</span><span class="tot">O/U ${gameTotals[gi] === null ? dash("no total in this slate file") : `<b class="t-${gt[gi]}" style="--tc:var(--am)"${gn[gi] ? ` title="${esc(gn[gi])}"` : ""}>${gameTotals[gi].toFixed(1)}</b>`}</span></div>${side(g, g.away, gi * 2)}${side(g, g.home, gi * 2 + 1)}</div>`).join("");
+  const bd = (g) => { const s = borderStyle(S.fives?.[g.game]); return s ? ` cf" style="${s}` : ""; }; // thin green/yellow border halves from the News tab's confirmed fives
+  $("games").innerHTML = games.map((g, gi) => `<div class="game${S.game === g.game ? " sel" : ""}${bd(g)}" data-game="${esc(g.game)}"><div class="gh"><span class="tip">${esc(when(g.tip) ?? "—")}</span><span class="tot">O/U ${gameTotals[gi] === null ? dash("no total in this slate file") : `<b class="t-${gt[gi]}" style="--tc:var(--am)"${gn[gi] ? ` title="${esc(gn[gi])}"` : ""}>${gameTotals[gi].toFixed(1)}</b>`}</span></div>${side(g, g.away, gi * 2)}${side(g, g.home, gi * 2 + 1)}</div>`).join("");
   fitGames();
 }
 

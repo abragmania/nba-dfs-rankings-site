@@ -9,7 +9,7 @@ import { SLOTS } from "./slots.js";
 import { cardRowHtml, capLine, totals, lineupTag, isOutNow } from "./card-row.js";
 import { outFor } from "./figures.js";
 import { gameStacks } from "./corr.js";
-import { exposureRows, exposureHtml, setKey, savedKey, savedKeys, builtFigures } from "./lineups-list.js";
+import { exposureRows, exposureHtml, starredCounts, starStripHtml, setKey, savedKey, savedKeys, builtFigures } from "./lineups-list.js";
 import { swapButtonHtml, swapPanelHtml, swapOptions, lineupStarted } from "./swap-list.js";
 import { buildMessage } from "./build-progress.js";
 import { compareHtml, freshCompare } from "./lineups-compare.js";
@@ -196,7 +196,8 @@ function cardHtml(e, { byId, dash, colourOf, swap, locked, savedSet, names, edit
   const stacks = e.mode === "GPP" ? gameStacks(e.men) : new Map(); // game stacks are a GPP idea: a Cash lineup shows no CORR chip (Adam)
   const rows = SLOTS.map((s, k) => {
     const p = e.men[k], lk = e.kind === "build" && locked.has(p?.dk_id), tag = tagOf(e.kind, p);
-    return cardRowHtml({ slot: s, p, dash, colourOf, lead: "logo", cls: `lr${lk ? " locked" : ""}${tag ? " gonetag" : ""}${heldRow(p, held) ? " held" : ""}`, note: [lk ? "locked" : "", tag ?? ""].filter(Boolean).join(" · "), corr: stacks.get(p?.dk_id) ?? null, ctl: swapButtonHtml(p, e.key, swap.ctx, open, lineupStarted(e.men, swap.ctx)) })
+    const star = p?.dk_id != null && live?.get(p.dk_id)?.starred === true; // the star on the board now, not the one a frozen build row carried
+    return cardRowHtml({ slot: s, p, dash, colourOf, lead: "logo", cls: `lr${lk ? " locked" : ""}${tag ? " gonetag" : ""}${heldRow(p, held) ? " held" : ""}${star ? " starred" : ""}`, note: [lk ? "locked" : "", tag ?? ""].filter(Boolean).join(" · "), corr: stacks.get(p?.dk_id) ?? null, ctl: swapButtonHtml(p, e.key, swap.ctx, open, lineupStarted(e.men, swap.ctx)) })
       + (open && p?.dk_id === open ? swapPanelHtml(swapOptions(e.ids, open, swap.ctx), e.key, dash) : "");
   }).join("");
   const foot = capLine(e.men.map((p) => (p?.stale ? null : p)), { dash, short: true });
@@ -375,5 +376,6 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
   const noted = notes ? `<div class="lt-notes"><em>The last ${esc(P.mode)} build made on this page:</em>${notes}</div>` : "";
   const otherHtml = others.length && !readErr ? otherSavedHtml(others, { byId: c.byId, live: c.byId, tagOf: (kind, p) => (isOutNow(p) ? "now Out" : lineupTag(p, c.byId, c.outNames)), spotText: P.spotText ?? null, dash, colourOf: c.colourOf, swap: { ctx: swapCtx, open: P.swap ?? null }, locked: new Set(c.picks.locked), savedSet, names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true, held: null }, P.lt.openOther ?? []) : "";
   const away = lists.buildOther ? `<div class="lt-away">The last build is ${esc(lists.buildOther.mode)} (${lists.buildOther.n} lineup${lists.buildOther.n === 1 ? "" : "s"}); switch the board to ${esc(lists.buildOther.mode)} to see it.</div>` : "";
-  return `${run}${view === "build" ? readNote + noted : ow + undo + mv}<div class="lt-top">${strip}<span class="lt-acts">${saveAll}${dl}</span></div>${top}${body}${otherHtml}${away}`;
+  const stars = starStripHtml(starredCounts(inMode.map((e) => e.ids), c.byId)); // every starred man and how many of these lineups hold him
+  return `${run}${view === "build" ? readNote + noted : ow + undo + mv}<div class="lt-top">${strip}<span class="lt-acts">${saveAll}${dl}</span></div>${top}${stars}${body}${otherHtml}${away}`;
 }

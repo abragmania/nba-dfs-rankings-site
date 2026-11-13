@@ -20,6 +20,7 @@ body.light .ip.t-solo,body.light .tot b.t-solo{color:color-mix(in srgb,var(--tc)
 body.light .ip.t-lit,body.light .tot b.t-lit{color:color-mix(in srgb,var(--tc) 45%,#000);text-shadow:none}
 body.light .ip.t-soft,body.light .tot b.t-soft{color:color-mix(in srgb,var(--tc) 45%,#000)}
 body.light .game.sel{background:linear-gradient(180deg,#fff3d6,var(--p))}
+body.light .game.cf{--gsel:#fff3d6}
 body.light .capbar{background:#00000012}
 body.light .capbar i{box-shadow:none}
 body.light .logo{filter:drop-shadow(0 0 1px #00000059)}

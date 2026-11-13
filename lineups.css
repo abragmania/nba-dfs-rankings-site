@@ -205,3 +205,12 @@ body.lineups-on{padding-bottom:0} /* the tab ends at its scrolling boxes, sized 
 #lineups .crow.held .sn b,#lineups .crow.held .sn a{color:var(--mu)}
 #lineups .ext tr.held>td{opacity:.4}
 #lineups .ext tr.held .ex-f{opacity:1}
+/* Starred men (Adam 11-13): the strip above the cards (every starred man, "in N of M lineups"; "in 0" red) and a starred man's row lit gold on each card. */
+#lineups .lt-stars{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}
+#lineups .stc{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--am);background:color-mix(in srgb,var(--am) 14%,transparent);font-size:12.5px}
+#lineups .stc i{font-style:normal;color:var(--am)}
+#lineups .stc .pn{font-weight:700;color:var(--tx);background:none;border:0;padding:0;cursor:pointer}
+#lineups .stc em{font-style:normal;font-weight:700;color:var(--am)}
+#lineups .stc.zero{border-color:var(--rd);background:color-mix(in srgb,var(--rd) 12%,transparent)}
+#lineups .stc.zero em{color:var(--rd)}
+#lineups .crow.starred{background-color:color-mix(in srgb,var(--am) 20%,transparent);box-shadow:inset 3px 0 var(--am)}

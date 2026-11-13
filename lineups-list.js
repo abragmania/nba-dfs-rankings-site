@@ -22,6 +22,21 @@ export function exposureRows(lineups, byId) {
   return sortExposure(rows);
 }
 
+/** Per starred man on the board: how many of the lineups hold him (0 included, never left out). `byId` is the board's rows (the star is read from them);
+ *  `lineups` = arrays of dk_ids. Name order. Pure. */
+export function starredCounts(lineups, byId) {
+  const men = [...byId.values()].filter((p) => p?.starred === true && p.dk_id != null);
+  return men.map((p) => ({ id: p.dk_id, name: p.name ?? String(p.dk_id), count: lineups.filter((ids) => ids.includes(p.dk_id)).length, total: lineups.length }))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+
+/** The strip above the cards: every starred man lit, "in N of M lineups"; "in 0" in red for a man in none. "" with nobody starred or no lineups. */
+export function starStripHtml(counts) {
+  if (!counts.length || !counts[0].total) return "";
+  const chip = (r) => `<span class="stc${r.count ? "" : " zero"}" title="${r.count ? `${esc(r.name)} is in ${r.count} of ${r.total} lineups` : `${esc(r.name)} is starred and is in none of these lineups`}"><i>★</i>${nameLink({ dk_id: r.id, name: r.name })}<em>${r.count ? `in ${r.count} of ${r.total} lineup${r.total === 1 ? "" : "s"}` : "in 0"}</em></span>`;
+  return `<div class="lt-stars">${counts.map(chip).join("")}</div>`;
+}
+
 /** The table's order (A10): sort is { key, dir } on any column, Exposure's key being "pct". A man with no figure in that column
  *  goes last either way; ties by name so the order never jumps. */
 export function sortExposure(rows, { key = "pct", dir = -1 } = {}) {

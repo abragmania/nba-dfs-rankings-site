@@ -145,7 +145,7 @@ export function barHtml(bar, state = {}) {
  * call it when the slate or its numbers change. newsOnly redraws the applied notes from the console; call it when his work moves.
  * applyInPage: only the public site's page applies (autoApplyProposal); on the app the server applies inside every pull (server/slate/news-apply.js), so a page never applies alongside it and never applies twice.
  */
-export function createLineupBar({ el, api, slate, players, slateData = () => null, tips = () => ({}), console: cons, toast, tryStore, now = Date.now, onLabel = () => {}, tick = false, applyInPage = false }) {
+export function createLineupBar({ el, api, slate, players, slateData = () => null, tips = () => ({}), console: cons, toast, tryStore, now = Date.now, onLabel = () => {}, onModel = () => {}, tick = false, applyInPage = false }) {
   const key = () => `nbaboard.lineupdismiss.${slate()}`;
   const readDismissed = () => { try { return JSON.parse(tryStore(() => localStorage.getItem(key())) ?? "{}") ?? {}; } catch (e) { console.warn("Lineup dismissals unreadable:", e.message); return {}; } };
   const state = { notes: [], team: null }; // team: the log filtered to one team (a click on a team header or a chip)
@@ -177,6 +177,7 @@ export function createLineupBar({ el, api, slate, players, slateData = () => nul
     }
     label = newsLabel(bar, shownState, model?.log.length ?? 0);
     onLabel(label);
+    onModel(model); // the game cards' border reads each team's five from the same model (game-borders.js)
   }
   const settle = (notes, next = { applied: [], info: [], conflicts: [] }, old = false) => { staleFlag = old; shown = next; state.notes = notes.filter(Boolean); draw(); };
 
