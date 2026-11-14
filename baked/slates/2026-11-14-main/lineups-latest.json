@@ -1,0 +1,2373 @@
+{
+ "slate": "2026-11-14-main",
+ "generated_at": "2026-11-14T22:21:01.659Z",
+ "status": "ok",
+ "slate_built_from": "slates/2026-11-14-main/raw/2026-11-14T172027-0500",
+ "sources": {
+  "monster": {
+   "url": "https://basketballmonster.com/nbalineups.aspx",
+   "status": "ok",
+   "fetched_at": "2026-11-14T22:20:53.409Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-14T172053-0500.html.gz",
+   "saved_at": "2026-11-14T22:20:53.409Z",
+   "parsed_sha": "909530e1e9673e7d3616e5938617afc080ec4e1423e4e0c89f78c47fbe0c2459",
+   "sha256": "53ac001f71c6009be94db902f1caec89a937cf419b8ac817dac6f8ca1eca41da"
+  },
+  "rotowire": {
+   "url": "https://www.rotowire.com/basketball/nba-lineups.php",
+   "status": "ok",
+   "fetched_at": "2026-11-14T22:20:57.500Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-14T172057-0500.html.gz",
+   "saved_at": "2026-11-14T22:20:57.500Z",
+   "parsed_sha": "f213d397a5470244baf3aaeddb1dd4147815048633c0baacc2590a9e215f0002",
+   "sha256": "bdf97d37fe0669b790a0df7b2b18d30a98981fd9fc3db49126b06220214b104c"
+  },
+  "rotogrinders": {
+   "url": "https://rotogrinders.com/lineups/nba?site=draftkings",
+   "status": "ok",
+   "fetched_at": "2026-11-14T22:21:01.637Z",
+   "saved_as": "news/lineups/pages/rotogrinders-2026-11-14T172101-0500.html.gz",
+   "saved_at": "2026-11-14T22:21:01.637Z",
+   "parsed_sha": "fa358dc4b7dc1b539e76a65b31998126034a3f58fb8a87ad4ad9a02f3ee370cf",
+   "sha256": "e285bc785fb873c556b8147b461fed68e31c50857d63d82c644f764ccce7169d"
+  }
+ },
+ "monster_news": {
+  "status": "ok",
+  "fetched_at": "2026-11-14T22:20:40.537Z",
+  "changed_at": "2026-11-14T17:20:40-05:00",
+  "saved_as": "news/bbm/2026-11-14T172040-0500.html",
+  "out": [
+   {
+    "name": "Bryce McGowens",
+    "team": "NOP",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "left elbow infection - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Trey Murphy",
+    "team": "NOP",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "bilateral patellar tendinopathy - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Trendon Watford",
+    "team": "NOP",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "right ankle sprain - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Sam Merrill",
+    "team": "CLE",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "right elbow injury management - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Evan Mobley",
+    "team": "CLE",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "left great toe sprain - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Nae'Qwan Tomlin",
+    "team": "CLE",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "lower back stress - Est. Return 11/18",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Tarik Biberovic",
+    "team": "DAL",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "right heel bursitis - Est. Return 11/15",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Dereck Lively II",
+    "team": "DAL",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "foot surgery - Est. Return 11/24",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Jalen Duren",
+    "team": "DET",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "right hamstring strain - Est. Return 11/24",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Isaiah Joe",
+    "team": "DET",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "right hip contusion - Est. Return 11/17",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Tobe Awaka",
+    "team": "CHI",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "disc irritation - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Ty Jerome",
+    "team": "MEM",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "right hip soreness - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Scotty Pippen Jr.",
+    "team": "MEM",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "lumbar disc herniation - Est. Return 11/25",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Quinten Post",
+    "team": "MEM",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "concussion protocol - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Richie Saunders",
+    "team": "MEM",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "torn acl - Est. Return 11/11",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   }
+  ],
+  "unrecognised": [
+   {
+    "name": "Zion Williamson",
+    "team": "NOP",
+    "raw": "Off Off Injury Report"
+   }
+  ],
+  "cards": [
+   {
+    "id": "182621",
+    "name": "Dillon Mitchell",
+    "team": "BOS",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "g league twoway",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T22:15:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182620",
+    "name": "Amari Williams",
+    "team": "BOS",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "g league twoway",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T22:15:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182619",
+    "name": "Devin Carter",
+    "team": "BOS",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "g league twoway",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T22:15:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182618",
+    "name": "Chris Cenac Jr",
+    "team": "BOS",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "g league on assignment",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T22:15:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182617",
+    "name": "Mitchell Robinson",
+    "team": "BOS",
+    "dk_id": null,
+    "match": null,
+    "word": "Off Injury Report",
+    "label": "UNKNOWN(Off Injury Report #00cc44)",
+    "body": null,
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T22:15:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182616",
+    "name": "Paul George",
+    "team": "BOS",
+    "dk_id": null,
+    "match": null,
+    "word": "Off Injury Report",
+    "label": "UNKNOWN(Off Injury Report #00cc44)",
+    "body": null,
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T22:15:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182615",
+    "name": "Joel Embiid",
+    "team": "PHI",
+    "dk_id": null,
+    "match": null,
+    "word": "Out",
+    "label": "Out",
+    "body": "right foot plantar fascia injury management",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T22:00:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182614",
+    "name": "LeBron James",
+    "team": "PHI",
+    "dk_id": null,
+    "match": null,
+    "word": "Off Injury Report",
+    "label": "UNKNOWN(Off Injury Report #00cc44)",
+    "body": null,
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T22:00:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182613",
+    "name": "Trayce Jackson-Davis",
+    "team": "TOR",
+    "dk_id": null,
+    "match": null,
+    "word": "Off Injury Report",
+    "label": "UNKNOWN(Off Injury Report #00cc44)",
+    "body": null,
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T21:46:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182612",
+    "name": "Steven Adams",
+    "team": "HOU",
+    "dk_id": null,
+    "match": null,
+    "word": "Probable",
+    "label": "Probable",
+    "body": "right soleus strain",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T21:46:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182611",
+    "name": "Fred VanVleet",
+    "team": "HOU",
+    "dk_id": null,
+    "match": null,
+    "word": "Out",
+    "label": "Out",
+    "body": "right knee injury management",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T21:46:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182610",
+    "name": "Keegan Murray",
+    "team": "SAC",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "ilness",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T21:35:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182609",
+    "name": "Darryn Peterson",
+    "team": "UTA",
+    "dk_id": null,
+    "match": null,
+    "word": "Playing",
+    "label": "Playing",
+    "body": "knee - Peterson said he'll play Sunday. Commenting on his knee, \"It's fine. I'm feeling good and playing tomorrow.\"",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T21:32:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182608",
+    "name": "T.J. McConnell",
+    "team": "IND",
+    "dk_id": null,
+    "match": null,
+    "word": "Probable",
+    "label": "Probable",
+    "body": "right hamstring strain",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T21:14:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182607",
+    "name": "Aaron Nesmith",
+    "team": "IND",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "left hand sprain",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T21:14:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182606",
+    "name": "Alexandre Sarr",
+    "team": "WAS",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "illness",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T21:14:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182605",
+    "name": "Felix Okpara",
+    "team": "WAS",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "g league twoway",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T21:08:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182604",
+    "name": "Bub Carrington",
+    "team": "WAS",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "chest / sternum contusion",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T21:08:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182603",
+    "name": "Tre Johnson",
+    "team": "WAS",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "low back soreness",
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T21:08:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182602",
+    "name": "Collin Sexton",
+    "team": "LAL",
+    "dk_id": null,
+    "match": null,
+    "word": "",
+    "label": "UNKNOWN( #01A9DB)",
+    "body": null,
+    "words_at": "2026-11-14T172040-0500",
+    "at": "2026-11-14T20:08:40.000Z",
+    "precision": "minute",
+    "out_as": null
+   }
+  ],
+  "pages_read": [
+   "2026-11-14T172040-0500.html"
+  ],
+  "unreadable_age": 0,
+  "unread_ids": [],
+  "no_id_page": "2026-11-14T172040-0500.html",
+  "no_id_newest": 0,
+  "unread_cards": 0
+ },
+ "teams": {
+  "DEN": {
+   "game": "DEN@NOP",
+   "monster": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Jamal Murray",
+      "pos": "PG",
+      "bmId": "5345",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912095",
+      "match": "exact"
+     },
+     {
+      "name": "Christian Braun",
+      "pos": "SG",
+      "bmId": "6526",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912250",
+      "match": "exact"
+     },
+     {
+      "name": "Cam Johnson",
+      "pos": "SF",
+      "bmId": "6125",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912282",
+      "match": "near"
+     },
+     {
+      "name": "Aaron Gordon",
+      "pos": "PF",
+      "bmId": "3920",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912224",
+      "match": "exact"
+     },
+     {
+      "name": "Nikola Jokic",
+      "pos": "C",
+      "bmId": "3930",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912081",
+      "match": "exact"
+     }
+    ]
+   },
+   "rotowire": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Jamal Murray",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912095",
+      "match": "exact"
+     },
+     {
+      "name": "Christian Braun",
+      "pos": "SG",
+      "flag": null,
+      "status": null,
+      "id": "44912250",
+      "match": "exact"
+     },
+     {
+      "name": "Cameron Johnson",
+      "pos": "SF",
+      "flag": null,
+      "status": null,
+      "id": "44912282",
+      "match": "exact"
+     },
+     {
+      "name": "Aaron Gordon",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912224",
+      "match": "exact"
+     },
+     {
+      "name": "Nikola Jokic",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912081",
+      "match": "exact"
+     }
+    ],
+    "label": "Expected Lineup",
+    "may_not_play": [
+     {
+      "name": "Julian Strawther",
+      "pos": "F",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     }
+    ]
+   },
+   "rotogrinders": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Jamal Murray",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912095",
+      "match": "exact"
+     },
+     {
+      "name": "Christian Braun",
+      "pos": "SG/SF",
+      "flag": null,
+      "status": null,
+      "id": "44912250",
+      "match": "exact"
+     },
+     {
+      "name": "Cameron Johnson",
+      "pos": "SG/SF",
+      "flag": null,
+      "status": null,
+      "id": "44912282",
+      "match": "exact"
+     },
+     {
+      "name": "Aaron Gordon",
+      "pos": "PF/C",
+      "flag": null,
+      "status": null,
+      "id": "44912224",
+      "match": "exact"
+     },
+     {
+      "name": "Nikola Jokic",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912081",
+      "match": "exact"
+     }
+    ],
+    "label": "lineup not released"
+   }
+  },
+  "NOP": {
+   "game": "DEN@NOP",
+   "monster": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Jeremiah Fears",
+      "pos": "PG",
+      "bmId": "7164",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912149",
+      "match": "exact"
+     },
+     {
+      "name": "Herb Jones",
+      "pos": "SG",
+      "bmId": "6324",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912302",
+      "match": "near"
+     },
+     {
+      "name": "Saddiq Bey",
+      "pos": "SF",
+      "bmId": "6159",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912177",
+      "match": "exact"
+     },
+     {
+      "name": "Zion Williamson",
+      "pos": "PF",
+      "bmId": "6121",
+      "flag": "Off",
+      "word": "Off Injury Report",
+      "status": "Off injury report",
+      "verified": false,
+      "id": "44912130",
+      "match": "exact"
+     },
+     {
+      "name": "Yves Missi",
+      "pos": "C",
+      "bmId": "6954",
+      "flag": "P",
+      "word": "Probable",
+      "status": "Probable",
+      "verified": false,
+      "id": "44912191",
+      "match": "exact"
+     }
+    ]
+   },
+   "rotowire": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Jeremiah Fears",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912149",
+      "match": "exact"
+     },
+     {
+      "name": "Herbert Jones",
+      "pos": "SG",
+      "flag": null,
+      "status": null,
+      "id": "44912302",
+      "match": "exact"
+     },
+     {
+      "name": "Saddiq Bey",
+      "pos": "SF",
+      "flag": null,
+      "status": null,
+      "id": "44912177",
+      "match": "exact"
+     },
+     {
+      "name": "Zion Williamson",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912130",
+      "match": "exact"
+     },
+     {
+      "name": "Yves Missi",
+      "pos": "C",
+      "flag": "Prob",
+      "status": "Probable",
+      "id": "44912191",
+      "match": "exact"
+     }
+    ],
+    "label": "Expected Lineup",
+    "may_not_play": [
+     {
+      "name": "Yves Missi",
+      "pos": "C",
+      "flag": "Prob",
+      "status": "Probable",
+      "id": "44912191",
+      "match": "exact"
+     },
+     {
+      "name": "Bryce McGowens",
+      "pos": "G",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Trey Murphy",
+      "pos": "F",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Dejounte Murray",
+      "pos": "G",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Trendon Watford",
+      "pos": "F",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     }
+    ]
+   },
+   "rotogrinders": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Jeremiah Fears",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912149",
+      "match": "exact"
+     },
+     {
+      "name": "Herbert Jones",
+      "pos": "SF/PF",
+      "flag": null,
+      "status": null,
+      "id": "44912302",
+      "match": "exact"
+     },
+     {
+      "name": "Saddiq Bey",
+      "pos": "SF/PF",
+      "flag": null,
+      "status": null,
+      "id": "44912177",
+      "match": "exact"
+     },
+     {
+      "name": "Zion Williamson",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912130",
+      "match": "exact"
+     },
+     {
+      "name": "Yves Missi",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912191",
+      "match": "exact"
+     }
+    ],
+    "label": "lineup not released"
+   }
+  },
+  "DAL": {
+   "game": "DAL@CLE",
+   "monster": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Kyrie Irving",
+      "pos": "PG",
+      "bmId": "3369",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912116",
+      "match": "exact"
+     },
+     {
+      "name": "Caleb Martin",
+      "pos": "SG",
+      "bmId": "6127",
+      "flag": "IN",
+      "word": "Playing",
+      "status": "Playing",
+      "verified": false,
+      "id": "44912426",
+      "match": "exact"
+     },
+     {
+      "name": "Cooper Flagg",
+      "pos": "SF",
+      "bmId": "7159",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912086",
+      "match": "exact"
+     },
+     {
+      "name": "PJ Washington",
+      "pos": "PF",
+      "bmId": "6111",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912169",
+      "match": "exact"
+     },
+     {
+      "name": "Daniel Gafford",
+      "pos": "C",
+      "bmId": "5977",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912240",
+      "match": "exact"
+     }
+    ]
+   },
+   "rotowire": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Kyrie Irving",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912116",
+      "match": "exact"
+     },
+     {
+      "name": "Caleb Martin",
+      "pos": "SG",
+      "flag": null,
+      "status": null,
+      "id": "44912426",
+      "match": "exact"
+     },
+     {
+      "name": "Cooper Flagg",
+      "pos": "SF",
+      "flag": null,
+      "status": null,
+      "id": "44912086",
+      "match": "exact"
+     },
+     {
+      "name": "P.J. Washington",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912169",
+      "match": "exact"
+     },
+     {
+      "name": "Daniel Gafford",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912240",
+      "match": "exact"
+     }
+    ],
+    "label": "Expected Lineup",
+    "may_not_play": [
+     {
+      "name": "Morez Johnson",
+      "pos": "F",
+      "flag": "Prob",
+      "status": "Probable",
+      "id": "44912398",
+      "match": "exact"
+     },
+     {
+      "name": "Max Christie",
+      "pos": "G",
+      "flag": "Doubt",
+      "status": "Doubtful",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Tarik Biberovic",
+      "pos": "F",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Sergio de Larrea",
+      "pos": "G",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Dereck Lively",
+      "pos": "C",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     }
+    ]
+   },
+   "rotogrinders": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Kyrie Irving",
+      "pos": "PG/SG",
+      "flag": null,
+      "status": null,
+      "id": "44912116",
+      "match": "exact"
+     },
+     {
+      "name": "Caleb Martin",
+      "pos": "SG/SF",
+      "flag": null,
+      "status": null,
+      "id": "44912426",
+      "match": "exact"
+     },
+     {
+      "name": "Cooper Flagg",
+      "pos": "SF",
+      "flag": null,
+      "status": null,
+      "id": "44912086",
+      "match": "exact"
+     },
+     {
+      "name": "PJ Washington",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912169",
+      "match": "exact"
+     },
+     {
+      "name": "Daniel Gafford",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912240",
+      "match": "exact"
+     }
+    ],
+    "label": "lineup not released"
+   }
+  },
+  "CLE": {
+   "game": "DAL@CLE",
+   "monster": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "James Harden",
+      "pos": "PG",
+      "bmId": "3001",
+      "flag": "Q",
+      "word": "Questionable",
+      "status": "Questionable (undetermined)",
+      "verified": false,
+      "id": "44912155",
+      "match": "exact"
+     },
+     {
+      "name": "Donovan Mitchell",
+      "pos": "SG",
+      "bmId": "5460",
+      "flag": "Q",
+      "word": "Questionable",
+      "status": "Questionable (undetermined)",
+      "verified": false,
+      "id": "44912107",
+      "match": "exact"
+     },
+     {
+      "name": "Jaylon Tyson",
+      "pos": "SF",
+      "bmId": "6953",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912357",
+      "match": "exact"
+     },
+     {
+      "name": "Peyton Watson",
+      "pos": "PF",
+      "bmId": "6531",
+      "flag": "Q",
+      "word": "Questionable",
+      "status": "Questionable (undetermined)",
+      "verified": false,
+      "id": "44912220",
+      "match": "exact"
+     },
+     {
+      "name": "Jarrett Allen",
+      "pos": "C",
+      "bmId": "5468",
+      "flag": "Q",
+      "word": "Questionable",
+      "status": "Questionable (undetermined)",
+      "verified": false,
+      "id": "44912214",
+      "match": "exact"
+     }
+    ]
+   },
+   "rotowire": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "James Harden",
+      "pos": "PG",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912155",
+      "match": "exact"
+     },
+     {
+      "name": "Donovan Mitchell",
+      "pos": "SG",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912107",
+      "match": "exact"
+     },
+     {
+      "name": "Peyton Watson",
+      "pos": "SF",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912220",
+      "match": "exact"
+     },
+     {
+      "name": "Jaylon Tyson",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912357",
+      "match": "exact"
+     },
+     {
+      "name": "Jarrett Allen",
+      "pos": "C",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912214",
+      "match": "exact"
+     }
+    ],
+    "label": "Expected Lineup",
+    "may_not_play": [
+     {
+      "name": "Jarrett Allen",
+      "pos": "C",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912214",
+      "match": "exact"
+     },
+     {
+      "name": "James Harden",
+      "pos": "G",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912155",
+      "match": "exact"
+     },
+     {
+      "name": "Donovan Mitchell",
+      "pos": "G",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912107",
+      "match": "exact"
+     },
+     {
+      "name": "Peyton Watson",
+      "pos": "F",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912220",
+      "match": "exact"
+     },
+     {
+      "name": "Sam Merrill",
+      "pos": "G",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Evan Mobley",
+      "pos": "F",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Nae'Qwan Tomlin",
+      "pos": "F",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     }
+    ]
+   },
+   "rotogrinders": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "James Harden",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912155",
+      "match": "exact"
+     },
+     {
+      "name": "Donovan Mitchell",
+      "pos": "SG",
+      "flag": null,
+      "status": null,
+      "id": "44912107",
+      "match": "exact"
+     },
+     {
+      "name": "Jaylon Tyson",
+      "pos": "SG/SF",
+      "flag": null,
+      "status": null,
+      "id": "44912357",
+      "match": "exact"
+     },
+     {
+      "name": "Peyton Watson",
+      "pos": "SF/PF",
+      "flag": null,
+      "status": null,
+      "id": "44912220",
+      "match": "exact"
+     },
+     {
+      "name": "Jarrett Allen",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912214",
+      "match": "exact"
+     }
+    ],
+    "label": "lineup not released"
+   }
+  },
+  "BKN": {
+   "game": "BKN@MEM",
+   "monster": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Nolan Traore",
+      "pos": "PG",
+      "bmId": "7150",
+      "flag": "P",
+      "word": "Probable",
+      "status": "Probable",
+      "verified": false,
+      "id": "44912242",
+      "match": "exact"
+     },
+     {
+      "name": "Egor Demin",
+      "pos": "SG",
+      "bmId": "7152",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912259",
+      "match": "exact"
+     },
+     {
+      "name": "Michael Porter Jr.",
+      "pos": "SF",
+      "bmId": "5682",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912123",
+      "match": "exact"
+     },
+     {
+      "name": "Julius Randle",
+      "pos": "PF",
+      "bmId": "3946",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912113",
+      "match": "exact"
+     },
+     {
+      "name": "Day'Ron Sharpe",
+      "pos": "C",
+      "bmId": "6329",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912207",
+      "match": "exact"
+     }
+    ]
+   },
+   "rotowire": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Nolan Traore",
+      "pos": "PG",
+      "flag": "Prob",
+      "status": "Probable",
+      "id": "44912242",
+      "match": "exact"
+     },
+     {
+      "name": "Egor Demin",
+      "pos": "SG",
+      "flag": null,
+      "status": null,
+      "id": "44912259",
+      "match": "exact"
+     },
+     {
+      "name": "Michael Porter",
+      "pos": "SF",
+      "flag": null,
+      "status": null,
+      "id": "44912123",
+      "match": "exact"
+     },
+     {
+      "name": "Julius Randle",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912113",
+      "match": "exact"
+     },
+     {
+      "name": "Day'Ron Sharpe",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912207",
+      "match": "exact"
+     }
+    ],
+    "label": "Expected Lineup",
+    "may_not_play": [
+     {
+      "name": "Mikel Brown",
+      "pos": "G",
+      "flag": "Prob",
+      "status": "Probable",
+      "id": "44912268",
+      "match": "exact"
+     },
+     {
+      "name": "Nolan Traore",
+      "pos": "G",
+      "flag": "Prob",
+      "status": "Probable",
+      "id": "44912242",
+      "match": "exact"
+     }
+    ]
+   },
+   "rotogrinders": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Nolan Traore",
+      "pos": "PG/SG",
+      "flag": null,
+      "status": null,
+      "id": "44912242",
+      "match": "exact"
+     },
+     {
+      "name": "Egor Demin",
+      "pos": "PG/SG",
+      "flag": null,
+      "status": null,
+      "id": "44912259",
+      "match": "exact"
+     },
+     {
+      "name": "Michael Porter Jr.",
+      "pos": "SF",
+      "flag": null,
+      "status": null,
+      "id": "44912123",
+      "match": "exact"
+     },
+     {
+      "name": "Julius Randle",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912113",
+      "match": "exact"
+     },
+     {
+      "name": "Day'Ron Sharpe",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912207",
+      "match": "exact"
+     }
+    ],
+    "label": "lineup not released"
+   }
+  },
+  "MEM": {
+   "game": "BKN@MEM",
+   "monster": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Cam Spencer",
+      "pos": "PG",
+      "bmId": "6986",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912274",
+      "match": "exact"
+     },
+     {
+      "name": "Jaylen Wells",
+      "pos": "SG",
+      "bmId": "6974",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912292",
+      "match": "exact"
+     },
+     {
+      "name": "Cedric Coward",
+      "pos": "SF",
+      "bmId": "7161",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912183",
+      "match": "exact"
+     },
+     {
+      "name": "Cameron Boozer",
+      "pos": "PF",
+      "bmId": "7409",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912110",
+      "match": "exact"
+     },
+     {
+      "name": "Zach Edey",
+      "pos": "C",
+      "bmId": "6942",
+      "flag": "Q",
+      "word": "Questionable",
+      "status": "Questionable (undetermined)",
+      "verified": false,
+      "id": "44912266",
+      "match": "exact"
+     }
+    ]
+   },
+   "rotowire": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Cam Spencer",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912274",
+      "match": "exact"
+     },
+     {
+      "name": "Cedric Coward",
+      "pos": "SG",
+      "flag": null,
+      "status": null,
+      "id": "44912183",
+      "match": "exact"
+     },
+     {
+      "name": "Jaylen Wells",
+      "pos": "SF",
+      "flag": null,
+      "status": null,
+      "id": "44912292",
+      "match": "exact"
+     },
+     {
+      "name": "Cameron Boozer",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912110",
+      "match": "exact"
+     },
+     {
+      "name": "Zach Edey",
+      "pos": "C",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912266",
+      "match": "exact"
+     }
+    ],
+    "label": "Expected Lineup",
+    "may_not_play": [
+     {
+      "name": "Zach Edey",
+      "pos": "C",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912266",
+      "match": "exact"
+     },
+     {
+      "name": "Jerami Grant",
+      "pos": "F",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912332",
+      "match": "exact"
+     },
+     {
+      "name": "Ty Jerome",
+      "pos": "G",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Scotty Pippen",
+      "pos": "G",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Quinten Post",
+      "pos": "C",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     }
+    ]
+   },
+   "rotogrinders": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Cam Spencer",
+      "pos": "PG/SG",
+      "flag": null,
+      "status": null,
+      "id": "44912274",
+      "match": "exact"
+     },
+     {
+      "name": "Cedric Coward",
+      "pos": "SG",
+      "flag": null,
+      "status": null,
+      "id": "44912183",
+      "match": "exact"
+     },
+     {
+      "name": "Jaylen Wells",
+      "pos": "SF",
+      "flag": null,
+      "status": null,
+      "id": "44912292",
+      "match": "exact"
+     },
+     {
+      "name": "Cameron Boozer",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912110",
+      "match": "exact"
+     },
+     {
+      "name": "Zach Edey",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912266",
+      "match": "exact"
+     }
+    ],
+    "label": "lineup not released"
+   }
+  },
+  "CHI": {
+   "game": "CHI@MIN",
+   "monster": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Josh Giddey",
+      "pos": "PG",
+      "bmId": "6282",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912120",
+      "match": "exact"
+     },
+     {
+      "name": "Norman Powell",
+      "pos": "SG",
+      "bmId": "5044",
+      "flag": "Q",
+      "word": "Questionable",
+      "status": "Questionable (undetermined)",
+      "verified": false,
+      "id": "44912186",
+      "match": "exact"
+     },
+     {
+      "name": "Isaac Okoro",
+      "pos": "SF",
+      "bmId": "6150",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912368",
+      "match": "exact"
+     },
+     {
+      "name": "Matas Buzelis",
+      "pos": "PF",
+      "bmId": "6944",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912193",
+      "match": "exact"
+     },
+     {
+      "name": "Jalen Smith",
+      "pos": "C",
+      "bmId": "6171",
+      "flag": "Q",
+      "word": "Questionable",
+      "status": "Questionable (undetermined)",
+      "verified": false,
+      "id": "44912197",
+      "match": "exact"
+     }
+    ]
+   },
+   "rotowire": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Josh Giddey",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912120",
+      "match": "exact"
+     },
+     {
+      "name": "Norman Powell",
+      "pos": "SG",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912186",
+      "match": "exact"
+     },
+     {
+      "name": "Isaac Okoro",
+      "pos": "SF",
+      "flag": null,
+      "status": null,
+      "id": "44912368",
+      "match": "exact"
+     },
+     {
+      "name": "Matas Buzelis",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912193",
+      "match": "exact"
+     },
+     {
+      "name": "Jalen Smith",
+      "pos": "C",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912197",
+      "match": "exact"
+     }
+    ],
+    "label": "Expected Lineup",
+    "may_not_play": [
+     {
+      "name": "Nic Claxton",
+      "pos": "C",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912233",
+      "match": "exact"
+     },
+     {
+      "name": "Norman Powell",
+      "pos": "G",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912186",
+      "match": "exact"
+     },
+     {
+      "name": "Jalen Smith",
+      "pos": "C",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912197",
+      "match": "exact"
+     },
+     {
+      "name": "Tobe Awaka",
+      "pos": "C",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Caleb Wilson",
+      "pos": "F",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     }
+    ]
+   },
+   "rotogrinders": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Josh Giddey",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912120",
+      "match": "exact"
+     },
+     {
+      "name": "Norman Powell",
+      "pos": "SG/SF",
+      "flag": null,
+      "status": null,
+      "id": "44912186",
+      "match": "exact"
+     },
+     {
+      "name": "Isaac Okoro",
+      "pos": "SG/SF",
+      "flag": null,
+      "status": null,
+      "id": "44912368",
+      "match": "exact"
+     },
+     {
+      "name": "Matas Buzelis",
+      "pos": "SF/PF",
+      "flag": null,
+      "status": null,
+      "id": "44912193",
+      "match": "exact"
+     },
+     {
+      "name": "Jalen Smith",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912197",
+      "match": "exact"
+     }
+    ],
+    "label": "lineup not released"
+   }
+  },
+  "MIN": {
+   "game": "CHI@MIN",
+   "monster": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "LaMelo Ball",
+      "pos": "PG",
+      "bmId": "6145",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912098",
+      "match": "exact"
+     },
+     {
+      "name": "Ayo Dosunmu",
+      "pos": "SG",
+      "bmId": "6321",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912137",
+      "match": "exact"
+     },
+     {
+      "name": "Jaden McDaniels",
+      "pos": "SF",
+      "bmId": "6188",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912145",
+      "match": "exact"
+     },
+     {
+      "name": "Jonathan Kuminga",
+      "pos": "PF",
+      "bmId": "6289",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912174",
+      "match": "exact"
+     },
+     {
+      "name": "Rudy Gobert",
+      "pos": "C",
+      "bmId": "3729",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912181",
+      "match": "exact"
+     }
+    ]
+   },
+   "rotowire": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "LaMelo Ball",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912098",
+      "match": "exact"
+     },
+     {
+      "name": "Ayo Dosunmu",
+      "pos": "SG",
+      "flag": null,
+      "status": null,
+      "id": "44912137",
+      "match": "exact"
+     },
+     {
+      "name": "Jonathan Kuminga",
+      "pos": "SF",
+      "flag": null,
+      "status": null,
+      "id": "44912174",
+      "match": "exact"
+     },
+     {
+      "name": "Jaden McDaniels",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912145",
+      "match": "exact"
+     },
+     {
+      "name": "Rudy Gobert",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912181",
+      "match": "exact"
+     }
+    ],
+    "label": "Expected Lineup",
+    "may_not_play": [
+     {
+      "name": "Donte DiVincenzo",
+      "pos": "G",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Anthony Edwards",
+      "pos": "G",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     }
+    ]
+   },
+   "rotogrinders": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "LaMelo Ball",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912098",
+      "match": "exact"
+     },
+     {
+      "name": "Ayo Dosunmu",
+      "pos": "PG/SG",
+      "flag": null,
+      "status": null,
+      "id": "44912137",
+      "match": "exact"
+     },
+     {
+      "name": "Jonathan Kuminga",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912174",
+      "match": "exact"
+     },
+     {
+      "name": "Jaden McDaniels",
+      "pos": "SF/PF",
+      "flag": null,
+      "status": null,
+      "id": "44912145",
+      "match": "exact"
+     },
+     {
+      "name": "Rudy Gobert",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912181",
+      "match": "exact"
+     }
+    ],
+    "label": "lineup not released"
+   }
+  },
+  "DET": {
+   "game": "DET@MIA",
+   "monster": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Daniss Jenkins",
+      "pos": "PG",
+      "bmId": "7076",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912203",
+      "match": "exact"
+     },
+     {
+      "name": "Cade Cunningham",
+      "pos": "SG",
+      "bmId": "6275",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912089",
+      "match": "exact"
+     },
+     {
+      "name": "Duncan Robinson",
+      "pos": "SF",
+      "bmId": "5752",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912209",
+      "match": "exact"
+     },
+     {
+      "name": "Ausar Thompson",
+      "pos": "PF",
+      "bmId": "6733",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912165",
+      "match": "exact"
+     },
+     {
+      "name": "John Collins",
+      "pos": "C",
+      "bmId": "5465",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912216",
+      "match": "exact"
+     }
+    ]
+   },
+   "rotowire": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Cade Cunningham",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912089",
+      "match": "exact"
+     },
+     {
+      "name": "Daniss Jenkins",
+      "pos": "SG",
+      "flag": null,
+      "status": null,
+      "id": "44912203",
+      "match": "exact"
+     },
+     {
+      "name": "Duncan Robinson",
+      "pos": "SF",
+      "flag": null,
+      "status": null,
+      "id": "44912209",
+      "match": "exact"
+     },
+     {
+      "name": "Ausar Thompson",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912165",
+      "match": "exact"
+     },
+     {
+      "name": "John Collins",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912216",
+      "match": "exact"
+     }
+    ],
+    "label": "Expected Lineup",
+    "may_not_play": [
+     {
+      "name": "Jalen Duren",
+      "pos": "C",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
+     {
+      "name": "Isaiah Joe",
+      "pos": "G",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     }
+    ]
+   },
+   "rotogrinders": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Cade Cunningham",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912089",
+      "match": "exact"
+     },
+     {
+      "name": "Daniss Jenkins",
+      "pos": "PG/SG",
+      "flag": null,
+      "status": null,
+      "id": "44912203",
+      "match": "exact"
+     },
+     {
+      "name": "Duncan Robinson",
+      "pos": "SG/SF",
+      "flag": null,
+      "status": null,
+      "id": "44912209",
+      "match": "exact"
+     },
+     {
+      "name": "Ausar Thompson",
+      "pos": "SF/PF",
+      "flag": null,
+      "status": null,
+      "id": "44912165",
+      "match": "exact"
+     },
+     {
+      "name": "John Collins",
+      "pos": "PF/C",
+      "flag": null,
+      "status": null,
+      "id": "44912216",
+      "match": "exact"
+     }
+    ],
+    "label": "lineup not released"
+   }
+  },
+  "MIA": {
+   "game": "DET@MIA",
+   "monster": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Davion Mitchell",
+      "pos": "PG",
+      "bmId": "6300",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912152",
+      "match": "exact"
+     },
+     {
+      "name": "Tim Hardaway Jr.",
+      "pos": "SG",
+      "bmId": "3709",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912466",
+      "match": "exact"
+     },
+     {
+      "name": "Klay Thompson",
+      "pos": "SF",
+      "bmId": "3399",
+      "flag": "P",
+      "word": "Probable",
+      "status": "Probable",
+      "verified": false,
+      "id": "44912228",
+      "match": "exact"
+     },
+     {
+      "name": "Giannis Antetokounmpo",
+      "pos": "PF",
+      "bmId": "3701",
+      "flag": "P",
+      "word": "Probable",
+      "status": "Probable",
+      "verified": false,
+      "id": "44912083",
+      "match": "exact"
+     },
+     {
+      "name": "Bam Adebayo",
+      "pos": "C",
+      "bmId": "5461",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912101",
+      "match": "exact"
+     }
+    ]
+   },
+   "rotowire": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Davion Mitchell",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912152",
+      "match": "exact"
+     },
+     {
+      "name": "Klay Thompson",
+      "pos": "SG",
+      "flag": "Prob",
+      "status": "Probable",
+      "id": "44912228",
+      "match": "exact"
+     },
+     {
+      "name": "Myron Gardner",
+      "pos": "SF",
+      "flag": null,
+      "status": null,
+      "id": "44912495",
+      "match": "exact"
+     },
+     {
+      "name": "Giannis Antetokounmpo",
+      "pos": "PF",
+      "flag": "Prob",
+      "status": "Probable",
+      "id": "44912083",
+      "match": "exact"
+     },
+     {
+      "name": "Bam Adebayo",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912101",
+      "match": "exact"
+     }
+    ],
+    "label": "Expected Lineup",
+    "may_not_play": [
+     {
+      "name": "Giannis Antetokounmpo",
+      "pos": "F",
+      "flag": "Prob",
+      "status": "Probable",
+      "id": "44912083",
+      "match": "exact"
+     },
+     {
+      "name": "Klay Thompson",
+      "pos": "F",
+      "flag": "Prob",
+      "status": "Probable",
+      "id": "44912228",
+      "match": "exact"
+     },
+     {
+      "name": "Pelle Larsson",
+      "pos": "F",
+      "flag": "Doubt",
+      "status": "Doubtful",
+      "id": null,
+      "match": null
+     }
+    ]
+   },
+   "rotogrinders": {
+    "state": "ok",
+    "confirmed": false,
+    "men": [
+     {
+      "name": "Davion Mitchell",
+      "pos": "PG",
+      "flag": null,
+      "status": null,
+      "id": "44912152",
+      "match": "exact"
+     },
+     {
+      "name": "Klay Thompson",
+      "pos": "SG/SF",
+      "flag": null,
+      "status": null,
+      "id": "44912228",
+      "match": "exact"
+     },
+     {
+      "name": "Myron Gardner",
+      "pos": "SG/SF",
+      "flag": null,
+      "status": null,
+      "id": "44912495",
+      "match": "exact"
+     },
+     {
+      "name": "Giannis Antetokounmpo",
+      "pos": "PF",
+      "flag": null,
+      "status": null,
+      "id": "44912083",
+      "match": "exact"
+     },
+     {
+      "name": "Bam Adebayo",
+      "pos": "C",
+      "flag": null,
+      "status": null,
+      "id": "44912101",
+      "match": "exact"
+     }
+    ],
+    "label": "lineup not released"
+   }
+  }
+ }
+}
