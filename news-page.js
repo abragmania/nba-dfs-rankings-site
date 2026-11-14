@@ -20,7 +20,7 @@ const deltaHtml = (d) => {
 function playerRow(r, day, team) {
   const tg = r.out ? (isNum(r.usual) ? `<s title="usual minutes">${f1(r.usual)}</s>` : dash) : f1(r.tg) ?? dash;
   const when = timeLabel(r.noteAt, { day, precision: r.notePrecision }), whenShort = timeLabel(r.noteAt, { day, precision: r.notePrecision, compact: true });
-  const title = [r.note, when ? `reported ${when}${r.notePrecision === "day" ? "" : " ET"}` : ""].filter(Boolean).join(" · ");
+  const title = [r.note, r.lineNote, when ? `reported ${when}${r.notePrecision === "day" ? "" : " ET"}` : ""].filter(Boolean).join(" · ");
   return `<div class="nwr${r.out ? " out" : ""}">${r.id ? nameOpen(r.name, r.id, "span", "nwn") : outNameOpen(r.name, team, "span", "nwn")}<span class="nwp">${esc(r.pos ?? "") || dash}</span><span class="nws">${esc(r.salary ?? "") || dash}</span>`
     + `<span class="nwc ${r.status.cls}" title="${esc(r.status.word)}">${esc(r.status.word)}</span><span class="nwt" title="${esc(title)}">${r.note || when ? `<span class="nwtx">${esc(r.note ?? "")}</span>${when ? `<time class="nwat">${esc(whenShort)}</time>` : ""}` : dash}</span><span class="nwm">${tg}</span>`
     + `<span class="nwm nwo">${f1(r.ours) ?? dash}</span><span class="nwk">${r.mark ? `<i>${esc(r.mark)}</i>` : ""}</span><span class="nwl">${deltaHtml(r.delta)}</span></div>`;

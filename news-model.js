@@ -4,7 +4,7 @@
 // console; one that is not there is null and drawn as a dash, never a stand-in. A lineup read too old to act on (staleOf) gives no Confirmed or Expected and no sources' statuses: the
 // five is then TwoGun's own, and the board's status and the injury notes still show. Men are joined to cards by the DraftKings id the lineup read stored (matchMan), Out-list men
 // (who have no id on the slate) by the Out entry's name the read stored (out_as); Out claims are the proposals' own (lineup-proposals.js claimsFor); TwoGun's minutes are tgMin, never his applied number.
-import { staleOf, withFreshness, blockFresh, outVsFive, tgMin, claimsFor, NO_STATUS, BACKS_ONLY } from "./lineup-proposals.js";
+import { staleOf, withFreshness, blockFresh, outVsFive, tgMin, claimsFor, NO_STATUS, NO_FLAG_WORDS, BACKS_ONLY, statusWords } from "./lineup-proposals.js";
 import { newsRuling, newestStatusCards, statusNote, cleanBody } from "./news-status.js";
 import { isOut } from "./figures.js";
 
@@ -137,6 +137,8 @@ export function checkFoot(latest, day = null) {
   if (teams.length) out.push(`Saved fives kept because the page no longer listed them: ${teams.join("; ")}.`);
   for (const p of latest?.card_status_problems ?? []) out.push(`Status cards: ${p}.`);
   for (const s of latest?.card_status_skipped ?? []) out.push(`Status card for ${s.name ?? s.id} set aside: ${s.why}.`);
+  const unrec = Array.isArray(latest?.monster_news?.unrecognised) ? latest.monster_news.unrecognised : []; // G62: a square the app does not know is counted here with the site's own words, never dropped
+  if (unrec.length) out.push(`Monster news: ${unrec.length} status square${unrec.length === 1 ? "" : "s"} not recognised, so not used (${unrec.slice(0, 5).map((u) => `${u.name} ${u.team}: ${statusWords(u.raw)}`).join("; ")}${unrec.length > 5 ? "; …" : ""}).`);
   if (latest?.found_unreadable) out.push(`The lineup check's finds could not be shown: ${latest.found_unreadable}.`);
   return out;
 }
@@ -210,7 +212,9 @@ export function teamModel({ code, players, out, latest, stale, cards, view, asOf
     ? { kind: uncompared ? "uncompared" : differs.length ? "disagree" : confirmed.length ? "confirmed" : "expected", by, differs, at: Object.fromEntries(by.map((n) => [n, asOf[keyOfName[n]] ?? null])), unmatched }
     : { kind: "twogun", by: [], differs: [], at: {}, unmatched: [] };
   const srcStatus = new Map(); // dk_id -> a status word a lineup source gave him
-  for (const [k] of usable) for (const m of block[k].men) if (m.id != null && m.status && m.status !== "Out" && m.status !== "Starting" && m.status !== "Playing" && m.status !== "Off injury report") srcStatus.set(String(m.id), m.status);
+  for (const [k] of usable) for (const m of block[k].men) if (m.id != null && m.status && m.status !== "Out" && !NO_FLAG_WORDS.includes(m.status)) srcStatus.set(String(m.id), m.status);
+  const lineNote = new Map(); // dk_id -> "Note: <the square's tooltip words>" for a Note man (hover only)
+  for (const [k] of usable) for (const m of block[k].men) if (m.id != null && m.status === "Note" && typeof m.detail === "string" && m.detail.trim()) lineNote.set(String(m.id), `Note: ${m.detail.trim()}`);
   const { byId: cardById, byName: cardByName } = cardIndex((cards ?? []).filter((c) => c.team === code));
   const statusCards = newestStatusCards((cards ?? []).filter((c) => c.team === code));
   const srcReadAt = Math.max(asOf.monster ?? -Infinity, asOf.rotowire ?? -Infinity, asOf.rotogrinders ?? -Infinity);
@@ -223,7 +227,7 @@ export function teamModel({ code, players, out, latest, stale, cards, view, asOf
     const mv = p.pull_move ?? null, card = cardById.get(String(p.dk_id));
     return {
       id: String(p.dk_id), name: p.name, pos: Array.isArray(p.positions) && p.positions.length ? p.positions.join("/") : null, salary: money(p.salary), status: statusChip(word),
-      note: shortWord(card), noteAt: atOf(card), notePrecision: card?.precision ?? "minute", // the newest report on him: his note and any change of status carry its time
+      note: shortWord(card), lineNote: lineNote.get(String(p.dk_id)) ?? null, noteAt: atOf(card), notePrecision: card?.precision ?? "minute", // the newest report on him: his note and any change of status carry its time
       tg: isNum(tgMin(p)) ? tgMin(p) : null, ours: isNum(p.min_ours) ? p.min_ours : null, mark: markOf(view, code, p.dk_id),
       delta: mv && (mv.min || mv.proj) ? { min: mv.min ?? null, proj: mv.proj ?? null } : null, out: false,
     };

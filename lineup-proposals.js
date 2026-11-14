@@ -25,6 +25,8 @@ export const LINEUP_LABEL = Object.freeze({ monster: "Monster", rotowire: "RotoW
 export const BACKS_ONLY = Object.freeze(["rotogrinders"]);
 /** Pages that carry no injury statuses: their five says nothing about who is Out, so it never counts against an Out claim. */
 export const NO_STATUS = Object.freeze(["rotogrinders"]);
+/** Lineup-man status words that carry no injury flag: a man with one counts as a man with none (never Out, doubtful, a clash or an injury chip). */
+export const NO_FLAG_WORDS = Object.freeze(["Starting", "Playing", "Note", "Off injury report"]);
 const ORDER = ["monster", "monster_news", "rotowire", "rotogrinders"]; // the order sources are named in
 const LABEL = { ...LINEUP_LABEL, monster_news: "Monster" };
 export const STALE_MIN = 90;
