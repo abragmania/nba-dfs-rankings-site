@@ -5,7 +5,7 @@
 // five is then TwoGun's own, and the board's status and the injury notes still show. Men are joined to cards by the DraftKings id the lineup read stored (matchMan), Out-list men
 // (who have no id on the slate) by the Out entry's name the read stored (out_as); Out claims are the proposals' own (lineup-proposals.js claimsFor); TwoGun's minutes are tgMin, never his applied number.
 import { staleOf, withFreshness, blockFresh, outVsFive, tgMin, claimsFor, NO_STATUS, BACKS_ONLY } from "./lineup-proposals.js";
-import { newsRuling, newestStatusCards } from "./news-status.js";
+import { newsRuling, newestStatusCards, statusNote, cleanBody } from "./news-status.js";
 import { isOut } from "./figures.js";
 
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
@@ -61,13 +61,13 @@ function cardIndex(cards) {
   return { byId, byName };
 }
 /** What a card says in short when it has no body: the site's own badge word ("Has Returned", "Starting"). */
-const shortWord = (c) => (c ? c.body ?? c.word ?? null : null);
+const shortWord = statusNote; // "Probable: ankle", "Doubtful: hamstring"; any other card its own words (news-status.js)
 
 /** The word that leads a log row's announcement, by the card's kind; a kind with none leads with "Note". */
 const LEAD_OF = { OUT: "Out", Q: "Questionable", D: "Doubtful", PROB: "Probable", IN: "Playing", START: "START" };
 /** The injury words of a card made short and tidy for a row: the coach's sentence after " - " is left to the hover, "g league" is "G League". null with no words. */
 export function tidyInjury(body) {
-  const s = String(body ?? "").split(/\s+-\s+/)[0].replace(/\bg league\b/gi, "G League").replace(/\btwoway\b/gi, "two-way").replace(/\s+/g, " ").trim();
+  const s = String(cleanBody(body) ?? "").split(/\s+-\s+/)[0].replace(/\bg league\b/gi, "G League").replace(/\btwoway\b/gi, "two-way").replace(/\s+/g, " ").trim();
   return s || null;
 }
 /** A move of a figure for a row: "30.9 → 30.8 ▼" (no arrow when it did not change). */
@@ -126,7 +126,7 @@ export function foundEntries(found, teams, day = null) {
  * (check_failed), and a damaged finds file. `latest`: the lineup read with the check's finds file attached (server/slate/news-lineups.js). [] with nothing to say. Pure.
  */
 export function checkFoot(latest, day = null) {
-  const out = [], lc = latest?.last_check, name = { monster: "Monster", rotowire: "RotoWire", rotogrinders: "RotoGrinders" };
+  const out = [], lc = latest?.last_check, name = { monster: "Monster", rotowire: "RotoWire", rotogrinders: "RotoGrinders", monster_news: "Monster news" };
   if (lc?.at) {
     const at = Date.parse(lc.at);
     out.push(`Lineup check (${lc.how ?? "5-minute check"}) at ${timeLabel(at, { day }) ?? "?"} ET: ${lc.result ?? "no result"}${lc.skipped_count ? `; ${lc.skipped_count} part${lc.skipped_count === 1 ? "" : "s"} of the pages not usable (${(lc.skipped_first ?? []).join("; ")}${lc.skipped_count > (lc.skipped_first ?? []).length ? "; …" : ""})` : ""}.`);
@@ -135,6 +135,8 @@ export function checkFoot(latest, day = null) {
   for (const [src, s] of Object.entries(latest?.sources ?? {})) if (s?.check_failed) out.push(`${name[src] ?? src}: the saved read from before was kept (${s.check_failed.why}).`);
   const teams = Object.entries(latest?.teams ?? {}).flatMap(([t, b]) => Object.entries(b ?? {}).filter(([k, v]) => v?.check_failed && !latest?.sources?.[k]?.check_failed).map(([k, v]) => `${t} ${name[k] ?? k}: ${v.check_failed.why}`));
   if (teams.length) out.push(`Saved fives kept because the page no longer listed them: ${teams.join("; ")}.`);
+  for (const p of latest?.card_status_problems ?? []) out.push(`Status cards: ${p}.`);
+  for (const s of latest?.card_status_skipped ?? []) out.push(`Status card for ${s.name ?? s.id} set aside: ${s.why}.`);
   if (latest?.found_unreadable) out.push(`The lineup check's finds could not be shown: ${latest.found_unreadable}.`);
   return out;
 }
@@ -179,6 +181,7 @@ export function teamModel({ code, players, out, latest, stale, cards, view, asOf
   const idsOf = (k) => new Set(block[k].men.filter((m) => m.id != null && m.status !== "Out").map((m) => String(m.id)));
   const same = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
   const claims = !latest ? null : claimsFor(latest, code), contested = new Set(claims ? outVsFive(claims).map((c) => String(c.id)) : []); // a man two fresh feeds dispute, or a kept Out a fresh five cancelled, is not shown or counted as Out
+  const doubtfulOnly = (id) => (claims?.out.get(String(id)) ?? []).every((c) => /^Doubtful\b/.test(c.detail ?? "")); // a Doubtful card made every Out claim: the row says Doubtful
   const claimedOut = (id) => Boolean(claims?.out.has(String(id))) && !contested.has(String(id));
   // A man the five shows whom another feed says is Out is not settled: the Out claim comes from a different feed than a claim that he is in a five (the proposals' outVsFive test), or
   // every Out claim on him is a near-name match, which the proposals refuse to act on. The feeds saying Out are named.
@@ -216,7 +219,7 @@ export function teamModel({ code, players, out, latest, stale, cards, view, asOf
     const ruled = stale ? null : newsRuling({ card: statusCards.get(String(p.dk_id)), tgStatus: p.injury_status, tgSince: p.status_since ?? null, viewOut: markOf(view, code, p.dk_id) === "Out" || (view?.[code]?.newsOut ?? []).includes(String(p.dk_id)) });
     const fromSource = srcStatus.get(String(p.dk_id)), useRuling = ruled && !(fromSource && srcReadAt > ruled.at);
     const tgWord = p.injury_status && p.injury_status !== "Available" ? p.injury_status : null;
-    const word = claimedOut(p.dk_id) ? "Out" : useRuling ? ruled.word : fromSource ?? tgWord;
+    const word = claimedOut(p.dk_id) ? (doubtfulOnly(p.dk_id) ? "Doubtful" : "Out") : useRuling ? ruled.word : fromSource ?? tgWord;
     const mv = p.pull_move ?? null, card = cardById.get(String(p.dk_id));
     return {
       id: String(p.dk_id), name: p.name, pos: Array.isArray(p.positions) && p.positions.length ? p.positions.join("/") : null, salary: money(p.salary), status: statusChip(word),

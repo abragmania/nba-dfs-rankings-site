@@ -7,8 +7,8 @@ export function checkFootLines(bc) {
   if (!bc || typeof bc !== "object") return [];
   if (bc.problem) return [{ cls: "bad", text: `Board self-check: ${bc.problem}` }];
   const time = isoToEastern(bc.checked_at ?? "") ?? "time unknown";
-  const fails = bc.failure_lines ?? [], conflicts = bc.conflict_lines ?? [], notes = bc.unchecked_lines ?? [], exempt = bc.exempt_lines ?? [];
-  const tail = [...fails.map((text) => ({ cls: "bad", text })), ...conflicts.map((text) => ({ cls: "conflict", text })), ...notes.map((text) => ({ cls: "note", text })), ...exempt.map((text) => ({ cls: "note", text }))];
+  const fails = bc.failure_lines ?? [], conflicts = bc.conflict_lines ?? [], notes = bc.unchecked_lines ?? [], exempt = bc.exempt_lines ?? [], depth = bc.depth_lines ?? [];
+  const tail = [...fails.map((text) => ({ cls: "bad", text })), ...conflicts.map((text) => ({ cls: "conflict", text })), ...notes.map((text) => ({ cls: "note", text })), ...exempt.map((text) => ({ cls: "note", text })), ...depth.map((text) => ({ cls: "note", text }))]; // depth: the day's automatic depth-chart changes and notes (server/slate/depth-refresh.js)
   if (!fails.length && !conflicts.length && !notes.length) return [{ cls: "ok", text: `Board self-check: all ${bc.men} men pass (${time})` }, ...tail];
   const head = fails.length ? `Board self-check: ${fails.length} ${fails.length === 1 ? "figure does" : "figures do"} not follow from its inputs` : `Board self-check: no failures in ${bc.men} men`;
   return [{ cls: "head", text: `${head}${conflicts.length ? `; ${conflicts.length} for you to settle` : ""} (${time})` }, ...tail];

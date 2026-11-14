@@ -142,7 +142,7 @@ export const exemptLine = (u) => `${u.count} left out of ${u.check.replace(/_/g,
  * Runs the checks. slate: what /api/slate returns; overrides: that slate's overrides record (readOverrides shape); lineups: readNewsLineups' answer or null; nowMs: the clock.
  * Returns { slate, checked_at, men, checks, failures, conflicts, unchecked, exempt, *_lines, ok }. ok: nothing failed, conflicted or was left unchecked. A missing input is counted, never a throw.
  */
-export function checkBoard({ slate, overrides = null, overridesProblem = null, lineups = null, resend = null, nowMs = Date.now() }) {
+export function checkBoard({ slate, overrides = null, overridesProblem = null, lineups = null, resend = null, depth = null, nowMs = Date.now() }) {
   const players = Array.isArray(slate?.players) ? slate.players : [], un = makeGroups(), ex = makeGroups(), bad = [], conflicts = [];
   const o = { proj: {}, min: {}, bump: {}, ...(overrides ?? {}) };
   const known = new Map([...players.map((p) => [String(p.dk_id), p.name]), ...(slate?.out ?? []).filter((x) => x.dk_id != null).map((x) => [String(x.dk_id), x.name])]);
@@ -160,7 +160,10 @@ export function checkBoard({ slate, overrides = null, overridesProblem = null, l
   if (resend) checkResend(players, c, resend);
   bad.push(...checkHiddenByLowerSource({ slate, players, lineups, nowMs }, un, conflicts));
   checkTeams(players, slate ?? {}, c);
+  if (depth?.problem) un.add("depth_chart_age", `the depth charts' ages could not be read: ${depth.problem}`);
+  for (const u of depth?.unreadable ?? []) un.add("depth_chart_age", `a depth chart could not be read, so its age is unknown: ${u.why}`, u.team);
+  for (const a of depth?.ages ?? []) if (a.stale) un.add("depth_chart_age", a.line, a.team); // a chart older than 3 days: its injured list may be stale (depth-refresh.js); the refresh keeps tonight's teams current
   const unchecked = un.list(), exempt = ex.list();
   return { slate: slate?.slate ?? null, checked_at: new Date(nowMs).toISOString(), men: players.length, checks: CHECKS, failures: bad, conflicts, unchecked, exempt,
-    failure_lines: bad.map(failureLine), conflict_lines: conflicts.map(failureLine), unchecked_lines: unchecked.map(uncheckedLine), exempt_lines: exempt.map(exemptLine), ok: !bad.length && !unchecked.length && !conflicts.length };
+    failure_lines: bad.map(failureLine), conflict_lines: conflicts.map(failureLine), unchecked_lines: unchecked.map(uncheckedLine), exempt_lines: exempt.map(exemptLine), depth_lines: depth?.lines ?? [], ok: !bad.length && !unchecked.length && !conflicts.length };
 }

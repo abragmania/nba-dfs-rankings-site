@@ -24,7 +24,25 @@ export function newsRuling({ card, tgStatus, tgSince = null, viewOut = false }) 
   if (isOut(tgStatus)) return null;
   if (Number.isFinite(tgSince) && tgSince > at) return null;
   if (same(word, tgStatus) || (calm(word) && calm(tgStatus))) return null;
-  return { word, at, note: card.body ?? null };
+  return { word, at, note: statusNote(card) };
+}
+
+const PLAY_PHRASE = /\b(?:not\s+)?expected\s+to\s+play\b/gi; // Probable already means "expected to play" and Doubtful "not expected to play": a note never repeats them (Adam 11-13)
+const EDGE = /^[\s,;:.\-–—]+|[\s,;:.\-–—]+$/g;
+/** A card's body without the play phrases and the separators they leave; null when nothing is left. */
+export function cleanBody(body) {
+  const s = String(body ?? "").replace(PLAY_PHRASE, " ").replace(/\s*([,;])(?:\s*[,;])+/g, "$1").replace(EDGE, "").replace(/\s+/g, " ").trim();
+  return s || null;
+}
+/** The short note a status card gives a row: "Probable: ankle" or "Doubtful: hamstring" (status, then the body part; the coach's sentence after " - " is left to the hover), else the card's words, else its badge word. null with no card. */
+export function statusNote(card) {
+  if (!card) return null;
+  const word = cardWord(card);
+  if (word === "Probable" || word === "Doubtful") {
+    const part = cleanBody(cleanBody(card.body)?.split(/\s+-\s+/)[0]);
+    return part ? `${word}: ${part}` : word;
+  }
+  return cleanBody(card.body) ?? card.word ?? null;
 }
 
 /** The newest status-giving card of each man, by dk_id: a card with no time never wins. A newer Out card is kept too (it gives no word, so it blocks an older IN). */
