@@ -383,12 +383,12 @@ function renderGames() {
 }
 
 /** The game tiles in as few rows as fit, split evenly (11 games on one row where the page is wide; 6 and 5 where it holds only 8). */
-const GAME_MIN = 205;
+const GAME_MIN = 212; // a tile's content at its narrowest (logo, code, spread, implied points); a column never goes below it, so the text stays inside the box
 function fitGames() {
   const el = $("games"), n = el.children.length;
   if (!n || !el.clientWidth) return;
   const fit = Math.max(1, Math.floor((el.clientWidth + 8) / (GAME_MIN + 8))), cols = Math.ceil(n / Math.ceil(n / fit));
-  el.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 236px))`;
+  el.style.gridTemplateColumns = `repeat(${cols}, minmax(${GAME_MIN}px, 236px))`;
 }
 
 // ---------- table ----------
@@ -678,9 +678,10 @@ $("search").addEventListener("input", (e) => { S.q = e.target.value; renderRows(
 $("minSal").addEventListener("input", (e) => { S.minSal = e.target.value; renderRows(); });
 $("maxSal").addEventListener("input", (e) => { S.maxSal = e.target.value; renderRows(); });
 if (typeof ResizeObserver === "function") new ResizeObserver(stickyHeights).observe($("fbar"));
+if (typeof ResizeObserver === "function") new ResizeObserver(() => fitGames()).observe($("games")); // the strip narrows when the player panel docks (R11), with no window resize to go on
 if (typeof MutationObserver === "function") new MutationObserver(stickyHeights).observe($("opt"), { childList: true }); // the panel redraws its band: --luh follows it
 let resizeTimer;
-window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { fixTableWidth(); fitGames(); }, 150); });
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { fixTableWidth(); }, 150); }); // the game tiles refit through their own observer above
 document.fonts?.ready.then(fixTableWidth);
 
 const fail = (e) => { document.querySelector(".work").innerHTML = `<div class="fatal">Could not load the board: ${esc(e.message)}</div>`; };

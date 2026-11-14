@@ -38,7 +38,8 @@ button{cursor:pointer}
 .game.cf{--gbg:var(--p);--gsel:#1a1405;border-color:transparent;background:linear-gradient(var(--gbg),var(--gbg)) padding-box,linear-gradient(90deg,var(--bdl) 50%,var(--bdr) 50%) border-box}
 .game.cf:hover{--gbg:var(--p2)}
 .game.cf.sel{background:linear-gradient(180deg,var(--gsel),var(--p)) padding-box,linear-gradient(90deg,var(--bdl) 50%,var(--bdr) 50%) border-box}
-.gh{display:flex;justify-content:flex-start;gap:16px;align-items:center;font-size:11.5px;color:var(--mu);margin-bottom:2px}
+.gh{display:flex;justify-content:flex-start;gap:16px;align-items:center;font-size:11.5px;color:var(--mu);margin-bottom:2px;white-space:nowrap}
+.side{white-space:nowrap}
 .gh .tip{color:var(--am);font-weight:700}
 .side{display:grid;grid-template-columns:26px 38px 46px auto;justify-content:start;align-items:center;gap:8px;padding:1px 10px 1px 8px;margin-top:2px;box-shadow:inset 3px 0 var(--t1);background:linear-gradient(90deg,color-mix(in srgb,var(--t1) 11%,transparent),color-mix(in srgb,var(--t1) 3%,transparent))}
 .code{font-weight:800;font-size:14px}
