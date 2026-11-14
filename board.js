@@ -28,6 +28,7 @@ import { createLineupBar } from "./lineup-bar.js";
 import { createBoardMarks } from "./board-marks.js";
 import { confirmedByGame, borderStyle } from "./game-borders.js";
 import { mountLateSwap } from "./lsw-main.js";
+import { createOptStrip } from "./opt-strip.js";
 
 const $ = (id) => document.getElementById(id);
 const TABS = ["ALL", "PG", "SG", "SF", "PF", "C", "G", "F"];
@@ -78,11 +79,13 @@ const api = async (url, opts) => {
 const dash = (title) => `<span class="miss" title="${esc(title)}">—</span>`;
 /** A slate stamp in Eastern time; the slate's own date (from its name) settles the year TwoGun's stamps leave out. */
 const when = (s) => tipWhen(S.name)(s);
-// The player card (card.js); it closes itself on Esc. A man's header figures follow the board's copy of him (a man from the
+// The player panel (card.js), docked on the right; it closes itself on Esc. A man's figures follow the board's copy of him (a man from the
 // Out list has none and stays as he was opened).
 const card = initCard({ root: document.body, dash, colourOf, picks: () => S.picks,
   figs: () => ({ source: figureSource(S.slate), asOf: when(topStamps(S.slate).board) }),
-  current: (p) => S.byId.get(p.dk_id) ?? p, marks: (id) => boardMarks.of(id), roles: cardRoles({ api: () => scenarioConsole, slate: () => S.name, toast }) });
+  current: (p) => S.byId.get(p.dk_id) ?? p, marks: (id) => boardMarks.of(id), newsState: () => boardMarks.newsState(), onDock: () => { fixTableWidth(); stickyHeights(); }, roles: cardRoles({ api: () => scenarioConsole, slate: () => S.name, toast }) });
+new MutationObserver(() => { if (document.body.classList.contains("lsw-on")) card.close(); }).observe(document.body, { attributes: true, attributeFilter: ["class"] }); // Late swap lists entries, not names: the panel is for the Player list and the Console, so it closes when that screen opens
+createOptStrip({ el: $("optstrip"), opt: $("opt"), onWorking: () => card.close() }); // the compact optimizer row over the table while the player panel is open (opt-strip.js)
 // The optimizer panel (panel.js); settled() lets a build wait for picks and override saves in flight, since the server
 // reads the saved locks and the saved overrides.
 // Late swap mode lives in the panel; onLateSwap redraws the header switch and the table's slot pickers when it changes.

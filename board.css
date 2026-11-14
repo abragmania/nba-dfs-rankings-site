@@ -5,8 +5,6 @@ tr.team{background:linear-gradient(90deg,color-mix(in srgb,var(--t1) 3%,transpar
 tr.team td:first-child{box-shadow:inset 2px 0 color-mix(in srgb,var(--t1) 45%,transparent)}
 *{box-sizing:border-box}
 html{scrollbar-color:#3a3a42 transparent;scrollbar-gutter:stable}
-/* An open player card holds the page still; the gutter above keeps the page from moving when the bar goes. */
-html:has(body.noscroll){overflow:hidden}
 body{margin:0;background:var(--bg);color:var(--tx);font:13.5px/1.35 "JetBrains Mono",monospace;padding:0 clamp(20px,2.2vw,60px) 40px;background-image:linear-gradient(#ffffff04 1px,transparent 1px);background-size:100% 34px}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
@@ -210,6 +208,9 @@ td.num:has(>.tagslot){position:relative}
 .top .pnlast,.top .pnread{color:var(--mu);font-size:10.5px;margin-top:2px}
 /* At 1920 the Pull now button and its status line stack in one narrow group, so the header keeps to one row (the whole line is on hover and in its panel). */
 @media (min-width:901px) and (max-width:2100px){.top .pngroup{flex-direction:column;align-items:flex-start;gap:1px}.top .pnbox{max-width:160px}.top .pnstat[class*=" f"]{max-width:300px}.top .pnbox:has(.pnstat[class*=" f"]){max-width:300px}}
+/* With the player panel open the header has less than the panel's width to work with, so it takes the 1920 forms at every width above the phone layout: tighter gaps and segments, the Pull now group stacked, a shorter slate box. */
+@media (min-width:901px){body.card-docked .top{gap:6px}body.card-docked .top .stamps span{padding:4px 5px}body.card-docked .top .themes button{padding:4px 4px}body.card-docked .top .vtabs button{padding:4px 5px}body.card-docked .top .lsw,body.card-docked .top .notes>button{padding:4px 7px}body.card-docked .top .brand small{display:none}body.card-docked .top select.slate{max-width:130px}body.card-docked .top .pngroup{flex-direction:column;align-items:flex-start;gap:1px}body.card-docked .top .pnbox{max-width:160px}body.card-docked .top .pnstat[class*=" f"],body.card-docked .top .pnbox:has(.pnstat[class*=" f"]){max-width:200px}body.card-docked .search{width:96px;padding:4px 6px}body.card-docked .tools{gap:6px}body.card-docked .cnt{margin-left:0;min-width:0}body.card-docked #chips .chip{white-space:nowrap;padding:4px 6px}body.card-docked .tabs button{padding:4px 6px}}
+@media (min-width:2200px){body.card-docked .search{width:150px}}
 @media (max-width:900px){
   .top .pngroup{display:contents}
   .top .pullnow{order:0}
@@ -491,16 +492,54 @@ tr.started td.ctl button{visibility:hidden}
 /* No page zoom: the type is set in real pixels so a very large monitor shows a dense page (the board's JS reads body zoom as 1). */
 /* The page fits a laptop width (standard A15): the panel's column gives way first (.work), then it goes over the table, where its band has no table beside it to stay with. */
 @media (max-width:1830px){.work{grid-template-columns:minmax(0,1fr)}.pool{grid-column:1;grid-row:2}.opt{grid-column:1;grid-row:1;align-self:start}.lu{position:static}}
-/* Player card (card.js): a modal over a dimmed page, at the optimizer column's left edge (card.js sets it). */
-.cardbg{position:fixed;inset:0;z-index:14;background:#0008}
-.cardbg[hidden]{display:none}
-.card{position:fixed;top:12px;left:12px;width:640px;z-index:15;background:var(--p);border:1px solid var(--ln);box-shadow:inset 0 2px 0 var(--am),-24px 0 40px #000b}
+/* Player panel (card.js, Layout A+C): docked on the right edge. The page keeps its own scroll and gives the panel its width (it is fixed at right:0, which is the inside edge of the page's scroll bar).
+   While it is open the working lineup's column gives way (as Full screen does) and the table's cells close up a little, so the table keeps the room beside the panel. */
+:root{--cardw:clamp(600px,30vw,780px)}
+body.card-docked{padding-left:clamp(14px,1.2vw,40px);padding-right:calc(var(--cardw) + clamp(14px,1.2vw,40px))}
+body.card-docked .work{grid-template-columns:minmax(0,1fr)}
+body.card-docked aside.opt{display:none}
+body.card-docked .pool{grid-row:1;min-width:0}
+body.card-docked #thead th,body.card-docked #tbody td{padding-left:6px;padding-right:6px}
+body.card-docked #thead th.num,body.card-docked #tbody td.num,body.card-docked #tbody td.pl{padding-left:5px;padding-right:5px}
+body.card-docked #thead th:last-child,body.card-docked #tbody td:last-child{width:auto}
+.optstrip{display:none}
+body.card-docked .optstrip{display:flex;align-items:center;gap:18px;border:1px solid var(--ln);background:var(--p);padding:6px 12px;margin-bottom:8px;font-size:12px;color:var(--mu);white-space:nowrap}
+.optstrip b{color:var(--tx)}.optstrip .osh{color:var(--am);letter-spacing:1px}
+.optstrip .osgrow{flex:1}
+.optstrip .osseg{display:inline-flex;border:1px solid var(--ln)}
+.optstrip .osseg button{background:none;border:0;border-right:1px solid var(--ln);padding:3px 12px;font-weight:700;font-size:11.5px;color:var(--mu)}
+.optstrip .osseg button:last-child{border-right:0}.optstrip .osseg button.on{background:var(--am);color:#000}
+.optstrip button.oslu,.optstrip button.osgo{background:none;border:1px solid var(--bd,var(--ln));padding:3px 14px;font-weight:700;font-size:12px;color:var(--mu)}
+.optstrip button.oslu:hover{color:var(--tx);border-color:var(--mu)}
+.optstrip button.osgo{border-color:var(--am);color:var(--am)}.optstrip button.osgo:disabled{opacity:.6;cursor:progress}
+body.light .optstrip .osseg button.on{color:#fff}
+.pbody>*{flex:none}
+.card{--bar:#4a4f5c;position:fixed;top:0;right:0;bottom:0;width:var(--cardw);z-index:15;display:flex;flex-direction:column;background:var(--p);border-left:1px solid var(--ln)}
 .card[hidden]{display:none}
+.pbody{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#3a3a42 transparent;display:flex;flex-direction:column;gap:12px;padding:12px 0 16px}
+.card .psec,.card .two,.card .psrc{margin:0 16px}
+.card h3{margin:0 0 6px;font-size:10.5px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase;font-weight:700}
+/* Every section heading in the panel reads as the h3 above: the sec lines (game log, Seasons, Role and minutes) and the Efficiency heading. */
+.card .sec,.card .ue-hd b{font:700 10.5px/1.35 "JetBrains Mono",monospace;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase}
+.card .tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.card .tile{border:1px solid var(--ln);background:var(--bg);padding:6px 10px;min-width:0}
+.card .tile small{display:block;color:var(--mu);font-size:10.5px;white-space:nowrap}
+.card .tile b{font-size:18px;font-weight:700;white-space:nowrap}.card .tile b.gr{color:var(--gr)}.card .tile b.rd{color:var(--rd)}
+.card .tile em{font-style:normal;font-size:11px;color:var(--mu);margin-left:4px;font-weight:500}
+.card .tile span{display:block;color:var(--dim);font-size:10.5px;white-space:nowrap}
+.card .tgap{margin-top:6px;color:var(--rd);font-weight:700;font-size:11.5px}
+.card .two{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+.card .news{border:1px solid var(--ln);padding:8px 12px;font-size:12.5px;background:var(--bg);overflow-wrap:anywhere}
+.card .news .pill{display:inline-block;background:#ffb00022;color:var(--am);font-weight:700;padding:0 8px;border-radius:9px;margin-right:6px;font-size:11px}
+.card .news small{color:var(--mu)}.card .news .nbody{margin-top:5px;white-space:normal}.card .news .mu,.card .news .nbody.mu{color:var(--mu)}
+.card .chart{display:flex;align-items:flex-end;gap:5px;height:104px;border-bottom:1px solid var(--ln)}
+.card .bar{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:100%}
+.card .bar i{display:block;width:100%;max-height:calc(100% - 16px);background:var(--bar)}.card .bar i.hi{background:var(--gr)}
+.card .bar span{text-align:center;font-size:10px;color:var(--mu);margin-bottom:2px}
+.card .psrc{color:var(--dim);font-size:11px}
+@media (min-width:2100px){.card .chart{height:130px}.card .tile{padding:8px 12px}.card .tile b{font-size:20px}.pbody{gap:16px;padding-top:16px}}
 .logo.xl{width:36px;height:36px}
 .chipx.xl{width:36px;height:36px}
-.cfig{flex:0 0 100%;display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 16px}
-.cfn{display:flex;gap:13px;font-size:12px;color:var(--mu);white-space:nowrap}.cfn b{color:var(--tx);font-size:14px;font-weight:800;margin-left:3px}.cfn span:nth-child(2) b{color:var(--am)}
-.cfs{font-size:10.5px;color:var(--mu)}.cfn .cfgap{color:var(--rd);font-weight:700}.cfn .cfsrc{font-size:10.5px;font-weight:400;color:var(--mu);margin-left:1px}
 .ch{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--ln);background:linear-gradient(90deg,color-mix(in srgb,var(--t1) 13%,transparent),color-mix(in srgb,var(--t1) 3%,transparent) 60%,transparent);box-shadow:inset 3px 0 var(--t1)}
 .ch>.logo,.ch>.chipx{flex-shrink:0}
 .ch .id{flex:1;min-width:0}.ch .l1{gap:9px;min-width:0}.ch .l1 .st{flex-shrink:0}
@@ -516,12 +555,6 @@ tr.started td.ctl button{visibility:hidden}
 .close kbd{font:700 9.5px "JetBrains Mono";letter-spacing:.8px;color:var(--dim)}
 .close:hover{color:var(--tx);border-color:var(--mu)}
 .sec{padding:8px 16px 3px;font-size:11px;color:var(--dim);font-weight:700}
-.avgrow{display:flex;align-items:center;gap:22px;margin:8px 16px 4px}
-.avg{display:flex;gap:22px}.avg span{display:flex;align-items:baseline;gap:7px}
-.avg small{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--dim)}.avg b{font-size:15px}
-.avg span:first-child b{color:var(--am);font-weight:800}
-.sparkbox{margin-left:auto}
-.spark{display:block;background:#ffffff06;border:1px solid var(--ln)}
 .log{margin:6px 16px 0;width:calc(100% - 32px)}
 .log th{padding:4px 7px;cursor:default;font-size:10.5px}.log th.l{text-align:left}.log th.s{color:var(--am)}
 .log td{padding:2px 7px;font-size:12.5px;border-bottom:1px solid #18181c}
@@ -534,12 +567,9 @@ tr.started td.ctl button{visibility:hidden}
 .src{padding:10px 16px 14px;font-size:10.5px;color:var(--dim)}
 /* Card usage section (card-usage.js, card-chart.js): "Efficiency and role" chart, past-seasons table, USG% log cells.
    The card scrolls inside itself once the chart makes it taller than the screen, as the optimizer panel does. */
-.card{max-height:calc(100vh - 24px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#3a3a42 transparent}
-.card .ch{position:sticky;top:0;z-index:4;background-color:var(--p)}
 .log td.u{color:var(--mu)}
 .ue{margin:6px 16px 0;padding-top:12px;border-top:1px solid var(--ln)}
 .ue-hd{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-.ue-hd b{font:700 15px "Space Grotesk",sans-serif}
 .ue-grow{flex:1}
 .ue-seg{display:flex;border:1px solid var(--ln)}
 .ue-seg button{padding:4px 12px;font-weight:700;font-size:11.5px;color:var(--mu);background:none;border:0;border-right:1px solid var(--ln)}

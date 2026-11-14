@@ -100,7 +100,7 @@ export function projTitle(p) {
   return `Ours: ${typeof p.ours?.minutes === "number" ? p.ours.minutes.toFixed(1) : "—"} min x DK/min ${rate}; TwoGun ${tg}`;
 }
 /** Why a man has no figure tonight, for the dash's hover. */
-const noTonight = (p) => (typeof p.minutes !== "number" ? "no minutes in this pull, so no DK/min tonight" : p.minutes <= 0 ? "on 0 minutes, so no DK/min tonight" : "no projection in this pull, so no DK/min tonight");
+export const noTonight = (p) => (typeof p.minutes !== "number" ? "no minutes in this pull, so no DK/min tonight" : p.minutes <= 0 ? "on 0 minutes, so no DK/min tonight" : "no projection in this pull, so no DK/min tonight");
 /** The Tonight cell: the figure, its arrow against the season's and both numbers on hover. */
 function tonightCell(p, col, dash, withWhy, mark) {
   const v = dkTonight(p);

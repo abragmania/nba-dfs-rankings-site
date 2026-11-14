@@ -49,25 +49,45 @@ export const undoChipHtml = (id, kind, mark) => (mark ? `<button class="cundo" t
  * Returns { refresh({ news }), of(id) -> { chip, m, d } or null, setPin(id, kind, v), drop(id, kind) }.
  */
 export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onChange, noteEl = null, players = () => [] }) {
-  let view = null, latest = null, gen = 0, statusCards = new Map(), byId = new Map(), byFor = null;
-  const note = () => { if (noteEl) { const html = api2.syncHtml(); noteEl.innerHTML = html; noteEl.hidden = !html; } };
-  /** news: read the lineup page again too (a new slate or pull); without it only the console's work is read again (after each change there). */
+  let view = null, latest = null, newsState = null, newsGen = 0, gen = 0, statusCards = new Map(), byId = new Map(), byFor = null;
+  /** The problem with the lineup/news read, in words, or "" (shown with the send state above the list, so it is not only in the console log). */
+  const newsProblem = () => (newsState?.failed ? `Lineup news could not be read: ${newsState.why}` : newsState?.stale ? `Lineup news is ${newsState.ageMin ?? "an unknown number of"} min old, so it is not used` : "");
+  const note = () => { if (noteEl) { const bad = newsProblem(), html = api2.syncHtml() + (bad ? `<div class="syncnote err"><b>${esc(bad)}</b></div>` : ""); noteEl.innerHTML = html; noteEl.hidden = !html; } };
+  /** The lineup/news read, on its own: when it settles and is still the newest one for the slate on show it sets latest, the status cards and the news state, and redraws.
+   *  Never touches `view`. A throw anywhere in the chain comes back as a failed read with its reason, never as the console's fault. */
+  function readNews(name) {
+    const ng = ++newsGen;
+    return api(`/api/slate/${encodeURIComponent(name)}/news-lineups`).then((r) => {
+      const now = Number.isFinite(r?.now_ms) ? r.now_ms : Date.now();
+      if (r?.state !== "ok") return { st: { failed: true, why: `the server answered "${r?.state ?? "nothing"}"` }, l: null };
+      const stale = staleOf(r.latest, now);
+      return stale ? { st: { stale: true, ageMin: stale.ageMin }, l: null } : { st: { ok: true }, l: withFreshness(r.latest, now) };
+    }).catch((e) => { console.warn("lineup read for the S chips:", e.message); return { st: { failed: true, why: e.message }, l: null }; }).then((out) => {
+      if (ng !== newsGen || name !== slate()) return;
+      latest = out.l; newsState = out.st;
+      statusCards = newestStatusCards(latest?.monster_news?.cards); // a stale or failed read is null here, so it gives no ruling
+      note();
+      onChange();
+    });
+  }
+  /** news: read the lineup page again too (a new slate or pull); without it only the console's work is read again (after each change there). The two reads are independent:
+   *  the console read only ever writes `view`, the lineup read only `latest`, so neither waits for or overwrites the other. */
   async function refresh({ news = true } = {}) {
     const name = slate(), g = ++gen;
     if (!name) return;
-    const read = !news ? Promise.resolve(latest) : api(`/api/slate/${encodeURIComponent(name)}/news-lineups`).then((r) => (r?.state === "ok" && !staleOf(r.latest, Number.isFinite(r.now_ms) ? r.now_ms : Date.now()) ? withFreshness(r.latest, Number.isFinite(r.now_ms) ? r.now_ms : Date.now()) : null), (e) => { console.warn("lineup read for the S chips:", e.message); return null; });
+    const np = news ? readNews(name) : null;
     try {
-      const [v, l] = await Promise.all([cons.boardView(name), read]);
-      if (g !== gen || name !== slate()) return;
-      view = v; latest = l;
+      const v = await cons.boardView(name);
+      if (g !== gen || name !== slate()) return np;
+      view = v;
     } catch (e) {
-      if (g !== gen) return;
+      if (g !== gen) return np;
       view = null;
       toast(`The board could not read the console (starters and your typed numbers): ${e.message}`, "err");
     }
-    statusCards = newestStatusCards(latest?.monster_news?.cards); // a stale read is null here, so it gives no ruling
     note();
     onChange();
+    return np;
   }
   /** The news ruling for a man's injury badge (news-status.js), or null to keep TwoGun's word. */
   const ruling = (id) => {
@@ -81,10 +101,13 @@ export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onC
   const teamOf = (id) => view?.[String(id)]?.team ?? null;
   const api2 = {
     refresh,
+    /** How the lineup/news read stands: null (not read yet), { ok }, { stale, ageMin } or { failed, why }; the player panel says so instead of "no news". */
+    newsState: () => newsState,
     of(id) {
-      const v = view?.[String(id)], inj = ruling(id);
-      if (!v && !inj) return null;
-      return { chip: v ? starterChip(v, latest, id, pullAt()) : null, m: v?.marks?.m ?? null, d: v?.marks?.d ?? null, inj };
+      const v = view?.[String(id)], inj = ruling(id), nc = statusCards.get(String(id));
+      if (!v && !inj && !nc) return null;
+      // news: his newest status card whole (label, body, at), for the player panel's News box, shown in full.
+      return { chip: v ? starterChip(v, latest, id, pullAt()) : null, m: v?.marks?.m ?? null, d: v?.marks?.d ?? null, inj, news: nc ? { label: nc.label ?? null, body: nc.body ?? null, at: nc.at ?? null } : null };
     },
     /** Every refusal is said (Adam, 11-07): not on the console, Out there, or the console could not load. Never rejects. */
     async setPin(id, kind, value) {

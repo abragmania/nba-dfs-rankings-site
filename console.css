@@ -162,10 +162,9 @@ html:has(body.console-on){scrollbar-color:#b9c0ca transparent}
 #console .cn .lprow.le{height:auto;min-height:23px;padding:2px 0;line-height:1.25} /* the log rows are never cut: they wrap */
 #console .inj{height:auto;min-height:23px;padding:2px 0}
 /* The player card's role and minutes block (card-role.js), on the board page. */
-#card.card{width:min(640px,calc(100vw - 24px))}
 #card .logscroll{overflow-x:auto}
-#card .crole{padding:0 16px 6px}
-#card .crole .sec{padding-left:0;padding-right:0}
+#card .two .crole{padding:0}
+#card .crole .sec{padding:0;font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase}
 #card .crole .hint{float:none;display:block;margin-top:2px}
 #card .crole .seg{display:inline-flex;flex-wrap:nowrap}
 #card .crole .rs{display:inline-flex;align-items:center;justify-content:center;height:24px;min-width:34px;padding:0 6px;background:transparent;border:1px solid var(--ln,#333);margin-left:-1px;font-size:11.5px;font-weight:800;line-height:1;color:var(--mu,#999);cursor:pointer}
@@ -177,7 +176,11 @@ html:has(body.console-on){scrollbar-color:#b9c0ca transparent}
   #card .ch .close{order:3}
   #card .ch .acts{order:4;flex-basis:100%}
   #card .ch .acts button{min-height:36px}
-  #card .ch .cfig{order:5}
+  /* Under 900 px there is no room beside the panel: it covers the page, and the tiles go two across. */
+  :root{--cardw:100%}
+  .card{left:0;width:auto}
+  body.card-docked{padding-right:clamp(20px,2.2vw,60px)}
+  .card .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.card .two{grid-template-columns:minmax(0,1fr)}
 }
 #card .crole .rs.on.starter{background:var(--gr);border-color:var(--gr);color:#fff}
 #card .crole .rs.on.bench_plus{background:var(--am,#ffb000);border-color:var(--am,#ffb000);color:#000}
