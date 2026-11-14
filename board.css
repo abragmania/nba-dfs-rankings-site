@@ -249,6 +249,8 @@ tr.excl td{opacity:.3}tr.excl .name{text-decoration:line-through}
 .oh2{font-weight:800;font-size:11px;letter-spacing:1.4px;color:var(--rd);margin-right:4px;background:none;border:1px solid #ff4d5e40;min-height:24px;padding:2px 8px}
 .o{display:flex;align-items:center;gap:7px;border:1px solid #ff4d5e40;padding:3px 10px 3px 5px;font-size:12px}
 .logo.xs{width:16px;height:16px}.oname{font:600 12.5px "Space Grotesk";background:none;border:0;padding:0;color:var(--tx);cursor:pointer}.oname:hover{color:var(--am);text-decoration:underline}.o em{font-style:normal;color:var(--dim)}.o i{font-style:normal;color:var(--rd)}
+.abs{color:var(--mu);font-size:11px;white-space:nowrap} /* an injured man's missed games, the short form (server/boxes/absence.js); --mu is set for Dark, Navy and Light */
+.ch .l2 .abs{font-size:12px}
 /* Fixed cells: the player list in column 1, the optimizer in column 2, so the card can share the optimizer's cell and nothing shifts when it opens. */
 .pool{grid-column:1;grid-row:1}
 /* Standard A15: no inner scroll boxes, so the panel runs its own length down the page; it stretches to the table's length so its band can stick that far. */

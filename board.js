@@ -15,7 +15,7 @@ import { askConfirm, CONFIRM } from "./confirm.js";
 import { columnsControl, sortNote } from "./columns.js";
 import { headHtml, rowHtml, SORT_KEYS, comparePlayers, hasResettable, minSourceOf, gapChipHtml } from "./player-table.js";
 import { pullChipHtml, pullNoteHtml } from "./pull-note.js";
-import { boxNote, noteLists as dataNotes, warningCount, freshBoxes } from "./box-note.js";
+import { boxNote, absenceNote, noteLists as dataNotes, warningCount, freshBoxes } from "./box-note.js";
 import { CHECK_MS, takeAnswer, applyHeld, createRefresher, followNewest, mergeFresh, outNamesOf, pickSlate, slateQuery, overrideKey, picksOnBoard, pullOf, rememberRows, rosterCleanup, statusLine } from "./slate-refresh.js";
 import { pressSettle } from "./press-settle.js";
 import { createPullNow, firstTipOf } from "./pull-now.js";
@@ -228,9 +228,9 @@ function renderSources() {
   if (!s) { el.hidden = true; return; }
   const t = (raw) => when(raw) ?? null;
   const { board, injuries } = topStamps(s);
-  const box = boxNote(s.box_freshness);
+  const box = boxNote(s.box_freshness), missed = absenceNote(s.absence_state); // the missed-games line (server/boxes/absence.js) sits with the box score line at the foot
   el.hidden = false;
-  el.innerHTML = sourcesHtml(sourceRows({ board: t(board), injuries: t(injuries), pulled: t(s.as_of?.pull_started), lock: t(s.lock), slate: s, numbers: numbersLine() }), box.text ? [["Box scores", box.text, true]] : []);
+  el.innerHTML = sourcesHtml(sourceRows({ board: t(board), injuries: t(injuries), pulled: t(s.as_of?.pull_started), lock: t(s.lock), slate: s, numbers: numbersLine() }), [...(box.text ? [["Box scores", box.text, true]] : []), ...(missed.text ? [["Games missed", missed.text.replace(/^Games missed: /, ""), true]] : [])]);
 }
 /** What names men, against the rows now (slate-refresh.js rosterCleanup): a man off the slate leaves the picks and the working lineup, named; a filter on a team or game gone ends. */
 function settleRoster() {
@@ -503,7 +503,8 @@ function renderPullNote() {
 /** A man from the Out list as the card opens him: on the slate's player pool when he is there, else only what the list says. */
 function outMan(o) {
   const on = S.players.find((p) => p.name === o.name && p.team === o.team);
-  return on ?? { dk_id: null, name: o.name, team: o.team, positions: [], injury_status: o.status ?? "Out", salary_text: o.salary_text ?? null, his_in_note: o.his_in_note ?? null };
+  if (on) return o.absence && !on.absence ? { ...on, absence: o.absence } : on;
+  return { dk_id: null, name: o.name, team: o.team, positions: [], injury_status: o.status ?? "Out", salary_text: o.salary_text ?? null, his_in_note: o.his_in_note ?? null, absence: o.absence ?? null };
 }
 function renderOuts() {
   const out = S.slate.out ?? [];

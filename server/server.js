@@ -40,6 +40,7 @@ import { withUsualMinutes } from "../site/shim/app-only.js";
 import { withOurMinutes } from "./slate/our-minutes.js";
 import { pullStamp, withPullMoves } from "../site/shim/pull-moves.js";
 import { withRest } from "../site/shim/back-to-back.js";
+import { withAbsence } from "../site/shim/absence.js";
 import { withBoxFreshness, readBoxFreshness } from "../site/shim/site-data.js";
 import { withStatusSince } from "../site/shim/status-since.js";
 import { lateswapHandler } from "./slate/lateswap-route.js";
@@ -469,7 +470,7 @@ function builtSlate(res, slate, opts) {
   const players = effectivePlayers(res, slate, ours); // the board shows the effective figures, each with its base
   if (!players) return null;
   const usual = withUsualMinutes(slate, { ...ours, players }, { nowMs: opts.now() }); // each man's usual minutes, the console's figure
-  return withBoxFreshness(withStatusSince(slate, withRest(slate, withPullMoves(slate, withOurMinutes(slate, usual), { nowMs: opts.now() })), { nowMs: opts.now() }), { nowMs: opts.now() }); // who the newest pull moved against the one before it; box_freshness: whether the stored box scores are behind the schedule
+  return withBoxFreshness(withStatusSince(slate, withAbsence(slate, withRest(slate, withPullMoves(slate, withOurMinutes(slate, usual), { nowMs: opts.now() })), { nowMs: opts.now() }), { nowMs: opts.now() }), { nowMs: opts.now() }); // who the newest pull moved against the one before it; absence: how many games each injured man has missed (server/boxes/absence.js); box_freshness: whether the stored box scores are behind the schedule
 }
 
 /** Decodes a path segment; a malformed escape (%E0) comes back as "" so the slate-name check refuses it with 400. */

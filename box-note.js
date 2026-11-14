@@ -28,13 +28,26 @@ export function boxNote(f) {
   return { text, title: [...titles, f.checked_at ? `Checked ${f.checked_at}` : ""].filter(Boolean).join("\n"), counted: true };
 }
 
-/** The header's Data warnings lists from the slate: conflicts, missing, and the box score line as one entry (unless it is a quiet one). The button's count is the three lengths added. */
+const WHO = 5; // men named on the missed-games line; the rest are counted
+/** The missed-games line (server/boxes/absence.js, the slate's absence_state): "" when every injured man was counted; else "Games missed: not counted (why)" or
+ *  "Games missed: N men could not be counted (Name TEAM: why; ...); M stored boxes could not be read". Pure. */
+export function absenceNote(a) {
+  if (!a || typeof a !== "object") return { text: "", title: "" };
+  const reason = (s) => String(s ?? "no reason given").replace(/\.+$/, "");
+  if (a.state === "unknown") return { text: `Games missed: not counted (${reason(a.why)})`, title: "" };
+  const who = Array.isArray(a.uncounted) ? a.uncounted : [], parts = [];
+  if (who.length) parts.push(`${who.length} ${who.length === 1 ? "man" : "men"} could not be counted (${who.slice(0, WHO).map((u) => `${u.name} ${u.team}: ${reason(u.why)}`).join("; ")}${who.length > WHO ? `; and ${who.length - WHO} more` : ""})`);
+  if (a.unread_boxes > 0) parts.push(`${a.unread_boxes} stored box${a.unread_boxes === 1 ? "" : "es"} could not be read`);
+  return { text: parts.length ? `Games missed: ${parts.join("; ")}` : "", title: who.map((u) => `${u.name} ${u.team}: ${reason(u.why)}`).join("\n") };
+}
+
+/** The header's Data warnings lists from the slate: conflicts, missing, and the box score and missed-games lines as entries (unless the box one is quiet). The button's count is the three lengths added. */
 export function noteLists(slate) {
   const box = boxNote(slate?.box_freshness);
   return {
     conflicts: (slate?.conflicts ?? []).map(warningText),
     missing: [...(slate?.missing ?? []).map(warningText), ...(slate?.min_ours_problem ? [slate.min_ours_problem] : []), ...(slate?.proj_problem ? [slate.proj_problem] : [])],
-    boxes: box.text && box.counted ? [box.text] : [],
+    boxes: [...(box.text && box.counted ? [box.text] : []), ...(absenceNote(slate?.absence_state).text ? [absenceNote(slate.absence_state).text] : [])],
   };
 }
 export const warningCount = (n) => n.conflicts.length + n.missing.length + n.boxes.length;

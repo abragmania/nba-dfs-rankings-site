@@ -8,13 +8,13 @@
 // The state (which player, which log) lives in createCardState and the markup in cardHtml, both DOM-free so the swap
 // rule is tested: opening a player shows Loading at once, and a log that arrives for a panel since closed or swapped is
 // dropped (its request is also aborted).
-import { esc, logo, ICON, statusBadge, focusSelector } from "./board-util.js";
-import { gamesProblem, usgCell, usgNote, MONTHS } from "./gamerow.js";
+import { esc, logo, ICON, statusBadge, focusSelector, restDot } from "./board-util.js";
+import { gamesProblem, usgCell, usgNote } from "./gamerow.js";
+import { shortDay, absenceSpan } from "./absence-view.js";
 import { createUsageState, usageHtml, chartModel, fetchUsageHttp, closeUsageHttp, fetchedAt } from "./card-usage.js";
 import { wireChart } from "./card-chart.js";
 import { cardTilesHtml, cardSourceHtml, newsHtml, barChartHtml, summarise, LAST_N } from "./card-tiles.js";
 
-const prettyDate = (iso) => { const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso); return m ? `${MONTHS[+m[1] - 1]} ${+m[2]}` : iso; };
 const mins = (v) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
 
 /** The server's answer -> the card's log state: { state: "ok", data } or { state: "error", message }. A 200 whose body
@@ -105,13 +105,13 @@ export function cardHtml(p, log, { dash, colourOf, picks, figs = null, usage = {
   const header = () => {
     const c = colourOf(p.team), lk = picks.locked.includes(p.dk_id), ex = picks.excluded.includes(p.dk_id);
     const acts = p.dk_id == null ? "" : `<div class="acts"><button class="a-lk${lk ? " on" : ""}" data-lock="${esc(p.dk_id)}">${ICON.lock}${lk ? "Locked" : "Lock"}</button><button class="a-ex${ex ? " on" : ""}" data-excl="${esc(p.dk_id)}">${ICON.x}${ex ? "Excluded" : "Exclude"}</button></div>`;
-    return `<div class="ch" style="--t1:${c.t1};--t2:${c.t2}">${logo(p.team, "xl")}<div class="id"><div class="l1"><span class="nm2" title="${esc(p.name)}">${esc(p.name)}</span><span data-cbadge>${statusBadge(p, inj)}</span></div>`
-      + `<div class="l2"><span class="ptm">${esc(p.team)}${p.oppText ? ` ${esc(p.oppText)}` : ""}</span>${p.positions?.length ? `<span class="pos">${esc(p.positions.join("/"))}</span>` : ""}<span class="ddtd"><span title="Double-double chance">DD <b>${pct(p.dd_pct, "no double-double chance in this pull")}</b></span> · <span title="Triple-double chance">TD <b>${pct(p.td_pct, "no triple-double chance in this pull")}</b></span></span></div></div>`
+    return `<div class="ch" style="--t1:${c.t1};--t2:${c.t2}">${logo(p.team, "xl")}<div class="id"><div class="l1"><span class="nm2" title="${esc(p.name)}">${esc(p.name)}</span><span data-cbadge>${statusBadge(p, inj)}</span>${restDot(p)}</div>`
+      + `<div class="l2"><span class="ptm">${esc(p.team)}${p.oppText ? ` ${esc(p.oppText)}` : ""}</span>${p.positions?.length ? `<span class="pos">${esc(p.positions.join("/"))}</span>` : ""}<span class="ddtd"><span title="Double-double chance">DD <b>${pct(p.dd_pct, "no double-double chance in this pull")}</b></span> · <span title="Triple-double chance">TD <b>${pct(p.td_pct, "no triple-double chance in this pull")}</b></span></span>${absenceSpan(p.absence)}</div></div>`
       + acts
       + `<button class="close" data-card-close title="Close (Esc)"><kbd>ESC</kbd>&#10005;</button></div>`;
   };
   const logTable = (games) => `<table class="log"><thead><tr><th class="l">Date</th><th class="l">Opp</th><th class="l">Result</th><th>Min</th><th>Pts</th><th>Reb</th><th>Ast</th><th>3PM</th><th>Stl</th><th>Blk</th><th>TO</th><th title="Usage rate, Basketball-Reference game log">USG%</th><th class="s">DK</th></tr></thead><tbody>`
-    + games.map((g) => `<tr><td class="d">${esc(prettyDate(g.date))}</td><td class="o">${esc(g.home_away)} ${esc(g.opp)}</td><td class="r ${g.result === "W" ? "w" : "l"}">${esc(g.result)} ${esc(g.score)}</td><td>${mins(g.min)}</td><td>${g.pts}</td><td>${g.reb}</td><td>${g.ast}</td><td>${g.fg3m}</td><td>${g.stl}</td><td>${g.blk}</td><td>${g.to}</td>${usgCell(g.date, usage, dash)}<td class="k">${g.dk.toFixed(2)}</td></tr>`).join("")
+    + games.map((g) => `<tr><td class="d">${esc(shortDay(g.date))}</td><td class="o">${esc(g.home_away)} ${esc(g.opp)}</td><td class="r ${g.result === "W" ? "w" : "l"}">${esc(g.result)} ${esc(g.score)}</td><td>${mins(g.min)}</td><td>${g.pts}</td><td>${g.reb}</td><td>${g.ast}</td><td>${g.fg3m}</td><td>${g.stl}</td><td>${g.blk}</td><td>${g.to}</td>${usgCell(g.date, usage, dash)}<td class="k">${g.dk.toFixed(2)}</td></tr>`).join("")
     + `</tbody></table>`;
   const lastTen = () => {
     if (log.state === "loading" || log.state === "idle") return `<div class="sec">Last 10 games</div><div class="cardmsg">Loading the game log…</div>`;

@@ -1,42 +1,44 @@
 {
  "slate": "2026-11-14-main",
- "generated_at": "2026-11-14T23:02:57.850Z",
+ "generated_at": "2026-11-14T23:22:08.018Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-14-main/raw/2026-11-14T180240-0500",
+ "slate_built_from": "slates/2026-11-14-main/raw/2026-11-14T182156-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-14T23:02:49.554Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-14T180249-0500.html.gz",
-   "saved_at": "2026-11-14T23:02:49.554Z",
-   "parsed_sha": "3dbe8bc8c247dc90b532bbf59eb448cb7c88b2a701d84b8d7a343cc24aa526ae",
-   "sha256": "ada29ec35fdd57fe0340b9757f9627580bf879bc998bece5fb68e1060c304857"
+   "fetched_at": "2026-11-14T23:21:59.654Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-14T181640-0500.html.gz",
+   "saved_at": "2026-11-14T23:16:40.243Z",
+   "unchanged_since": "2026-11-14T23:16:40.243Z",
+   "parsed_sha": "309b5417e1642a2ac730e68f5a7a767017196bf87f392ae202a2fc4420438479",
+   "sha256": "fb00e3fa2a60d915fe74a84f74bd8c25fdad3a4cae2019cf15fa1d9500aadab3"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-14T23:02:53.624Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-14T180253-0500.html.gz",
-   "saved_at": "2026-11-14T23:02:53.624Z",
-   "parsed_sha": "143ed0f4646d7f76a6f14dafe3c553f4b752eb3c95011b877e81542c23a3c5f4",
-   "sha256": "85b0ecaf88ff3b7d0be495ba71247f4a0d9389d3f50673cfffc63010358e8467"
+   "fetched_at": "2026-11-14T23:22:03.787Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-14T182203-0500.html.gz",
+   "saved_at": "2026-11-14T23:22:03.787Z",
+   "parsed_sha": "8b8243f5288127575e106c34f4f072a50d19a9a49f57fcfae63a2384864df056",
+   "sha256": "72eedcd202ba69afc3118f138edebbd6883151a3e201734bb83efe56256cde08"
   },
   "rotogrinders": {
    "url": "https://rotogrinders.com/lineups/nba?site=draftkings",
    "status": "ok",
-   "fetched_at": "2026-11-14T23:02:57.828Z",
+   "fetched_at": "2026-11-14T23:22:08.001Z",
    "saved_as": "news/lineups/pages/rotogrinders-2026-11-14T180257-0500.html.gz",
    "saved_at": "2026-11-14T23:02:57.828Z",
+   "unchanged_since": "2026-11-14T23:02:57.828Z",
    "parsed_sha": "ad3364d551918d7a1c7e39febf4f4ada06a706259f7a02c1fb02d636fec47faa",
-   "sha256": "72b90fb12db2dd07d99055a7ac7cbcbec516d924fce4c7fa02493031e7778d20"
+   "sha256": "00d5aaa1c7ba419b9655f180f4de98094452aacaac766c7856e2af75e6b9e21e"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-14T23:02:42.931Z",
-  "changed_at": "2026-11-14T18:02:42-05:00",
-  "saved_as": "news/bbm/2026-11-14T180242-0500.html",
+  "fetched_at": "2026-11-14T23:21:56.421Z",
+  "changed_at": "2026-11-14T18:16:35-05:00",
+  "saved_as": "news/bbm/2026-11-14T181635-0500.html",
   "out": [
    {
     "name": "Bennedict Mathurin",
@@ -45,7 +47,7 @@
     "match": null,
     "status": "Out",
     "detail": "left plantar fasciitis - Est. Return 11/16",
-    "out_since": "2026-11-14T18:02:42-05:00"
+    "out_since": "2026-11-14T17:59:37-05:00"
    },
    {
     "name": "Bryce McGowens",
@@ -81,7 +83,7 @@
     "match": null,
     "status": "Out",
     "detail": "right knee injury management - Est. Return 11/16",
-    "out_since": "2026-11-14T18:02:42-05:00"
+    "out_since": "2026-11-14T17:59:37-05:00"
    },
    {
     "name": "James Harden",
@@ -90,7 +92,7 @@
     "match": null,
     "status": "Out",
     "detail": "left lower leg/calf tightness - Est. Return 11/16",
-    "out_since": "2026-11-14T18:02:42-05:00"
+    "out_since": "2026-11-14T17:59:37-05:00"
    },
    {
     "name": "Sam Merrill",
@@ -108,7 +110,7 @@
     "match": null,
     "status": "Out",
     "detail": "left knee contusion/injury management - Est. Return 11/16",
-    "out_since": "2026-11-14T18:02:42-05:00"
+    "out_since": "2026-11-14T17:59:37-05:00"
    },
    {
     "name": "Evan Mobley",
@@ -135,7 +137,7 @@
     "match": null,
     "status": "Out",
     "detail": "right hamstring injury management - Est. Return 11/16",
-    "out_since": "2026-11-14T18:02:42-05:00"
+    "out_since": "2026-11-14T17:59:37-05:00"
    },
    {
     "name": "Tarik Biberovic",
@@ -153,7 +155,7 @@
     "match": null,
     "status": "Out",
     "detail": "left ankle sprain - Est. Return 11/15",
-    "out_since": "2026-11-14T18:02:42-05:00"
+    "out_since": "2026-11-14T17:59:37-05:00"
    },
    {
     "name": "Dereck Lively II",
@@ -181,6 +183,15 @@
     "status": "Out",
     "detail": "right hip contusion - Est. Return 11/17",
     "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Pelle Larsson",
+    "team": "MIA",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "illness - Est. Return 11/16",
+    "out_since": "2026-11-14T18:16:35-05:00"
    },
    {
     "name": "Tobe Awaka",
@@ -237,6 +248,76 @@
   ],
   "cards": [
    {
+    "id": "182643",
+    "name": "Klay Thompson",
+    "team": "MIA",
+    "dk_id": "44912228",
+    "match": "exact",
+    "word": "Playing",
+    "label": "Playing",
+    "body": "left ankle sprain",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T23:15:35.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182642",
+    "name": "Pelle Larsson",
+    "team": "MIA",
+    "dk_id": null,
+    "match": null,
+    "word": "Out",
+    "label": "Out",
+    "body": "illness",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T23:15:35.000Z",
+    "precision": "minute",
+    "out_as": "Pelle Larsson"
+   },
+   {
+    "id": "182641",
+    "name": "Giannis Antetokounmpo",
+    "team": "MIA",
+    "dk_id": "44912083",
+    "match": "exact",
+    "word": "Playing",
+    "label": "Playing",
+    "body": "right wrist sprain",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T23:15:35.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182640",
+    "name": "Mikel Brown Jr",
+    "team": "BKN",
+    "dk_id": "44912268",
+    "match": "exact",
+    "word": "Playing",
+    "label": "Playing",
+    "body": "illness",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T23:12:35.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182639",
+    "name": "Michael Porter Jr.",
+    "team": "BKN",
+    "dk_id": "44912123",
+    "match": "exact",
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "personal reasons",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T23:11:35.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
     "id": "182638",
     "name": "Keshon Gilbert",
     "team": "ATL",
@@ -245,8 +326,8 @@
     "word": "Out",
     "label": "Out",
     "body": "left knee inflammation nonsurgical procedure",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T23:01:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T23:00:51.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -259,8 +340,8 @@
     "word": "Doubtful",
     "label": "Doubtful",
     "body": "g league twoway",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T23:01:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T23:00:51.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -273,8 +354,8 @@
     "word": "Out",
     "label": "Out",
     "body": "left great toe hyperextension",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T23:01:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T23:00:35.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -287,8 +368,8 @@
     "word": "Playing",
     "label": "Playing",
     "body": "face mask",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T23:01:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T23:00:35.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -301,8 +382,8 @@
     "word": "Out",
     "label": "Out",
     "body": "lumbar strain",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T23:01:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T23:00:21.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -315,8 +396,8 @@
     "word": "Out",
     "label": "Out",
     "body": "left ankle sprain",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:52:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T22:51:35.000Z",
     "precision": "minute",
     "out_as": "Max Christie"
    },
@@ -329,8 +410,8 @@
     "word": "Playing",
     "label": "Playing",
     "body": "left shin / tibia contusion",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:52:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T22:51:21.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -343,8 +424,8 @@
     "word": "Playing",
     "label": "Playing",
     "body": "g league twoway",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:46:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T22:45:35.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -357,8 +438,8 @@
     "word": "Playing",
     "label": "Playing",
     "body": "g league twoway",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:46:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T22:45:35.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -371,8 +452,8 @@
     "word": "Out",
     "label": "Out",
     "body": "left finger sprain",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:46:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T22:45:35.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -385,8 +466,8 @@
     "word": "Out",
     "label": "Out",
     "body": "left plantar fasciitis",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:46:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T22:45:21.000Z",
     "precision": "minute",
     "out_as": "Bennedict Mathurin"
    },
@@ -399,8 +480,8 @@
     "word": "Out",
     "label": "Out",
     "body": "right knee injury management",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:46:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T22:45:21.000Z",
     "precision": "minute",
     "out_as": "Jarrett Allen"
    },
@@ -413,8 +494,8 @@
     "word": "Out",
     "label": "Out",
     "body": "right hamstring injury management",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:45:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T22:44:37.000Z",
     "precision": "minute",
     "out_as": "Peyton Watson"
    },
@@ -427,8 +508,8 @@
     "word": "Out",
     "label": "Out",
     "body": "left knee contusion/injury management",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:45:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T22:44:37.000Z",
     "precision": "minute",
     "out_as": "Donovan Mitchell"
    },
@@ -441,8 +522,8 @@
     "word": "Out",
     "label": "Out",
     "body": "left lower leg/calf tightness",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:45:42.000Z",
+    "words_at": "2026-11-14T181635-0500",
+    "at": "2026-11-14T22:44:35.000Z",
     "precision": "minute",
     "out_as": "James Harden"
    },
@@ -455,8 +536,8 @@
     "word": "Playing",
     "label": "Playing",
     "body": "g league twoway",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:31:42.000Z",
+    "words_at": "2026-11-14T180851-0500",
+    "at": "2026-11-14T22:30:21.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -469,8 +550,8 @@
     "word": "Playing",
     "label": "Playing",
     "body": "left knee contusion / bone bruise - Missi is playing Saturday but will be on a minutes restriction.",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:26:42.000Z",
+    "words_at": "2026-11-14T180851-0500",
+    "at": "2026-11-14T22:25:21.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -483,8 +564,8 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "g league twoway",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:15:40.000Z",
+    "words_at": "2026-11-14T180851-0500",
+    "at": "2026-11-14T22:14:51.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -497,8 +578,8 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "g league twoway",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:15:40.000Z",
+    "words_at": "2026-11-14T180851-0500",
+    "at": "2026-11-14T22:14:37.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -511,8 +592,8 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "g league twoway",
-    "words_at": "2026-11-14T180242-0500",
-    "at": "2026-11-14T22:15:40.000Z",
+    "words_at": "2026-11-14T180851-0500",
+    "at": "2026-11-14T22:14:37.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -525,8 +606,8 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "g league on assignment",
-    "words_at": "2026-11-14T172040-0500",
-    "at": "2026-11-14T22:15:40.000Z",
+    "words_at": "2026-11-14T180021-0500",
+    "at": "2026-11-14T22:14:37.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -539,8 +620,8 @@
     "word": "Off Injury Report",
     "label": "UNKNOWN(Off Injury Report #00cc44)",
     "body": null,
-    "words_at": "2026-11-14T172040-0500",
-    "at": "2026-11-14T22:15:40.000Z",
+    "words_at": "2026-11-14T180021-0500",
+    "at": "2026-11-14T22:14:37.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -553,8 +634,8 @@
     "word": "Off Injury Report",
     "label": "UNKNOWN(Off Injury Report #00cc44)",
     "body": null,
-    "words_at": "2026-11-14T172040-0500",
-    "at": "2026-11-14T22:15:40.000Z",
+    "words_at": "2026-11-14T180021-0500",
+    "at": "2026-11-14T22:14:37.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -567,8 +648,8 @@
     "word": "Out",
     "label": "Out",
     "body": "right foot plantar fascia injury management",
-    "words_at": "2026-11-14T172040-0500",
-    "at": "2026-11-14T22:00:40.000Z",
+    "words_at": "2026-11-14T180021-0500",
+    "at": "2026-11-14T21:59:37.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -581,8 +662,8 @@
     "word": "Off Injury Report",
     "label": "UNKNOWN(Off Injury Report #00cc44)",
     "body": null,
-    "words_at": "2026-11-14T172040-0500",
-    "at": "2026-11-14T22:00:40.000Z",
+    "words_at": "2026-11-14T175937-0500",
+    "at": "2026-11-14T21:59:37.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -757,11 +838,15 @@
   ],
   "pages_read": [
    "2026-11-14T172040-0500.html",
-   "2026-11-14T180242-0500.html"
+   "2026-11-14T175937-0500.html",
+   "2026-11-14T180021-0500.html",
+   "2026-11-14T180242-0500.html",
+   "2026-11-14T180851-0500.html",
+   "2026-11-14T181635-0500.html"
   ],
   "unreadable_age": 0,
   "unread_ids": [],
-  "no_id_page": "2026-11-14T180242-0500.html",
+  "no_id_page": "2026-11-14T181635-0500.html",
   "no_id_newest": 0,
   "unread_cards": 0
  },
@@ -1044,6 +1129,14 @@
     ],
     "label": "Expected Lineup",
     "may_not_play": [
+     {
+      "name": "Bennedict Mathurin",
+      "pos": "F",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
+     },
      {
       "name": "Bryce McGowens",
       "pos": "G",
@@ -1566,9 +1659,9 @@
       "name": "Michael Porter Jr.",
       "pos": "SF",
       "bmId": "5682",
-      "flag": null,
-      "word": null,
-      "status": null,
+      "flag": "Q",
+      "word": "Questionable",
+      "status": "Questionable (undetermined)",
       "verified": false,
       "id": "44912123",
       "match": "exact"
@@ -1620,8 +1713,8 @@
      {
       "name": "Michael Porter",
       "pos": "SF",
-      "flag": null,
-      "status": null,
+      "flag": "Ques",
+      "status": "Questionable",
       "id": "44912123",
       "match": "exact"
      },
@@ -1644,6 +1737,14 @@
     ],
     "label": "Expected Lineup",
     "may_not_play": [
+     {
+      "name": "Michael Porter",
+      "pos": "F",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912123",
+      "match": "exact"
+     },
      {
       "name": "Mikel Brown",
       "pos": "G",
@@ -2494,9 +2595,9 @@
       "name": "Klay Thompson",
       "pos": "SF",
       "bmId": "3399",
-      "flag": "P",
-      "word": "Probable",
-      "status": "Probable",
+      "flag": "IN",
+      "word": "Playing",
+      "status": "Playing",
       "verified": false,
       "id": "44912228",
       "match": "exact"
@@ -2505,9 +2606,9 @@
       "name": "Giannis Antetokounmpo",
       "pos": "PF",
       "bmId": "3701",
-      "flag": "P",
-      "word": "Probable",
-      "status": "Probable",
+      "flag": "IN",
+      "word": "Playing",
+      "status": "Playing",
       "verified": false,
       "id": "44912083",
       "match": "exact"
@@ -2556,8 +2657,8 @@
      {
       "name": "Giannis Antetokounmpo",
       "pos": "PF",
-      "flag": "Prob",
-      "status": "Probable",
+      "flag": null,
+      "status": null,
       "id": "44912083",
       "match": "exact"
      },
@@ -2573,12 +2674,12 @@
     "label": "Expected Lineup",
     "may_not_play": [
      {
-      "name": "Giannis Antetokounmpo",
+      "name": "Pelle Larsson",
       "pos": "F",
-      "flag": "Prob",
-      "status": "Probable",
-      "id": "44912083",
-      "match": "exact"
+      "flag": "Doubt",
+      "status": "Doubtful",
+      "id": null,
+      "match": null
      },
      {
       "name": "Klay Thompson",
@@ -2587,14 +2688,6 @@
       "status": "Probable",
       "id": "44912228",
       "match": "exact"
-     },
-     {
-      "name": "Pelle Larsson",
-      "pos": "F",
-      "flag": "Doubt",
-      "status": "Doubtful",
-      "id": null,
-      "match": null
      }
     ]
    },

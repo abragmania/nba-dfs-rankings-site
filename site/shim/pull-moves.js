@@ -28,7 +28,7 @@ function appliedMisses(slate, players, men) {
 /** The slate with the baked pull_changes and each moved man's pull_move, as the app's withPullMoves gives them. */
 export function withPullMoves(slate, input) {
   const b = baked(slate);
-  if (!b) return { ...input, pull_changes: { state: "none", why: "The pull comparison was not published with this slate.", unread_newer: [] } };
+  if (!b) return { ...input, absence_state: { state: "unknown", why: "the missed-games count was not published with this slate" }, pull_changes: { state: "none", why: "The pull comparison was not published with this slate.", unread_newer: [] } };
   const misses = Array.isArray(b.row_men) ? appliedMisses(slate, input.players ?? [], b.row_men) : [];
   const slateData = misses.length ? { ...input, missing: [...(input.missing ?? []), ...misses] } : input;
   const moves = b.moves ?? {};
@@ -38,5 +38,9 @@ export function withPullMoves(slate, input) {
     const p = since[String(p0.dk_id)] != null ? { ...p0, status_since: since[String(p0.dk_id)] } : p0;
     return men[String(p.dk_id)] ? { ...p, rest_b2b2nd: men[String(p.dk_id)][0], rest_plays_tomorrow: men[String(p.dk_id)][1] } : p;
   };
-  return { ...slateData, rest: { state: b.rest?.state ?? "unknown", ...(b.rest?.why ? { why: b.rest.why } : {}) }, pull_changes: b.pull_changes, players: (slateData.players ?? []).map((p) => mark(moves[String(p.dk_id)] ? { ...p, pull_move: moves[String(p.dk_id)] } : p)) };
+  const ab = b.absence ?? null; // the injured men's missed games baked with the pull comparison (server/boxes/absence.js); a file baked before it holds none
+  const absence_state = ab ? { state: ab.state, ...(ab.why ? { why: ab.why } : {}), ...(ab.boxes_through ? { boxes_through: ab.boxes_through } : {}), ...(ab.unread_boxes ? { unread_boxes: ab.unread_boxes } : {}), uncounted: ab.uncounted ?? [] } : { state: "unknown", why: "the missed-games count was not published with this slate" };
+  const withAb = (p) => (ab?.men?.[String(p.dk_id)] ? { ...p, absence: ab.men[String(p.dk_id)] } : p);
+  const outs = Array.isArray(slateData.out) ? { out: slateData.out.map((o) => (ab?.out?.[`${o.team}|${o.name}`] ? { ...o, absence: ab.out[`${o.team}|${o.name}`] } : o)) } : {};
+  return { ...slateData, ...outs, absence_state, rest: { state: b.rest?.state ?? "unknown", ...(b.rest?.why ? { why: b.rest.why } : {}) }, pull_changes: b.pull_changes, players: (slateData.players ?? []).map((p) => withAb(mark(moves[String(p.dk_id)] ? { ...p, pull_move: moves[String(p.dk_id)] } : p))) };
 }

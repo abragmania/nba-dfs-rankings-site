@@ -10,6 +10,7 @@ import { marksOf, liveText } from "./console-marks.js";
 import { MINUTE_SOURCES, SOURCE_LABEL } from "./depth-chart.js";
 import { syncWords } from "./console-auto.js";
 import { noteCell, outNote, stripHtml } from "./console-news.js";
+import { absenceRow } from "./absence-view.js";
 
 export const TEAM_NAMES = {
   ATL: "Atlanta Hawks", BKN: "Brooklyn Nets", BOS: "Boston Celtics", CHA: "Charlotte Hornets", CHI: "Chicago Bulls", CLE: "Cleveland Cavaliers",
@@ -78,7 +79,7 @@ function outRow(team, r, T, mk, N) {
   const omark = mk?.out ? chip(team, r.id, "out", mk.out, "in") : "";
   return `<div class="oline" data-row="${esc(r.id)}"><span class="ps">${esc(pos0(p) || "—")}</span>${consoleNameOpen(p, p.name, "span", "onm")}
 <span class="tgl"><button class="tg o on" type="button" data-out="${esc(r.id)}" data-team="${esc(team)}" title="Out. Click to bring him back in">Out</button><span class="cs">${omark}</span></span>
-${outNote(N, p)}<div class="why">${src}${isNum(p.healthy) && p.healthy > 0 ? ` &middot; usual ${f1(p.healthy)} min` : ""}</div></div>`;
+${outNote(N, p)}<div class="why">${src}${isNum(p.healthy) && p.healthy > 0 ? ` &middot; usual ${f1(p.healthy)} min` : ""}${absenceRow(p.absence)}</div></div>`;
 }
 
 const HEAD = (first) => `<div class="hd"><span>${first}</span><span>Player</span><span>Min</span><span>DK/min</span><span class="r">Proj</span><span>Where his minutes come from</span><span>Status and latest note</span><span class="c">S</span><span class="c">Out</span></div>`;
