@@ -76,11 +76,15 @@ thead tr{background:var(--p2)}th.pl{text-align:left}th.s{color:var(--am)}th.ctl{
 /* The sort arrow hangs after the label and takes no width (its negative margin cancels it), so a sort moves no column and the label stays over its numbers; the sorted header sits one layer up so the arrow shows over the next header's padding. */
 th[data-sort]::after{content:"▾";display:inline-block;width:8px;margin:0 -10px 0 2px;font-size:8px;text-align:left;visibility:hidden}th.s::after{visibility:visible}th.s.up::after{content:"▴"}
 #thead th.s{z-index:2}
-#thead th{padding-top:17px;vertical-align:bottom}
+#thead th{padding-top:20px;vertical-align:bottom}
 /* Band names (player-table.js BAND): a small label above the first column of the Tonight and Season Stats families. */
 #thead th[data-band]{z-index:2}
-#thead th[data-band]::before{content:attr(data-band);position:absolute;top:3px;left:8px;font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--am);pointer-events:none}
-#thead th.ctl,#thead th.bmp{padding-top:17px}
+#thead th[data-band]::before{content:attr(data-band);position:absolute;top:5px;left:8px;font-size:10px;font-weight:800;line-height:1;letter-spacing:1px;text-transform:uppercase;color:var(--am);pointer-events:none}
+#thead th.gs[data-band]::before{color:var(--mu)}
+/* The band spans its whole group: a 2px rule along the top of every header cell in it, amber for Tonight, muted for Season Stats. */
+#thead th.gp::after,#thead th.gs::after{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:color-mix(in srgb,var(--am) 85%,transparent);pointer-events:none}
+#thead th.gs::after{background:color-mix(in srgb,var(--mu) 55%,transparent)}
+#thead th.ctl,#thead th.bmp{padding-top:20px}
 td{padding:2px 12px;border-bottom:1px solid #18181c;text-align:right;white-space:nowrap}
 tbody tr:hover td{background:#ffffff0d}
 tr.team:hover td{background:color-mix(in srgb,var(--t1) 7%,transparent)}
