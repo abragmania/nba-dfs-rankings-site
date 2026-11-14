@@ -175,7 +175,9 @@ body.lineups-on{padding-bottom:0} /* the tab ends at its scrolling boxes, sized 
 }
 /* The exposure table fits its column: a long name ends in an ellipsis, so the Filter buttons are never cut off. */
 #lineups .lt-ex .ext td.ex-name{max-width:0;overflow:hidden;text-overflow:ellipsis}
-#lineups .lt-ex .ext td.ex-name>*{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#lineups .lt-ex .ext td.ex-name>.exn{display:flex;align-items:center;gap:6px;min-width:0}
+#lineups .lt-ex .ext td.ex-name .logo.sm,#lineups .lt-ex .ext td.ex-name .chipx.sm{flex:none;width:20px;height:20px}
+#lineups .lt-ex .ext td.ex-name .exn>:not(.logo):not(.chipx){display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* The spot filter: each button on one line; the row wraps between buttons. */
 #lineups .lt-sort button{white-space:nowrap}
 /* With many spots the buttons stay within two lines and scroll inside their own box, so the cards below never move far. */

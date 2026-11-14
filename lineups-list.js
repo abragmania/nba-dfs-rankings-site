@@ -2,7 +2,7 @@
 // helpers the Lineups tab shares: a man's name opens his player card (board.js reads data-dk-id from any click). Layout ported from the
 // NFL app's exposure table, written in this app's own style. exposureRows, sortExposure and savedKeys are pure and tested in node.
 // The cards themselves are drawn by lineups-tab.js.
-import { esc } from "./board-util.js";
+import { esc, logo } from "./board-util.js";
 import { setKey } from "./slots.js";
 import { nameLink } from "./card-row.js";
 import { EXPOSURE_POS } from "./view-memory.js";
@@ -84,7 +84,7 @@ export function exposureHtml(rows, sort, dash, only = null, pos = "All", field =
   const isOn = (id) => (Array.isArray(only) ? only.includes(id) : only === id); // the men filtered (an AND), or the one the older list had
   const shown = pos === "All" ? rows : rows.filter((r) => (r.positions ?? []).includes(pos));
   const body = !shown.length ? `<tr><td colspan="${field ? 8 : 6}" class="ex-none">No man in these lineups plays ${esc(pos)}.</td></tr>` : sortExposure(shown, sort).map((r) => `<tr${dim && isOn(r.id) ? ' class="held"' : ""}><td class="ex-pct">${r.pct.toFixed(1)}% <span class="ex-n">(${r.count})</span></td>`
-    + `<td class="ex-name">${nameLink({ dk_id: r.id, name: r.name })}</td>`
+    + `<td class="ex-name"><span class="exn">${logo(r.team, "sm")}${nameLink({ dk_id: r.id, name: r.name })}</span></td>`
     + `<td>${r.pos ? esc(r.pos) : dash("no position in this slate file")}</td><td>${r.team ? esc(r.team) : dash("no team in this slate file")}</td>`
     + `<td class="ex-own">${r.own == null ? dash("no projected ownership in this pull") : r.own.toFixed(1) + "%"}</td>`
     + (field ? fieldCells(r, dash) : "")
