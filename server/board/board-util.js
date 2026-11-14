@@ -178,6 +178,9 @@ export function injBadge(status, source = "injury report") {
   return `<span class="st" style="background:${bg}" title="${esc(s)} (${esc(source)})">${esc(letter)}</span>`;
 }
 
+/** The back-to-back dot beside a man's name (Adam 11-14: a colour, no chip): orange on the second night, blue when his team plays again tomorrow; the flags come from server/slate/back-to-back.js. */
+export const restDot = (p) => (p?.rest_b2b2nd ? `<i class="b2bdot b2b2" title="${esc(p.team ?? "")} played last night: second night of a back-to-back"></i>` : p?.rest_plays_tomorrow ? `<i class="b2bdot b2b1" title="${esc(p.team ?? "")} plays again tomorrow: first night of a back-to-back"></i>` : "");
+
 /** A man's status badge as the board shows it: the news-aware word when the console's mark carries one (inj: { word, note }), else TwoGun's injury status. The Player list row and the card share it. */
 export const statusBadge = (p, inj = null) => (p?.his === "in" ? injBadge("In", `you put him In; ${p.injury_status ? `the injury report says ${p.injury_status}` : "no outside Out stands"}`) : p?.his === "out" ? injBadge("Out", "you put him Out") : inj ? injBadge(inj.word, `Monster news${inj.note ? `: ${inj.note}` : ""}; TwoGun says ${p.injury_status || "nothing"}`) : injBadge(p.injury_status));
 

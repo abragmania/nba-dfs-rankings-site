@@ -372,10 +372,12 @@ function renderGames() {
   const flat = games.flatMap((g, gi) => [g.away, g.home].map((t) => ({ gi, t })));
   const implied = flat.map(({ gi, t }) => (typeof games[gi].implied?.[t] === "number" ? games[gi].implied[t] : null));
   const it = tiers(implied), inotes = notes(implied, "team total");
+  // Back-to-back (Adam 11-14): the team code's colour says it, orange on the second night, blue when the team plays again tomorrow; the flags ride every man (server/slate/back-to-back.js).
+  const restOf = (t) => { const m = S.players.find((p) => p.team === t); return m?.rest_b2b2nd ? { cls: " b2b2", title: `${t} played last night: second night of a back-to-back` } : m?.rest_plays_tomorrow ? { cls: " b2b1", title: `${t} plays again tomorrow: first night of a back-to-back` } : { cls: "", title: "" }; };
   const side = (g, t, k) => {
-    const ip = implied[k]; const fav = g.favourite === t; const sp = g.spread; const c = colourOf(t);
+    const ip = implied[k]; const fav = g.favourite === t; const sp = g.spread; const c = colourOf(t); const rest = restOf(t);
     const note = typeof sp !== "number" || !g.favourite ? "" : (fav ? "" : "+") + (fav ? sp : Math.abs(sp)).toFixed(1);
-    return `<div class="side${fav ? " fav" : ""}" style="--t1:${c.t1}">${logo(t, "lg")}<b class="code">${esc(t)}</b><small class="spr" title="${fav ? "Favourite" : "Underdog"}">${esc(note)}</small>${ip === null ? `<span class="ip">${dash("no implied points in this slate file")}</span>` : `<span class="ip t-${it[k]}" style="--tc:${c.t1}"${inotes[k] ? ` title="${esc(inotes[k])}"` : ""}>${ip.toFixed(1)}</span>`}</div>`;
+    return `<div class="side${fav ? " fav" : ""}" style="--t1:${c.t1}">${logo(t, "lg")}<b class="code${rest.cls}"${rest.title ? ` title="${esc(rest.title)}"` : ""}>${esc(t)}</b><small class="spr" title="${fav ? "Favourite" : "Underdog"}">${esc(note)}</small>${ip === null ? `<span class="ip">${dash("no implied points in this slate file")}</span>` : `<span class="ip t-${it[k]}" style="--tc:${c.t1}"${inotes[k] ? ` title="${esc(inotes[k])}"` : ""}>${ip.toFixed(1)}</span>`}</div>`;
   };
   const bd = (g) => { const s = borderStyle(S.fives?.[g.game]); return s ? ` cf" style="${s}` : ""; }; // thin green/yellow border halves from the News tab's confirmed fives
   $("games").innerHTML = games.map((g, gi) => `<div class="game${S.game === g.game ? " sel" : ""}${bd(g)}" data-game="${esc(g.game)}"><div class="gh"><span class="tip">${esc(when(g.tip) ?? "—")}</span><span class="tot">O/U ${gameTotals[gi] === null ? dash("no total in this slate file") : `<b class="t-${gt[gi]}" style="--tc:var(--am)"${gn[gi] ? ` title="${esc(gn[gi])}"` : ""}>${gameTotals[gi].toFixed(1)}</b>`}</span></div>${side(g, g.away, gi * 2)}${side(g, g.home, gi * 2 + 1)}</div>`).join("");

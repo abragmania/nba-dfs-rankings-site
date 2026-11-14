@@ -3,7 +3,7 @@
 // own roster-card row (wkRowHtml: Salary, Proj, Value, Own under a header row) and its own totals layout, over the same capLine.
 // A card row is the slot (boxed, first at the left, every path), the team logo, the name (it opens the player card), the injury letter, then Sal, Proj, Own.
 // A missing figure is the board's dash with a reason, never zero (RULES R1). Pure: no DOM, tested in node.
-import { esc, money, dec1, logo, statusBadge } from "./board-util.js";
+import { esc, money, dec1, logo, statusBadge, restDot } from "./board-util.js";
 import { SALARY_CAP } from "./slots.js";
 import { outFor } from "./figures.js";
 
@@ -95,7 +95,7 @@ function wkRowHtml({ slot, p, dash, colourOf, cls, attrs, ctl, note, emptyLabel,
   const matchup = p.oppText ? esc(p.oppText) : dash("no opponent in this slate file");
   const t = p.tip ? (when ? when(p.tip) : p.tip) : null;
   const tip = t ? esc(t) : dash("no tip time in this slate file");
-  return row(colourOf ? " tm" : "", teamAttr(p.team, colourOf), `${logo(p.team, "sm")}<div class="sn"><div class="sn1">${wkName(p)}${p.positions?.length ? `<span class="pos">${esc(p.positions.join("/"))}</span>` : ""}<span class="inj1">${statusBadge(p)}</span></div><small><span class="inj2">${statusBadge(p)}</span>${esc(p.team)} ${matchup} · ${tip}${note ? ` · ${esc(note)}` : ""}</small></div>`
+  return row(colourOf ? " tm" : "", teamAttr(p.team, colourOf), `${logo(p.team, "sm")}<div class="sn"><div class="sn1">${wkName(p)}${restDot(p)}${p.positions?.length ? `<span class="pos">${esc(p.positions.join("/"))}</span>` : ""}<span class="inj1">${statusBadge(p)}</span></div><small><span class="inj2">${statusBadge(p)}</span>${esc(p.team)} ${matchup} · ${tip}${note ? ` · ${esc(note)}` : ""}</small></div>`
     + f("ss", p.salary == null ? null : money(p.salary), "no salary in this slate file")
     + f("sp", p.projection == null ? null : p.projection.toFixed(1), "no projection in this pull")
     + f("sv", p.value == null ? null : p.value.toFixed(2), "no value in this pull")
@@ -123,7 +123,7 @@ export function cardRowHtml({ slot, p, dash, colourOf = null, cls = "", attrs = 
     return row(" stale", "", `<span></span><div class="sn"><b>${p?.name ? `${esc(p.name)} · ${esc(note || "off the slate")}` : "Not on this slate"}</b>${id}</div>${ctlCell}${fig("ss", "Sal", gone)}${fig("sp", "Proj", gone)}${fig("so", "Own", gone)}`);
   }
   const matchup = p.oppText ? esc(p.oppText) : dash("no opponent in this slate file");
-  return row(colourOf ? " tm" : "", teamAttr(p.team, colourOf), `${logo(p.team, "sm")}<div class="sn"><div class="sn1">${nameLink(p, "", shortName(p.name))}${p.positions?.length ? `<span class="pos">${esc(p.positions.join("/"))}</span>` : ""}${statusBadge(p)}${chip}</div><small>${esc(p.team)} ${matchup}${note ? ` · ${esc(note)}` : ""}</small></div>${ctlCell}`
+  return row(colourOf ? " tm" : "", teamAttr(p.team, colourOf), `${logo(p.team, "sm")}<div class="sn"><div class="sn1">${nameLink(p, "", shortName(p.name))}${restDot(p)}${p.positions?.length ? `<span class="pos">${esc(p.positions.join("/"))}</span>` : ""}${statusBadge(p)}${chip}</div><small>${esc(p.team)} ${matchup}${note ? ` · ${esc(note)}` : ""}</small></div>${ctlCell}`
     + fig("ss", "Sal", p.salary == null ? dash("no salary in this slate file") : money(p.salary))
     + fig("sp", "Proj", p.projection == null ? dash("no projection in this pull") : p.projection.toFixed(1))
     + fig("so", "Own", p.proj_own == null ? dash("no projected ownership in this pull") : p.proj_own.toFixed(1) + "%"));

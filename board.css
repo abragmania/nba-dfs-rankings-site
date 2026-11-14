@@ -43,6 +43,10 @@ button{cursor:pointer}
 .gh .tip{color:var(--am);font-weight:700}
 .side{display:grid;grid-template-columns:26px 38px 46px auto;justify-content:start;align-items:center;gap:8px;padding:1px 10px 1px 8px;margin-top:2px;box-shadow:inset 3px 0 var(--t1);background:linear-gradient(90deg,color-mix(in srgb,var(--t1) 11%,transparent),color-mix(in srgb,var(--t1) 3%,transparent))}
 .code{font-weight:800;font-size:14px}
+.code.b2b2{color:var(--or)} /* second night of a back-to-back (Adam 11-14: a colour on the team code, a dot beside each man, no chip) */
+.code.b2b1{color:var(--bl)} /* plays again tomorrow */
+.b2bdot{display:inline-block;width:7px;height:7px;border-radius:50%;flex-shrink:0;vertical-align:middle}
+.b2bdot.b2b2{background:var(--or)}.b2bdot.b2b1{background:var(--bl)}
 .spr{color:var(--dim);font-size:11px}
 .ip,.tot b{display:inline-block;padding:0 7px;font-weight:700;font-size:14px;color:var(--mu)}
 .tot b{font-size:13px}
