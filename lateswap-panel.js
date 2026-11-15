@@ -258,7 +258,7 @@ export async function lsBuild(X, settings, post, current = () => true) {
   // A pin, unpin, page, load or Cash/GPP switch (the counter), or a new entry (a replaced state object): the result is stale.
   if (X.P.ls !== ls0 || X.P.ls.rev !== rev) { X.P.ls.msg = "The working lineup changed during the build; build again."; X.P.ls.msgMen = null; return; }
   const prev = X.P.ls.res;
-  if (!out.lineups.length && prev?.lineups.length) { X.P.ls.res = { ...prev, note: out.note ?? null, partial: out.partial ?? null, error: null, kept: true }; X.P.ls.msg = null; refresh(X); return; } // nothing built (a stop, or a note saying why): the lineups on show stay, the note over them
+  if (!out.lineups.length && prev?.lineups.length) { X.P.ls.res = { ...prev, note: out.note ?? null, partial: out.partial ?? null, error: null, kept: true }; X.P.ls.msg = null; refresh(X); return; } // nothing built (a stop, or a note saying why): the lineups on show stay, the note at the foot of the tab
   X.P.ls.res = {
     idx: 0, mode, pinned: v.pinned, started: [...v.started], lineups: out.lineups.map((l) => ({ ...l, ids: l.slots.map((p) => p.dk_id) })), note: out.note ?? null, partial: out.partial ?? null, error: null, skipped: out.skipped ?? [],
     droppedLocks: out.late_swap?.dropped_locks ?? [],

@@ -364,7 +364,7 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
         + `<div class="lt-cards">${shown.length ? cards : none}</div></div>`;
     }
   }
-  // The build's own notes and stale warnings sit at the top of This build; the spot move offer after a swapped save sits on Saved.
+  // The build's own notes and stale warnings sit at the foot of the tab; the spot move offer after a swapped save sits on Saved.
   const mv = view === "saved" && P.spotMove ? (() => {
     const old = P.saved.find((l) => String(l.id) === String(P.spotMove.fromId));
     return `<div class="lt-run"><span>${esc(P.spotMove.spots.join(", "))} ${P.spotMove.spots.length === 1 ? "is" : "are"} still on the old lineup${old ? ` (${esc(savedLabel(old, P.svNames, P.saved))})` : ""}.</span><button class="ol sm" data-op="spotmove">Move ${esc(P.spotMove.spots.join(", "))} to the new one</button><button class="ol sm" data-op="spotmovex">Leave ${P.spotMove.spots.length === 1 ? "it" : "them"}</button></div>`;
@@ -372,10 +372,10 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
   // The download sits on the summary strip's row, where the spots and filters beside the switch cannot push it.
   const ow = view === "saved" && P.orderWarn ? `<div class="spwarn lt-ordwarn"><b>${P.orderWarn.bad.length} lineup${P.orderWarn.bad.length === 1 ? "" : "s"} hold${P.orderWarn.bad.length === 1 ? "s" : ""} a man who cannot play:</b><ul>${P.orderWarn.bad.map((b) => `<li>${esc(b.label)}: ${b.names.map(esc).join(", ")}</li>`).join("")}</ul><span><button data-op="orderforce">Assign anyway</button><button data-op="orderskip">Skip those</button><button data-op="ordercancel">Cancel</button></span></div>` : "";
   const undo = view === "saved" && P.spotUndo ? `<div class="lt-run"><span>${esc(P.spotUndo.text)}</span><button class="ol sm" data-op="orderundo">Undo</button><button class="ol sm" data-op="orderokay">Keep</button></div>` : "";
-  // The panel's notes and stale warnings belong to the last build made on this page in the panel's mode, not to every build below.
+  // The panel's notes and stale warnings sit at the foot of the tab; they belong to the last build made on this page in the panel's mode, not to every build below.
   const noted = notes ? `<div class="lt-notes"><em>The last ${esc(P.mode)} build made on this page:</em>${notes}</div>` : "";
   const otherHtml = others.length && !readErr ? otherSavedHtml(others, { byId: c.byId, live: c.byId, tagOf: (kind, p) => (isOutNow(p) ? "now Out" : lineupTag(p, c.byId, c.outNames)), spotText: P.spotText ?? null, dash, colourOf: c.colourOf, swap: { ctx: swapCtx, open: P.swap ?? null }, locked: new Set(c.picks.locked), savedSet, names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true, held: null }, P.lt.openOther ?? []) : "";
   const away = lists.buildOther ? `<div class="lt-away">The last build is ${esc(lists.buildOther.mode)} (${lists.buildOther.n} lineup${lists.buildOther.n === 1 ? "" : "s"}); switch the board to ${esc(lists.buildOther.mode)} to see it.</div>` : "";
   const stars = starStripHtml(starredCounts(inMode.map((e) => e.ids), c.byId)); // every starred man and how many of these lineups hold him
-  return `${run}${view === "build" ? readNote + noted : ow + undo + mv}<div class="lt-top">${strip}<span class="lt-acts">${saveAll}${dl}</span></div>${top}${stars}${body}${otherHtml}${away}`;
+  return `${run}${view === "build" ? readNote : ow + undo + mv}<div class="lt-top">${strip}<span class="lt-acts">${saveAll}${dl}</span></div>${top}${stars}${body}${otherHtml}${away}${view === "build" ? noted : ""}`;
 }

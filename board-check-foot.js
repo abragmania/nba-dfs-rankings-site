@@ -14,11 +14,24 @@ export function checkFootLines(bc) {
   return [{ cls: "head", text: `${head}${conflicts.length ? `; ${conflicts.length} for you to settle` : ""} (${time})` }, ...tail];
 }
 
-/** The foot's html: a block of one line each; "" when there is nothing to say. */
+/** The lines he must act on: the head or all-clear line, the failures and the conflicts (G65). The rest is checkNoteLines. */
+export const checkActionLines = (bc) => checkFootLines(bc).filter((l) => l.cls !== "note");
+/** The lines that only explain, in order: what was not checked, each exemption, the depth-chart notes. They go in the collapsed notes block at the foot. */
+export const checkNoteLines = (bc) => checkFootLines(bc).filter((l) => l.cls === "note");
+const linesHtml = (lines) => lines.map((l) => `<div class="bc-${l.cls}">${esc(l.text)}</div>`).join("");
+
+/** The foot's open html: the action lines, one each; "" when there is nothing to say. */
 export function checkFootHtml(bc) {
-  const lines = checkFootLines(bc);
-  return lines.length ? lines.map((l) => `<div class="bc-${l.cls}">${esc(l.text)}</div>`).join("") : "";
+  return linesHtml(checkActionLines(bc));
 }
+
+/** The notes block's inner html for those note lines; "" when there are none. */
+export function checkNotesHtml(bc, pool) {
+  return linesHtml([...checkNoteLines(bc), ...hisPoolNoteLines(pool)]);
+}
+
+/** How many note lines the notes block holds (the count on its summary). */
+export const checkNoteCount = (bc, pool) => checkNoteLines(bc).length + hisPoolNoteLines(pool).length;
 
 /** The foot's lines for the Out men he put In (slate.his_in_pool, server/slate/out-pool.js): who was brought into the pool, and who could not be and why (G62: said, never a silent hide). Empty with nothing to say. */
 export function hisPoolLines(pool) {
@@ -30,7 +43,10 @@ export function hisPoolLines(pool) {
   return lines;
 }
 
-/** The foot's html for those lines; "" when there are none. */
+/** Its note lines (who was brought into the pool): they join the collapsed notes block. */
+export const hisPoolNoteLines = (pool) => hisPoolLines(pool).filter((l) => l.cls === "note");
+
+/** The foot's open html for its failure lines; "" when there are none. */
 export function hisPoolHtml(pool) {
-  return hisPoolLines(pool).map((l) => `<div class="bc-${l.cls}">${esc(l.text)}</div>`).join("");
+  return linesHtml(hisPoolLines(pool).filter((l) => l.cls !== "note"));
 }

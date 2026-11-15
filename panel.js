@@ -253,7 +253,7 @@ async function build(X) {
     const out = await postBuild(X, { mode, settings: exposure ? { ...settings, exposure } : settings, ...(hand ? { handPicks: hand } : {}) }, watch);
     if (P.build !== watch) return; // an abandoned build's answer, even if the panel is back on its slate
     const prev = P.results[mode];
-    if (!out.lineups.length && prev?.lineups.length) P.results[mode] = { ...prev, note: out.note ?? null, partial: out.partial ?? null, error: null, kept: true }; // nothing built (a stop, or a note saying why): the lineups on show stay, the note over them
+    if (!out.lineups.length && prev?.lineups.length) P.results[mode] = { ...prev, note: out.note ?? null, partial: out.partial ?? null, error: null, kept: true }; // nothing built (a stop, or a note saying why): the lineups on show stay, the note at the foot of the tab
     else P.results[mode] = { idx: 0, lineups: out.lineups.map((l) => ({ ...l, ids: l.slots.map((p) => p.dk_id), men: frozenMen(l.slots, X.ctx().byId) })), skipped: out.skipped ?? [], note: out.note ?? null, partial: out.partial ?? null, error: null, picksAt, ovAt, limAt, workKey: wk, pullAt, builtAt: Date.now() };
     // The lineups are kept as the slate's one build on the Lineups tab, replacing the last build of either mode (Adam, 2026-11-07),
     // so the other mode's result and its notes go with it; the panel says "N lineups built: open Lineups" and Build never moves Adam
