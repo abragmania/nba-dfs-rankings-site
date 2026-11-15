@@ -1,303 +1,232 @@
 {
  "slate": "2026-11-14-main",
- "generated_at": "2026-11-15T00:55:19.352Z",
+ "generated_at": "2026-11-15T04:51:31.239Z",
  "status": "ok",
  "slate_built_from": "slates/2026-11-14-main/raw/2026-11-14T185117-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
-   "status": "ok",
-   "fetched_at": "2026-11-15T00:55:10.874Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-14T194011-0500.html.gz",
-   "saved_at": "2026-11-15T00:40:11.572Z",
-   "unchanged_since": "2026-11-15T00:40:11.572Z",
-   "parsed_sha": "fce68fcdc7923a12a8f7a696abb3999af7bad0fe30b22325f952a4633a98bb13",
-   "sha256": "6fa6b8486d87fb21f3300b93e0b1765e3d8f5671a6c998083e4378ede9e73d11"
+   "status": "failed",
+   "fetched_at": "2026-11-15T04:51:22.506Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-14T235122-0500.html.gz",
+   "saved_at": "2026-11-15T04:51:22.506Z",
+   "parsed_sha": "5043a5352acbd37b4e9fe15d181b245a385d2147a2fecebab21cf00f20db877f",
+   "sha256": "f08240f6406d42f951b8d1dcd3024ff786655fe5686c80a805202f6b093f6203",
+   "note": "the page is for 11/15, not 2026-11-14",
+   "last_good_at": "2026-11-15T00:55:10.874Z",
+   "check_failed": {
+    "at": "2026-11-15T04:51:31.239Z",
+    "why": "the page is for 11/15, not 2026-11-14"
+   }
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-15T00:55:15.077Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-14T194517-0500.html.gz",
-   "saved_at": "2026-11-15T00:45:17.004Z",
-   "unchanged_since": "2026-11-15T00:45:17.004Z",
-   "parsed_sha": "da9e9155d19c186a18bac7925c8c635fbf0b06de2c9949f0ad72f33c0c15ee47",
-   "sha256": "12a82bc5bc4466326f8cfe258d8d9a6a69ff9c1ec18b85c3e89f09a57ed5e1c2"
+   "fetched_at": "2026-11-15T04:51:26.802Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-14T235126-0500.html.gz",
+   "saved_at": "2026-11-15T04:51:26.802Z",
+   "parsed_sha": "42a61fc24475ac8b240763eaeb070a2fdfc7b2cf00e3b7513c51a729fe8cd090",
+   "sha256": "6207349d7dadedb39477a28063088747ab1ae3f31ec9784cf57ca36685d173df"
   },
   "rotogrinders": {
    "url": "https://rotogrinders.com/lineups/nba?site=draftkings",
    "status": "ok",
-   "fetched_at": "2026-11-15T00:55:19.336Z",
+   "fetched_at": "2026-11-15T04:51:31.053Z",
    "saved_as": "news/lineups/pages/rotogrinders-2026-11-14T194019-0500.html.gz",
    "saved_at": "2026-11-15T00:40:19.973Z",
    "unchanged_since": "2026-11-15T00:40:19.973Z",
    "parsed_sha": "1246ca608785940c86fb50face72574cc97d866e49a8ab206920276bc2ef23c6",
-   "sha256": "155fbb96955add5503855b30b8ceab1f317e859b8522057b98c57b18a00fb6f5"
+   "sha256": "fc678c07f689568ef035a2cd9a7b08cd5985de628e00e4e40b047efd5325d5d4"
   }
  },
  "monster_news": {
-  "status": "ok",
-  "fetched_at": "2026-11-15T00:55:00.007Z",
-  "changed_at": "2026-11-14T19:45:00-05:00",
-  "saved_as": "news/bbm/2026-11-14T194500-0500.html",
-  "out": [
-   {
-    "name": "Bennedict Mathurin",
-    "team": "NOP",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "left plantar fasciitis - Est. Return 11/16",
-    "out_since": "2026-11-14T17:59:37-05:00"
-   },
-   {
-    "name": "Bryce McGowens",
-    "team": "NOP",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "left elbow infection - Est. Return 11/16",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   },
-   {
-    "name": "Trey Murphy",
-    "team": "NOP",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "bilateral patellar tendinopathy - Est. Return 11/16",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   },
-   {
-    "name": "Trendon Watford",
-    "team": "NOP",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "right ankle sprain - Est. Return 11/16",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   },
-   {
-    "name": "Jarrett Allen",
-    "team": "CLE",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "right knee injury management - Est. Return 11/16",
-    "out_since": "2026-11-14T17:59:37-05:00"
-   },
-   {
-    "name": "James Harden",
-    "team": "CLE",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "left lower leg/calf tightness - Est. Return 11/16",
-    "out_since": "2026-11-14T17:59:37-05:00"
-   },
-   {
-    "name": "Sam Merrill",
-    "team": "CLE",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "right elbow injury management - Est. Return 11/16",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   },
-   {
-    "name": "Donovan Mitchell",
-    "team": "CLE",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "left knee contusion/injury management - Est. Return 11/16",
-    "out_since": "2026-11-14T17:59:37-05:00"
-   },
-   {
-    "name": "Evan Mobley",
-    "team": "CLE",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "left great toe sprain - Est. Return 11/16",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   },
-   {
-    "name": "Nae'Qwan Tomlin",
-    "team": "CLE",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "lower back stress - Est. Return 11/18",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   },
-   {
-    "name": "Peyton Watson",
-    "team": "CLE",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "right hamstring injury management - Est. Return 11/16",
-    "out_since": "2026-11-14T17:59:37-05:00"
-   },
-   {
-    "name": "Tarik Biberovic",
-    "team": "DAL",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "right heel bursitis - Est. Return 11/15",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   },
-   {
-    "name": "Max Christie",
-    "team": "DAL",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "left ankle sprain - Est. Return 11/15",
-    "out_since": "2026-11-14T17:59:37-05:00"
-   },
-   {
-    "name": "Dereck Lively II",
-    "team": "DAL",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "foot surgery - Est. Return 11/24",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   },
-   {
-    "name": "Jalen Duren",
-    "team": "DET",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "right hamstring strain - Est. Return 11/24",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   },
-   {
-    "name": "Isaiah Joe",
-    "team": "DET",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "right hip contusion - Est. Return 11/17",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   },
-   {
-    "name": "Pelle Larsson",
-    "team": "MIA",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "illness - Est. Return 11/16",
-    "out_since": "2026-11-14T18:16:35-05:00"
-   },
-   {
-    "name": "Tobe Awaka",
-    "team": "CHI",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "disc irritation - Est. Return 11/16",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   },
-   {
-    "name": "Nicolas Claxton",
-    "team": "CHI",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "left hamstring injury management (Injury Maintenance) - Est. Return 11/16",
-    "out_since": "2026-11-14T18:36:59-05:00"
-   },
-   {
-    "name": "Jalen Smith",
-    "team": "CHI",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "left finger sprain - Est. Return 11/16",
-    "out_since": "2026-11-14T18:36:59-05:00"
-   },
-   {
-    "name": "Michael Porter Jr.",
-    "team": "BKN",
-    "id": "44912123",
-    "match": "exact",
-    "status": "Out",
-    "detail": "personal reasons (Personal) - Est. Return 11/16",
-    "out_since": "2026-11-14T19:05:00-05:00"
-   },
-   {
-    "name": "Zach Edey",
-    "team": "MEM",
-    "id": "44912266",
-    "match": "exact",
-    "status": "Out",
-    "detail": "left ankle (Injury Maintenance) - Est. Return 11/16",
-    "out_since": "2026-11-14T19:35:00-05:00"
-   },
-   {
-    "name": "Jerami Grant",
-    "team": "MEM",
-    "id": "44912332",
-    "match": "exact",
-    "status": "Out",
-    "detail": "head injury - Est. Return 11/16",
-    "out_since": "2026-11-14T19:10:00-05:00"
-   },
-   {
-    "name": "Ty Jerome",
-    "team": "MEM",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "right hip soreness - Est. Return 11/16",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   },
-   {
-    "name": "Scotty Pippen Jr.",
-    "team": "MEM",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "lumbar disc herniation - Est. Return 11/25",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   },
-   {
-    "name": "Quinten Post",
-    "team": "MEM",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "concussion protocol - Est. Return 11/16",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   },
-   {
-    "name": "Richie Saunders",
-    "team": "MEM",
-    "id": null,
-    "match": null,
-    "status": "Out",
-    "detail": "torn acl - Est. Return 11/11",
-    "out_since": "2026-11-14T17:20:40-05:00"
-   }
-  ],
-  "unrecognised": [
-   {
-    "name": "DeAndre Jordan",
-    "team": "NOP",
-    "raw": "B Off the Bench"
-   },
-   {
-    "name": "Zion Williamson",
-    "team": "NOP",
-    "raw": "Off Off Injury Report"
-   }
-  ],
+  "status": "missing",
+  "note": "the Monster player-news page's day does not match: the page is for 11/15, not 2026-11-14",
+  "saved_as": "news/bbm/2026-11-14T235106-0500.html",
+  "fetched_at": "2026-11-15T04:51:06.978Z",
   "cards": [
+   {
+    "id": "182685",
+    "name": "G.G. Jackson",
+    "team": "MEM",
+    "dk_id": null,
+    "match": null,
+    "word": "Injured",
+    "label": "Out",
+    "body": "left foot - They are saying it's a 'relatively serious' injury",
+    "words_at": "2026-11-14T235106-0500",
+    "at": "2026-11-15T04:05:06.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182684",
+    "name": "Duncan Robinson",
+    "team": "DET",
+    "dk_id": "44912209",
+    "match": "exact",
+    "word": "Questionable to return",
+    "label": "UNKNOWN(Questionable to return #01A9DB)",
+    "body": "left thigh soreness",
+    "words_at": "2026-11-14T235106-0500",
+    "at": "2026-11-15T02:33:06.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182683",
+    "name": "Daniel Gafford",
+    "team": "DAL",
+    "dk_id": "44912240",
+    "match": "exact",
+    "word": "Will not return",
+    "label": "UNKNOWN(Will not return #cc3300)",
+    "body": "stinger",
+    "words_at": "2026-11-14T235106-0500",
+    "at": "2026-11-15T02:27:06.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182682",
+    "name": "Daniel Gafford",
+    "team": "DAL",
+    "dk_id": "44912240",
+    "match": "exact",
+    "word": "In the Locker Room",
+    "label": "UNKNOWN(In the Locker Room #01A9DB)",
+    "body": null,
+    "words_at": "2026-11-14T235106-0500",
+    "at": "2026-11-15T02:03:06.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182681",
+    "name": "Daniel Gafford",
+    "team": "DAL",
+    "dk_id": "44912240",
+    "match": "exact",
+    "word": "Has Returned",
+    "label": "UNKNOWN(Has Returned #00cc44)",
+    "body": null,
+    "words_at": "2026-11-14T235106-0500",
+    "at": "2026-11-15T02:03:06.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182680",
+    "name": "Jaylen Clark",
+    "team": "MIN",
+    "dk_id": "44912435",
+    "match": "exact",
+    "word": "Will not return",
+    "label": "UNKNOWN(Will not return #cc3300)",
+    "body": "right hamstring soreness",
+    "words_at": "2026-11-14T235106-0500",
+    "at": "2026-11-15T01:57:06.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182679",
+    "name": "Daniel Gafford",
+    "team": "DAL",
+    "dk_id": "44912240",
+    "match": "exact",
+    "word": "In the Locker Room",
+    "label": "UNKNOWN(In the Locker Room #01A9DB)",
+    "body": null,
+    "words_at": "2026-11-14T235106-0500",
+    "at": "2026-11-15T01:57:06.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182678",
+    "name": "G.G. Jackson",
+    "team": "MEM",
+    "dk_id": null,
+    "match": null,
+    "word": "Will not return",
+    "label": "UNKNOWN(Will not return #cc3300)",
+    "body": "left foot",
+    "words_at": "2026-11-14T235106-0500",
+    "at": "2026-11-15T01:39:06.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182677",
+    "name": "Jaylen Clark",
+    "team": "MIN",
+    "dk_id": "44912435",
+    "match": "exact",
+    "word": "In the Locker Room",
+    "label": "UNKNOWN(In the Locker Room #01A9DB)",
+    "body": "leg",
+    "words_at": "2026-11-14T235106-0500",
+    "at": "2026-11-15T01:39:06.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182675",
+    "name": "Jaylin Williams",
+    "team": "OKC",
+    "dk_id": null,
+    "match": null,
+    "word": "Out",
+    "label": "Out",
+    "body": "low back spasms",
+    "words_at": "2026-11-14T235106-0500",
+    "at": "2026-11-15T01:03:06.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182674",
+    "name": "Andrew Nembhard",
+    "team": "IND",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "left hip soreness / tightness",
+    "words_at": "2026-11-14T235106-0500",
+    "at": "2026-11-15T01:03:06.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182673",
+    "name": "Brandon Miller",
+    "team": "CHA",
+    "dk_id": null,
+    "match": null,
+    "word": "Off Injury Report",
+    "label": "UNKNOWN(Off Injury Report #00cc44)",
+    "body": null,
+    "words_at": "2026-11-14T235106-0500",
+    "at": "2026-11-15T01:03:06.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182672",
+    "name": "Ajay Mitchell",
+    "team": "OKC",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "left ankle sprain",
+    "words_at": "2026-11-14T235106-0500",
+    "at": "2026-11-15T01:03:06.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
    {
     "id": "182671",
     "name": "Precious Achiuwa",
@@ -307,7 +236,7 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "left ankle soreness",
-    "words_at": "2026-11-14T194500-0500",
+    "words_at": "2026-11-14T235106-0500",
     "at": "2026-11-15T00:44:00.000Z",
     "precision": "minute",
     "out_as": null
@@ -321,7 +250,7 @@
     "word": "Out",
     "label": "Out",
     "body": "left ankle",
-    "words_at": "2026-11-14T194500-0500",
+    "words_at": "2026-11-14T235106-0500",
     "at": "2026-11-15T00:32:00.000Z",
     "precision": "minute",
     "out_as": null
@@ -1154,13 +1083,264 @@
    "2026-11-14T191500-0500.html",
    "2026-11-14T193500-0500.html",
    "2026-11-14T194000-0500.html",
-   "2026-11-14T194500-0500.html"
+   "2026-11-14T194500-0500.html",
+   "2026-11-14T235106-0500.html"
   ],
   "unreadable_age": 0,
   "unread_ids": [],
-  "no_id_page": "2026-11-14T194500-0500.html",
+  "no_id_page": "2026-11-14T235106-0500.html",
   "no_id_newest": 0,
-  "unread_cards": 0
+  "unread_cards": 0,
+  "out": [
+   {
+    "name": "Bennedict Mathurin",
+    "team": "NOP",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "left plantar fasciitis - Est. Return 11/16",
+    "out_since": "2026-11-14T17:59:37-05:00"
+   },
+   {
+    "name": "Bryce McGowens",
+    "team": "NOP",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "left elbow infection - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Trey Murphy",
+    "team": "NOP",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "bilateral patellar tendinopathy - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Trendon Watford",
+    "team": "NOP",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "right ankle sprain - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Jarrett Allen",
+    "team": "CLE",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "right knee injury management - Est. Return 11/16",
+    "out_since": "2026-11-14T17:59:37-05:00"
+   },
+   {
+    "name": "James Harden",
+    "team": "CLE",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "left lower leg/calf tightness - Est. Return 11/16",
+    "out_since": "2026-11-14T17:59:37-05:00"
+   },
+   {
+    "name": "Sam Merrill",
+    "team": "CLE",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "right elbow injury management - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Donovan Mitchell",
+    "team": "CLE",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "left knee contusion/injury management - Est. Return 11/16",
+    "out_since": "2026-11-14T17:59:37-05:00"
+   },
+   {
+    "name": "Evan Mobley",
+    "team": "CLE",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "left great toe sprain - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Nae'Qwan Tomlin",
+    "team": "CLE",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "lower back stress - Est. Return 11/18",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Peyton Watson",
+    "team": "CLE",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "right hamstring injury management - Est. Return 11/16",
+    "out_since": "2026-11-14T17:59:37-05:00"
+   },
+   {
+    "name": "Tarik Biberovic",
+    "team": "DAL",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "right heel bursitis - Est. Return 11/15",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Max Christie",
+    "team": "DAL",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "left ankle sprain - Est. Return 11/15",
+    "out_since": "2026-11-14T17:59:37-05:00"
+   },
+   {
+    "name": "Dereck Lively II",
+    "team": "DAL",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "foot surgery - Est. Return 11/24",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Jalen Duren",
+    "team": "DET",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "right hamstring strain - Est. Return 11/24",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Isaiah Joe",
+    "team": "DET",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "right hip contusion - Est. Return 11/17",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Pelle Larsson",
+    "team": "MIA",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "illness - Est. Return 11/16",
+    "out_since": "2026-11-14T18:16:35-05:00"
+   },
+   {
+    "name": "Tobe Awaka",
+    "team": "CHI",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "disc irritation - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Nicolas Claxton",
+    "team": "CHI",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "left hamstring injury management (Injury Maintenance) - Est. Return 11/16",
+    "out_since": "2026-11-14T18:36:59-05:00"
+   },
+   {
+    "name": "Jalen Smith",
+    "team": "CHI",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "left finger sprain - Est. Return 11/16",
+    "out_since": "2026-11-14T18:36:59-05:00"
+   },
+   {
+    "name": "Michael Porter Jr.",
+    "team": "BKN",
+    "id": "44912123",
+    "match": "exact",
+    "status": "Out",
+    "detail": "personal reasons (Personal) - Est. Return 11/16",
+    "out_since": "2026-11-14T19:05:00-05:00"
+   },
+   {
+    "name": "Zach Edey",
+    "team": "MEM",
+    "id": "44912266",
+    "match": "exact",
+    "status": "Out",
+    "detail": "left ankle (Injury Maintenance) - Est. Return 11/16",
+    "out_since": "2026-11-14T19:35:00-05:00"
+   },
+   {
+    "name": "Jerami Grant",
+    "team": "MEM",
+    "id": "44912332",
+    "match": "exact",
+    "status": "Out",
+    "detail": "head injury - Est. Return 11/16",
+    "out_since": "2026-11-14T19:10:00-05:00"
+   },
+   {
+    "name": "Ty Jerome",
+    "team": "MEM",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "right hip soreness - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Scotty Pippen Jr.",
+    "team": "MEM",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "lumbar disc herniation - Est. Return 11/25",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Quinten Post",
+    "team": "MEM",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "concussion protocol - Est. Return 11/16",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   },
+   {
+    "name": "Richie Saunders",
+    "team": "MEM",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "torn acl - Est. Return 11/11",
+    "out_since": "2026-11-14T17:20:40-05:00"
+   }
+  ],
+  "last_good_at": "2026-11-15T00:55:00.007Z",
+  "check_failed": {
+   "at": "2026-11-15T04:51:31.239Z",
+   "why": "the Monster player-news page's day does not match: the page is for 11/15, not 2026-11-14"
+  }
  },
  "teams": {
   "DEN": {
@@ -1224,7 +1404,12 @@
       "id": "44912081",
       "match": "exact"
      }
-    ]
+    ],
+    "check_failed": {
+     "at": "2026-11-15T04:51:31.239Z",
+     "why": "the page is for 11/15, not 2026-11-14"
+    },
+    "last_good_at": "2026-11-15T00:55:10.874Z"
    },
    "rotowire": {
     "state": "ok",
@@ -1392,7 +1577,12 @@
       "id": "44912191",
       "match": "exact"
      }
-    ]
+    ],
+    "check_failed": {
+     "at": "2026-11-15T04:51:31.239Z",
+     "why": "the page is for 11/15, not 2026-11-14"
+    },
+    "last_good_at": "2026-11-15T00:55:10.874Z"
    },
    "rotowire": {
     "state": "ok",
@@ -1592,7 +1782,12 @@
       "id": "44912240",
       "match": "exact"
      }
-    ]
+    ],
+    "check_failed": {
+     "at": "2026-11-15T04:51:31.239Z",
+     "why": "the page is for 11/15, not 2026-11-14"
+    },
+    "last_good_at": "2026-11-15T00:55:10.874Z"
    },
    "rotowire": {
     "state": "ok",
@@ -1633,8 +1828,8 @@
      {
       "name": "Daniel Gafford",
       "pos": "C",
-      "flag": null,
-      "status": null,
+      "flag": "Out",
+      "status": "Out",
       "id": "44912240",
       "match": "exact"
      }
@@ -1664,6 +1859,14 @@
       "status": "Out",
       "id": null,
       "match": null
+     },
+     {
+      "name": "Daniel Gafford",
+      "pos": "C",
+      "flag": "Out",
+      "status": "Out",
+      "id": "44912240",
+      "match": "exact"
      },
      {
       "name": "Dereck Lively",
@@ -1784,7 +1987,12 @@
       "id": "44912377",
       "match": "exact"
      }
-    ]
+    ],
+    "check_failed": {
+     "at": "2026-11-15T04:51:31.239Z",
+     "why": "the page is for 11/15, not 2026-11-14"
+    },
+    "last_good_at": "2026-11-15T00:55:10.874Z"
    },
    "rotowire": {
     "state": "ok",
@@ -2000,7 +2208,12 @@
       "id": "44912207",
       "match": "exact"
      }
-    ]
+    ],
+    "check_failed": {
+     "at": "2026-11-15T04:51:31.239Z",
+     "why": "the page is for 11/15, not 2026-11-14"
+    },
+    "last_good_at": "2026-11-15T00:55:10.874Z"
    },
    "rotowire": {
     "state": "ok",
@@ -2168,7 +2381,12 @@
       "id": "44912373",
       "match": "exact"
      }
-    ]
+    ],
+    "check_failed": {
+     "at": "2026-11-15T04:51:31.239Z",
+     "why": "the page is for 11/15, not 2026-11-14"
+    },
+    "last_good_at": "2026-11-15T00:55:10.874Z"
    },
    "rotowire": {
     "state": "ok",
@@ -2232,6 +2450,14 @@
       "status": "Out",
       "id": "44912332",
       "match": "exact"
+     },
+     {
+      "name": "GG Jackson",
+      "pos": "F",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
      },
      {
       "name": "Ty Jerome",
@@ -2368,7 +2594,12 @@
       "id": "44912349",
       "match": "exact"
      }
-    ]
+    ],
+    "check_failed": {
+     "at": "2026-11-15T04:51:31.239Z",
+     "why": "the page is for 11/15, not 2026-11-14"
+    },
+    "last_good_at": "2026-11-15T00:55:10.874Z"
    },
    "rotowire": {
     "state": "ok",
@@ -2560,7 +2791,12 @@
       "id": "44912181",
       "match": "exact"
      }
-    ]
+    ],
+    "check_failed": {
+     "at": "2026-11-15T04:51:31.239Z",
+     "why": "the page is for 11/15, not 2026-11-14"
+    },
+    "last_good_at": "2026-11-15T00:55:10.874Z"
    },
    "rotowire": {
     "state": "ok",
@@ -2609,6 +2845,14 @@
     ],
     "label": "Confirmed Lineup",
     "may_not_play": [
+     {
+      "name": "Jaylen Clark",
+      "pos": "F",
+      "flag": "Out",
+      "status": "Out",
+      "id": "44912435",
+      "match": "exact"
+     },
      {
       "name": "Donte DiVincenzo",
       "pos": "G",
@@ -2736,7 +2980,12 @@
       "id": "44912216",
       "match": "exact"
      }
-    ]
+    ],
+    "check_failed": {
+     "at": "2026-11-15T04:51:31.239Z",
+     "why": "the page is for 11/15, not 2026-11-14"
+    },
+    "last_good_at": "2026-11-15T00:55:10.874Z"
    },
    "rotowire": {
     "state": "ok",
@@ -2761,8 +3010,8 @@
      {
       "name": "Duncan Robinson",
       "pos": "SF",
-      "flag": null,
-      "status": null,
+      "flag": "Ques",
+      "status": "Questionable",
       "id": "44912209",
       "match": "exact"
      },
@@ -2785,6 +3034,14 @@
     ],
     "label": "Confirmed Lineup",
     "may_not_play": [
+     {
+      "name": "Duncan Robinson",
+      "pos": "F",
+      "flag": "Ques",
+      "status": "Questionable",
+      "id": "44912209",
+      "match": "exact"
+     },
      {
       "name": "Jalen Duren",
       "pos": "C",
@@ -2912,7 +3169,12 @@
       "id": "44912101",
       "match": "exact"
      }
-    ]
+    ],
+    "check_failed": {
+     "at": "2026-11-15T04:51:31.239Z",
+     "why": "the page is for 11/15, not 2026-11-14"
+    },
+    "last_good_at": "2026-11-15T00:55:10.874Z"
    },
    "rotowire": {
     "state": "ok",
