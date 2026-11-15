@@ -12,7 +12,7 @@ import { buildInputs } from "../../site/shim/app-only.js";
 import { readSlate } from "./store.js";
 import { readScenarios, writeScenarios, heldTeams } from "./scenarios.js";
 import { readOverrides } from "./overrides.js";
-import { planApply, applyRecord, checkKeys } from "./console-apply.js";
+import { planApply, applyRecord, checkKeys, sourceRefusal } from "./console-apply.js";
 import { writeApply } from "./console-route.js";
 import { buildModel, recordOf, canonRecord } from "../board/console-model.js";
 import { keyOf } from "../board/console-engine.js";
@@ -51,6 +51,8 @@ export const LOCKED_WHY = "the slate is locked";
  * Returns { teams, sent, wrote, missing, failed }. Nothing is written when `failed` (a scenario key that no longer fits); a failed send puts the team records back and throws.
  */
 export function sendHeld({ slate, inputs, model, file, overrides, players, extra = [], usageReady = true, writeSend = writeApply, atIso }) {
+  const unknown = sourceRefusal(inputs);
+  if (unknown) return { teams: [], blocked: [], sent: 0, wrote: false, missing: [], failed: unknown }; // fails closed: the board is blank, so no held number is re-sent (recorded in resend.json by the caller)
   const held = new Set([...Object.keys(file.applied?.keys ?? {}), ...Object.entries(model.ST).filter(([, S]) => Object.values(S.news ?? {}).some((e) => e.state === "applied")).map(([t]) => t), ...extra]);
   const all = [...held].filter((t) => model.ST[t]).sort();
   // A usage table that is not ready blocks the RESEND of held teams (their scenario maths needs it; the earlier numbers stay): only teams the news moved this pass (`extra`) are still sent, so a news Out lands.

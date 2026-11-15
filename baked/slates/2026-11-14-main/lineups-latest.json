@@ -1,44 +1,44 @@
 {
  "slate": "2026-11-14-main",
- "generated_at": "2026-11-14T23:22:08.018Z",
+ "generated_at": "2026-11-15T00:15:46.016Z",
  "status": "ok",
- "slate_built_from": "slates/2026-11-14-main/raw/2026-11-14T182156-0500",
+ "slate_built_from": "slates/2026-11-14-main/raw/2026-11-14T185117-0500",
  "sources": {
   "monster": {
    "url": "https://basketballmonster.com/nbalineups.aspx",
    "status": "ok",
-   "fetched_at": "2026-11-14T23:21:59.654Z",
-   "saved_as": "news/lineups/pages/monster-2026-11-14T181640-0500.html.gz",
-   "saved_at": "2026-11-14T23:16:40.243Z",
-   "unchanged_since": "2026-11-14T23:16:40.243Z",
-   "parsed_sha": "309b5417e1642a2ac730e68f5a7a767017196bf87f392ae202a2fc4420438479",
-   "sha256": "fb00e3fa2a60d915fe74a84f74bd8c25fdad3a4cae2019cf15fa1d9500aadab3"
+   "fetched_at": "2026-11-15T00:15:37.584Z",
+   "saved_as": "news/lineups/pages/monster-2026-11-14T191025-0500.html.gz",
+   "saved_at": "2026-11-15T00:10:25.068Z",
+   "unchanged_since": "2026-11-15T00:10:25.068Z",
+   "parsed_sha": "22d5cc4695ef5db8720567008e46eb2e55c4db148059f356253df5e809cce44f",
+   "sha256": "84ba3c81a1cefd66c37470b921c0421c6195fa768253a26c93c8fe04e72dd146"
   },
   "rotowire": {
    "url": "https://www.rotowire.com/basketball/nba-lineups.php",
    "status": "ok",
-   "fetched_at": "2026-11-14T23:22:03.787Z",
-   "saved_as": "news/lineups/pages/rotowire-2026-11-14T182203-0500.html.gz",
-   "saved_at": "2026-11-14T23:22:03.787Z",
-   "parsed_sha": "8b8243f5288127575e106c34f4f072a50d19a9a49f57fcfae63a2384864df056",
-   "sha256": "72eedcd202ba69afc3118f138edebbd6883151a3e201734bb83efe56256cde08"
+   "fetched_at": "2026-11-15T00:15:41.767Z",
+   "saved_as": "news/lineups/pages/rotowire-2026-11-14T191541-0500.html.gz",
+   "saved_at": "2026-11-15T00:15:41.767Z",
+   "parsed_sha": "fd54cf68ac112bee7420da6ae4580852db458db008a2be424147bb6e1526173d",
+   "sha256": "41293fe6592314acfc6a816e2906b42b605bdec195f0cfdea49937e40f60758e"
   },
   "rotogrinders": {
    "url": "https://rotogrinders.com/lineups/nba?site=draftkings",
    "status": "ok",
-   "fetched_at": "2026-11-14T23:22:08.001Z",
-   "saved_as": "news/lineups/pages/rotogrinders-2026-11-14T180257-0500.html.gz",
-   "saved_at": "2026-11-14T23:02:57.828Z",
-   "unchanged_since": "2026-11-14T23:02:57.828Z",
-   "parsed_sha": "ad3364d551918d7a1c7e39febf4f4ada06a706259f7a02c1fb02d636fec47faa",
-   "sha256": "00d5aaa1c7ba419b9655f180f4de98094452aacaac766c7856e2af75e6b9e21e"
+   "fetched_at": "2026-11-15T00:15:45.993Z",
+   "saved_as": "news/lineups/pages/rotogrinders-2026-11-14T191033-0500.html.gz",
+   "saved_at": "2026-11-15T00:10:33.491Z",
+   "unchanged_since": "2026-11-15T00:10:33.491Z",
+   "parsed_sha": "69de73f9d1025f4a6313726444ccb95b5d60d925a3f70ae48e04ca8d1bd302a7",
+   "sha256": "7cd8b2469d2a8af6c2f267ece2fbe7872ab88fba95c02092ac97194ff010fd2e"
   }
  },
  "monster_news": {
   "status": "ok",
-  "fetched_at": "2026-11-14T23:21:56.421Z",
-  "changed_at": "2026-11-14T18:16:35-05:00",
-  "saved_as": "news/bbm/2026-11-14T181635-0500.html",
+  "fetched_at": "2026-11-15T00:15:00.015Z",
+  "changed_at": "2026-11-14T19:15:00-05:00",
+  "saved_as": "news/bbm/2026-11-14T191500-0500.html",
   "out": [
    {
     "name": "Bennedict Mathurin",
@@ -203,6 +203,42 @@
     "out_since": "2026-11-14T17:20:40-05:00"
    },
    {
+    "name": "Nicolas Claxton",
+    "team": "CHI",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "left hamstring injury management (Injury Maintenance) - Est. Return 11/16",
+    "out_since": "2026-11-14T18:36:59-05:00"
+   },
+   {
+    "name": "Jalen Smith",
+    "team": "CHI",
+    "id": null,
+    "match": null,
+    "status": "Out",
+    "detail": "left finger sprain - Est. Return 11/16",
+    "out_since": "2026-11-14T18:36:59-05:00"
+   },
+   {
+    "name": "Michael Porter Jr.",
+    "team": "BKN",
+    "id": "44912123",
+    "match": "exact",
+    "status": "Out",
+    "detail": "personal reasons (Personal) - Est. Return 11/16",
+    "out_since": "2026-11-14T19:05:00-05:00"
+   },
+   {
+    "name": "Jerami Grant",
+    "team": "MEM",
+    "id": "44912332",
+    "match": "exact",
+    "status": "Out",
+    "detail": "head injury - Est. Return 11/16",
+    "out_since": "2026-11-14T19:10:00-05:00"
+   },
+   {
     "name": "Ty Jerome",
     "team": "MEM",
     "id": null,
@@ -241,12 +277,241 @@
   ],
   "unrecognised": [
    {
+    "name": "DeAndre Jordan",
+    "team": "NOP",
+    "raw": "B Off the Bench"
+   },
+   {
     "name": "Zion Williamson",
     "team": "NOP",
     "raw": "Off Off Injury Report"
    }
   ],
   "cards": [
+   {
+    "id": "182663",
+    "name": "Adou Thiero",
+    "team": "LAL",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": "left ankle sprain",
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-15T00:15:00.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182662",
+    "name": "Quentin Grimes",
+    "team": "LAL",
+    "dk_id": null,
+    "match": null,
+    "word": "Playing",
+    "label": "Playing",
+    "body": "right finger splint",
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-15T00:14:00.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182661",
+    "name": "Luka Doncic",
+    "team": "LAL",
+    "dk_id": null,
+    "match": null,
+    "word": "Off Injury Report",
+    "label": "UNKNOWN(Off Injury Report #00cc44)",
+    "body": null,
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-15T00:14:00.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182660",
+    "name": "Jerami Grant",
+    "team": "MEM",
+    "dk_id": "44912332",
+    "match": "exact",
+    "word": "Out",
+    "label": "Out",
+    "body": "head injury",
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-15T00:08:00.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182657",
+    "name": "Cameron Carr",
+    "team": "LAL",
+    "dk_id": null,
+    "match": null,
+    "word": "Out",
+    "label": "Out",
+    "body": null,
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-15T00:06:00.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182656",
+    "name": "Bronny James",
+    "team": "LAL",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": null,
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-15T00:05:00.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182655",
+    "name": "Collin Sexton",
+    "team": "LAL",
+    "dk_id": null,
+    "match": null,
+    "word": "Questionable",
+    "label": "Questionable (undetermined)",
+    "body": null,
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-15T00:05:00.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182654",
+    "name": "Austin Reaves",
+    "team": "LAL",
+    "dk_id": null,
+    "match": null,
+    "word": "Out",
+    "label": "Out",
+    "body": "left heel",
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-15T00:04:00.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182653",
+    "name": "Michael Porter Jr.",
+    "team": "BKN",
+    "dk_id": "44912123",
+    "match": "exact",
+    "word": "Out",
+    "label": "Out",
+    "body": "personal reasons",
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-15T00:04:00.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182652",
+    "name": "Jaxson Hayes",
+    "team": "UTA",
+    "dk_id": null,
+    "match": null,
+    "word": "Out",
+    "label": "Out",
+    "body": "left knee strain",
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-15T00:00:00.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182651",
+    "name": "Yves Missi",
+    "team": "NOP",
+    "dk_id": "44912191",
+    "match": "exact",
+    "word": "Starting",
+    "label": "Starting",
+    "body": "left knee contusion / bone bruise",
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-14T23:35:49.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182650",
+    "name": "DeAndre Jordan",
+    "team": "NOP",
+    "dk_id": "44912508",
+    "match": "exact",
+    "word": "Off the Bench",
+    "label": "UNKNOWN(Off the Bench #a6a6a6)",
+    "body": null,
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-14T23:35:08.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182648",
+    "name": "Norman Powell",
+    "team": "CHI",
+    "dk_id": "44912186",
+    "match": "exact",
+    "word": "Playing",
+    "label": "Playing",
+    "body": "low back injury management",
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-14T23:31:49.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182647",
+    "name": "Jalen Smith",
+    "team": "CHI",
+    "dk_id": null,
+    "match": null,
+    "word": "Out",
+    "label": "Out",
+    "body": "left finger sprain",
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-14T23:31:49.000Z",
+    "precision": "minute",
+    "out_as": "Jalen Smith"
+   },
+   {
+    "id": "182646",
+    "name": "Nicolas Claxton",
+    "team": "CHI",
+    "dk_id": null,
+    "match": null,
+    "word": "Out",
+    "label": "Out",
+    "body": "left hamstring injury management",
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-14T23:31:49.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182644",
+    "name": "Nolan Traore",
+    "team": "BKN",
+    "dk_id": "44912242",
+    "match": "exact",
+    "word": "Playing",
+    "label": "Playing",
+    "body": "right calf tightness / soreness",
+    "words_at": "2026-11-14T191500-0500",
+    "at": "2026-11-14T23:25:08.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
    {
     "id": "182643",
     "name": "Klay Thompson",
@@ -256,8 +521,8 @@
     "word": "Playing",
     "label": "Playing",
     "body": "left ankle sprain",
-    "words_at": "2026-11-14T181635-0500",
-    "at": "2026-11-14T23:15:35.000Z",
+    "words_at": "2026-11-14T191000-0500",
+    "at": "2026-11-14T23:14:49.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -270,8 +535,8 @@
     "word": "Out",
     "label": "Out",
     "body": "illness",
-    "words_at": "2026-11-14T181635-0500",
-    "at": "2026-11-14T23:15:35.000Z",
+    "words_at": "2026-11-14T191000-0500",
+    "at": "2026-11-14T23:14:49.000Z",
     "precision": "minute",
     "out_as": "Pelle Larsson"
    },
@@ -284,8 +549,8 @@
     "word": "Playing",
     "label": "Playing",
     "body": "right wrist sprain",
-    "words_at": "2026-11-14T181635-0500",
-    "at": "2026-11-14T23:15:35.000Z",
+    "words_at": "2026-11-14T191000-0500",
+    "at": "2026-11-14T23:14:49.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -298,8 +563,8 @@
     "word": "Playing",
     "label": "Playing",
     "body": "illness",
-    "words_at": "2026-11-14T181635-0500",
-    "at": "2026-11-14T23:12:35.000Z",
+    "words_at": "2026-11-14T190500-0500",
+    "at": "2026-11-14T23:11:59.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -312,36 +577,8 @@
     "word": "Questionable",
     "label": "Questionable (undetermined)",
     "body": "personal reasons",
-    "words_at": "2026-11-14T181635-0500",
+    "words_at": "2026-11-14T190500-0500",
     "at": "2026-11-14T23:11:35.000Z",
-    "precision": "minute",
-    "out_as": null
-   },
-   {
-    "id": "182638",
-    "name": "Keshon Gilbert",
-    "team": "ATL",
-    "dk_id": null,
-    "match": null,
-    "word": "Out",
-    "label": "Out",
-    "body": "left knee inflammation nonsurgical procedure",
-    "words_at": "2026-11-14T181635-0500",
-    "at": "2026-11-14T23:00:51.000Z",
-    "precision": "minute",
-    "out_as": null
-   },
-   {
-    "id": "182637",
-    "name": "Jalen Wilson",
-    "team": "ATL",
-    "dk_id": null,
-    "match": null,
-    "word": "Doubtful",
-    "label": "Doubtful",
-    "body": "g league twoway",
-    "words_at": "2026-11-14T181635-0500",
-    "at": "2026-11-14T23:00:51.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -354,7 +591,7 @@
     "word": "Out",
     "label": "Out",
     "body": "left great toe hyperextension",
-    "words_at": "2026-11-14T181635-0500",
+    "words_at": "2026-11-14T190108-0500",
     "at": "2026-11-14T23:00:35.000Z",
     "precision": "minute",
     "out_as": null
@@ -368,7 +605,7 @@
     "word": "Playing",
     "label": "Playing",
     "body": "face mask",
-    "words_at": "2026-11-14T181635-0500",
+    "words_at": "2026-11-14T190108-0500",
     "at": "2026-11-14T23:00:35.000Z",
     "precision": "minute",
     "out_as": null
@@ -382,8 +619,50 @@
     "word": "Out",
     "label": "Out",
     "body": "lumbar strain",
-    "words_at": "2026-11-14T181635-0500",
+    "words_at": "2026-11-14T190108-0500",
     "at": "2026-11-14T23:00:21.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182638",
+    "name": "Keshon Gilbert",
+    "team": "ATL",
+    "dk_id": null,
+    "match": null,
+    "word": "Out",
+    "label": "Out",
+    "body": "left knee inflammation nonsurgical procedure",
+    "words_at": "2026-11-14T190500-0500",
+    "at": "2026-11-14T22:59:00.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182637",
+    "name": "Jalen Wilson",
+    "team": "ATL",
+    "dk_id": null,
+    "match": null,
+    "word": "Doubtful",
+    "label": "Doubtful",
+    "body": "g league twoway",
+    "words_at": "2026-11-14T190500-0500",
+    "at": "2026-11-14T22:59:00.000Z",
+    "precision": "minute",
+    "out_as": null
+   },
+   {
+    "id": "182632",
+    "name": "Morez Johnson Jr",
+    "team": "DAL",
+    "dk_id": "44912398",
+    "match": "exact",
+    "word": "Playing",
+    "label": "Playing",
+    "body": "left shin / tibia contusion",
+    "words_at": "2026-11-14T185849-0500",
+    "at": "2026-11-14T22:51:21.000Z",
     "precision": "minute",
     "out_as": null
    },
@@ -396,24 +675,10 @@
     "word": "Out",
     "label": "Out",
     "body": "left ankle sprain",
-    "words_at": "2026-11-14T181635-0500",
-    "at": "2026-11-14T22:51:35.000Z",
+    "words_at": "2026-11-14T190108-0500",
+    "at": "2026-11-14T22:49:08.000Z",
     "precision": "minute",
     "out_as": "Max Christie"
-   },
-   {
-    "id": "182632",
-    "name": "Morez Johnson Jr",
-    "team": "DAL",
-    "dk_id": "44912398",
-    "match": "exact",
-    "word": "Playing",
-    "label": "Playing",
-    "body": "left shin / tibia contusion",
-    "words_at": "2026-11-14T181635-0500",
-    "at": "2026-11-14T22:51:21.000Z",
-    "precision": "minute",
-    "out_as": null
    },
    {
     "id": "182631",
@@ -842,11 +1107,17 @@
    "2026-11-14T180021-0500.html",
    "2026-11-14T180242-0500.html",
    "2026-11-14T180851-0500.html",
-   "2026-11-14T181635-0500.html"
+   "2026-11-14T181635-0500.html",
+   "2026-11-14T183659-0500.html",
+   "2026-11-14T185849-0500.html",
+   "2026-11-14T190108-0500.html",
+   "2026-11-14T190500-0500.html",
+   "2026-11-14T191000-0500.html",
+   "2026-11-14T191500-0500.html"
   ],
   "unreadable_age": 0,
   "unread_ids": [],
-  "no_id_page": "2026-11-14T181635-0500.html",
+  "no_id_page": "2026-11-14T191500-0500.html",
   "no_id_newest": 0,
   "unread_cards": 0
  },
@@ -855,7 +1126,7 @@
    "game": "DEN@NOP",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Jamal Murray",
@@ -864,7 +1135,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912095",
       "match": "exact"
      },
@@ -875,7 +1146,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912250",
       "match": "exact"
      },
@@ -886,7 +1157,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912282",
       "match": "near"
      },
@@ -897,7 +1168,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912224",
       "match": "exact"
      },
@@ -908,7 +1179,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912081",
       "match": "exact"
      }
@@ -916,7 +1187,7 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Jamal Murray",
@@ -959,7 +1230,7 @@
       "match": "exact"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": [
      {
       "name": "Julian Strawther",
@@ -973,7 +1244,7 @@
    },
    "rotogrinders": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Jamal Murray",
@@ -1016,14 +1287,14 @@
       "match": "exact"
      }
     ],
-    "label": "lineup not released"
+    "label": "Confirmed"
    }
   },
   "NOP": {
    "game": "DEN@NOP",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Jeremiah Fears",
@@ -1032,7 +1303,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912149",
       "match": "exact"
      },
@@ -1043,7 +1314,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912302",
       "match": "near"
      },
@@ -1054,7 +1325,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912177",
       "match": "exact"
      },
@@ -1065,7 +1336,7 @@
       "flag": "Off",
       "word": "Off Injury Report",
       "status": "Off injury report",
-      "verified": false,
+      "verified": true,
       "id": "44912130",
       "match": "exact"
      },
@@ -1073,10 +1344,10 @@
       "name": "Yves Missi",
       "pos": "C",
       "bmId": "6954",
-      "flag": "IN",
-      "word": "Playing",
-      "status": "Playing",
-      "verified": false,
+      "flag": "S",
+      "word": "Starting",
+      "status": "Starting",
+      "verified": true,
       "id": "44912191",
       "match": "exact"
      }
@@ -1084,7 +1355,7 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Jeremiah Fears",
@@ -1127,7 +1398,7 @@
       "match": "exact"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": [
      {
       "name": "Bennedict Mathurin",
@@ -1173,7 +1444,7 @@
    },
    "rotogrinders": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Jeremiah Fears",
@@ -1216,14 +1487,14 @@
       "match": "exact"
      }
     ],
-    "label": "lineup not released"
+    "label": "Confirmed"
    }
   },
   "DAL": {
    "game": "DAL@CLE",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Kyrie Irving",
@@ -1232,7 +1503,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912116",
       "match": "exact"
      },
@@ -1243,7 +1514,7 @@
       "flag": "IN",
       "word": "Playing",
       "status": "Playing",
-      "verified": false,
+      "verified": true,
       "id": "44912426",
       "match": "exact"
      },
@@ -1254,7 +1525,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912086",
       "match": "exact"
      },
@@ -1265,7 +1536,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912169",
       "match": "exact"
      },
@@ -1276,7 +1547,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912240",
       "match": "exact"
      }
@@ -1284,7 +1555,7 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Kyrie Irving",
@@ -1327,7 +1598,7 @@
       "match": "exact"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": [
      {
       "name": "Tarik Biberovic",
@@ -1365,7 +1636,7 @@
    },
    "rotogrinders": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Kyrie Irving",
@@ -1408,14 +1679,14 @@
       "match": "exact"
      }
     ],
-    "label": "lineup not released"
+    "label": "Confirmed"
    }
   },
   "CLE": {
    "game": "DAL@CLE",
    "monster": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Meleek Thomas",
@@ -1424,7 +1695,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912297",
       "match": "exact"
      },
@@ -1435,7 +1706,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912322",
       "match": "exact"
      },
@@ -1446,7 +1717,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912357",
       "match": "exact"
      },
@@ -1457,7 +1728,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912328",
       "match": "exact"
      },
@@ -1468,7 +1739,7 @@
       "flag": null,
       "word": null,
       "status": null,
-      "verified": false,
+      "verified": true,
       "id": "44912377",
       "match": "exact"
      }
@@ -1476,14 +1747,14 @@
    },
    "rotowire": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
-      "name": "Craig Porter",
+      "name": "Tyrese Proctor",
       "pos": "PG",
       "flag": null,
       "status": null,
-      "id": "44912471",
+      "id": "44912322",
       "match": "exact"
      },
      {
@@ -1519,7 +1790,7 @@
       "match": "exact"
      }
     ],
-    "label": "Expected Lineup",
+    "label": "Confirmed Lineup",
     "may_not_play": [
      {
       "name": "Jarrett Allen",
@@ -1581,7 +1852,7 @@
    },
    "rotogrinders": {
     "state": "ok",
-    "confirmed": false,
+    "confirmed": true,
     "men": [
      {
       "name": "Tyrese Proctor",
@@ -1624,7 +1895,7 @@
       "match": "exact"
      }
     ],
-    "label": "lineup not released"
+    "label": "Confirmed"
    }
   },
   "BKN": {
@@ -1637,9 +1908,9 @@
       "name": "Nolan Traore",
       "pos": "PG",
       "bmId": "7150",
-      "flag": "P",
-      "word": "Probable",
-      "status": "Probable",
+      "flag": "IN",
+      "word": "Playing",
+      "status": "Playing",
       "verified": false,
       "id": "44912242",
       "match": "exact"
@@ -1656,25 +1927,25 @@
       "match": "exact"
      },
      {
-      "name": "Michael Porter Jr.",
-      "pos": "SF",
-      "bmId": "5682",
-      "flag": "Q",
-      "word": "Questionable",
-      "status": "Questionable (undetermined)",
-      "verified": false,
-      "id": "44912123",
-      "match": "exact"
-     },
-     {
       "name": "Julius Randle",
-      "pos": "PF",
+      "pos": "SF",
       "bmId": "3946",
       "flag": null,
       "word": null,
       "status": null,
       "verified": false,
       "id": "44912113",
+      "match": "exact"
+     },
+     {
+      "name": "Danny Wolf",
+      "pos": "PF",
+      "bmId": "7151",
+      "flag": null,
+      "word": null,
+      "status": null,
+      "verified": false,
+      "id": "44912272",
       "match": "exact"
      },
      {
@@ -1697,8 +1968,8 @@
      {
       "name": "Nolan Traore",
       "pos": "PG",
-      "flag": "Prob",
-      "status": "Probable",
+      "flag": null,
+      "status": null,
       "id": "44912242",
       "match": "exact"
      },
@@ -1711,11 +1982,11 @@
       "match": "exact"
      },
      {
-      "name": "Michael Porter",
+      "name": "Danny Wolf",
       "pos": "SF",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44912123",
+      "flag": null,
+      "status": null,
+      "id": "44912272",
       "match": "exact"
      },
      {
@@ -1740,25 +2011,9 @@
      {
       "name": "Michael Porter",
       "pos": "F",
-      "flag": "Ques",
-      "status": "Questionable",
+      "flag": "Out",
+      "status": "Out",
       "id": "44912123",
-      "match": "exact"
-     },
-     {
-      "name": "Mikel Brown",
-      "pos": "G",
-      "flag": "Prob",
-      "status": "Probable",
-      "id": "44912268",
-      "match": "exact"
-     },
-     {
-      "name": "Nolan Traore",
-      "pos": "G",
-      "flag": "Prob",
-      "status": "Probable",
-      "id": "44912242",
       "match": "exact"
      }
     ]
@@ -1784,11 +2039,11 @@
       "match": "exact"
      },
      {
-      "name": "Michael Porter Jr.",
-      "pos": "SF",
+      "name": "Danny Wolf",
+      "pos": "C",
       "flag": null,
       "status": null,
-      "id": "44912123",
+      "id": "44912272",
       "match": "exact"
      },
      {
@@ -2032,9 +2287,9 @@
       "name": "Norman Powell",
       "pos": "SG",
       "bmId": "5044",
-      "flag": "Q",
-      "word": "Questionable",
-      "status": "Questionable (undetermined)",
+      "flag": "IN",
+      "word": "Playing",
+      "status": "Playing",
       "verified": false,
       "id": "44912186",
       "match": "exact"
@@ -2062,14 +2317,14 @@
       "match": "exact"
      },
      {
-      "name": "Jalen Smith",
+      "name": "Zach Collins",
       "pos": "C",
-      "bmId": "6171",
-      "flag": "Q",
-      "word": "Questionable",
-      "status": "Questionable (undetermined)",
+      "bmId": "5457",
+      "flag": null,
+      "word": null,
+      "status": null,
       "verified": false,
-      "id": "44912197",
+      "id": "44912349",
       "match": "exact"
      }
     ]
@@ -2089,8 +2344,8 @@
      {
       "name": "Norman Powell",
       "pos": "SG",
-      "flag": "Ques",
-      "status": "Questionable",
+      "flag": null,
+      "status": null,
       "id": "44912186",
       "match": "exact"
      },
@@ -2111,42 +2366,34 @@
       "match": "exact"
      },
      {
-      "name": "Jalen Smith",
+      "name": "Zach Collins",
       "pos": "C",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44912197",
+      "flag": null,
+      "status": null,
+      "id": "44912349",
       "match": "exact"
      }
     ],
     "label": "Expected Lineup",
     "may_not_play": [
      {
-      "name": "Nic Claxton",
+      "name": "Tobe Awaka",
       "pos": "C",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44912233",
-      "match": "exact"
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
      },
      {
-      "name": "Norman Powell",
-      "pos": "G",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44912186",
-      "match": "exact"
+      "name": "Nic Claxton",
+      "pos": "C",
+      "flag": "Out",
+      "status": "Out",
+      "id": null,
+      "match": null
      },
      {
       "name": "Jalen Smith",
-      "pos": "C",
-      "flag": "Ques",
-      "status": "Questionable",
-      "id": "44912197",
-      "match": "exact"
-     },
-     {
-      "name": "Tobe Awaka",
       "pos": "C",
       "flag": "Out",
       "status": "Out",
@@ -2200,11 +2447,11 @@
       "match": "exact"
      },
      {
-      "name": "Jalen Smith",
+      "name": "Zach Collins",
       "pos": "C",
       "flag": null,
       "status": null,
-      "id": "44912197",
+      "id": "44912349",
       "match": "exact"
      }
     ],
@@ -2641,8 +2888,8 @@
      {
       "name": "Klay Thompson",
       "pos": "SG",
-      "flag": "Prob",
-      "status": "Probable",
+      "flag": null,
+      "status": null,
       "id": "44912228",
       "match": "exact"
      },
@@ -2676,18 +2923,10 @@
      {
       "name": "Pelle Larsson",
       "pos": "F",
-      "flag": "Doubt",
-      "status": "Doubtful",
+      "flag": "Out",
+      "status": "Out",
       "id": null,
       "match": null
-     },
-     {
-      "name": "Klay Thompson",
-      "pos": "F",
-      "flag": "Prob",
-      "status": "Probable",
-      "id": "44912228",
-      "match": "exact"
      }
     ]
    },

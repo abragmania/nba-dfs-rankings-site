@@ -19,6 +19,8 @@ export const DEPTH_ROLES = ["starter", "bench_plus", "bench", "oor", "injured"];
 export const DEPTH_ROLE_LABEL = { starter: "Starter", bench_plus: "Bench+", bench: "Bench", oor: "Out of rotation", injured: "Injured" };
 export const MINUTE_SOURCES = ["twogun", "ours", "ours_edits"];
 export const SOURCE_LABEL = { twogun: "TwoGun", ours: "Ours", ours_edits: "Ours + my edits" };
+/** The minutes source a team opens on when its record names none (R: the console follows the board): "ours" when the console inputs say so (source_default, from the projection setting), else "twogun". Reads inputs, a team or a model team alike. */
+export const defaultSourceOf = (x) => (x?.source_default === "ours" ? "ours" : "twogun");
 export const MAX_MIN = 48;
 export const SEED_SOURCE = "seed proposal";
 /** WORKING VALUE, not ruled on by Adam: how many games of last season's minutes per game count against this season's games in a man's usual minutes. */

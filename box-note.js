@@ -38,16 +38,17 @@ export function absenceNote(a) {
   const who = Array.isArray(a.uncounted) ? a.uncounted : [], parts = [];
   if (who.length) parts.push(`${who.length} ${who.length === 1 ? "man" : "men"} could not be counted (${who.slice(0, WHO).map((u) => `${u.name} ${u.team}: ${reason(u.why)}`).join("; ")}${who.length > WHO ? `; and ${who.length - WHO} more` : ""})`);
   if (a.unread_boxes > 0) parts.push(`${a.unread_boxes} stored box${a.unread_boxes === 1 ? "" : "es"} could not be read`);
+  if (a.duplicate_rows > 0) parts.push(`${a.duplicate_rows} duplicate schedule row${a.duplicate_rows === 1 ? "" : "s"} skipped`);
   return { text: parts.length ? `Games missed: ${parts.join("; ")}` : "", title: who.map((u) => `${u.name} ${u.team}: ${reason(u.why)}`).join("\n") };
 }
 
 /** The header's Data warnings lists from the slate: conflicts, missing, and the box score and missed-games lines as entries (unless the box one is quiet). The button's count is the three lengths added. */
 export function noteLists(slate) {
-  const box = boxNote(slate?.box_freshness);
+  const box = boxNote(slate?.box_freshness), missed = absenceNote(slate?.absence_state).text;
   return {
     conflicts: (slate?.conflicts ?? []).map(warningText),
     missing: [...(slate?.missing ?? []).map(warningText), ...(slate?.min_ours_problem ? [slate.min_ours_problem] : []), ...(slate?.proj_problem ? [slate.proj_problem] : [])],
-    boxes: [...(box.text && box.counted ? [box.text] : []), ...(absenceNote(slate?.absence_state).text ? [absenceNote(slate.absence_state).text] : [])],
+    boxes: [...(box.text && box.counted ? [box.text] : []), ...(missed ? [missed] : [])],
   };
 }
 export const warningCount = (n) => n.conflicts.length + n.missing.length + n.boxes.length;

@@ -12,7 +12,7 @@ import { error } from "../../site/shim/log.js";
 import { SLATE_NAME } from "./store.js";
 import { buildInputs } from "../../site/shim/app-only.js";
 import { readScenarios, writeScenarios, checkTeamBody } from "./scenarios.js";
-import { planApply, applyRecord, reverseChanges, checkKeys, checkTeams } from "./console-apply.js";
+import { planApply, applyRecord, reverseChanges, checkKeys, checkTeams, sourceRefusal } from "./console-apply.js";
 import { readOverrides, writeOverrides, applyChanges, mergeOverrides } from "./overrides.js";
 import { basePlayers } from "./base-players.js";
 
@@ -98,6 +98,10 @@ async function handleApply(req, res, slate, ctx) {
   if (!read) return;
   const inputs = await inputsFor(res, ctx, slate, slateData);
   if (!inputs) return;
+  const unknown = sourceRefusal(inputs);
+  if (unknown) return ctx.fail(res, 409, "CONSOLE_SOURCE_UNKNOWN", `Nothing was sent: ${unknown}.`);
+  // A console left open across a setting change opens teams on another default: what it reads as TwoGun's or Ours' minutes would be sent as the other (the page reads its inputs again and sends once more).
+  if (Object.hasOwn(read.body ?? {}, "source_default") && read.body.source_default !== (inputs.source_default ?? null)) return ctx.fail(res, 409, "CONSOLE_OLD_PULL", "The minutes setting changed since this console read its inputs, so nothing was sent. The console reads the new setting and sends again by itself.");
   // A console left open across a pull holds an old Tonight: what it reads as a chosen scenario would be sent as one.
   if ((Object.hasOwn(read.body ?? {}, "pull") && read.body.pull !== inputs.basis.pull) || (Object.hasOwn(read.body ?? {}, "tier") && read.body.tier !== (inputs.basis.tier ?? null))) return ctx.fail(res, 409, "CONSOLE_OLD_PULL", "A new pull has landed since this console read its inputs, so nothing was sent. The console reads the new pull and sends again by itself.");
   const checked = checkKeys(read.body?.scenarios, inputs), teams = checkTeams(read.body?.teams, inputs);

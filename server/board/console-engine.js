@@ -20,7 +20,7 @@
 import { isNum } from "./figures.js";
 import { FLIP_ROLES, liveFlips, resolveRoles } from "./console-roles.js";
 import { oursUse, rolesFromEngine, fiveIsSet, chartUse, oursFor, sourceOf, injuredPlayNote, chartUsualNote } from "./console-ours.js";
-import { settleTyped } from "./depth-chart.js";
+import { MINUTE_SOURCES, SOURCE_LABEL, defaultSourceOf, settleTyped } from "./depth-chart.js";
 
 export const TEAM_USAGE = 100;
 /** A usage total this close to 100 is on it; further off is named on the page. A working tolerance. */
@@ -47,7 +47,7 @@ export const outsOf = (key) => (key ? key.split("+") : []);
 export const emptyPins = () => ({ m: {}, u: {}, d: {}, p: {}, r: {} });
 
 /** The engine's team from the inputs route's team and his saved record for it. */
-export const teamFor = (input, record) => ({ men: input.men, tonight: input.tonight ?? [], healthy_exact: Boolean(input.healthy_exact), tables: input.tables ?? {}, handouts: record?.handouts ?? {}, combos: record?.combos ?? {}, tier: input.tier, depth: input.depth ?? null, source: record?.source ?? "twogun" });
+export const teamFor = (input, record) => ({ men: input.men, tonight: input.tonight ?? [], healthy_exact: Boolean(input.healthy_exact), tables: input.tables ?? {}, handouts: record?.handouts ?? {}, combos: record?.combos ?? {}, tier: input.tier, depth: input.depth ?? null, source_default: defaultSourceOf(input), source_set: record?.sourceSet ?? MINUTE_SOURCES.includes(record?.source), source: MINUTE_SOURCES.includes(record?.source) ? record.source : defaultSourceOf(input) });
 
 const positions = (man) => (typeof man.pos === "string" ? man.pos.split("/").filter(Boolean) : []);
 
@@ -231,6 +231,16 @@ function minutesFor(team, outSet, tonightSet, pins, flips, implicit = {}) {
   return { minutes, basis, flag, median, fromOurs, totalNote: ours?.totalNote ?? null };
 }
 
+/** Hand-out and combination minute edits count only on TwoGun (modelledMinutes runs only there): one team foot note naming them when the engine's minutes are in use, else null. */
+export function handoutNote(team, engineOk) {
+  const src = sourceOf(team);
+  if (src === "twogun" || !engineOk) return null;
+  const name = (id) => team.men.find((p) => p.id === id)?.name ?? id;
+  const has = (o) => Object.keys(o?.m ?? {}).length > 0;
+  const names = [...Object.entries(team.handouts ?? {}).filter(([, h]) => has(h)).map(([id]) => name(id)), ...Object.entries(team.combos ?? {}).filter(([, c]) => has(c)).map(([k]) => outsOf(k).map(name).join(" + "))];
+  return names.length ? `Your hand-out minutes for ${names.join(", ")} do not apply on ${SOURCE_LABEL[src]}; they count on TwoGun's minutes.` : null;
+}
+
 /** Why the usage total misses 100, with the fix; null when it is on it or no man has a figure. Only typed usage can miss: the fit places the rest. */
 function usageMiss(total) {
   if (total === null) return null;
@@ -321,7 +331,7 @@ export function scenario(team, outs = [], pins = emptyPins()) {
   const moved = { ...implicit, ...flips };
   const { minutes: m, basis, flag, median, fromOurs, totalNote } = minutesFor(team, outSet, tonightSet, pins.m ?? {}, flips, implicit);
   const use = oursUse(team), clean = oursFor(team, outSet);
-  const oursNote = sourceOf(team) !== "twogun" && !use.ok ? `Ours minutes are chosen but ${use.why ?? "this team has no minutes engine inputs"}, so TwoGun's minutes are in use.` : null; // the chart's minutes on this scenario's outs alone, for the "Ours" column beside TwoGun's
+  const oursNote = sourceOf(team) !== "twogun" && !use.ok ? `${team.source_set ? "Ours minutes are chosen" : "Ours is the default"} but ${use.why ?? "this team has no minutes engine inputs"}, so TwoGun's minutes are in use.` : null; // the chart's minutes on this scenario's outs alone, for the "Ours" column beside TwoGun's
   const u = usageFor(team, outSet, tonightSet, m, pins, moved);
   const rows = team.men.map((p) => {
     const oc = clean?.[p.id], oursFields = { ours_min: isNum(oc?.min) ? oc.min : null, ours_basis: oc?.basis ?? (use.ok ? "the minutes engine has no inputs for him" : use.why), ours_median: false, ours_tier: oc?.tier ?? null, ours_flag: oc?.flag ?? null };
@@ -357,6 +367,7 @@ export function scenario(team, outs = [], pins = emptyPins()) {
     },
     roles_note: [rolesNote, oursNote, totalNote ?? clean?.totalNote, plainNote].filter(Boolean).join(" ") || null,
     chart_note: clean ? chartUsualNote(clean, (id) => team.men.find((p) => p.id === id)?.name ?? id, sourceOf(team), (id) => team.tier?.men?.[id]?.chart_usual ?? null) : null, // the no-games chart usual's own foot note (Ours against the table)
+    handout_note: handoutNote(team, use.ok),
     injured_note: injuredPlayNote(team, outSet, roles, clean), // its own field, for the panel foot: never joined into roles_note, whose readers split on periods
   };
 }

@@ -5,6 +5,7 @@
 // stays unsent and is named as one line until he next changes that team. What a send holds back (planNotesList) is shown as "partial",
 // never as up to date. Each takes the console's shared state `c`; c.auto is set only by createConsole, so the tests' fake consoles send nothing by themselves.
 import { keyOf } from "./console-engine.js";
+import { defaultSourceOf } from "./depth-chart.js";
 import { calc, hasPins } from "./console-model.js";
 import { saveDirty } from "./console-moves.js";
 
@@ -76,8 +77,8 @@ export function requeueNews(c) {
   return any;
 }
 
-/** Teams with saved work of his that this page has not sent: pins on any scenario, a scenario off Tonight, or minutes from Ours. */
-export const unsentTeams = (c, sent) => Object.keys(c.model.ST).filter((t) => !sent.includes(t) && ((c.model.ST[t].source ?? "twogun") !== "twogun" || Object.values(c.model.ST[t].pins ?? {}).some(hasPins) || keyOf(c.model.ST[t].outs) !== c.model.TEAMS[t]?.tonightKey)).sort();
+/** Teams with saved work of his that this page has not sent: pins on any scenario, a scenario off Tonight, or a minutes source other than the default. */
+export const unsentTeams = (c, sent) => Object.keys(c.model.ST).filter((t) => !sent.includes(t) && ((c.model.ST[t].source ?? defaultSourceOf(c.model.TEAMS[t])) !== defaultSourceOf(c.model.TEAMS[t]) || Object.values(c.model.ST[t].pins ?? {}).some(hasPins) || keyOf(c.model.ST[t].outs) !== c.model.TEAMS[t]?.tonightKey)).sort();
 
 /** Each team's console result as a short text: the scenario on show and every man's minutes and projection in it. A pull that changes it is what the board must be sent again. */
 export function resultSigs(c) {
@@ -121,7 +122,7 @@ export async function previewAndSend(c, teams, check = null) {
   const failed = Object.values(c.saveErrs);
   if (failed.length) throw new Error(`not sent, because your last change is not saved. ${failed.join(" ")}`);
   const keys = Object.fromEntries(teams.map((t) => [t, keyOf(c.model.ST[t].outs)]));
-  const body = { scenarios: keys, teams, pull: c.inputs.basis.pull, tier: c.inputs.basis.tier ?? null };
+  const body = { scenarios: keys, teams, pull: c.inputs.basis.pull, tier: c.inputs.basis.tier ?? null, source_default: c.inputs.source_default ?? null };
   for (let round = 0; ; round++) {
     const plan = await post(c, { ...body, preview: true });
     if (slate !== c.slate) return null;

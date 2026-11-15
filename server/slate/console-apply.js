@@ -8,6 +8,11 @@ import { PROJ_MAX } from "../board/override-limits.js";
 import { isNum, isPlain, round2, tonightRate } from "../board/figures.js";
 import { validKey, heldTeams } from "./scenarios.js";
 import { newsOwned } from "../board/console-marks.js";
+import { defaultSourceOf } from "../board/depth-chart.js";
+
+/** Why no send goes out while the projection setting cannot be read (buildInputs gives source_default "unknown"): the board is blank then, so TwoGun's minutes must not be sent onto it. Null otherwise. */
+export const SOURCE_UNKNOWN_WHY = "the projection setting could not be read, so the board shows no projections and nothing is sent until it is fixed";
+export const sourceRefusal = (inputs) => (inputs?.source_default === "unknown" ? SOURCE_UNKNOWN_WHY : null);
 
 const MOVE_FLOOR = 0.05; // the console shows tenths
 const MIN_FLOOR = 0.0005; // minutes are kept to thousandths, so a team's total survives the rounding
@@ -123,7 +128,7 @@ function missingWhy(r, man) {
 /** One team's moves into the plan. A hand-typed board number with no pin in this scenario, not one an Apply set, stays and is listed as kept. */
 function planTeam(plan, t, rec, key, ctx) {
   const pins = rec?.pins?.[key] ?? emptyPins();
-  const res = scenario(teamFor(t, rec), outsOf(key), pins);
+  const res = scenario(teamFor({ ...t, source_default: ctx.dflt }, rec), outsOf(key), pins);
   const before = plan.changes.length;
   let minMoves = 0;
   for (const r of res.rows) {
@@ -226,8 +231,9 @@ function changedRows(plan, ctx) {
  * of the typed number is counted; each sent man's bump is in the basis.
  */
 export function planApply(inputs, file, overrides, players, keys, only = null) {
+  if (sourceRefusal(inputs)) throw new Error(`Nothing can be planned: ${SOURCE_UNKNOWN_WHY}.`); // the route and the resend refuse before this; a caller that did not is stopped here
   const ctx = {
-    overrides, applied: file.applied, men: new Map(),
+    overrides, applied: file.applied, men: new Map(), dflt: defaultSourceOf(inputs),
     board: new Map(mergeOverrides(players, overrides, { held: heldTeams(file) }).map((p) => [String(p.dk_id), p])),
     base: new Map(players.map((p) => [String(p.dk_id), p])),
   };
@@ -236,7 +242,7 @@ export function planApply(inputs, file, overrides, players, keys, only = null) {
     if (only && !only.has(t.code)) continue; // a team not asked for is not planned, sent or undone (the console sends only the teams he changed)
     const rec = Object.hasOwn(file.teams, t.code) ? file.teams[t.code] : null, key = keys[t.code], tonight = keyOf(t.tonight);
     const name = label(shapedTeam(t), key);
-    const ownSource = Boolean(rec?.source) && rec.source !== "twogun"; // Ours feeds the optimizer here, so Tonight with no pins is still a send
+    const ownSource = Boolean(rec?.source) && rec.source !== ctx.dflt; // a source other than the board's default feeds the optimizer here, so Tonight with no pins is still a send
     if (key === tonight && !hasPins(rec?.pins?.[key]) && !ownSource) {
       const { moves, min_moves } = undoTeam(plan, t, ctx);
       if (moves || min_moves) plan.teams.push({ team: t.code, key, tonight, name, moves, min_moves, min_total: null, undone: true });

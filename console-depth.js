@@ -7,7 +7,7 @@ import { esc, logo, nameOpen, consoleNameOpen } from "./board-util.js";
 import { calc } from "./console-model.js";
 import { keyOf, outsOf } from "./console-engine.js";
 import { marksOf, liveText } from "./console-marks.js";
-import { MINUTE_SOURCES, SOURCE_LABEL } from "./depth-chart.js";
+import { MINUTE_SOURCES, SOURCE_LABEL, defaultSourceOf } from "./depth-chart.js";
 import { syncWords } from "./console-auto.js";
 import { noteCell, outNote, stripHtml } from "./console-news.js";
 import { absenceRow } from "./absence-view.js";
@@ -34,7 +34,7 @@ const chip = (team, id, kind, mark, text) => `<button class="rv" type="button" d
 function basisOf(r, T, S) {
   const p = r.p;
   if (r.pinned.m) return { tag: "you", word: "Yours", text: "minutes typed by you" };
-  if (r.min_from_ours || ((S.source ?? "twogun") !== "twogun" && r.min_basis)) return { tag: "ch", word: "Tier", text: r.min_basis ?? "the minutes engine", flag: r.min_flag ?? null };
+  if (r.min_from_ours || ((S.source ?? defaultSourceOf(T)) !== "twogun" && r.min_basis)) return { tag: "ch", word: "Tier", text: r.min_basis ?? "the minutes engine", flag: r.min_flag ?? null };
   if (r.min_basis) return { tag: "tg", word: "Role", text: r.min_basis };
   if (isNum(r.min) && isNum(p.min) && Math.abs(r.min - p.min) < 0.05) return { tag: "tg", word: "TwoGun", text: p.starter ? "TwoGun starter" : "TwoGun projection" };
   if (isNum(r.min) && isNum(p.min)) {
@@ -130,12 +130,13 @@ function teamBody(model, code, news) {
   const disagree = disagreeNote(N?.team?.five, T.tier?.confirmed); // the foot says what was really used when the header says the sources disagree
   for (const n of String(res.roles_note ?? "").split(/\n+|(?<=\.)\s+/).filter(Boolean).map(shortNote).map((x) => (disagree && /^Starters: the lineup pages' (?:agreed|confirmed) five/.test(x) ? disagree : x))) if (!notes.some((x) => x.slice(0, 12) === n.slice(0, 12)) && !/starters marked|Only \d starters/.test(n)) notes.push(n);
   if (res.chart_note) notes.push(res.chart_note); // one note per team (G68), added whole
+  if (res.handout_note) notes.push(res.handout_note); // one note per team, added whole (G68)
   if (res.injured_note) notes.push(res.injured_note); // one note per team, added whole (G68)
   const auto = calc(T, { ...S, pins: {} }, T.tonight).totals;
   const typedAdd = (res.totals.min ?? 0) - (auto.min ?? 0);
   const main = `<section class="box"><h2>Starters <small>${starters.length} &middot; ${f1(sumMin(starters))} min</small></h2>${HEAD("Pos")}${starters.map((r) => manRow(code, r, T, S, marks[r.id], "", N)).join("") || `<div class="none">Nobody is starting. Mark five men S.</div>`}</section>
 <section class="box"><h2>Bench <small>rotation order &middot; ${f1(sumMin(inRot))} min</small></h2>${HEAD("#")}${inRot.map((r, i) => manRow(code, r, T, S, marks[r.id], String(6 + i), N)).join("") || `<div class="none">Nobody on the bench has minutes.</div>`}${notRot.length ? `<div class="sub">Not in the rotation</div>${notRot.map((r) => manRow(code, r, T, S, marks[r.id], "", N)).join("")}` : ""}<div class="row tot"><span></span><span class="who">Team total</span><span class="mt">${f1(res.totals.min) ?? "—"}</span></div>${benchPlusHtml(T.bench_plus)}</section>`;
-  const src = S.source ?? "twogun";
+  const src = S.source ?? defaultSourceOf(T);
   const srcBox = oursUse(T).ok ? `<section class="box"><h2>Minutes for the optimizer</h2><div class="srcs">${MINUTE_SOURCES.map((k) => `<button class="sv${k === src ? " on" : ""}" type="button" data-source="${k}" data-team="${esc(code)}">${SOURCE_LABEL[k]}</button>`).join("")}<button class="sv all" type="button" data-source-all="${src}" data-team="${esc(code)}" title="Use ${esc(SOURCE_LABEL[src])} on every team with the minutes engine">All teams</button></div></section>` : "";
   const side = `<section class="box"><h2>Team total</h2><div class="tot">
 <div class="big"><span>Minutes tonight</span><b class="${Math.abs(typedAdd) >= 0.05 ? "warn" : ""}">${f1(res.totals.min) ?? "—"} min</b></div>

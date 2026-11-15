@@ -6,7 +6,7 @@ import { keyOf, outsOf, handoutShares, teamFor, TEAM_USAGE } from "./console-eng
 import { calc, chipName, dcls, f1, fullLabel, label, savedFor, sgn, tableName, tonightMin, tonightProj, tonightUsg, usualMin, usualProj } from "./console-model.js";
 import { FN, fmtv } from "./console-cmd.js";
 import { isNum as num } from "./figures.js";
-import { MINUTE_SOURCES, SOURCE_LABEL } from "./depth-chart.js";
+import { MINUTE_SOURCES, SOURCE_LABEL, defaultSourceOf } from "./depth-chart.js";
 import { ROLES, ROLE_LABEL, ROLE_SHORT } from "./console-roles.js";
 
 export const COLS = ["m", "u", "d", "p"];
@@ -123,11 +123,13 @@ export function teamHtml(model, G, code, colour) {
     return `<tr${r.out ? ' class="out"' : ""}>${roleCell(code, r)}${nameCell(T, p)}${usual}${c.m}${chg(r.min, tonightMin(T, p), "x-chg")}${basisCell(r)}${oursCell(r)}${usualU}${c.u}${chg(r.usg, tonightUsg(T, p), "x-uchg")}${c.d}${c.p}</tr>`;
   }).join("");
   const list = `<div class="tlx"><table class="tl">${COLGROUP}<thead>${GROUP_ROW}${HEAD_ROW}</thead><tbody>${rows}</tbody><tfoot><tr><td class="x-fteam">Team</td><td></td><td></td>${minTotalCell(R.totals.min)}<td></td><td></td><td></td><td class="gs"></td>${totalCell(R.totals.usg, TEAM_USAGE, R.totals.usg_why)}<td></td><td class="gs"></td>${projTotal(R, tonightTotal(T))}</tr></tfoot></table></div>`;
-  return `<div class="cwork"><div class="panel main" style="--t1:${colour}">${teamHead(T, S, code, key)}${roleLines(G, code, R)}${list}${missLines(R.totals)}${R.injured_note ? `<div class="rnote">${esc(R.injured_note)}</div>` : ""}</div>${compareHtml(T, S, key, colour)}</div>`;
+  return `<div class="cwork"><div class="panel main" style="--t1:${colour}">${teamHead(T, S, code, key)}${roleLines(G, code, R)}${list}${missLines(R.totals)}${R.handout_note ? `<div class="rnote">${esc(R.handout_note)}</div>` : ""}${R.injured_note ? `<div class="rnote">${esc(R.injured_note)}</div>` : ""}</div>${compareHtml(T, S, key, colour)}</div>`;
 }
 
-/** Which minutes feed the optimizer for this team: TwoGun's (the default), the saved depth chart's, or the chart with his edits. "All" sets every team. Only where the team has a chart. */
-const sourceSwitch = (T, S, code) => (!oursUse(T).ok ? "" : `<span class="grow"></span><span class="msrc"><span class="mu">Optimizer minutes</span>${MINUTE_SOURCES.map((k) => `<button class="ms${(S.source ?? "twogun") === k ? " on" : ""}" data-msrc="${k}" data-team="${esc(code)}" title="${k === "twogun" ? "TwoGun's minutes (the default)" : k === "ours" ? "The minutes engine's tiers, on this scenario's outs" : "The minutes engine that also follows your role flips and typed minutes"}" tabindex="-1">${SOURCE_LABEL[k]}</button>`).join("")}<button class="ms all" data-msrc-all="${esc(S.source ?? "twogun")}" data-team="${esc(code)}" title="Use this team's choice for every team with the minutes engine" tabindex="-1">All teams</button></span>`);
+/** The switch button's hover text; the default is the source the board shows (inputs' source_default), marked in its title. */
+export const sourceTitle = (k, dflt) => (k === "twogun" ? `TwoGun's minutes${dflt === "twogun" ? " (the default)" : ""}` : k === "ours" ? `The minutes engine's tiers, on this scenario's outs${dflt === "ours" ? " (the default while the board shows our projections)" : ""}` : "The minutes engine that also follows your role flips and typed minutes");
+/** Which minutes feed the optimizer for this team: TwoGun's, the minutes engine's tiers (Ours; the default while the board shows our projections), or the tiers with his edits. "All" sets every team. Only where the team has a chart. */
+const sourceSwitch = (T, S, code) => (!oursUse(T).ok ? "" : `<span class="grow"></span><span class="msrc"><span class="mu">Optimizer minutes</span>${MINUTE_SOURCES.map((k) => `<button class="ms${(S.source ?? defaultSourceOf(T)) === k ? " on" : ""}" data-msrc="${k}" data-team="${esc(code)}" title="${sourceTitle(k, defaultSourceOf(T))}" tabindex="-1">${SOURCE_LABEL[k]}</button>`).join("")}<button class="ms all" data-msrc-all="${esc(S.source ?? defaultSourceOf(T))}" data-team="${esc(code)}" title="Use this team's choice for every team with the minutes engine" tabindex="-1">All teams</button></span>`);
 /** The team panel's heading: its code, its scenario and who is out. Shared by both layouts. */
 export function teamHead(T, S, code, key) {
   const named = S.outs.map((i) => T.byId[i]).filter(Boolean).map((p) => chipName(T, p));

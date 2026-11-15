@@ -1,12 +1,12 @@
 // The console's "ours" minutes (Adam 11-12: one minutes model): the tier engine's (console-tier.js over tiers.js) for the scenario's Outs, there being no second copy of the minutes logic in the console. Pure,
 // shared by the page and the server.
-// team.source says which minutes feed the optimizer: "twogun" (the default, the engine's own), "ours" (the tier engine with the scenario's outs), or "ours_edits" (the tier engine that also knows his marks
+// team.source says which minutes feed the optimizer: "twogun" (TwoGun's own; the default unless the inputs' source_default says "ours"), "ours" (the tier engine with the scenario's outs), or "ours_edits" (the tier engine that also knows his marks
 // and typed minutes, so the other men move with them). His typed minutes and marks always win on their own man whichever source is on. The tier engine's inputs are team.tier (server/minutes/tier-inputs.js).
-import { MINUTE_SOURCES, badChart, chartFive, fiveNotes } from "./depth-chart.js";
+import { MINUTE_SOURCES, badChart, chartFive, defaultSourceOf, fiveNotes } from "./depth-chart.js";
 import { tierUse, tierScenario, tierFive } from "./console-tier.js";
 import { isNum } from "./figures.js";
 
-export const sourceOf = (team) => (MINUTE_SOURCES.includes(team.source) ? team.source : "twogun");
+export const sourceOf = (team) => (MINUTE_SOURCES.includes(team.source) ? team.source : defaultSourceOf(team));
 
 /** Whether the team's minutes can come from the engine, and if not why: { ok: true } or { ok: false, why } (why null for an older fixture with no engine field at all). */
 export const oursUse = tierUse;

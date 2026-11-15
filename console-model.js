@@ -1,7 +1,7 @@
 // The console's state for one slate: the teams from the inputs route, his saved work per team (ST) and the calculations on them,
 // through console-engine.js. No page here, so the tests can run it in node.
 import { keyOf, outsOf, emptyPins, scenario, teamFor } from "./console-engine.js";
-import { MINUTE_SOURCES } from "./depth-chart.js";
+import { MINUTE_SOURCES, defaultSourceOf } from "./depth-chart.js";
 
 const SUFFIX = /^(jr\.?|sr\.?|ii|iii|iv|v)$/i;
 /** His last name, a generational suffix aside. */
@@ -31,14 +31,16 @@ export const dcls = (x) => (Math.abs(x) < 0.05 ? "dim" : x > 0 ? "up" : "dn");
  *  else Tonight. rec.on is saved with every change, so it is never older than the applied key: a change whose send never landed is not lost on a reload.
  *  Each is rebased from the Tonight it was made on onto this one (moveTo), his pins carried across; an id no longer on the team drops. */
 export function buildModel(inputs, saved, appliedKeys = {}) {
-  const TEAMS = {}, ST = {};
-  for (const [code, input] of Object.entries(inputs.teams)) ({ T: TEAMS[code], S: ST[code] } = buildTeam(input, saved?.[code], appliedKeys?.[code]));
+  const TEAMS = {}, ST = {}, dflt = defaultSourceOf(inputs);
+  for (const [code, input] of Object.entries(inputs.teams)) ({ T: TEAMS[code], S: ST[code] } = buildTeam(input, saved?.[code], appliedKeys?.[code], dflt));
   return { TEAMS, ST };
 }
 
-/** One team's T and S from its inputs, its saved record and its applied key (buildModel's rules). Also how a page takes another page's newer record for a team. */
-export function buildTeam(input, rec, ak) {
-  const T = shapeTeam(input), S = stateFor(T, rec);
+/** One team's T and S from its inputs, its saved record and its applied key (buildModel's rules). Also how a page takes another page's newer record for a team.
+ *  dflt: the minutes source a team with no choice of his opens on (the inputs' source_default through depth-chart.js defaultSourceOf); required. */
+export function buildTeam(input, rec, ak, dflt) {
+  if (dflt !== "ours" && dflt !== "twogun") throw new Error("buildTeam needs the minutes source default (defaultSourceOf(inputs)), never a guess");
+  const T = shapeTeam(input, dflt), S = stateFor(T, rec);
   pruneFlips(T, S);
   const recTonight = typeof rec?.tonight === "string" ? rec.tonight : T.tonightKey;
   const applied = ak === undefined || ak === null ? null : typeof ak === "string" ? { key: ak, tonight: recTonight } : ak;
@@ -96,29 +98,30 @@ export function moveTo(T, S, outs, old) {
   S.shown = (S.shown ?? []).filter((k) => k !== from && k !== to);
 }
 
-function shapeTeam(input) {
+function shapeTeam(input, dflt) {
   const byId = {};
   for (const p of input.men) byId[p.id] = p;
-  return { ...input, pl: input.men, byId, tonightKey: keyOf(input.tonight) };
+  return { ...input, source_default: dflt, pl: input.men, byId, tonightKey: keyOf(input.tonight) };
 }
 
 /** His saved record as the working state, on Tonight. A scenario holding pins but not on his list (an earlier Tonight) shows for this session only; it is not written into saved. */
 function stateFor(T, rec) {
-  const saved = [...(rec?.saved ?? [])], shown = [];
+  const saved = [...(rec?.saved ?? [])], shown = [], sourceSet = MINUTE_SOURCES.includes(rec?.source); // sourceSet: his own choice of source (a record carries one only then); an unset team follows the default
   for (const [key, p] of Object.entries(rec?.pins ?? {})) {
     if (key !== "" && key !== T.tonightKey && !saved.includes(key) && hasPins(p)) shown.push(key);
   }
-  return { outs: outsOf(T.tonightKey), tonight: T.tonightKey, source: MINUTE_SOURCES.includes(rec?.source) ? rec.source : "twogun", saved, shown, pins:structuredClone(rec?.pins ?? {}), handouts: structuredClone(rec?.handouts ?? {}), combos: structuredClone(rec?.combos ?? {}), news: structuredClone(rec?.news ?? {}), ...(rec?.mine ? { mine: structuredClone(rec.mine) } : {}) };
+  return { outs: outsOf(T.tonightKey), tonight: T.tonightKey, source: sourceSet ? rec.source : T.source_default, sourceSet, saved, shown, pins:structuredClone(rec?.pins ?? {}), handouts: structuredClone(rec?.handouts ?? {}), combos: structuredClone(rec?.combos ?? {}), news: structuredClone(rec?.news ?? {}), ...(rec?.mine ? { mine: structuredClone(rec.mine) } : {}) };
 }
 
 /** New inputs on the same work (a pull landed): his pins stay and everything he did not pin moves. Every team is rebased on the new Tonight
  *  (moveTo): a team with nothing of his stays on Tonight, his own Outs and back-ins stay his through any number of pulls, and his pins go with the scenario; a man who left is dropped. */
 export function refreshTeams(model, inputs) {
-  const TEAMS = {};
+  const TEAMS = {}, dflt = defaultSourceOf(inputs);
   for (const [code, input] of Object.entries(inputs.teams)) {
-    TEAMS[code] = shapeTeam(input);
+    TEAMS[code] = shapeTeam(input, dflt);
     const S = model.ST[code];
     if (!S) { model.ST[code] = stateFor(TEAMS[code], null); continue; }
+    if (!S.sourceSet) S.source = dflt; // a team he has not chosen for follows the default when the projection setting moves
     moveTo(TEAMS[code], S, S.outs, model.TEAMS[code]?.tonightKey ?? TEAMS[code].tonightKey);
     pruneFlips(TEAMS[code], S);
   }
@@ -217,7 +220,7 @@ export function recordOf(S) {
   const offTonight = S.tonight !== undefined && keyOf(S.outs) !== S.tonight;
   const where = (Object.keys(pins).length || offTonight || S.sticky) && S.tonight !== undefined ? { tonight: S.tonight, on: keyOf(S.outs) } : {};
   const mine = S.mine?.out.length || S.mine?.in.length ? { mine: S.mine } : {};
-  return { saved: S.saved, pins, handouts: S.handouts, combos: S.combos, ...where, ...mine, ...(S.source && S.source !== "twogun" ? { source: S.source } : {}), ...(Object.keys(S.news ?? {}).length ? { news: S.news } : {}) };
+  return { saved: S.saved, pins, handouts: S.handouts, combos: S.combos, ...where, ...mine, ...(S.sourceSet && MINUTE_SOURCES.includes(S.source) ? { source: S.source } : {}), ...(Object.keys(S.news ?? {}).length ? { news: S.news } : {}) };
 }
 
 /** His usual minutes: min_healthy where the pull has it, else Tonight's. */

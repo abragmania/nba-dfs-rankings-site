@@ -10,6 +10,7 @@ import { cardApi, lineupViewOf } from "./console-card.js";
 import { createAutoApply, createPullReads, mayAutoSend, requeueApplied, requeueNews, resendChanged, resultSigs } from "./console-auto.js";
 import { PIN_MAX } from "./override-limits.js";
 import { keyOf } from "./console-engine.js";
+import { defaultSourceOf } from "./depth-chart.js";
 import { teamNews } from "./console-news.js";
 
 const USAGE_RETRY_MS = 20_000;
@@ -157,7 +158,7 @@ export function takeOthersWork(c, out) {
     const seen = c.serverSeen?.[code], now = canonRecord(out.scenarios.teams[code]);
     (c.serverSeen ??= {})[code] = now;
     if (seen === undefined || seen === now || c.lastSaved[code] === "unsaved") continue; // nobody else wrote, or his own write is still to come
-    const { T, S } = buildTeam(input, out.scenarios.teams[code], out.scenarios.applied?.keys?.[code]);
+    const { T, S } = buildTeam(input, out.scenarios.teams[code], out.scenarios.applied?.keys?.[code], defaultSourceOf(c.inputs));
     c.model.TEAMS[code] = T; c.model.ST[code] = S;
     c.lastSaved[code] = savedBehind(out.scenarios.teams[code], S) ? "unsaved" : JSON.stringify(recordOf(S));
     c.touched?.delete(code); c.pending?.delete(code);

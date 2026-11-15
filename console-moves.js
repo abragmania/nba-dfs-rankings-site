@@ -113,7 +113,7 @@ export function restore(c, i) {
   for (const [code, S] of Object.entries(o.ST)) {
     const T = c.model.TEAMS[code];
     if (!T) continue;
-    const next = c.model.ST[code] = { ...S, news: c.model.ST[code]?.news ?? {}, sticky: Boolean(S.sticky || c.model.ST[code]?.sticky) }; // the news record is not part of history; once he has been off Tonight, where he is stays saved
+    const next = c.model.ST[code] = { ...S, source: S.sourceSet ? S.source : T.source_default, news: c.model.ST[code]?.news ?? {}, sticky: Boolean(S.sticky || c.model.ST[code]?.sticky) }; // the news record is not part of history; once he has been off Tonight, where he is stays saved
     moveTo(T, next, next.outs, next.tonight ?? T.tonightKey); // a step taken before a pull lands on the current Tonight, pins carried
     alignNews(next, memo); // and the news records follow the screen: reverted, or applied again
   }
@@ -258,7 +258,7 @@ export function setRole(c, t, id, role) {
   const T = c.model.TEAMS[t], S = c.model.ST[t], key = keyOf(S.outs);
   const rows = calc(T, S, S.outs).rows, mine = rows.find((r) => r.id === id);
   if (!mine || mine.role === role) return null;
-  const res = roleMove(T, S.outs, pinsOf(S, key).r, id, role, Object.fromEntries(rows.map((r) => [r.id, r.min])));
+  const res = roleMove({ ...T, source: S.source }, S.outs, pinsOf(S, key).r, id, role, Object.fromEntries(rows.map((r) => [r.id, r.min])));
   const also = res.moved.map((m) => `${nameOf(c, t, m.id)} to ${ROLE_LABEL[m.to]}`).join(", ");
   const flips = Object.fromEntries(Object.entries(res.flips).filter(([fid]) => T.byId[fid])); // a man no longer on the team keeps no flip
   const next = keyOf(res.outs), opened = opensSaved(S, key, next);
@@ -275,9 +275,9 @@ export function setRole(c, t, id, role) {
 /** Which minutes feed the optimizer (depth-chart.js MINUTE_SOURCES): one team, or every team that has a chart. It is saved with his work and takes Ctrl+Z like any move. */
 export function setSource(c, t, source, all = false) {
   if (!MINUTE_SOURCES.includes(source)) return;
-  const codes = (all ? Object.keys(c.model.TEAMS) : [t]).filter((code) => oursUse(c.model.TEAMS[code]).ok && (c.model.ST[code].source ?? "twogun") !== source);
+  const codes = (all ? Object.keys(c.model.TEAMS) : [t]).filter((code) => oursUse(c.model.TEAMS[code]).ok && !(c.model.ST[code].sourceSet && c.model.ST[code].source === source)); // a click on the source a team follows by default still makes it his choice
   if (!codes.length) return;
-  mutate(c, `${all ? "all teams" : t} minutes: ${SOURCE_LABEL[source]}`, () => { for (const code of codes) c.model.ST[code].source = source; });
+  mutate(c, `${all ? "all teams" : t} minutes: ${SOURCE_LABEL[source]}`, () => { for (const code of codes) Object.assign(c.model.ST[code], { source, sourceSet: true }); });
 }
 /**
  * A starter in and a named man out, as one role move (the lineup news's start): `inId` becomes a Starter and `outId` (the man the news sources leave out of the
@@ -287,7 +287,7 @@ export function setSource(c, t, source, all = false) {
 export function swapStarter(c, t, inId, outId) {
   const T = c.model.TEAMS[t], S = c.model.ST[t], key = keyOf(S.outs);
   const rows = calc(T, S, S.outs).rows;
-  const res = swapStarterMove(T, S.outs, pinsOf(S, key).r, inId, outId, Object.fromEntries(rows.map((r) => [r.id, r.min]))); // the pure move (console-roles.js): through the chart where the team has one
+  const res = swapStarterMove({ ...T, source: S.source }, S.outs, pinsOf(S, key).r, inId, outId, Object.fromEntries(rows.map((r) => [r.id, r.min]))); // the pure move (console-roles.js): through the chart where the team has one
   if (res === null) return null;
   if (res.backIn) {
     // He is Out here: back in on a non-starting role first (the scenario moves once), then the swap in the scenario he is back in, so both flips land there; one history step.
