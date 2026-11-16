@@ -54,7 +54,8 @@ export function buildTeam(input, rec, ak, dflt) {
 /** A saved team record in one canonical text (default sections filled, every key sorted), so two pages' records compare by what they hold, not by how they were written. */
 export function canonRecord(rec) {
   const sort = (v) => (Array.isArray(v) ? v.map(sort) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sort(v[k])])) : v);
-  return JSON.stringify(sort({ saved: [], pins: {}, handouts: {}, combos: {}, ...(rec ?? {}) }));
+  const { his_at: _stamp, ...held } = rec ?? {}; // his_at (when he saved) is the sync's stamp, not part of what the record says
+  return JSON.stringify(sort({ saved: [], pins: {}, handouts: {}, combos: {}, ...held }));
 }
 /** Whether two saved team records differ: another page wrote one of them. */
 export const recordsDiffer = (a, b) => canonRecord(a) !== canonRecord(b);

@@ -10,7 +10,7 @@ import { routeModule, routeMods, loadRouteModules } from "./route-modules.js";
 import { readNowSetting, optimizeErrorKind } from "./server-util.js";
 export { readNowSetting, optimizeErrorKind };
 import { refuseNonJsonPost, refuseCrossSiteRead } from "./lib/origin.js";
-import { info, warn, error } from "../site/shim/log.js";
+import { info, warn, error, dataDir } from "../site/shim/log.js";
 import { readScenarios, heldTeams } from "./slate/scenarios.js";
 import { checkLogQuery, getPlayerLog, PlayerLogError } from "../site/shim/app-only.js";
 import { withSeasonFigures, seasonUsageTable } from "../site/shim/app-only.js";
@@ -194,6 +194,9 @@ const withOurs = (slate, slateData, opts) => (opts?.ourProjection ? opts.ourProj
 
 /** GET { slate, overrides }; POST a change ({ proj, own, bump, stars }), { reset: dk_id } or { resetAll: true }.
  *  A POST answers { overrides, players } with the players' effective figures, so the page redraws from the saved file. */
+/** The 409 text while GitHub's data is being brought down, else null: opts.syncBusy is given by the app below (pullnow/sync-flag.js through the lazily loaded pullnow route module); the tests and the public site have none. */
+const syncBusyNow = async (opts) => (await opts.syncBusy?.()) ?? null;
+
 async function handleOverrides(req, res, slate, opts) {
   const slateData = openSlate(req, res, slate, "Overrides");
   if (!slateData) return;
@@ -215,6 +218,8 @@ async function handleOverrides(req, res, slate, opts) {
   if (!read) return;
   const checked = checkChanges(read.body, slateData);
   if (!checked.ok) return fail(res, 400, "BAD_OVERRIDE", checked.message);
+  const busy = await syncBusyNow(opts); // GitHub's data is coming down: his write waits (409) so it never lands between the set-aside and the put-back; asked before the read, so nothing awaits between the read and the write
+  if (busy) return fail(res, 409, "SYNC_RUNNING", busy);
   // Read the file only now, after the body has arrived: from here to the write nothing awaits, so two overlapping POSTs
   // each apply onto the other's saved result and neither change is lost.
   const current = readCurrent();
@@ -227,7 +232,7 @@ async function handleOverrides(req, res, slate, opts) {
     if (e?.code !== "BUMP_NO_PROJECTION") throw e;
     return fail(res, 400, e.code, e.message);
   }
-  const written = writeOverrides(slate, next);
+  const written = writeOverrides(slate, next, { his: new Date().toISOString() }); // his click: sets his_at
   send(res, 200, { overrides: publicOverrides(written), players: mergedFor(slate, base.players ?? [], written) });
 }
 
@@ -511,9 +516,9 @@ async function route(req, res, opts) {
   const mins = minutesHandler(p); // our minutes engine (minutes/route.js)
   if (mins) return mins.handler(req, res, mins, { send, fail, readJson, now: opts.now, decode: safeDecode });
   const depth = depthHandler(p); // the saved depth charts (slate/depth-store.js)
-  if (depth) return depth.handler(req, res, depth.team, { send, fail, readJson, now: opts.now });
+  if (depth) return depth.handler(req, res, depth.team, { send, fail, readJson, now: opts.now, syncBusy: () => syncBusyNow(opts) });
   const cons = consoleHandler(p); // the scenario console (slate/console-route.js)
-  if (cons) return cons.handler(req, res, safeDecode(cons.encodedSlate), { send, fail, readJson, openSlate, usageTable: opts.usageTable, benchPlus: consoleBenchPlus, now: opts.now, effectivePlayers: (res, slate, slateData) => effectivePlayers(res, slate, slateData, opts), ourPlayers: (slate, slateData) => withOurs(slate, slateData, opts) });
+  if (cons) return cons.handler(req, res, safeDecode(cons.encodedSlate), { send, fail, readJson, openSlate, syncBusy: () => syncBusyNow(opts), usageTable: opts.usageTable, benchPlus: consoleBenchPlus, now: opts.now, effectivePlayers: (res, slate, slateData) => effectivePlayers(res, slate, slateData, opts), ourPlayers: (slate, slateData) => withOurs(slate, slateData, opts) });
   const lsw = lateswapHandler(p); // the Late swap screen (slate/lateswap-route.js)
   if (lsw) return lsw.handler(req, res, safeDecode(lsw.encodedSlate), { send, fail, readJson, openSlate, effectivePlayers: (res, slate, slateData) => effectivePlayers(res, slate, slateData, opts), now: opts.now, injected: opts.injected });
   let m = p.match(/^\/api\/slate\/([^/]+)\/resend$/);
@@ -594,8 +599,8 @@ async function route(req, res, opts) {
  *  ourProjection: (slate, slateData, { nowMs }) -> slateData with our minutes engine's figures (minutes/board.js withOurProjection, which reads the projection setting); off unless given,
  *  so the tests and the public site keep the slate's own (TwoGun's) figures. The app below turns it on.
  *  primeTotals: (slate, { nowMs }) -> fetches missing league totals for the engine once (minutes/inputs.js); off unless given, so the tests never reach Basketball-Reference. */
-export function makeServer({ optimizeTimeoutMs = OPTIMIZE_CEILING_MS, optimizeUrl = OPTIMIZE_URL, seasonFigures = null, nowMs = null, answerStartMs = ANSWER_START_MS, answerKeepaliveMs = ANSWER_KEEPALIVE_MS, setTimer = setTimeout, usageTable = null, pullNowDeps = null, pullNowState = { running: null }, ourProjection = null, primeTotals: prime = null } = {}) {
-  const opts = { optimizeTimeoutMs, optimizeUrl, answerStartMs, answerKeepaliveMs, setTimer, build: null, seasonFigures, usageTable, ourProjection, primeTotals: prime, now: () => nowMs ?? Date.now(), injected: nowMs != null, pullNow: pullNowState, pullNowDeps };
+export function makeServer({ optimizeTimeoutMs = OPTIMIZE_CEILING_MS, optimizeUrl = OPTIMIZE_URL, seasonFigures = null, nowMs = null, answerStartMs = ANSWER_START_MS, answerKeepaliveMs = ANSWER_KEEPALIVE_MS, setTimer = setTimeout, usageTable = null, pullNowDeps = null, pullNowState = { running: null }, ourProjection = null, primeTotals: prime = null, syncBusy = null } = {}) {
+  const opts = { optimizeTimeoutMs, optimizeUrl, answerStartMs, answerKeepaliveMs, setTimer, build: null, seasonFigures, usageTable, ourProjection, primeTotals: prime, syncBusy, now: () => nowMs ?? Date.now(), injected: nowMs != null, pullNow: pullNowState, pullNowDeps };
   return http.createServer((req, res) => {
     route(req, res, opts).catch((e) => {
       error("request failed", { url: req.url, message: e.message });
@@ -619,7 +624,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (now.ms != null && (!process.env.NBADFS_DATA_DIR || port === 8693)) { error("NBADFS_NOW needs NBADFS_DATA_DIR set and a port other than 8693; not starting."); process.exit(1); }
   if (now.ms != null) info(`Late swap test clock: now is ${new Date(now.ms).toISOString()} (NBADFS_NOW)`);
   const pullNowState = { running: null };
-  makeServer({ seasonFigures: withSeasonFigures, usageTable: seasonUsageTable, nowMs: now.ms, pullNowState, ourProjection: withOurProjection, primeTotals }).listen(port, "127.0.0.1", () => {
+  makeServer({ seasonFigures: withSeasonFigures, usageTable: seasonUsageTable, nowMs: now.ms, pullNowState, ourProjection: withOurProjection, primeTotals, syncBusy: async () => (await routeModule("pullnow")).syncBusy(dataDir()) }).listen(port, "127.0.0.1", () => {
     info(`NBA board on http://127.0.0.1:${port}`);
     startSnapshotRefresh({ now: () => now.ms ?? Date.now() }); // keeps each team's figures saved for its tip (minutes/refresh.js)
     routeModule("pullnow").then(({ startLightCheckIfAllowed }) => startLightCheckIfAllowed({ state: pullNowState, port })).catch((e) => error("the light check could not start", { error: e.message })); // only in the real app: port 8693, on the default data folder or the live copy's NBADFS_DATA_DIR (route.js startLightCheckIfAllowed decides)

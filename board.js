@@ -581,7 +581,18 @@ function saveOverride(body, what) {
       // one goes to the slate it was made on (the address below), so what was typed is never lost.
       if (name !== S.name && typeof body === "function") { toast("Not saved: the slate changed."); return false; }
       const sent = typeof body === "function" ? body() : body;
-      const out = await api(`/api/slate/${encodeURIComponent(name)}/overrides`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sent) });
+      // GitHub's data is being brought down (the server answers 409 SYNC_RUNNING): his typed value is kept as it is and sent again after a few seconds, up to three times, never redrawn away.
+      let out;
+      for (let tries = 0; ; tries++) {
+        try {
+          out = await api(`/api/slate/${encodeURIComponent(name)}/overrides`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sent) });
+          break;
+        } catch (e) {
+          if (e.code !== "SYNC_RUNNING" || tries >= 2) throw e;
+          toast("A sync is running; your change is sent again in a few seconds.");
+          await new Promise((r) => setTimeout(r, 4000));
+        }
+      }
       if (name === S.name) applyPlayers(out.players);
       return true;
     } catch (e) {

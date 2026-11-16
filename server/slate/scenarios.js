@@ -17,7 +17,7 @@ const ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
 const TEAM = /^[A-Z]{2,4}$/;
 const PIN_KINDS = ["m", "u", "d", "p", "r"]; // r: his role flips (console-roles.js), the others numbers
 const SHARE_KINDS = ["m", "u"];
-const RECORD_KEYS = ["saved", "pins", "handouts", "combos", "source", "news", "tonight", "on", "mine"]; // on: the scenario on show when last saved; mine: the men he or the news put Out and the men he put back in // tonight: the Tonight key his work was made on (console-model.js rebases on a newer one) // source: which minutes feed the optimizer (depth-chart.js MINUTE_SOURCES); absent is the default the console inputs name (source_default, from the projection setting). news: below
+const RECORD_KEYS = ["saved", "pins", "handouts", "combos", "source", "news", "tonight", "on", "mine", "his_at"]; // his_at: when he last saved this team's work; only his clicks move it (writeScenarios), so a machine rewrite never makes a stale copy look newer // on: the scenario on show when last saved; mine: the men he or the news put Out and the men he put back in // tonight: the Tonight key his work was made on (console-model.js rebases on a newer one) // source: which minutes feed the optimizer (depth-chart.js MINUTE_SOURCES); absent is the default the console inputs name (source_default, from the projection setting). news: below
 const NEWS_STATES = ["applied", "undone", "failed", "reverted", "reversed"]; // reverted: taken back with Ctrl+Z (never applied again; applied once more on Ctrl+Y). reversed: a news Out put back by a pressed pull when no source claimed it any more (news-reverse.js); it applies again if a source rules him Out again
 const NEWS_KINDS = ["out", "r"];
 const NEWS_FIELDS = ["sig", "state", "at", "text", "men", "why"];
@@ -88,6 +88,7 @@ export function badRecord(rec, team = null) {
   if (!isPlain(rec)) return "A team record must be an object.";
   const unknown = Object.keys(rec).filter((k) => !RECORD_KEYS.includes(k));
   if (unknown.length) return `Unknown field: ${unknown[0].slice(0, 20)}.`;
+  if (rec.his_at !== undefined && !(typeof rec.his_at === "string" && Number.isFinite(Date.parse(rec.his_at)))) return '"his_at" must be a time.';
   if (rec.source !== undefined && !MINUTE_SOURCES.includes(rec.source)) return `"source" must be one of ${MINUTE_SOURCES.join(", ")}.`;
   if (rec.tonight !== undefined && !validKey(rec.tonight)) return '"tonight" must be a scenario key.';
   if (rec.on !== undefined && !validKey(rec.on)) return '"on" must be a scenario key.';
@@ -180,9 +181,23 @@ export const heldTeams = (file) => new Set([
   ...Object.entries(file?.teams ?? {}).filter(([, rec]) => Object.values(rec?.news ?? {}).some((e) => e.state === "applied")).map(([t]) => t),
 ]);
 
-/** Writes the file atomically, stamped. Returns what was written. */
-export function writeScenarios(slate, doc) {
-  const out = { schema: SCENARIOS_SCHEMA, slate, teams: doc.teams, applied: doc.applied ?? null, updated_at: new Date().toISOString() };
+/** The his_at stamps on disk now (the file's and each team's), tolerant of a missing or damaged file: a write that is not his carries them unchanged. */
+function hisStampsOnDisk(slate) {
+  try { const j = JSON.parse(fs.readFileSync(scenariosFile(slate), "utf8")); return { file: j?.his_at, teams: Object.fromEntries(Object.entries(j?.teams ?? {}).map(([t, r]) => [t, r?.his_at])) }; } catch { return { file: undefined, teams: {} }; }
+}
+
+/**
+ * Writes the file atomically, stamped. Returns what was written. `his`: the time of his own click (ISO) when this write is his action: it stamps the file's his_at and, with `team`, that team's record; every other write
+ * (the server's resend and news apply) carries the his_at stamps unchanged (the record's own, else the ones on disk), so only his clicks move them. The stamp is what the sync judges two computers' copies by (pullnow/resolve.js).
+ */
+export function writeScenarios(slate, doc, { his = null, team = null } = {}) {
+  const was = hisStampsOnDisk(slate), teams = {};
+  for (const [t, rec] of Object.entries(doc.teams)) {
+    const at = his && t === team ? his : rec?.his_at ?? was.teams[t];
+    teams[t] = at && rec && typeof rec === "object" ? { ...rec, his_at: at } : rec;
+  }
+  const hisAt = his ?? doc.his_at ?? was.file;
+  const out = { schema: SCENARIOS_SCHEMA, slate, teams, applied: doc.applied ?? null, ...(hisAt ? { his_at: hisAt } : {}), updated_at: new Date().toISOString() };
   const why = badFile(out);
   if (why) throw new ScenariosError("SCENARIOS_INVALID", `The scenarios could not be saved: ${why}.`);
   writeFileAtomic(scenariosFile(slate), JSON.stringify(out, null, 1) + "\n");

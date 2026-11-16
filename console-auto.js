@@ -7,7 +7,7 @@
 import { keyOf } from "./console-engine.js";
 import { defaultSourceOf } from "./depth-chart.js";
 import { calc, hasPins } from "./console-model.js";
-import { saveDirty } from "./console-moves.js";
+import { saveDirty, SYNC_WAIT_MS } from "./console-moves.js";
 
 const post = (c, body) => c.api(`/api/slate/${encodeURIComponent(c.slate)}/console/apply`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 /** Each team's scenario on show: { team: key }. */
@@ -97,7 +97,7 @@ export function resendChanged(c, before) {
   if (!moved.length) return [];
   c.pending ??= new Set();
   for (const t of moved) c.pending.add(t);
-  c.auto?.kick();
+  c.auto?.kick(true); // a pull moved it: no click of his started this send
   return moved;
 }
 
@@ -115,22 +115,25 @@ export function requeueApplied(c) {
  * One preview and send for `teams`, the keys taken once and used for both calls. A save landing between them (CONSOLE_MOVED) previews once more,
  * silently. check(plan) may throw to refuse before anything is sent. { plan, out } (out null when nothing moved), or null when the slate changed.
  */
-export async function previewAndSend(c, teams, check = null) {
+export async function previewAndSend(c, teams, check = null, auto = false) {
   const slate = c.slate;
-  saveDirty(c);
+  saveDirty(c, auto);
   await c.saveQueue;
+  if (c.saveWaiting) throw Object.assign(new Error("a sync is running, so your last change is not saved yet"), { code: "SYNC_RUNNING" }); // the save is tried again by its own timer; the send waits for it the same way
   const failed = Object.values(c.saveErrs);
   if (failed.length) throw new Error(`not sent, because your last change is not saved. ${failed.join(" ")}`);
   const keys = Object.fromEntries(teams.map((t) => [t, keyOf(c.model.ST[t].outs)]));
-  const body = { scenarios: keys, teams, pull: c.inputs.basis.pull, tier: c.inputs.basis.tier ?? null, source_default: c.inputs.source_default ?? null };
+  // auto: no click of his started this send (a load, a pull, the lineup bar's news), so the server carries his_at; file_base: the scenarios file's his_at as this page last saw it.
+  const body = { scenarios: keys, teams, pull: c.inputs.basis.pull, tier: c.inputs.basis.tier ?? null, source_default: c.inputs.source_default ?? null, ...(auto ? { auto: true } : {}) };
   for (let round = 0; ; round++) {
     const plan = await post(c, { ...body, preview: true });
     if (slate !== c.slate) return null;
     check?.(plan);
     if (!plan.changes.length && !plan.min_moves && !plan.flag_moves && !plan.holds) return { plan, out: null };
     try {
-      const out = await post(c, { ...body, basis: plan.basis });
+      const out = await post(c, { ...body, basis: plan.basis, file_base: c.serverFileHisAt ?? null });
       if (slate !== c.slate) return null;
+      if (out.his_at !== undefined) c.serverFileHisAt = out.his_at;
       c.applied = out.applied;
       c.onPlayers(out.players);
       return { plan, out };
@@ -146,7 +149,7 @@ export async function previewAndSend(c, teams, check = null) {
  * notes (what the last send held back), unsent (teams with old work not sent), pending (teams changed since the last send) }.
  */
 export function createAutoApply(c, { refreshInputs, onState }) {
-  let chain = Promise.resolve(), queued = false;
+  let chain = Promise.resolve(), queued = false, queuedAuto = true;
   c.pending ??= new Set();
   const set = (state, extra = {}) => { c.sync = { state, at: Date.now(), msg: null, notes: [], unsent: [], ...extra, pending: [...c.pending].sort() }; onState(); };
   /** After a send: the teams it covered are no longer pending; what it held back is "partial". */
@@ -156,33 +159,35 @@ export function createAutoApply(c, { refreshInputs, onState }) {
     set(notes.length ? "partial" : "ok", { notes, unsent });
   };
   /** One send; a pull that landed since the console read its inputs reads them again (his work rebased on the new Tonight) and sends once more. */
-  async function sendWith(teamsOf, check) {
+  async function sendWith(teamsOf, check, auto = false) {
     const slate = c.slate, was = new Set(c.pending);
     let teams = teamsOf();
     if (!teams.length) { settle(null, teams, was); return null; }
     set("sending");
     let res;
     try {
-      res = await previewAndSend(c, teams, check);
+      res = await previewAndSend(c, teams, check, auto);
     } catch (e) {
-      if (e.code !== "CONSOLE_OLD_PULL") throw e;
+      if (e.code !== "CONSOLE_OLD_PULL" && e.code !== "CHANGED_ELSEWHERE") throw e; // a pull landed, or the disk's work moved (the other computer's came down): read again, which takes that work, and send once more from it
       await refreshInputs();
       teams = teamsOf();
-      res = await previewAndSend(c, teams, check);
+      res = await previewAndSend(c, teams, check, auto);
     }
     if (slate === c.slate) settle(res, teams, was);
     return res;
   }
   async function send() {
-    queued = false;
+    const auto = queuedAuto; // true only when every change waiting to go was started by no click of his
+    queued = false; queuedAuto = true;
     if (!c.model || !c.slate) return;
     c.cardStart = null; // any send, a pull's included, carries the card's held moves, so they can no longer be taken back
     for (const s of c.cardOwned ?? []) s.carried = true;
     const slate = c.slate;
     try {
-      await sendWith(() => sendTeams(c), null);
+      await sendWith(() => sendTeams(c), null, auto);
     } catch (e) {
       if (slate !== c.slate) return;
+      if (e.code === "SYNC_RUNNING") { set("waiting", { msg: "GitHub's data is coming down; your change goes to the board in a moment." }); clearTimeout(c.retryTimer); c.retryTimer = setTimeout(() => api.kick(auto), SYNC_WAIT_MS); return; } // one retry timer, like the usage wait
       if (e.code === "USAGE_LOADING") { set("waiting", { msg: "The usage table is still loading; your change goes to the board when it has." }); clearTimeout(c.retryTimer); c.retryTimer = setTimeout(() => api.kick(), USAGE_WAIT_MS); return; } // one retry timer, replaced by the next and cleared with the slate (console.js load)
       set("error", { msg: `Your last change has not reached the board: ${e.message}` });
       c.toast(`The board was not updated: ${e.message}`, "err");
@@ -190,7 +195,9 @@ export function createAutoApply(c, { refreshInputs, onState }) {
   }
 
   const api = {
-    kick() {
+    /** A change was made: send it. `auto`: no click of his started it (a load, a pull, the lineup bar's news); a click among the changes waiting makes the send his. */
+    kick(auto = false) {
+      queuedAuto = queuedAuto && auto === true;
       if (queued) return chain;
       queued = true;
       chain = chain.then(send);

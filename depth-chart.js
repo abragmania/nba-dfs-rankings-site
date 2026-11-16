@@ -29,7 +29,7 @@ const PLAYING = ["starter", "bench_plus", "bench"];
 const r3 = (x) => Math.round(x * 1000) / 1000;
 const f1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
 const KEYS = {
-  chart: ["schema", "team", "updated_at", "sources", "men", "starters", "bench", "oor", "injured", "positions"],
+  chart: ["schema", "team", "updated_at", "his_at", "sources", "men", "starters", "bench", "oor", "injured", "positions"],
   man: ["name", "positions", "role", "usual", "usual_basis", "history", "role_unconfirmed", "note", "last_season_team", "bbr_id", "fields"],
   starter: ["key", "backup", "backup_source"],
   field: ["source", "as_of"],

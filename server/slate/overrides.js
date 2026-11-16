@@ -124,12 +124,18 @@ export function readOverrides(slate) {
   };
 }
 
-/** Writes the slate's overrides atomically, stamping updated_at; throws OVERRIDES_INVALID on a bad record. Returns the record. */
-export function writeOverrides(slate, obj) {
+/**
+ * Writes the slate's overrides atomically, stamping updated_at; throws OVERRIDES_INVALID on a bad record. Returns the record. `his`: the time of his own click (ISO), which sets his_at; every other write (the
+ * server's resend and news apply) carries the his_at on disk unchanged, so only his clicks move it. The stamp is what the sync judges two computers' copies by (pullnow/resolve.js).
+ */
+export function writeOverrides(slate, obj, { his = null } = {}) {
   validateOverrides(obj);
+  let onDisk;
+  try { onDisk = JSON.parse(fs.readFileSync(overridesFile(slate), "utf8"))?.his_at; } catch { onDisk = undefined; }
+  const hisAt = his ?? obj.his_at ?? onDisk;
   const record = {
     slate, proj: { ...(obj.proj ?? {}) }, own: { ...(obj.own ?? {}) }, bump: { ...(obj.bump ?? {}) }, min: { ...(obj.min ?? {}) }, ...autoPart(obj.auto, obj),
-    stars: [...(obj.stars ?? [])], notes: { ...(obj.notes ?? {}) }, updated_at: new Date().toISOString(),
+    stars: [...(obj.stars ?? [])], notes: { ...(obj.notes ?? {}) }, ...(hisAt ? { his_at: hisAt } : {}), updated_at: new Date().toISOString(),
   };
   writeFileAtomic(overridesFile(slate), JSON.stringify(record, null, 1) + "\n");
   return record;

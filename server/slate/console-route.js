@@ -26,6 +26,10 @@ const answerFileError = (res, ctx, slate, e) => {
   return true;
 };
 
+/** Whether his write must wait: GitHub's data is coming down (ctx.syncBusy, the app's pullnow/sync-flag.js; the public site has none), so it never lands between the set-aside and the put-back. True after answering 409. */
+const syncRefusal = async (res, ctx) => { const busy = (await ctx.syncBusy?.()) ?? null; if (!busy) return false; ctx.fail(res, 409, "SYNC_RUNNING", busy); return true; };
+const hisNow = (ctx) => new Date(ctx.now()).toISOString(); // the time of his click: it becomes his_at on what he writes (scenarios.js, overrides.js)
+
 const usageState = async (ctx) => (ctx.usageTable ? ctx.usageTable() : USAGE_OFF);
 
 /** Inputs for a request, or null after answering 500 for a row that cannot be read (never older figures in its place). */
@@ -56,7 +60,7 @@ async function handleRead(req, res, slate, ctx) {
   ctx.benchPlus?.(slate, inputs); // each charted team's Bench+ suggestions (minutes/route.js consoleBenchPlus; app only, never throws)
   try {
     const file = readScenarios(slate);
-    ctx.send(res, 200, { inputs, scenarios: { teams: file.teams, applied: appliedView(file.applied, readOverrides(slate)) } });
+    ctx.send(res, 200, { inputs, scenarios: { teams: file.teams, applied: appliedView(file.applied, readOverrides(slate)), his_at: file.his_at ?? null } }); // his_at: the stamp the page sends back as `base`, so a stale page cannot write over a brought-down record
   } catch (e) {
     if (!answerFileError(res, ctx, slate, e)) throw e;
   }
@@ -70,20 +74,24 @@ async function handleSave(req, res, slate, ctx) {
   if (!read) return;
   const checked = checkTeamBody(read.body, slateData);
   if (!checked.ok) return ctx.fail(res, 400, "BAD_SCENARIOS", checked.message);
+  if (await syncRefusal(res, ctx)) return;
   try {
     const file = readScenarios(slate); // only after the body has arrived: nothing awaits from here to the write
-    writeScenarios(slate, { ...file, teams: { ...file.teams, [checked.team]: checked.record } });
-    ctx.send(res, 200, { saved: checked.team });
+    // A page that saw an older record than the disk holds (GitHub's data came down since, or another page wrote) must not write over it: it is told, takes the disk's work and says so.
+    if (Object.hasOwn(read.body, "base") && (read.body.base ?? null) !== (file.teams[checked.team]?.his_at ?? null)) return ctx.fail(res, 409, "CHANGED_ELSEWHERE", `${checked.team}'s saved work changed since this page read it (another page, or the other computer's work came down), so nothing was written over it.`);
+    // `auto`: no click of his started this save (a load, a pull, the lineup bar's news), so his_at is carried and only a click moves it.
+    const written = writeScenarios(slate, { ...file, teams: { ...file.teams, [checked.team]: checked.record } }, { his: read.body.auto === true ? null : hisNow(ctx), team: checked.team });
+    ctx.send(res, 200, { saved: checked.team, his_at: written.teams[checked.team]?.his_at ?? null, file_his_at: written.his_at ?? null });
   } catch (e) {
     if (!answerFileError(res, ctx, slate, e)) throw e;
   }
 }
 
 /** The record first, so a failed overrides write has nothing of its own to reverse; on that failure the record goes back as it was. The one path that writes a send, a press's or the server's news (news-apply.js). */
-export function writeApply(slate, file, overrides, rec, players) {
-  writeScenarios(slate, { ...file, applied: rec.applied });
+export function writeApply(slate, file, overrides, rec, players, his = null) {
+  writeScenarios(slate, { ...file, applied: rec.applied }, { his }); // his: the time of his own click, null for the server's resend and news (they carry his_at unchanged)
   try {
-    return writeOverrides(slate, applyChanges(overrides, rec.changes, players));
+    return writeOverrides(slate, applyChanges(overrides, rec.changes, players), { his });
   } catch (e) {
     writeScenarios(slate, file);
     throw e;
@@ -109,24 +117,28 @@ async function handleApply(req, res, slate, ctx) {
   if (!teams.ok) return ctx.fail(res, 400, "BAD_SCENARIO", teams.message);
   const players = basePlayers(slate, slateData, ctx.now(), ctx.ourPlayers).players; // the board's own figures (the engine's on), the same base the server's resend plans against
   const shown = () => (ctx.effectivePlayers ? ctx.effectivePlayers(res, slate, slateData) : mergeOverrides(players, readOverrides(slate))); // the answer's players are built as the board builds them (null after a 500)
+  if (read.body?.preview !== true && await syncRefusal(res, ctx)) return; // asked before the files are read: a send waits while GitHub's data comes down
+  const his = read.body?.auto === true ? null : hisNow(ctx); // `auto`: no click of his started this send (a load, a pull, the lineup bar's news), so his_at is carried; only a click moves it
   try {
     const file = readScenarios(slate), overrides = readOverrides(slate);
     const plan = planApply(inputs, file, overrides, players, checked.keys, teams.only);
     if (read.body.preview === true) return ctx.send(res, 200, { ...publicPlan(plan), usage: inputs.usage });
     if (inputs.usage.state === "loading") return ctx.fail(res, 409, "USAGE_LOADING", "The usage table is still loading; try again in a moment.");
     if (read.body.basis !== plan.basis) return ctx.fail(res, 409, "CONSOLE_MOVED", "The numbers moved since the preview, so nothing was sent. Look again.");
+    // A page that read the scenarios file before GitHub's data came down (or another page wrote) must not send over what is there now.
+    if (Object.hasOwn(read.body, "file_base") && (read.body.file_base ?? null) !== (file.his_at ?? null)) return ctx.fail(res, 409, "CHANGED_ELSEWHERE", "Your saved work changed since this page read it (another page, or the other computer's work came down), so nothing was sent.");
     if (!plan.changes.length && !plan.min_moves && !plan.flag_moves) {
-      if (plan.holds) writeScenarios(slate, { ...file, applied: applyRecord(plan, overrides, file.applied, new Date(ctx.now()).toISOString()).applied }); // no number moved, but the mark is held: only the record is written
+      if (plan.holds) writeScenarios(slate, { ...file, applied: applyRecord(plan, overrides, file.applied, new Date(ctx.now()).toISOString()).applied }, { his }); // no number moved, but the mark is held: only the record is written
       const held = plan.holds ? readScenarios(slate).applied : file.applied;
       const now = shown();
       if (!now) return;
-      return ctx.send(res, 200, { applied: appliedView(held, overrides), changed: 0, min_changed: 0, refused: plan.refused, players: now });
+      return ctx.send(res, 200, { applied: appliedView(held, overrides), changed: 0, min_changed: 0, refused: plan.refused, players: now, his_at: readScenarios(slate).his_at ?? null });
     }
     const rec = applyRecord(plan, overrides, file.applied, new Date(ctx.now()).toISOString());
-    const written = writeApply(slate, file, overrides, rec, players);
+    const written = writeApply(slate, file, overrides, rec, players, his);
     const now = shown();
     if (!now) return;
-    ctx.send(res, 200, { applied: appliedView(rec.applied, written), changed: plan.changes.length, min_changed: plan.min_moves, refused: plan.refused, players: now });
+    ctx.send(res, 200, { applied: appliedView(rec.applied, written), changed: plan.changes.length, min_changed: plan.min_moves, refused: plan.refused, players: now, his_at: his ?? file.his_at ?? null });
   } catch (e) {
     if (!answerFileError(res, ctx, slate, e)) throw e;
   }
@@ -139,13 +151,14 @@ async function handleReverse(req, res, slate, ctx) {
   const read = await ctx.readJson(req, res);
   if (!read) return;
   const players = basePlayers(slate, slateData, ctx.now(), ctx.ourPlayers).players;
+  if (read.body?.preview !== true && await syncRefusal(res, ctx)) return; // asked before the files are read
   try {
     const file = readScenarios(slate), overrides = readOverrides(slate);
     if (!file.applied) return ctx.fail(res, 409, "NOTHING_APPLIED", "Nothing has been applied on this slate.");
     const rev = reverseChanges(file.applied, overrides, players);
     if (read.body?.preview === true) return ctx.send(res, 200, { restored: rev.restored, restored_min: rev.restored_min, kept: rev.kept, at: file.applied.at });
-    writeOverrides(slate, applyChanges(overrides, rev.changes, players));
-    writeScenarios(slate, { ...file, applied: null });
+    writeOverrides(slate, applyChanges(overrides, rev.changes, players), { his: hisNow(ctx) });
+    writeScenarios(slate, { ...file, applied: null }, { his: hisNow(ctx) });
     const now = ctx.effectivePlayers ? ctx.effectivePlayers(res, slate, slateData) : mergeOverrides(players, readOverrides(slate));
     if (!now) return;
     ctx.send(res, 200, { applied: null, restored: rev.restored, restored_min: rev.restored_min, kept: rev.kept, players: now });

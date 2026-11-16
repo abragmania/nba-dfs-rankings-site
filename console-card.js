@@ -141,7 +141,8 @@ export function cardApi(c, ensure) {
     async autoApplyProposal(slate, proposal) {
       await ensure(slate);
       if (!c.model) throw new Error(c.loadError ?? "the console could not load");
-      return applyProposal(c, proposal);
+      c.autoMove = true; // no click of his started this: its saves and sends carry his_at (the server stamps only a click)
+      try { return applyProposal(c, proposal); } finally { c.autoMove = false; }
     },
     /** The send's state for the board's line (console-auto.js syncWords reads it). */
     syncState: () => ({ ...(c.sync ?? { state: "ok" }), pending: [...(c.pending ?? [])].sort() }),

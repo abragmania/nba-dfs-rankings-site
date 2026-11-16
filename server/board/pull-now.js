@@ -19,7 +19,8 @@ const listed = (a, n = 3) => `${a.slice(0, n).join(", ")}${a.length > n ? ` and 
 
 /** What the saving said, as clauses after the main sentence: not pushed and why, files carried along or left, the publish hook's own words. Pure. */
 function savedClauses(saved) {
-  if (!saved || saved.state === "none") return "";
+  if (!saved) return "";
+  if (saved.state === "none") return saved.note ? `; ${bare(saved.note)}` : ""; // nothing to commit, but a sync that kept or merged files both sides changed still says so (G62)
   const out = [];
   if (saved.state === "local") out.push(`saved on this computer, not pushed: ${bare(saved.why)}`);
   if (saved.state === "unknown") out.push(`push outcome unknown: ${bare(saved.why)}`);
@@ -288,6 +289,10 @@ function panelHtml(s) {
   const run = st.running ?? {};
   out.push("<h5>Most recent pull</h5>");
   out.push(st.last ? kv("When", dayHtml(etStamp(st.last.atMs) ?? "unknown")) + kv("Where", esc(whereWords(st.last.where))) + kv("Result", esc(resultWords(st.last.result))) + (st.last.why ? kv("Note", esc(st.last.why), "pnmiss") : "") : kv("When", "unknown", "pnmiss"));
+  if (st.syncNotes?.length) { // files both computers changed, resolved when GitHub's data came down (Pull now's, the lineup check's and sync_down's): whose copy stayed and where the other is kept; newest first
+    out.push("<h5>Last sync</h5>");
+    for (const e of st.syncNotes) { out.push(kv("When", dayHtml(etStamp(e.atMs) ?? "unknown"))); for (const l of e.lines) out.push(`<div class="pnread">${esc(l)}</div>`); }
+  }
   out.push("<h5>Running now</h5>");
   out.push(kv("This computer", run.local ? esc(`yes, since ${etClock(run.local.startedMs)}`) : s.running ? "yes, started here" : "no"));
   out.push(kv("Cloud job", run.cloud === "running" ? esc(`${run.cloudDetail ?? "running"}${run.cloudStartedMs ? `, started ${etClock(run.cloudStartedMs)}` : ""}`) : run.cloud === "idle" ? "no" : esc(`unknown (${run.cloudWhy ?? "GitHub could not be read"})`), run.cloud === "unknown" ? "pnmiss" : ""));

@@ -2,7 +2,7 @@
 // (console-engine.js: scenario Outs, pins, flips, usage-scaled DK/min), so only that maths can refresh them when a pull moves the engine's minutes. The browser did it (console-auto.js
 // resendChanged / requeueApplied); between a pull and the next page load the board served stale numbers (11-12: PHI 256.1 and TOR 257.7 minutes, engine 240). This file is the one
 // server copy: sendHeld is planApply + writeApply for each held team, the same two calls the page's send makes (console-route.js), used by applyNews (inside every pressed pull and the 5-minute
-// check) and by resendHeld (every other pull path: update_cycle.mjs, cloud_cycle.mjs). Nothing here re-implements the console's sums.
+// check) and by resendHeld (the by-hand cycle, tools/update_cycle.mjs; the cloud runner never resends). Nothing here re-implements the console's sums. Every write here carries his_at (the stamp only his clicks move) unchanged, in scenarios.js writeScenarios and overrides.js writeOverrides.
 // Every pass writes data/slates/<slate>/resend.json (what it did, or what blocked it and why) so the board foot can name held numbers that were not refreshed (G62/G64).
 import fs from "../../site/shim/fs.js";
 import path from "../../site/shim/path.js";

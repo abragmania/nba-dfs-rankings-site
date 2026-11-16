@@ -87,7 +87,7 @@ export function readSlateCharts(slate, teams, { lock = null, nowMs = Date.now(),
 /**
  * The slate's chart copies, written while it is unlocked and never once it is locked or its lock cannot be read. `mode`: "refresh" (the desktop: the copy
  * becomes today's live chart, and a team whose live chart is gone loses its copy, so a deleted chart is no chart and the old copy is never revived) or
- * "create" (the cloud runner: only a missing copy is made, an existing one is never overwritten or removed, so the desktop's copy stays authoritative).
+ * "create" (test-only: only a missing copy is made, an existing one is never overwritten or removed; the cloud runner uses "refresh" too, since it keeps the charts current itself).
  * Never throws: a chart that cannot be read or a copy that cannot be written is returned as a problem and the live chart is untouched.
  * Returns { written: [TEAM], removed: [TEAM], problems: { TEAM: text }, locked, lock_problem }.
  */
@@ -149,11 +149,11 @@ function refreshOpenSlates(team, chart, nowMs, root) {
 }
 
 /** Saves an edited chart for `team`, the old version going to history/, and refreshes its copy in every unlocked slate that carries the team. `at`: the save's ISO time. Returns { saved, kept, copies, copy_problems } (kept: the history file, or null for a first save). */
-export function saveChart(team, chart, at, root = dataDir()) {
+export function saveChart(team, chart, at, root = dataDir(), { his = null } = {}) {
   if (!TEAM.test(team)) throw new DepthError("DEPTH_BAD_TEAM", "A team code looks like ATL.");
   const why = badChart(chart) ?? (chart.team === team ? null : `the chart is for ${chart.team}, not ${team}`);
   if (why) throw new DepthError("DEPTH_INVALID", why);
-  const out = { ...chart, updated_at: at };
+  const out = { ...chart, updated_at: at, ...(his ? { his_at: his } : {}) }; // his: the time of his own save (the POST route); the depth refresh passes none, so a chart's his_at is carried unchanged and only his clicks move it
   const file = chartFile(team, root);
   let kept = null;
   if (fs.existsSync(file)) {
@@ -189,8 +189,11 @@ async function handle(req, res, team, ctx) {
   if (refused) return ctx.fail(res, refused.status, refused.code, refused.message);
   const read = await ctx.readJson(req, res);
   if (!read) return;
+  const busy = (await ctx.syncBusy?.()) ?? null; // GitHub's data is coming down: his save waits (409), so it never lands between the set-aside and the put-back
+  if (busy) return ctx.fail(res, 409, "SYNC_RUNNING", busy);
   try {
-    ctx.send(res, 200, saveChart(team, read.body?.chart, new Date(ctx.now()).toISOString()));
+    const at = new Date(ctx.now()).toISOString();
+    ctx.send(res, 200, saveChart(team, read.body?.chart, at, undefined, { his: at }));
   } catch (e) {
     if (e instanceof DepthError) return ctx.fail(res, e.code === "DEPTH_INVALID" || e.code === "DEPTH_BAD_TEAM" ? 400 : 500, e.code, e.message);
     throw e;

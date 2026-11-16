@@ -35,7 +35,7 @@ function touch(c, before, { track = false } = {}) {
 }
 const states = (c) => Object.fromEntries(Object.entries(c.model.ST).map(([code, S]) => [code, teamState(S)]));
 /** The send after a step, unless the caller holds it (the player card sends with its own check, console-card.js). */
-const kick = (c) => { if (c.holdSend) return; c.cardStart = null; for (const s of c.cardOwned ?? []) s.carried = true; c.auto?.kick(); }; // anything sent from here on carries the card's moves, so they can no longer be taken back as unsent
+const kick = (c) => { if (c.holdSend) return; c.cardStart = null; for (const s of c.cardOwned ?? []) s.carried = true; c.auto?.kick(c.autoMove === true); }; // anything sent from here on carries the card's moves, so they can no longer be taken back as unsent
 
 export function pushHist(c, text) {
   const G = c.G;
@@ -69,8 +69,16 @@ function ripple(c, before) {
   }
 }
 
-/** Saves every team whose work changed, one write at a time and in order. A failed save stays on show until a later one works, and refuses Apply's preview. */
-export function saveDirty(c) {
+/** How long a save or a send waits while GitHub's data is being brought down (the server answers 409 SYNC_RUNNING) before it is tried again. */
+export const SYNC_WAIT_MS = 4000;
+
+/**
+ * Saves every team whose work changed, one write at a time and in order. A failed save stays on show until a later one works, and refuses Apply's preview.
+ * `auto`: no click of his started this save (a load, a pull, the lineup bar's news; c.autoMove marks those), so the server carries his_at and only a click moves it.
+ * Each save names the team's his_at as this page last saw it (`base`): the server refuses with CHANGED_ELSEWHERE when the disk's differs, and the page takes the other work (c.onConflict) instead of writing over it.
+ * A SYNC_RUNNING refusal (GitHub's data is coming down) is tried again after SYNC_WAIT_MS, the change kept.
+ */
+export function saveDirty(c, auto = c.autoMove === true) {
   const name = c.slate;
   for (const [code, S] of Object.entries(c.model.ST)) {
     const text = JSON.stringify(recordOf(S));
@@ -79,11 +87,27 @@ export function saveDirty(c) {
     c.saveGen = (c.saveGen ?? 0) + 1; // a save of his own is under way: a read of the server's records during it is not comparable (console.js refresh)
     c.saveQueue = c.saveQueue.then(async () => {
       try {
-        await c.api(`/api/slate/${encodeURIComponent(name)}/scenarios`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ team: code, record: JSON.parse(text) }) });
+        const out = await c.api(`/api/slate/${encodeURIComponent(name)}/scenarios`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ team: code, record: JSON.parse(text), base: c.serverHisAt?.[code] ?? null, ...(auto ? { auto: true } : {}) }) });
         (c.serverSeen ??= {})[code] = canonRecord(JSON.parse(text)); // what the server holds for the team is now what this page wrote
+        if (out && name === c.slate) { (c.serverHisAt ??= {})[code] = out.his_at ?? null; if (out.file_his_at !== undefined) c.serverFileHisAt = out.file_his_at; }
         if (c.saveErrs[code] && name === c.slate) { delete c.saveErrs[code]; c.drawBar(); }
       } catch (e) {
-        if (name === c.slate) { c.saveErrs[code] = `${code} not saved: ${e.message}`; c.lastSaved[code] = "unsaved"; c.drawBar(); }
+        if (name !== c.slate) return;
+        if (e.code === "CHANGED_ELSEWHERE") { // the disk holds work this page has not seen: this page takes it (and says so) instead of writing over it
+          c.lastSaved[code] = text;
+          (c.conflicted ??= new Set()).add(code);
+          c.toast(`${code}'s saved work changed elsewhere (the other computer or another page), so your last change on it was not written over it.`, "notice");
+          c.onConflict?.(code);
+          return;
+        }
+        if (e.code === "SYNC_RUNNING") { // GitHub's data is coming down: one timer, then the save is tried again; a send waits for it (console-auto.js previewAndSend)
+          c.lastSaved[code] = "unsaved"; c.saveWaiting = true;
+          clearTimeout(c.saveRetry);
+          c.saveRetry = setTimeout(() => { c.saveWaiting = false; if (name === c.slate) { saveDirty(c, auto); c.auto?.kick(auto); } }, SYNC_WAIT_MS);
+          c.drawBar();
+          return;
+        }
+        c.saveErrs[code] = `${code} not saved: ${e.message}`; c.lastSaved[code] = "unsaved"; c.drawBar();
         c.toast(`Could not save the console: ${e.message}`, "err");
       }
     });

@@ -5,7 +5,7 @@
 import { esc, tipWhen } from "./board-util.js";
 import { buildModel, buildTeam, canonRecord, recordOf, refreshTeams, savedBehind, typedText } from "./console-model.js";
 import { depthHtml } from "./console-depth.js";
-import { dropMark, firstPlaying, jumpTeam, pushHist, redo, setPin, setSource, toggleOut, toggleStarter, undo } from "./console-moves.js";
+import { dropMark, firstPlaying, jumpTeam, pushHist, redo, saveDirty, setPin, setSource, toggleOut, toggleStarter, undo } from "./console-moves.js";
 import { cardApi, lineupViewOf } from "./console-card.js";
 import { createAutoApply, createPullReads, mayAutoSend, requeueApplied, requeueNews, resendChanged, resultSigs } from "./console-auto.js";
 import { PIN_MAX } from "./override-limits.js";
@@ -112,6 +112,8 @@ async function load(c, name) {
     c.model = buildModel(c.inputs, out.scenarios.teams, out.scenarios.applied?.keys);
     c.lastSaved = {};
     c.serverSeen = Object.fromEntries(Object.keys(c.model.ST).map((code) => [code, canonRecord(out.scenarios.teams[code])])); // what the server held for each team when this page last looked or wrote
+    c.serverHisAt = Object.fromEntries(Object.keys(c.model.ST).map((code) => [code, out.scenarios.teams[code]?.his_at ?? null])); // each team's his_at as read: sent as `base` with every save, so a stale page cannot write over a brought-down record
+    c.serverFileHisAt = out.scenarios.his_at ?? null; c.conflicted = new Set(); c.saveWaiting = false;
     for (const code of Object.keys(c.model.ST)) c.lastSaved[code] = savedBehind(out.scenarios.teams[code], c.model.ST[code]) ? "unsaved" : JSON.stringify(recordOf(c.model.ST[code])); // work rebased on a newer pull, or cleaned of old copies, is written on the next save
     const G = c.G, first = Object.keys(c.model.TEAMS)[0] ?? null;
     Object.assign(G, { cur: first, view: "team", editing: false, modal: null, pick: null, roleMoves: null, hist: [], hi: -1, focus: first ? { team: first, id: firstPlaying(c, first), k: "m" } : null });
@@ -120,7 +122,7 @@ async function load(c, name) {
     render(c);
     readNews(c).then(() => { if (c.on && name === c.slate) render(c); }); // the strip says "reading..." until the read lands; readNews never rejects
     const news = requeueNews(c), applied = requeueApplied(c);
-    if (news || applied) c.auto.kick(); // a news change whose send never landed, or a pull since the last send, reaches the board now
+    if (news || applied) c.auto.kick(true); // (no click of his started it: his_at is carried) // a news change whose send never landed, or a pull since the last send, reaches the board now
     else c.auto.settleNow(); // old work this page does not send (a locked or older slate, a mark nothing moved) is said in the header, not "up to date"
     watchUsage(c);
   } catch (e) {
@@ -141,6 +143,7 @@ async function refresh(c) {
     const was = resultSigs(c);
     takeInputs(c, out);
     refreshTeams(c.model, c.inputs);
+    c.serverFileHisAt = out.scenarios.his_at ?? null; // his saves have landed (saveQueue above), so the file's stamp is the base for the next send
     const others = c.saveGen === gen ? takeOthersWork(c, out) : []; // a save of his own during the read makes the comparison unsafe, so it waits for the next one
     resendChanged(c, was); // a pull that moved a team the board holds is sent without a click
     render(c);
@@ -155,12 +158,16 @@ async function refresh(c) {
 export function takeOthersWork(c, out) {
   const taken = [];
   for (const [code, input] of Object.entries(c.inputs.teams)) {
-    const seen = c.serverSeen?.[code], now = canonRecord(out.scenarios.teams[code]);
+    const seen = c.serverSeen?.[code], now = canonRecord(out.scenarios.teams[code]), conflicted = c.conflicted?.has(code) === true; // conflicted: the server refused this page's save of the team (CHANGED_ELSEWHERE)
     (c.serverSeen ??= {})[code] = now;
-    if (seen === undefined || seen === now || c.lastSaved[code] === "unsaved") continue; // nobody else wrote, or his own write is still to come
+    if (seen === undefined || seen === now || (c.lastSaved[code] === "unsaved" && !conflicted)) { // nobody else wrote, or his own write is still to come
+      if (seen !== undefined && seen === now) { (c.serverHisAt ??= {})[code] = out.scenarios.teams[code]?.his_at ?? null; if (c.conflicted?.delete(code)) c.lastSaved[code] = "unsaved"; } // only the stamp moved: his work is saved again on the new base
+      continue;
+    }
     const { T, S } = buildTeam(input, out.scenarios.teams[code], out.scenarios.applied?.keys?.[code], defaultSourceOf(c.inputs));
     c.model.TEAMS[code] = T; c.model.ST[code] = S;
     c.lastSaved[code] = savedBehind(out.scenarios.teams[code], S) ? "unsaved" : JSON.stringify(recordOf(S));
+    (c.serverHisAt ??= {})[code] = out.scenarios.teams[code]?.his_at ?? null; c.conflicted?.delete(code);
     c.touched?.delete(code); c.pending?.delete(code);
     taken.push(code);
   }
@@ -229,6 +236,8 @@ export function createConsole({ el, api, toast, colourOf, onPlayers, onWork, new
     render: () => render(c), drawBar: () => render(c), focusCell: () => {},
   };
   c.auto = createAutoApply(c, { refreshInputs: () => refresh(c), onState: () => { if (c.on) render(c); else c.onWork?.(); } }); // the board shows the send's state too
+  // A save the server refused as CHANGED_ELSEWHERE (console-moves.js saveDirty): read the disk's work now, which this page takes for that team, and save what is still its own.
+  c.onConflict = () => { clearTimeout(c.conflictTimer); c.conflictTimer = setTimeout(async () => { await refresh(c); saveDirty(c); }, 0); };
   el.addEventListener("click", (e) => onClick(c, e));
   el.addEventListener("change", (e) => { if (e.target.matches?.("input.fin")) commitBox(c, e.target); });
   el.addEventListener("focusout", () => setTimeout(() => { if (c.redrawLater && c.on) render(c); }, 0)); // the redraw that waited for him to finish typing
@@ -262,7 +271,7 @@ export function createConsole({ el, api, toast, colourOf, onPlayers, onWork, new
       c.pullName = name;
       await (c.pullReads ??= createPullReads({
         read: () => (c.pullName !== c.slate || !c.model ? ensure(c, c.pullName) : refresh(c)),
-        kick: () => { if (mayAutoSend(c.inputs)) c.auto.kick(); },
+        kick: () => { if (mayAutoSend(c.inputs)) c.auto.kick(true); }, // a pull's kick: no click of his
         pending: () => c.pending ?? new Set(),
       }))();
       return !c.loadError && Boolean(c.model);
