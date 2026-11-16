@@ -14,6 +14,8 @@ export class PlayerLogError extends Error {}
 export const withSeasonFigures = never("The season figures reader");
 export const seasonUsageTable = never("The season usage reader");
 export const handlePlayerUsage = never("The usage lookup");
+/** The started column's box score join reads the stored boxes: app only (the site's card logs are baked with it at publish). */
+export const logWithStarts = never("The started column box score join");
 export const handlePullStatus = never("The app's pull status (the site's status block reads GitHub and its own baked files, site-src/site-pull.js)");
 /** Our minutes engine runs at publish, not in the browser: its routes are unknown paths (404) here, and the board's figures are the ones baked in site.json (static-api.js hands makeServer an ourProjection). */
 export const minutesHandler = () => null;

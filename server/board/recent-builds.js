@@ -35,11 +35,26 @@ export function newBuild(res, mode, now = Date.now(), id = newBuildId(now)) {
   };
 }
 
+/** The most of a build's note the server keeps (slate/builds.js checks it). */
+const NOTE_MAX = 600;
+/**
+ * A note cut to NOTE_MAX characters from the middle, keeping its last sentence (the result's foot notes, such as the ownership
+ * no-figure count, come last) and marking the cut with "…"; a last sentence too long to keep whole leaves the head, cut and marked.
+ */
+export function cutNote(note) {
+  const t = String(note);
+  if (t.length <= NOTE_MAX) return t;
+  const at = t.lastIndexOf(". ");
+  const last = at >= 0 ? t.slice(at + 2) : "";
+  if (!last || last.length > NOTE_MAX - 3) return `${t.slice(0, NOTE_MAX - 1)}…`;
+  return `${t.slice(0, NOTE_MAX - 2 - last.length)}… ${last}`;
+}
+
 /** A build as the server stores it: each man once, in `rows`, however many lineups hold him. */
 export function toRecord(b) {
   const rows = {};
   for (const l of b.lineups) for (const m of l.men ?? []) if (m?.dk_id != null) rows[m.dk_id] = compactRow(m);
-  return { id: b.id, mode: b.mode, built_at: b.built_at, lineups: b.lineups.map((l) => ({ ids: [...l.ids] })), rows, skipped: (b.skipped ?? []).slice(0, 300).map((x) => (typeof x === "string" ? x.slice(0, 80) : x)), note: b.note == null ? null : String(b.note).slice(0, 600), partial: b.partial ?? null, stamps: b.stamps?.pullAt ? { pullAt: { key: b.stamps.pullAt.key ?? null, label: b.stamps.pullAt.label ?? null } } : null };
+  return { id: b.id, mode: b.mode, built_at: b.built_at, lineups: b.lineups.map((l) => ({ ids: [...l.ids] })), rows, skipped: (b.skipped ?? []).slice(0, 300).map((x) => (typeof x === "string" ? x.slice(0, 80) : x)), note: b.note == null ? null : cutNote(b.note), partial: b.partial ?? null, stamps: b.stamps?.pullAt ? { pullAt: { key: b.stamps.pullAt.key ?? null, label: b.stamps.pullAt.label ?? null } } : null };
 }
 
 /** A stored record as the page draws it: each lineup's men from the stored rows (a man with no row is left out of `men`; the

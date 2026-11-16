@@ -2,7 +2,7 @@
 // optimizer), the built lineups as cards, Save working lineup with the saved cards, and the DraftKings upload file.
 // Every slot placement and lineup check goes through slots.js (the one matcher and validator). A missing figure is an em
 // dash with a title, never zero (RULES R1). The pure helpers (totals, dkCsv, lateSwapOrder, pageWindow) are tested in node.
-// The settings and low-owned rules are in settings-panel.js, the saved lineups in saved-panel.js, late swap mode in
+// The settings and ownership rules are in settings-panel.js, the saved lineups in saved-panel.js, late swap mode in
 // lateswap-panel.js, the working lineup (row and slot clicks, Build keeping the hand-picked men) in work-panel.js.
 import { esc, ICON, keepFocus } from "./board-util.js";
 import { SLOTS, arrangeForLateSwap, checkLineup } from "./slots.js";
@@ -418,13 +418,15 @@ function onClick(X, e) {
     // Kept on the Build's own result, so each mode has its own and a new Build starts with every card on show.
     case "skipped": return set({ showSkipped: !P.showSkipped });
     case "csv": return download(X);
-    // One small form open at a time (team override or low-owned rule), so each form's message has one place to go.
+    // One small form open at a time (team override or ownership rule), so each form's message has one place to go.
     case "ovopen": return set({ ovOpen: true, ovMsg: null, ovForm: {}, lrOpen: false, lrMsg: null, lrForm: {} });
     case "ovcancel": return set({ ovOpen: false, ovMsg: null, ovForm: {}, lrOpen: false, lrMsg: null, lrForm: {} });
     case "ovadd": return addOverride(X);
     case "ovdel": return removeOverride(X, d.team, d.b);
     case "lropen": return set({ lrOpen: true, lrMsg: null, lrForm: {}, ovOpen: false, ovMsg: null, ovForm: {} });
     case "lradd": return addLowRuleFromForm(X);
+    case "lrdir": P.lrForm = { ...P.lrForm, dir: d.v }; return render(X); // the form's at least / at most toggle
+    case "lrside": P.lrForm = { ...P.lrForm, side: d.v }; return render(X); // and its under / over toggle
     case "lrdel": return setLowRules(X, P.raw.GPP.lowRules.filter((_, i) => i !== +d.i));
     case "varsw": P.raw.GPP.varOn = d.v; saveRaw(X.tryStore, "GPP", P.raw.GPP, X.ctx().name); return render(X);
   }
@@ -439,7 +441,7 @@ function setLowRules(X, rules) {
 function addLowRuleFromForm(X) {
   const { P, el } = X;
   const val = (k) => el.querySelector(`[data-lr="${k}"]`).value;
-  const out = addLowRule(P.raw.GPP.lowRules, val("count"), val("pct"));
+  const out = addLowRule(P.raw.GPP.lowRules, val("count"), val("pct"), P.lrForm?.dir ?? "min", P.lrForm?.side ?? "under");
   if (out.msg) { P.lrMsg = out.msg; const m = el.querySelector(".ovmsg"); if (m) m.textContent = out.msg; return; }
   P.lrOpen = false; P.lrMsg = null; P.lrForm = {};
   setLowRules(X, out.rules);
@@ -465,6 +467,7 @@ function setSlate(X, name, view = null) {
   if (X.P.ls) { X.P.ls = { ...X.P.ls, slots: new Array(N).fill(null), userPins: [], res: null, msg: null }; refresh(X); }
   if (view) Object.assign(X.P, { mode: view.mode ?? X.P.mode, expSort: view.expSort, expPos: view.expPos });
   const ovRead = readOverridesByMode(X.tryStore, name), limRead = readLimits(X.tryStore, name), rawBad = MODES.filter((m) => readRaw(X.tryStore, m, name).unreadable);
+  X.P.rulesDropped = readRaw(X.tryStore, "GPP", name).rulesDropped; // saved ownership rules that could not be used: said under the Ownership line
   Object.assign(X.P, { raw: Object.fromEntries(MODES.map((m) => [m, pinRaw(X.tryStore, m, name)])), svNames: loadSavedNames(X.tryStore, name), svEdit: null, ovByMode: ovRead.byMode, ovBad: ovRead.bad, limits: limRead.limits, limBad: limRead.unreadable, rawBad, results: {}, swap: null, lt: freshLt(), spots: {}, spotsReady: false, spotsError: null, spotsReading: null, spotQueue: null, spotPending: 0, spotGen: (X.P.spotGen ?? 0) + 1, spotMenu: null, spotWarn: null, spotMove: null, spotUndo: null, orderWarn: null, builds: [], buildsReady: false, buildsError: null, buildsReading: null, buildQueue: null, buildGen: (X.P.buildGen ?? 0) + 1, cmp: null, loaded: null, saved: [], savedPick: new Set(), savedError: null, savedReady: false, savedReading: null, running: false, showSkipped: false, ovOpen: false, ovMsg: null, lrOpen: false, lrMsg: null, ...freshWork() });
   render(X);
   readSaved(X, name, own);

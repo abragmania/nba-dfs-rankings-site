@@ -1,17 +1,18 @@
 // The optimizer panel's settings (panel.js draws them in its settings block): reading the typed settings into the
 // optimizer's settings, the per-viewer storage of what was typed, the team overrides read from storage, and the
-// low-owned rules (GPP only). Everything here is pure or touches browser storage only; the clicks live in panel.js.
+// ownership rules (GPP only; own-rules.js). Everything here is pure or touches browser storage only; the clicks live in panel.js.
 import { esc } from "./board-util.js";
 import { SLOTS, DEFAULT_COUNT, MAX_COUNT } from "./slots.js";
 import { readLimits, sentLimits, probeJson, ABSENT } from "./row-limits.js";
+import { toRule, ruleWords, ruleChip, ownConflict, sameRule } from "./own-rules.js";
 
 const N = SLOTS.length;
 // No min salary setting (Adam's ruling, 2026-10-29): an older stored minSalary is ignored because FIELDS leaves it out.
 // Standard D9: 5 lineups, min unique 1, the per-team cap DraftKings' own rule (none short of the whole lineup), nothing on that blocks a build.
 const DEFAULTS = { count: String(DEFAULT_COUNT), minUnique: "1", maxTotalOwn: "", teamMin: "0", teamMax: String(N), varOn: "", varPct: "10" };
 const FIELDS = Object.keys(DEFAULTS);
-// Low-owned rules (Adam, 2026-10-29: several rules working together, on one line of chips). Four chips plus "+ rule" fit
-// the 640px panel on one line; a fifth would wrap, so the panel stops at four (the optimizer itself takes up to eight).
+// Ownership rules (Adam, 2026-10-29: several rules working together, on one line of chips; 11-16: at least or at most, under or over).
+// Four chips plus "+ rule" fit the 640px panel on one line; a fifth would wrap, so the panel stops at four (the optimizer takes eight).
 export const MAX_LOW_RULES = 4;
 /** The team overrides' stored map also holds the game limits, keyed by game ("ATL@WAS"); a team code has no @. */
 const isGameKey = (k) => k.includes("@");
@@ -38,8 +39,8 @@ export function liveOverrides(overrides, games) {
 
 /**
  * Reads the settings as typed (strings) into the optimizer's settings. Returns { settings, bad } where bad maps a field to
- * its message; a bad field is never sent. Commas are allowed in numbers ("48,000"). Max total own and Low-owned are GPP only;
- * the low-owned rules come as raw.lowRules, a list of {count, underPct} already checked when added or loaded.
+ * its message; a bad field is never sent. Commas are allowed in numbers ("48,000"). Max total own and Ownership are GPP only;
+ * the ownership rules come as raw.lowRules, a list of own-rules.js rules already checked when added or loaded, sent as lowOwned.
  */
 export function readSettings(raw, mode, overrides = {}) {
   const bad = {};
@@ -78,9 +79,9 @@ export function readSettings(raw, mode, overrides = {}) {
   if (mode === "GPP") {
     const own = take("maxTotalOwn", "Max total own", 0, N * 100, { optional: true, decimal: true });
     if (own != null) settings.maxTotalOwn = own;
-    // The rules were checked when added or loaded (lowRuleOk); every one binds at once.
-    const rules = Array.isArray(raw?.lowRules) ? raw.lowRules.filter(lowRuleOk) : [];
-    if (rules.length) settings.lowOwned = rules.map((r) => ({ count: r.count, underPct: r.underPct }));
+    // The rules were checked when added or loaded (panelRule); every one binds at once.
+    const rules = Array.isArray(raw?.lowRules) ? raw.lowRules.map(panelRule).filter(Boolean) : [];
+    if (rules.length) settings.lowOwned = rules;
     // The variance switch (GPP only): on with 0 is the same as off, so nothing is sent.
     if (raw?.varOn === "1") {
       const pct = take("varPct", "Variance", 0, 100, { decimal: true });
@@ -98,8 +99,9 @@ export function readSettings(raw, mode, overrides = {}) {
 export const loadRaw = (tryStore, mode, slate = null) => readRaw(tryStore, mode, slate).raw;
 
 /**
- * { raw, unreadable }. Absent (getItem null) gives the defaults. An entry that cannot
+ * { raw, unreadable, rulesDropped }. Absent (getItem null) gives the defaults. An entry that cannot
  * be read gives the defaults and unreadable true, never another slate's settings in its place; the panel says so.
+ * rulesDropped: how many stored ownership rules (GPP) could not be used and are not applied.
  */
 export function readRaw(tryStore, mode, slate = null) {
   let unreadable = false, saved = null;
@@ -116,11 +118,12 @@ export function readRaw(tryStore, mode, slate = null) {
   // from here on, where a 1 was typed).
   if (saved.count === "1" && !saved.d9) raw.count = DEFAULTS.count;
   raw.d9 = true;
-  if (mode === "GPP") raw.lowRules = readLowRules(saved);
-  return { raw, unreadable };
+  let rulesDropped = 0;
+  if (mode === "GPP") ({ rules: raw.lowRules, dropped: rulesDropped } = readLowRules(saved));
+  return { raw, unreadable, rulesDropped };
 }
 
-/** Writes a mode's typed settings (and, in GPP, its low-owned rules) back to storage: a per-viewer convenience. */
+/** Writes a mode's typed settings (and, in GPP, its ownership rules) back to storage: a per-viewer convenience. */
 export function saveRaw(tryStore, mode, raw, slate = null) {
   if (!slate) { console.warn(`${mode} settings not saved: no slate given`); return; }
   tryStore(() => localStorage.setItem(`nbaboard.opt.${mode}.${slate}`, JSON.stringify(raw)));
@@ -134,54 +137,66 @@ export function pinRaw(tryStore, mode, slate) {
   return raw;
 }
 
-/** A usable low-owned rule: at least `count` (1 to 8) men strictly under `underPct` (0 to 100) percent owned. */
-export function lowRuleOk(r) {
-  return r != null && typeof r === "object" && Number.isInteger(r.count) && r.count >= 1 && r.count <= N
-    && typeof r.underPct === "number" && Number.isFinite(r.underPct) && r.underPct >= 0 && r.underPct <= 100;
+/** A rule the panel can hold, in its one shape (own-rules.js; the older { count, underPct } reads as at least, under), or null:
+ *  an at least of 1 to 8 men or an at most of 0 to 8, on a line from 0 to 100 percent. */
+function panelRule(r) {
+  const rule = toRule(r);
+  if (!rule || rule.count > N || (rule.dir === "min" && rule.count < 1) || rule.pct > 100) return null;
+  return rule;
 }
 
-/** The stored low-owned rules: the list, or an older single rule (lowCount and lowPct as typed) moved into one. A malformed
- *  rule is left out with a console warning; an older empty count or count of 0 meant no rule (no warning). */
+/** The stored ownership rules: { rules, dropped }. The list, or an older single rule (lowCount and lowPct as typed) moved into one. A
+ *  malformed rule, or one past the panel's four, is left out and counted in dropped (global G62: settingsHtml and refillState say so),
+ *  with a console warning; a stored value that is not a list counts as one. An older empty count or count of 0 meant no rule. */
 function readLowRules(saved) {
   const warn = (what) => console.warn(`nbaboard.opt.GPP: ${what}; ignored`);
   if (saved.lowRules != null) {
-    if (!Array.isArray(saved.lowRules)) { warn("lowRules is not a list"); return []; }
-    const good = saved.lowRules.filter(lowRuleOk);
-    if (good.length < saved.lowRules.length) warn(`${saved.lowRules.length - good.length} malformed low-owned rule(s)`);
-    if (good.length > MAX_LOW_RULES) warn(`low-owned rules past the first ${MAX_LOW_RULES}`);
-    return good.slice(0, MAX_LOW_RULES);
+    if (!Array.isArray(saved.lowRules)) { warn("lowRules is not a list"); return { rules: [], dropped: 1 }; }
+    const good = saved.lowRules.map(panelRule).filter(Boolean);
+    if (good.length < saved.lowRules.length) warn(`${saved.lowRules.length - good.length} malformed ownership rule(s)`);
+    if (good.length > MAX_LOW_RULES) warn(`ownership rules past the first ${MAX_LOW_RULES}`);
+    const rules = good.slice(0, MAX_LOW_RULES);
+    return { rules, dropped: saved.lowRules.length - rules.length };
   }
   const text = (v) => (typeof v === "string" ? v.replace(/,/g, "").trim() : "");
   const c = text(saved.lowCount), u = text(saved.lowPct);
-  if (c === "" || c === "0") return []; // no count (empty or 0) was no rule before, whatever the % field held
-  const rule = { count: /^\d+$/.test(c) ? +c : NaN, underPct: /^\d+(\.\d+)?$/.test(u) ? +u : NaN };
-  if (lowRuleOk(rule)) return [rule];
+  if (c === "" || c === "0") return { rules: [], dropped: 0 }; // no count (empty or 0) was no rule before, whatever the % field held
+  const rule = panelRule({ count: /^\d+$/.test(c) ? +c : NaN, underPct: /^\d+(\.\d+)?$/.test(u) ? +u : NaN });
+  if (rule) return { rules: [rule], dropped: 0 };
   warn(`the older low-owned rule (${c || "no count"} under ${u || "no %"}) is malformed`);
-  return [];
+  return { rules: [], dropped: 1 };
 }
 
-/** Adds a rule typed in the form (count and under-% as text). { rules } with the rule added, or { msg } saying why not. */
-export function addLowRule(rules, countText, pctText) {
+/**
+ * Adds a rule typed in the form: dir "min" (at least) or "max" (at most), side "under" or "over", count and % as text. { rules } with
+ * the rule added, or { msg } saying why not; a rule that plainly contradicts one already on is refused naming both (own-rules.js).
+ */
+export function addLowRule(rules, countText, pctText, dir = "min", side = "under") {
   const c = String(countText ?? "").replace(/,/g, "").trim(), u = String(pctText ?? "").replace(/,/g, "").trim();
-  const rule = { count: /^\d+$/.test(c) ? +c : NaN, underPct: /^\d+(\.\d+)?$/.test(u) ? +u : NaN };
-  if (!Number.isInteger(rule.count) || rule.count < 1 || rule.count > N) return { msg: `The count is a whole number from 1 to ${N}.` };
-  if (!lowRuleOk(rule)) return { msg: "The ownership line is a percentage from 0 to 100." };
-  if (rules.some((r) => r.count === rule.count && r.underPct === rule.underPct)) return { msg: "That rule is already on." };
-  if (rules.length >= MAX_LOW_RULES) return { msg: `At most ${MAX_LOW_RULES} low-owned rules.` };
-  return { rules: [...rules, rule] };
+  const count = /^\d+$/.test(c) ? +c : NaN, pct = /^\d+(\.\d+)?$/.test(u) ? +u : NaN;
+  if (dir === "min" && !(count >= 1)) return { msg: `The count is a whole number from 1 to ${N}.` };
+  if (dir === "max" && !(count >= 0 && count <= N)) return { msg: `The count is a whole number from 0 to ${N}.` };
+  if (!(pct >= 0 && pct <= 100)) return { msg: "The ownership line is a percentage from 0 to 100." };
+  const rule = toRule({ dir, side, count, pct });
+  if (!rule) return { msg: "Choose at least or at most, and under or over." };
+  if (rules.some((r) => sameRule(r, rule))) return { msg: "That rule is already on." };
+  if (rules.length >= MAX_LOW_RULES) return { msg: `At most ${MAX_LOW_RULES} ownership rules.` };
+  const clash = ownConflict([...rules, rule]);
+  return clash ? { msg: clash } : { rules: [...rules, rule] };
 }
 
-/** The Low-owned line (GPP only): a chip per rule with × to remove, "+ rule", and the add form when open. */
+/** The Ownership line (GPP only): a chip per rule with × to remove, "+ rule", and the add form when open, with its two toggles. */
 export function lowOwnedHtml(rules, { open = false, msg = null, typed = {} } = {}) {
   const box = (k) => (typed[k] ? ` value="${esc(typed[k])}"` : ""); // what he has typed in the open form survives a redraw
-  const pct = (v) => `${v}%`;
-  // The rule counts a man strictly under the line, so the chip, its titles and the form all say "under" (<).
-  const chips = rules.map((r, i) => `<span class="ovc" title="At least ${r.count} men under ${pct(r.underPct)} owned">≥${r.count} &lt;${pct(r.underPct)}<button data-op="lrdel" data-i="${i}" title="Remove at least ${r.count} under ${pct(r.underPct)}">×</button></span>`).join("");
-  const form = open ? `<div class="ovf"><span>at least</span><input data-lr="count" inputmode="numeric" placeholder="—"${box("count")}><span>men under</span><input data-lr="pct" inputmode="decimal" placeholder="—"${box("pct")}><span>% owned</span><button class="ol sm" data-op="lradd">Add</button><button class="ol sm" data-op="ovcancel">Cancel</button><span class="ovmsg">${esc(msg ?? "")}</span></div>` : "";
+  const words = (r) => ruleWords(r).replace(/^./, (ch) => ch.toUpperCase());
+  const chips = rules.map((r, i) => `<span class="ovc" title="${esc(words(r))}">${esc(ruleChip(r))}<button data-op="lrdel" data-i="${i}" title="Remove ${esc(ruleWords(r))}">×</button></span>`).join("");
+  const dir = typed.dir === "max" ? "max" : "min", side = typed.side === "over" ? "over" : "under";
+  const seg = (op, now, pairs) => `<div class="seg">${pairs.map(([v, w]) => `<button data-op="${op}" data-v="${v}"${v === now ? ' class="on"' : ""}>${w}</button>`).join("")}</div>`;
+  const form = open ? `<div class="ovf">${seg("lrdir", dir, [["min", "at least"], ["max", "at most"]])}<input data-lr="count" inputmode="numeric" placeholder="—"${box("count")}><span>men</span>${seg("lrside", side, [["under", "under"], ["over", "over"]])}<input data-lr="pct" inputmode="decimal" placeholder="—"${box("pct")}><span>% owned</span><button class="ol sm" data-op="lradd">Add</button><button class="ol sm" data-op="ovcancel">Cancel</button><span class="ovmsg">${esc(msg ?? "")}</span></div>` : "";
   // At the limit "+ rule" is shown but disabled, with the limit as its title, rather than opening a form that cannot add.
   const full = rules.length >= MAX_LOW_RULES;
-  const addBtn = `<button class="ov" data-op="lropen"${full ? ` disabled title="At most ${MAX_LOW_RULES} low-owned rules"` : ""}>+ rule</button>`;
-  return `<div class="teams"><span class="tl">Low-owned:</span><span class="ovs">${chips || `<span>none</span>`}</span>${addBtn}</div>${form}`;
+  const addBtn = `<button class="ov" data-op="lropen"${full ? ` disabled title="At most ${MAX_LOW_RULES} ownership rules"` : ""}>+ rule</button>`;
+  return `<div class="teams"><span class="tl">Ownership:</span><span class="ovs">${chips || `<span>none</span>`}</span>${addBtn}</div>${form}`;
 }
 /** Storage key of a mode's team and game limits for a slate (Adam, 11-13: Cash and GPP each keep their own). */
 export const overridesKey = (slate, mode) => `nbaboard.opt.teams.${mode}.${slate}`;
@@ -236,7 +251,10 @@ export function countHtml(P, games = []) {
     + `<div class="cntmsg"${msg && !P.setOpen ? "" : " hidden"} title="${esc(msg)}">${esc(msg)}</div></div>`;
 }
 
-/** The settings block: the typed fields, the Low-owned line in GPP, the team limits with their override chips and form (each game an option beside the teams).
+/** Under the Ownership line: how many saved rules could not be read (readRaw's rulesDropped), in the unreadable-settings style; "" with none. */
+const droppedRulesHtml = (n, line) => (n > 0 ? line(`${n} saved ownership rule${n === 1 ? " could not be read and is" : "s could not be read and are"} not applied.`) : "");
+
+/** The settings block: the typed fields, the Ownership line in GPP, the team limits with their override chips and form (each game an option beside the teams).
  *  `count: false` leaves the Lineups box out (countHtml draws it elsewhere). */
 export function settingsHtml(P, teams, games = [], { count = true } = {}) {
   const raw = P.raw[P.mode], overrides = liveOverrides(P.overrides, games);
@@ -259,7 +277,7 @@ export function settingsHtml(P, teams, games = [], { count = true } = {}) {
   const variance = `<div class="teams"><span class="tl" title="Each lineup is searched on every player's projection varied at random; the numbers shown stay the real ones">Variance:</span><div class="seg">${[["", "Off"], ["1", "On"]].map(([v, w]) => `<button data-op="varsw" data-v="${v}" class="${(raw.varOn ?? "") === v ? "on" : ""}">${w}</button>`).join("")}</div><span class="tl">± <input data-f="varPct" value="${esc(raw.varPct ?? "")}" inputmode="decimal" autocomplete="off"${varOn ? "" : " disabled"}${varOn && bad.varPct ? ` class="bad" title="${esc(bad.varPct)}"` : ""}> % on all players</span></div>`;
   return `<div class="sec sethd">Settings</div><div class="set${count ? "" : " two"}">${count ? `<label>Lineups${input("count")}</label>` : ""}<label>Min unique${input("minUnique")}</label>`
     + (gpp ? `<label>Max total own${input("maxTotalOwn", "none")}</label>` : `<label title="Ownership limits are GPP settings">Max total own<input disabled placeholder="GPP only"></label>`) + `</div>`
-    + (gpp ? lowOwnedHtml(raw.lowRules ?? [], { open: P.lrOpen, msg: P.lrMsg, typed: P.lrForm ?? {} }) + variance : "")
+    + (gpp ? lowOwnedHtml(raw.lowRules ?? [], { open: P.lrOpen, msg: P.lrMsg, typed: P.lrForm ?? {} }) + droppedRulesHtml(P.rulesDropped, line) + variance : "")
     + `<div class="teams"><span class="tl">Teams: min ${input("teamMin")} · max ${input("teamMax")} per team</span><span class="ovs">${chips}</span><button class="ov" data-op="ovopen">+ override</button></div>${unreadableAll}${gone}${form}`
     + `<div class="setmsg"${msg ? "" : " hidden"} title="${esc(msg)}">${esc(msg)}</div>`;
 }
@@ -275,7 +293,7 @@ export function refillState(tryStore, slate) {
     const ov = readOverrides(tryStore, slate, mode), typed = readRaw(tryStore, mode, slate);
     const { settings: s, bad } = readSettings(typed.raw, mode, ov.overrides);
     settingsBad[mode] = [...Object.keys(bad).filter((f) => !["count", "minUnique", "varPct"].includes(f)), // a re-fill builds one lineup, so these three are never used
-      ...(typed.unreadable ? ["typed settings"] : []), ...(ov.unreadable ? ["team and game limits"] : [])];
+      ...(typed.unreadable ? ["typed settings"] : []), ...(ov.unreadable ? ["team and game limits"] : []), ...(typed.rulesDropped > 0 ? ["ownership rules"] : [])];
     settings[mode] = s;
   }
   const lim = readLimits(tryStore, slate);

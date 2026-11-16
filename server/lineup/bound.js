@@ -44,12 +44,15 @@ function fillTable(F, n, mask, weight) {
 
 /** The run's limits on the pool men as rows a*x <= rhs, x being who is picked: salary first, ownership second when capped (scaled to like sizes). */
 function limitRows(ctx, s, start) {
-  const { n, sal, own, team, game, low } = ctx;
+  const { n, sal, own, team, game, hit } = ctx;
   const rows = [];
   const add = (coef, rhs, size = 0) => rows.push({ coef: Float64Array.from({ length: n }, (_, i) => coef(i)), rhs, size });
   add((i) => sal[i] / 1000, (s.cap - start.baseSal) / 1000);
   if (s.maxTotalOwn != null) add((i) => own[i] / 10, (s.maxTotalOwn + EPS - start.baseOwn) / 10, s.maxTotalOwn / 10);
-  ctx.rules.forEach((rule, r) => add((i) => (low[r][i] ? -1 : 0), start.lowCount[r] - rule.count));
+  // An ownership rule's counted men: at least count, -x <= have - count; at most count, x <= count - have.
+  ctx.rules.forEach((rule, r) => (rule.dir === "min"
+    ? add((i) => (hit[r][i] ? -1 : 0), start.hitCount[r] - rule.count)
+    : add((i) => (hit[r][i] ? 1 : 0), rule.count - start.hitCount[r])));
   for (let t = 0; t < ctx.nTeams; t++) {
     if (ctx.teamMax[t] < N) add((i) => (team[i] === t ? 1 : 0), ctx.teamMax[t] - start.teamCount[t]);
     if (ctx.hardMin[t] > 0) add((i) => (team[i] === t ? -1 : 0), start.teamCount[t] - ctx.hardMin[t]);

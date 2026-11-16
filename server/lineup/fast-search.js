@@ -5,6 +5,7 @@
 // scratch before it leaves here. Cash never comes here.
 import { SLOTS } from "../board/slots.js";
 import { EPS } from "./bound.js";
+import { ruleMet, ruleShort } from "../board/own-rules.js";
 
 const N = SLOTS.length;
 const FULL = (1 << N) - 1;
@@ -33,7 +34,9 @@ export function jitter(vals, pct, random) {
 
 /** The men the search looks at, best first: those with fewer than `keep` men at least as good, as cheap, at least as flexible and as useful to every rule. */
 function coreOf(ctx, s, vals, keep) {
-  const { n, sal, own, mask, team, game, low } = ctx;
+  const { n, sal, own, mask, team, game, hit, rules } = ctx;
+  // As useful to a rule: counted where i is, for an at least; not counted where i is not, for an at most.
+  const worseFor = (i, j) => rules.some((rule, r) => (rule.dir === "min" ? hit[r][i] && !hit[r][j] : hit[r][j] && !hit[r][i]));
   const out = [];
   for (let i = 0; i < n; i++) {
     const sameTeam = ctx.hardMin[team[i]] > 0 || ctx.softMin[team[i]] > 1;
@@ -44,7 +47,7 @@ function coreOf(ctx, s, vals, keep) {
       if (sameTeam && team[j] !== team[i]) continue;
       if (sameGame && game[j] !== game[i]) continue;
       if (s.maxTotalOwn != null && own[j] > own[i]) continue;
-      if (low.some((l) => l[i] && !l[j])) continue;
+      if (worseFor(i, j)) continue;
       better++;
     }
     if (better < keep) out.push(i);
@@ -58,14 +61,14 @@ function coreOf(ctx, s, vals, keep) {
  * returns the first legal lineup found.
  */
 export function fastLineup({ ctx, s, start, cuts, maxShared, vals, rng, firstFit = false, budget = WORK_PER_LINEUP }) {
-  const { n, sal, own, mask, team, game, low } = ctx;
+  const { n, sal, own, mask, team, game, hit } = ctx;
   const k = N - ctx.lockedMen.length, R = ctx.rules.length;
   if (k <= 0) return null;
   const C = coreOf(ctx, s, vals, CORE_BETTER + Math.floor(cuts.length / 4));
   const m = C.length;
   const cutOf = Array.from({ length: n }, () => []);
   cuts.forEach((c, ci) => c.forEach((i) => cutOf[i].push(ci)));
-  const T = Int32Array.from(start.teamCount), G = Int32Array.from(start.gameCount), L = Int32Array.from(start.lowCount), shared = new Int32Array(cuts.length);
+  const T = Int32Array.from(start.teamCount), G = Int32Array.from(start.gameCount), L = Int32Array.from(start.hitCount), shared = new Int32Array(cuts.length);
   const inCur = new Uint8Array(n), cur = [], seen = new Uint8Array(FULL + 1);
   let S = start.baseSal, O = start.baseOwn, V = 0, D = start.distinctGames, excess = 0, work = 0;
   const teamLimits = ctx.teams.map((_, t) => t).filter((t) => ctx.teamMax[t] < N || ctx.hardMin[t] > 0 || ctx.softMin[t] > 1);
@@ -75,7 +78,7 @@ export function fastLineup({ ctx, s, start, cuts, maxShared, vals, rng, firstFit
   const add = (i) => {
     cur.push(i); inCur[i] = 1; T[team[i]]++;
     if (G[game[i]]++ === 0) D++;
-    for (let r = 0; r < R; r++) if (low[r][i]) L[r]++;
+    for (let r = 0; r < R; r++) if (hit[r][i]) L[r]++;
     S += sal[i]; O += own[i]; V += vals[i];
     const list = cutOf[i];
     for (let x = 0; x < list.length; x++) if (++shared[list[x]] > maxShared[list[x]]) excess++;
@@ -83,7 +86,7 @@ export function fastLineup({ ctx, s, start, cuts, maxShared, vals, rng, firstFit
   const del = (i) => {
     cur.splice(cur.indexOf(i), 1); inCur[i] = 0; T[team[i]]--;
     if (--G[game[i]] === 0) D--;
-    for (let r = 0; r < R; r++) if (low[r][i]) L[r]--;
+    for (let r = 0; r < R; r++) if (hit[r][i]) L[r]--;
     S -= sal[i]; O -= own[i]; V -= vals[i];
     const list = cutOf[i];
     for (let x = 0; x < list.length; x++) if (shared[list[x]]-- > maxShared[list[x]]) excess--;
@@ -105,7 +108,7 @@ export function fastLineup({ ctx, s, start, cuts, maxShared, vals, rng, firstFit
       if (c < ctx.gameMin[g]) v += ctx.gameMin[g] - c;
     }
     if (D < s.minGames) v += s.minGames - D;
-    for (let r = 0; r < R; r++) if (L[r] < ctx.rules[r].count) v += ctx.rules[r].count - L[r];
+    for (let r = 0; r < R; r++) v += ruleShort(ctx.rules[r], L[r]);
     return v;
   };
   /** The filled-slot sets the men on hand can take. */
@@ -142,7 +145,7 @@ export function fastLineup({ ctx, s, start, cuts, maxShared, vals, rng, firstFit
     if (T[ta] + 1 + (tb === ta ? 1 : 0) > ctx.teamMax[ta] || (two && T[tb] + 1 + (tb === ta ? 1 : 0) > ctx.teamMax[tb])) return false;
     if (G[ga] + 1 + (gb === ga ? 1 : 0) > ctx.gameMax[ga] || (two && G[gb] + 1 + (gb === ga ? 1 : 0) > ctx.gameMax[gb])) return false;
     if (D + (G[ga] === 0 ? 1 : 0) + (two && gb !== ga && G[gb] === 0 ? 1 : 0) < s.minGames) return false;
-    for (let r = 0; r < R; r++) if (L[r] + (low[r][a] ? 1 : 0) + (two && low[r][b] ? 1 : 0) < ctx.rules[r].count) return false;
+    for (let r = 0; r < R; r++) if (!ruleMet(ctx.rules[r], L[r] + (hit[r][a] ? 1 : 0) + (two && hit[r][b] ? 1 : 0))) return false;
     for (let x = 0; x < teamNeeds.length; x++) {
       const t = teamNeeds[x], c = T[t] + (ta === t ? 1 : 0) + (tb === t ? 1 : 0);
       if (c < ctx.hardMin[t] || (c > 0 && c < ctx.softMin[t])) return false;
@@ -311,7 +314,7 @@ export function checkFastLineup(ctx, s, start, set, cuts, maxShared) {
   for (let g = 0; g < games.length; g++) if (games[g] > ctx.gameMax[g] || games[g] < ctx.gameMin[g]) return "a game limit";
   if (games.filter((c) => c > 0).length < s.minGames) return "too few games";
   for (let r = 0; r < ctx.rules.length; r++) {
-    if (men.filter((i) => ctx.low[r][i]).length + start.lowCount[r] < ctx.rules[r].count) return `low-owned rule ${r + 1}`;
+    if (!ruleMet(ctx.rules[r], men.filter((i) => ctx.hit[r][i]).length + start.hitCount[r])) return `ownership rule ${r + 1}`;
   }
   for (let c = 0; c < cuts.length; c++) if (men.filter((i) => cuts[c].has(i)).length > maxShared[c]) return "min unique";
   return null;

@@ -292,7 +292,7 @@ function flushHeld() {
   if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
 }
 const press = pressSettle();
-/** The forms a redraw would disturb: the team-limit and low-owned boxes, and a slot picker. A number box in a row is handled apart, row by row. */
+/** The forms a redraw would disturb: the team-limit and ownership-rule boxes, and a slot picker. A number box in a row is handled apart, row by row. */
 const formHasFocus = () => Boolean(document.activeElement?.matches?.("#opt [data-ov], #opt [data-lr], select[data-lspin], .psel, .rpin, #console input.fin"));
 const refresher = createRefresher({
   api, name: () => S.name, busy: () => panel.running() || formHasFocus() || press.pressing(), saves: () => ovSaves, apply: applyFresh,

@@ -15,6 +15,18 @@ import { createUsageState, usageHtml, chartModel, fetchUsageHttp, closeUsageHttp
 import { wireChart } from "./card-chart.js";
 import { cardTilesHtml, cardSourceHtml, newsHtml, barChartHtml, summarise, LAST_N } from "./card-tiles.js";
 
+// Why a game's Started cell is a dash (starts.js started_why); a dash is never blank, so a missing box never looks like a bench game. A log with no started field at all (an older baked file) is "unworked".
+const START_WHY = { nobox: "No box score on file for this game", notfound: "Not found in this game's box score", dnp: "Did not play", damaged: "This game's box score cannot be read", nostarter: "Starter not recorded in this box score", unworked: "Started not worked out for this log" };
+const startWhy = (g) => (g.started === undefined ? "unworked" : START_WHY[g.started_why] ? g.started_why : "nobox");
+
+/** The one line under the log when the Started column lacks games the box scores should have given: how many have no box and how many boxes cannot be read (the rest, a man not in a box or a DNP, are the box's own word). "" when none. */
+export function startsNoteText(games) {
+  const count = (why) => games.filter((g) => g.started === null && g.started_why === why).length;
+  const none = count("nobox"), bad = count("damaged");
+  if (!none && !bad) return "";
+  const parts = [none ? `${none} with no box score on file` : "", bad ? `${bad} whose box score cannot be read` : ""].filter(Boolean);
+  return `Started not shown for ${none + bad} game${none + bad === 1 ? "" : "s"}: ${parts.join(", ")}.`;
+}
 const mins = (v) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
 
 /** The server's answer -> the card's log state: { state: "ok", data } or { state: "error", message }. A 200 whose body
@@ -110,8 +122,10 @@ export function cardHtml(p, log, { dash, colourOf, picks, figs = null, usage = {
       + acts
       + `<button class="close" data-card-close title="Close (Esc)"><kbd>ESC</kbd>&#10005;</button></div>`;
   };
-  const logTable = (games) => `<table class="log"><thead><tr><th class="l">Date</th><th class="l">Opp</th><th class="l">Result</th><th>Min</th><th>Pts</th><th>Reb</th><th>Ast</th><th>3PM</th><th>Stl</th><th>Blk</th><th>TO</th><th title="Usage rate, Basketball-Reference game log">USG%</th><th class="s">DK</th></tr></thead><tbody>`
-    + games.map((g) => `<tr><td class="d">${esc(shortDay(g.date))}</td><td class="o">${esc(g.home_away)} ${esc(g.opp)}</td><td class="r ${g.result === "W" ? "w" : "l"}">${esc(g.result)} ${esc(g.score)}</td><td>${mins(g.min)}</td><td>${g.pts}</td><td>${g.reb}</td><td>${g.ast}</td><td>${g.fg3m}</td><td>${g.stl}</td><td>${g.blk}</td><td>${g.to}</td>${usgCell(g.date, usage, dash)}<td class="k">${g.dk.toFixed(2)}</td></tr>`).join("")
+  // started: true -> a coloured S; false -> blank (came off the bench); anything else (null, or an old answer without it) -> a faint dash, never a blank, so a missing box never reads as a bench game.
+  const startCell = (g) => (g.started === true ? `<td class="gs on" title="Started (box score)">S</td>` : g.started === false ? `<td class="gs"></td>` : `<td class="gs no" title="${START_WHY[startWhy(g)]}">–</td>`);
+  const logTable = (games) => `<table class="log"><thead><tr><th class="l">Date</th><th class="l">Opp</th><th class="l">Result</th><th class="gs" title="Started (box score)">S</th><th>Min</th><th>Pts</th><th>Reb</th><th>Ast</th><th>3PM</th><th>Stl</th><th>Blk</th><th>TO</th><th title="Usage rate, Basketball-Reference game log">USG%</th><th class="s">DK</th></tr></thead><tbody>`
+    + games.map((g) => `<tr><td class="d">${esc(shortDay(g.date))}</td><td class="o">${esc(g.home_away)} ${esc(g.opp)}</td><td class="r ${g.result === "W" ? "w" : "l"}">${esc(g.result)} ${esc(g.score)}</td>${startCell(g)}<td>${mins(g.min)}</td><td>${g.pts}</td><td>${g.reb}</td><td>${g.ast}</td><td>${g.fg3m}</td><td>${g.stl}</td><td>${g.blk}</td><td>${g.to}</td>${usgCell(g.date, usage, dash)}<td class="k">${g.dk.toFixed(2)}</td></tr>`).join("")
     + `</tbody></table>`;
   const lastTen = () => {
     if (log.state === "loading" || log.state === "idle") return `<div class="sec">Last 10 games</div><div class="cardmsg">Loading the game log…</div>`;
@@ -119,8 +133,9 @@ export function cardHtml(p, log, { dash, colourOf, picks, figs = null, usage = {
     const games = log.data.games, recent = games.slice(0, LAST_N), s = summarise(recent); // the log is the whole season, newest first
     if (!s) return `<div class="sec">Last 10 games</div><div class="cardmsg">${esc(p.name)} has no regular-season games this season yet (${esc(log.data.source)} lists none).</div>`;
     return `<div class="psec"><h3>Last ${s.n === LAST_N ? LAST_N : s.n} game${s.n === 1 ? "" : "s"} (DK pts)</h3>${barChartHtml(recent)}</div>`
-      + `<div class="sec">This season's games<span class="hint">${games.length} game${games.length === 1 ? "" : "s"}, newest first</span></div><div class="logscroll">${logTable(games)}</div>${usgNoteHtml(games)}`;
+      + `<div class="sec">This season's games<span class="hint">${games.length} game${games.length === 1 ? "" : "s"}, newest first</span></div><div class="logscroll">${logTable(games)}</div>${usgNoteHtml(games)}${startsNoteHtml(games)}`;
   };
+  const startsNoteHtml = (games) => { const n = startsNoteText(games), f = log.data.starts?.first; return n ? `<div class="gsnote"${f ? ` title="${esc(`First unreadable box score file: ${f.file} (${f.why})`)}"` : ""}>${esc(n)}</div>` : ""; };
   const usgNoteHtml = (games) => { const n = usgNote(games, usage); return n ? `<div class="ue-warn logwarn">${esc(n)}</div>` : ""; };
   const two = `<div class="two">${roleSlot ? `<div class="crole" data-crole></div>` : ""}${newsHtml(p, news, dash, newsState)}</div>`;
   return header() + `<div class="pbody">${cardTilesHtml(p, log, { dash, inj })}${two}${lastTen()}${usageHtml(p, usage, ui, { dash })}${cardSourceHtml(p, figs, dash)}</div>`;

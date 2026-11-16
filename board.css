@@ -421,9 +421,10 @@ tr.excl td{opacity:.3}tr.excl .name{text-decoration:line-through}
 .opt .ov:disabled{color:var(--dim);cursor:default}
 .opt .ovf{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:7px 16px;border-bottom:1px solid var(--ln);font-size:11px;color:var(--dim);white-space:nowrap;background:var(--p2)}
 .opt .ovf select{background:var(--p);border:1px solid var(--ln);padding:3px 6px;font-weight:700}
-.opt .ovf button{background:none;border:1px solid var(--am);color:var(--am);padding:3px 10px;font-weight:700;font-size:11px}
-.opt .ovf button[data-op="ovcancel"]{border-color:var(--ln);color:var(--mu)}
-.opt .ovf button:hover{background:#ffb00014}
+.opt .ovf>button{background:none;border:1px solid var(--am);color:var(--am);padding:3px 10px;font-weight:700;font-size:11px}
+.opt .ovf>button[data-op="ovcancel"]{border-color:var(--ln);color:var(--mu)}
+.opt .ovf>button:hover{background:#ffb00014}
+.opt .ovf .seg button{padding:3px 10px;font-size:11px}
 .opt .ovmsg{color:var(--rd);white-space:normal}
 .opt .setmsg{padding:5px 16px;border-bottom:1px solid var(--ln);color:var(--rd);font-size:11.5px;white-space:normal}
 .opt .luh{align-items:center;padding-top:6px}.opt .luh>span:first-child{color:var(--tx);font-weight:700}
@@ -572,6 +573,7 @@ body.light .optstrip .osseg button.on{color:#fff}
 .log td{padding:2px 7px;font-size:12.5px;border-bottom:1px solid #18181c}
 .log td.d{text-align:left;color:var(--mu)}.log td.o{text-align:left}.log td.r{text-align:left;font-size:11.5px}
 .log td.w{color:var(--gr)}.log td.l{color:var(--rd)}
+.log th.gs,.log td.gs{width:1%;padding:2px 4px;text-align:center}.log td.gs.on{color:var(--am);font-weight:800;font-size:11px}.log td.gs.no{color:var(--dim)}.gsnote{margin:4px 16px 0;font-size:10.5px;color:var(--dim)}
 .log td.k{color:var(--am);font-weight:800}
 .log tbody tr:nth-child(even) td{background:#ffffff04}
 .cardmsg{margin:10px 16px 6px;padding:14px;border:1px dashed var(--ln);color:var(--mu);font-size:12.5px}

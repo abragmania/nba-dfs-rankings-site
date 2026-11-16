@@ -13,6 +13,9 @@ import { refuseNonJsonPost, refuseCrossSiteRead } from "./lib/origin.js";
 import { info, warn, error, dataDir } from "../site/shim/log.js";
 import { readScenarios, heldTeams } from "./slate/scenarios.js";
 import { checkLogQuery, getPlayerLog, PlayerLogError } from "../site/shim/app-only.js";
+import { logWithStarts } from "../site/shim/app-only.js";
+
+const warnedStarts = new Set(); // box-reading problems already logged, each distinct message once
 import { withSeasonFigures, seasonUsageTable } from "../site/shim/app-only.js";
 import { slateRefMs, startedSplit, leftOut } from "./board/lateswap.js";
 import { DEFAULT_COUNT } from "./board/slots.js";
@@ -458,7 +461,10 @@ async function handlePlayerLog(req, res, url) {
   try {
     // taken: his DK teammates on the newest slate, so a near-name match never lands on a teammate's row (none readable: no near match).
     const { cardTeammates } = await routeModule("usage");
-    return send(res, 200, await getPlayerLog(q.name, q.team, { signal: gone.signal, taken: cardTeammates(q.name, q.team) }));
+    const taken = cardTeammates(q.name, q.team);
+    const log = await getPlayerLog(q.name, q.team, { signal: gone.signal, taken });
+    // Each game gets started (true, false, or null: no box score on file for it) from the saved box scores; the log's cache file is not changed.
+    return send(res, 200, logWithStarts(log, q.name, q.team, { taken, note: (m) => { if (!warnedStarts.has(m)) { if (warnedStarts.size > 50) warnedStarts.clear(); warnedStarts.add(m); warn(`player log: ${m}`); } } }));
   } catch (e) {
     if (!(e instanceof PlayerLogError)) throw e;
     if (e.cancelled) return res.destroy(); // nobody is waiting for this answer

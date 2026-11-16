@@ -1,7 +1,7 @@
 // DraftKings NBA classic lineup optimizer: exact branch and bound for Cash, a fast seeded search with a short exact run for GPP
 // (fast-search.js); pure (no file or network access). Besides settings.variancePct's random source, the one outside input is the reference time used to read year-less tip stamps for late-swap seating: args.refMs, read from the clock
 // (Date.now()) only at the entry point when the caller leaves it out; everything below takes it as an argument.
-// Cash and GPP both maximize total projection. GPP adds its optional ownership limits (max total ownership, low-owned rules).
+// Cash and GPP both maximize total projection. GPP adds its optional ownership limits (max total ownership, ownership rules).
 // The projection is the effective one the server passes in (Adam's typed number or bump, server/slate/overrides.js). The
 // feed's ceiling is never read: a lineup carries no ceiling total and a man with none is never skipped for it (optimizer
 // standard A21). A man missing a figure the run needs is skipped and never scored as zero (RULES R1).
@@ -10,9 +10,9 @@ import { EPS, BOUND_SLACK, WIDTH, SLOT_BITS, REACH_MAX, buildBound, extendReach 
 import { readExposure, countLimits, limitStart, buildLimited } from "./exposure.js";
 import { fastLineup, checkFastLineup, jitter, seededRandom } from "./fast-search.js";
 import { outFor } from "../board/figures.js";
+import { readOwnRules, ruleTables, ruleCounts, ruleMet, ruleReachable, ruleWords, noFigureNote, liftForHeld } from "../board/own-rules.js";
 
 const N = SLOTS.length;
-const MAX_LOW_RULES = 8;
 /** The reason a man not playing is in the skipped list. */
 export const OUT_WHY = "Out";
 /** The note when every man this run may use (pool and locked or pinned men) is from one game. */
@@ -57,9 +57,9 @@ function readSettings(mode, settings, slateTeams, slateGames) {
     teamOverrides: st.teamOverrides ?? {},
     gameOverrides: st.gameOverrides ?? {},
     maxSteps: st.maxSteps ?? DEFAULT_MAX_STEPS,
-    // maxTotalOwn and lowOwned are GPP limits: checked in either mode, ignored in Cash on purpose.
+    // maxTotalOwn and the ownership rules (settings.lowOwned) are GPP limits: checked in either mode, ignored in Cash on purpose.
     maxTotalOwn: mode === "GPP" ? st.maxTotalOwn ?? null : null,
-    lowOwned: [], // filled below from a checked list of rules, in GPP only
+    ownRules: [], // filled below from the checked rules, in GPP only
   };
   if (!isInt(s.count, 1, MAX_COUNT)) return { error: `Lineups must be a whole number from 1 to ${MAX_COUNT}.` };
   if (!isInt(s.minUnique, 1, N)) return { error: `Min unique must be a whole number from 1 to ${N}.` };
@@ -88,19 +88,12 @@ function readSettings(mode, settings, slateTeams, slateGames) {
     if ((o.min != null && !isInt(o.min, 0, N)) || (o.max != null && !isInt(o.max, 0, N))) return { error: `The ${g} min and max must be whole numbers from 0 to ${N}.` };
     if (o.min != null && o.max != null && o.min > o.max) return { error: `The ${g} min (${o.min}) is more than its max (${o.max}).` };
   }
-  const own = st.maxTotalOwn, lo = st.lowOwned;
+  const own = st.maxTotalOwn;
   if (own != null && !(isNum(own) && own >= 0)) return { error: "Max total ownership must be a percentage." };
-  // Low-owned rules: a list of {count, underPct}, every rule binding at once; the older single {count, underPct} is a list of one.
-  if (lo != null) {
-    const rules = Array.isArray(lo) ? lo : [lo];
-    if (rules.length > MAX_LOW_RULES) return { error: `At most ${MAX_LOW_RULES} low-owned rules; this run has ${rules.length}.` };
-    for (const [i, r] of rules.entries()) {
-      const shape = isPlain(r) && Object.keys(r).every((k) => k === "count" || k === "underPct");
-      const which = rules.length === 1 ? "Low-owned" : `Low-owned rule ${i + 1}`;
-      if (!shape || !isInt(r.count, 0, N) || !(isNum(r.underPct) && r.underPct >= 0)) return { error: `${which} must be {count: 0 to ${N}, underPct: a percentage}.` };
-    }
-    if (mode === "GPP") s.lowOwned = rules.map((r) => ({ count: r.count, underPct: r.underPct }));
-  }
+  // Ownership rules (own-rules.js): the shape is checked in either mode, a plain contradiction only in GPP, where they bind.
+  const rules = readOwnRules(st.lowOwned, { conflicts: mode === "GPP" });
+  if (rules.error) return { error: rules.error };
+  if (mode === "GPP") s.ownRules = rules.rules;
   // Late-swap pins (Adam, 2026-10-29): dk_id -> the one slot that man must fill, in Cash and GPP alike. The men themselves
   // are checked against the slate in preparePool.
   const pins = st.pinned ?? {};
@@ -140,8 +133,8 @@ function gaps(p, mode, s) {
   if (p.team == null) g.push("no team");
   if (p.game == null) g.push("no game");
   if (s.maxTotalOwn != null) figure(p.proj_own, "projected ownership (the total-ownership cap needs it)");
-  // The search's cap check assumes none below zero, and a low-owned rule would count him as under any line. Low-owned rules alone do not need the figure: a man with none just never counts.
-  if ((s.maxTotalOwn != null || s.lowOwned.length) && isNum(p.proj_own) && p.proj_own < 0) g.push("a projected ownership below zero");
+  // The search's cap check assumes none below zero, and an ownership rule would count him as under any line. The rules alone do not need the figure: a man with none never counts.
+  if ((s.maxTotalOwn != null || s.ownRules.length) && isNum(p.proj_own) && p.proj_own < 0) g.push("a projected ownership below zero");
   return g;
 }
 
@@ -183,15 +176,11 @@ function buildContext(pool, lockedMen, mode, s) {
   const games = [...new Set(all.map((p) => p.game))].sort();
   const tIdx = new Map(teams.map((t, i) => [t, i]));
   const gIdx = new Map(games.map((g, i) => [g, i]));
-  const rules = s.lowOwned;
-  // Low-owned means a published ownership strictly under the rule's underPct (<, so a man at exactly 5.0% is not under 5%); a man with
-  // no ownership never counts. One man counts toward every rule he meets.
-  const isLow = (p, r) => isNum(p.proj_own) && p.proj_own < rules[r].underPct;
+  const rules = s.ownRules, { hit, suffix } = ruleTables(rules, sorted); // own-rules.js: the men each ownership rule counts
   const ctx = {
-    n, sorted, lockedMen, isLow, obj, rules, lockMask: lockedMen.map((p) => pinnedMask(p, s.pinned)),
+    n, sorted, lockedMen, obj, rules, hit, hitSuffix: suffix, lockMask: lockedMen.map((p) => pinnedMask(p, s.pinned)),
     val: sorted.map(obj), sal: sorted.map((p) => p.salary), own: sorted.map((p) => (isNum(p.proj_own) ? p.proj_own : 0)),
     mask: sorted.map(slotMask), team: sorted.map((p) => tIdx.get(p.team)), game: sorted.map((p) => gIdx.get(p.game)),
-    low: rules.map((_, r) => sorted.map((p) => isLow(p, r))),
     teamMax: teams.map((t) => s.teamOverrides[t]?.max ?? s.teamMax),
     // A team override min is a hard requirement; the overall teamMin binds only teams the lineup uses (absent, or at least teamMin men).
     hardMin: teams.map((t) => s.teamOverrides[t]?.min ?? 0),
@@ -202,15 +191,10 @@ function buildContext(pool, lockedMen, mode, s) {
   };
   ctx.minTeams = teams.map((_, t) => t).filter((t) => ctx.hardMin[t] > 0 || ctx.softMin[t] > 0);
   ctx.gamesWithMin = games.map((_, g) => g).filter((g) => ctx.gameMin[g] > 0);
-  // Suffix tables: cheapest and dearest salaries, smallest ownerships, low-owned and per-team counts.
+  // Suffix tables: cheapest and dearest salaries, smallest ownerships, per-team counts.
   ctx.smallSal = suffixBest(ctx.sal, (a, b) => a < b);
   ctx.largeSal = suffixBest(ctx.sal, (a, b) => a > b);
   ctx.smallOwn = suffixBest(ctx.own, (a, b) => a < b);
-  ctx.lowSuffix = ctx.low.map((low) => {
-    const c = new Int32Array(n + 1);
-    for (let i = n - 1; i >= 0; i--) c[i] = c[i + 1] + (low[i] ? 1 : 0);
-    return c;
-  });
   ctx.teamSuffix = ctx.minTeams.map((t) => {
     const c = new Int32Array(n + 1);
     for (let i = n - 1; i >= 0; i--) c[i] = c[i + 1] + (ctx.team[i] === t ? 1 : 0);
@@ -229,7 +213,7 @@ function baseState(ctx) {
   const st = {
     reach: [0],
     teamCount: new Int32Array(ctx.nTeams), gameCount: new Int32Array(ctx.nGames),
-    distinctGames: 0, base: 0, baseSal: 0, baseOwn: 0, lowCount: new Int32Array(ctx.rules.length),
+    distinctGames: 0, base: 0, baseSal: 0, baseOwn: 0, hitCount: ruleCounts(ctx.rules, ctx.lockedMen),
   };
   ctx.lockedMen.forEach((p, k) => {
     const next = new Set();
@@ -240,7 +224,6 @@ function baseState(ctx) {
     st.base += ctx.obj(p);
     st.baseSal += p.salary;
     st.baseOwn += isNum(p.proj_own) ? p.proj_own : 0;
-    for (let r = 0; r < ctx.rules.length; r++) if (ctx.isLow(p, r)) st.lowCount[r]++;
   });
   return st;
 }
@@ -249,7 +232,7 @@ function baseState(ctx) {
 function leafOk(ctx, s, st, salary) {
   if (st.distinctGames < s.minGames) return false;
   if (s.minSalary != null && salary < s.minSalary) return false;
-  for (let r = 0; r < ctx.rules.length; r++) if (st.lowCount[r] < ctx.rules[r].count) return false;
+  for (let r = 0; r < ctx.rules.length; r++) if (!ruleMet(ctx.rules[r], st.hitCount[r])) return false;
   for (const t of ctx.minTeams) if (st.teamCount[t] < ctx.hardMin[t] || (st.teamCount[t] > 0 && st.teamCount[t] < ctx.softMin[t])) return false;
   for (const g of ctx.gamesWithMin) if (st.gameCount[g] < ctx.gameMin[g]) return false;
   return true;
@@ -261,8 +244,11 @@ function canFinish(ctx, s, st, i, k, salary, ow) {
   if (salary + sumFirst(ctx.smallSal, i, k) > s.cap) return false;
   if (s.minSalary != null && salary + sumFirst(ctx.largeSal, i, k) < s.minSalary) return false;
   if (s.maxTotalOwn != null && ow + sumFirst(ctx.smallOwn, i, k) > s.maxTotalOwn + EPS) return false;
-  // Every low-owned rule must still be reachable with the k men left (each rule on its own: a valid bound, so still exact).
-  for (let r = 0; r < ctx.rules.length; r++) if (st.lowCount[r] + Math.min(k, ctx.lowSuffix[r][i]) < ctx.rules[r].count) return false;
+  // Every ownership rule must still be reachable with the k men left, all from men i on (each rule on its own: a valid bound, so still exact).
+  for (let r = 0; r < ctx.rules.length; r++) {
+    const hit = ctx.hitSuffix[r][i];
+    if (!ruleReachable(ctx.rules[r], st.hitCount[r], k, hit, ctx.n - i - hit)) return false;
+  }
   if (st.distinctGames + k < s.minGames) return false;
   let deficit = 0;
   for (let m = 0; m < ctx.minTeams.length; m++) {
@@ -298,10 +284,10 @@ function canFinish(ctx, s, st, i, k, salary, ow) {
  * seed (the fast GPP build) is a legal lineup, pool indexes, to start from as the best so far.
  */
 function solve(ctx, s, cuts, maxShared, firstFit = false, seed = null, maxSteps = s.maxSteps) {
-  const { n, val, sal, own, mask, team, game, low } = ctx;
+  const { n, val, sal, own, mask, team, game, hit } = ctx;
   const L = ctx.lockedMen.length;
   const st = baseState(ctx);
-  const { teamCount, gameCount, lowCount } = st;
+  const { teamCount, gameCount, hitCount } = st;
   const R = ctx.rules.length;
   const cutOf = Array.from({ length: n }, () => []);
   cuts.forEach((c, ci) => c.forEach((i) => cutOf[i].push(ci)));
@@ -347,11 +333,11 @@ function solve(ctx, s, cuts, maxShared, firstFit = false, seed = null, maxSteps 
       teamCount[t]++;
       if (gameCount[game[i]]++ === 0) st.distinctGames++;
       for (const ci of cutOf[i]) shared[ci]++;
-      for (let r = 0; r < R; r++) if (low[r][i]) lowCount[r]++;
+      for (let r = 0; r < R; r++) if (hit[r][i]) hitCount[r]++;
       chosen.push(i);
       dfs(i + 1, k - 1, v + val[i], salary + sal[i], ow + own[i]);
       chosen.pop();
-      for (let r = 0; r < R; r++) if (low[r][i]) lowCount[r]--;
+      for (let r = 0; r < R; r++) if (hit[r][i]) hitCount[r]--;
       for (const ci of cutOf[i]) shared[ci]--;
       if (--gameCount[game[i]] === 0) st.distinctGames--;
       teamCount[t]--;
@@ -454,6 +440,8 @@ function startProblem(lockedMen, pool, s) {
   // With 8 held men no search step runs, so this is the one check of their ownership against the cap.
   const heldOwn = lockedMen.reduce((t, p) => t + p.proj_own, 0);
   if (s.maxTotalOwn != null && heldOwn > s.maxTotalOwn + EPS) return `The ${held} players' total ownership ${round2(heldOwn)}% is over the ${s.maxTotalOwn}% limit.`;
+  const heldHits = ruleCounts(s.ownRules, lockedMen), past = s.ownRules.find((r, x) => r.dir === "max" && !ruleMet(r, heldHits[x]));
+  if (past) return `The ${held} players already break the ownership rule ${ruleWords(past)}.`;
   if (new Set([...lockedMen, ...pool].map((p) => p.game)).size < s.minGames) return ONE_GAME_NOTE;
   const byTeam = {};
   for (const p of lockedMen) byTeam[p.team] = (byTeam[p.team] ?? 0) + 1;
@@ -633,6 +621,7 @@ export function optimize({ players, mode, settings, locked = [], excluded = [], 
   const noOwn = mode === "GPP" ? [...new Set(result.lineups.flatMap((l) => l.slots ?? []).filter((p) => p.his === "in" && p.out_pool && !isNum(p.proj_own)).map((p) => p.name ?? p.dk_id))] : [];
   if (noOwn.length) result.note = [result.note, `${noOwn.join(", ")} ${noOwn.length === 1 ? "has" : "have"} no projected ownership (TwoGun's was made while ${noOwn.length === 1 ? "he was" : "they were"} Out and is not used), so the ownership totals count ${noOwn.length === 1 ? "him" : "them"} as 0%; type one to change that.`].filter(Boolean).join(" ");
   if (s.exposureIgnored && !result.error) result.note = [result.note, "Min % and Max % are GPP settings; this Cash run ignored them."].filter(Boolean).join(" ");
+  if (s.usable && !result.error) result.note = [result.note, s.liftNote, noFigureNote(s.usable, s.ownRules)].filter(Boolean).join(" ") || null; // last: the foot of the result
   return result;
 }
 
@@ -709,6 +698,8 @@ function runSearch(players, mode, s, lockIds, exSet, refMs, onProgress) {
   const prep = preparePool(players, mode, s, lockIds, exSet);
   if (prep.error) return fail(prep.skipped, prep.error);
   const { lockedMen, pool, skipped, lockSet } = prep; // lockSet holds the locked and the pinned men
+  s.usable = [...lockedMen, ...pool]; // the men an ownership rule could count, for the no-figure note
+  if (latePinned(s)) ({ rules: s.ownRules, note: s.liftNote } = liftForHeld(s.ownRules, lockedMen)); // late swap: a broken at most is held, not refused
   const done = (lineups, note) => ({ lineups, skipped, note, error: null });
   const allPicked = players.length > 0 && players.every((p) => exSet.has(p.dk_id) || lockSet.has(p.dk_id));
   if (!pool.length && lockedMen.length < N && allPicked) return done([], "Every player is excluded.");

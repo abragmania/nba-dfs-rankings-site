@@ -198,7 +198,7 @@ const NOT_FOR_REFILL = ["count", "minUnique", "pinned", "exposure", "variancePct
 
 /**
  * What the board holds that a re-optimize must honour (RULES R4): the excluded men (the saved picks, args.picks), the settings of each mode
- * (body.settings = { Cash: {...}, GPP: {...} }, the optimizer panel's team and game limits, low-owned rules, max total ownership) and the
+ * (body.settings = { Cash: {...}, GPP: {...} }, the optimizer panel's team and game limits, ownership rules, max total ownership) and the
  * Max % across the set (body.exposure). Returns the engine's { excluded, settingsByMode, exposure, notes }; whatever it cannot apply or was not
  * given is named in notes, which the engine puts on every spot it re-fills. A Min % does not apply across a set of entries (actions.js refuses it), so it is dropped and named.
  */
@@ -214,7 +214,7 @@ function boardState(body, picks, state, slate, nowMs) {
     for (const m of MODES) if (Array.isArray(body.settingsBad[m]) && body.settingsBad[m].length) notes.push(`The board's ${m} ${body.settingsBad[m].map(String).join(", ")} could not be read, so ${m} spots did not apply ${body.settingsBad[m].length === 1 ? "it" : "them"}.`);
   }
   let settingsByMode = null;
-  if (given == null) notes.push("The board's saved optimizer settings (team and game limits, low-owned rules, max total ownership) and Max % were not sent with this request, so this re-fill used none of them.");
+  if (given == null) notes.push("The board's saved optimizer settings (team and game limits, ownership rules, max total ownership) and Max % were not sent with this request, so this re-fill used none of them.");
   else if (typeof given !== "object" || Array.isArray(given)) notes.push("The board's saved optimizer settings could not be read (not a Cash and GPP pair), so this re-fill used none of them.");
   else {
     settingsByMode = {};
