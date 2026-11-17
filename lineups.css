@@ -20,6 +20,21 @@ body.lineups-on{padding-bottom:0} /* the tab ends at its scrolling boxes, sized 
 .vtabs button:last-child{border-right:0}
 .vtabs button.on{background:var(--am);color:#000}
 .vtabs b{font-weight:800}
+/* Main view navigation (Adam 2:41 PM): the header's tabs read as the page's main nav, stronger than the minor header buttons. */
+.top .vtabs{border:2px solid var(--am);border-radius:6px;overflow:hidden;background:var(--p2)}
+.top .vtabs button{padding:8px 18px;font-family:"Space Grotesk",sans-serif;font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--tx);border-right:2px solid var(--ln)}
+.top .vtabs button:last-child{border-right:0;min-width:112px}
+.top .vtabs button:not(.on):hover{background:var(--ln)}
+.top .vtabs button.on{background:var(--am);color:#000}
+body.light .top .vtabs button.on{color:#fff}
+.top .vtabs button.need:not(.on){color:var(--am)}
+.top .lswnav{display:inline-flex;margin-left:10px;border:2px solid var(--am);border-radius:6px;overflow:hidden;background:var(--p2)}
+.top .lswnav button{padding:8px 18px;border:0;background:none;font-family:"Space Grotesk",sans-serif;font-weight:800;font-size:15px;letter-spacing:.2px;color:var(--tx)}
+.top .lswnav button:not(.on):hover{background:var(--ln)}
+.top .lswnav button.on{background:var(--am);color:#000}
+body.light .top .lswnav button.on{color:#fff}
+@media (max-width:2100px){.top .vtabs button{padding:8px 13px;font-size:14px}.top .vtabs button:last-child{min-width:100px}.top .lswnav{margin-left:6px}.top .lswnav button{padding:8px 13px;font-size:14px}}
+@media (min-width:901px){body.card-docked .top .vtabs button{padding:8px 9px;font-size:13px}body.card-docked .top .vtabs button:last-child{min-width:0}body.card-docked .top .lswnav button{padding:8px 9px;font-size:13px}}
 /* The player list's panel: count beside Build, the other settings one click away. */
 .opt .cntrow{padding:5px 16px;border-bottom:1px solid var(--ln)}
 .opt .cntrow label{display:flex;align-items:center;gap:12px;font-size:11px;color:var(--mu)}

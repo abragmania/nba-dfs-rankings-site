@@ -224,8 +224,8 @@ function decorate() {
   if (!top) return;
   let v = top.querySelector(".vtabs");
   if (!v) { v = document.createElement("span"); v.className = "vtabs own"; v.innerHTML = '<button data-lsw-list="1">Player list</button>'; top.append(v); }
-  let b = v.querySelector("[data-lswtab]");
-  if (!b) { b = document.createElement("button"); b.dataset.lswtab = "1"; b.textContent = "Late swap"; v.append(b); }
+  let b = top.querySelector("[data-lswtab]");
+  if (!b) { const w = document.createElement("span"); w.className = "lswnav"; b = document.createElement("button"); b.dataset.lswtab = "1"; b.textContent = "Late swap"; w.append(b); v.after(w); } // its own framed button beside the tabs (lineups.css .lswnav)
   b.classList.toggle("on", open);
   if (!open && v.classList.contains("own")) v.querySelector("[data-lsw-list]")?.classList.add("on");
   const name = slateName();
