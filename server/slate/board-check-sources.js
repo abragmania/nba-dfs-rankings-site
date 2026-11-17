@@ -23,12 +23,16 @@ const ok = (b) => b?.state === "ok" && Array.isArray(b.men);
 const best = (list) => list.reduce((a, b) => (b.rank > a.rank ? b : a));
 const claim = (key, confirmed) => ({ key, confirmed, rank: rankOf(key, confirmed) });
 
-/** The pages that list a man in their five, by name (a page's own Out marks are not read: the engine's reason is the Out source). [claim] */
-export function fiveClaims(latest, team, name) {
+/**
+ * The pages that list a man in their five, by his DraftKings id when given (the lineup read ties each page man to an id: exact name, then the near-name rule, tools/lineups_read.mjs matchMan),
+ * else by name (a page's own Out marks are not read: the engine's reason is the Out source). [claim]
+ */
+export function fiveClaims(latest, team, name, dkId = null) {
   const k = nameKey(name), block = latest.teams?.[team] ?? {}, out = [];
+  const him = (m) => (dkId != null && m.id != null ? String(m.id) === String(dkId) : nameKey(m.name) === k);
   for (const key of LINEUP_KEYS) {
     const b = block[key];
-    if (ok(b) && blockFresh(latest, key, b) && b.men.some((m) => m.status !== "Out" && nameKey(m.name) === k)) out.push(claim(key, b.confirmed === true));
+    if (ok(b) && blockFresh(latest, key, b) && b.men.some((m) => m.status !== "Out" && him(m))) out.push(claim(key, b.confirmed === true));
   }
   return out;
 }
@@ -69,7 +73,7 @@ export function checkHiddenByLowerSource({ slate, players, lineups, nowMs }, un,
     return bad;
   }
   for (const m of men) {
-    const fives = fiveClaims(latest, m.team, m.name);
+    const fives = fiveClaims(latest, m.team, m.name, m.dk_id);
     if (!fives.length) continue;
     const outs = sourcesOfReason(m.reason, latest, m.team), f = best(fives), row = { check: CHECK, dk_id: m.dk_id, name: m.name, team: m.team, shown: "Out", expected: "playing" };
     if (!outs.length) { bad.push({ ...row, why: `${m.name} is shown Out with no known source for it (${m.reason || "no reason given"}), but ${labelOf(f)} has him in its five` }); continue; }
