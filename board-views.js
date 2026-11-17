@@ -5,7 +5,6 @@ import { esc, logo, isoToEastern, ICON, topStamps } from "./board-util.js";
 import { badgeHtml } from "./sources-panel.js";
 import { noteLists as dataNotes, warningCount } from "./box-note.js";
 import { hasResettable } from "./player-table.js";
-import { pullChipHtml } from "./pull-note.js";
 import { borderStyle } from "./game-borders.js";
 import { themeHtml } from "./theme.js";
 
@@ -63,13 +62,12 @@ export function headTitle(slate, players, c) {
 
 /** Locked / Excluded / Starred filter chips with their counts (only men still on the slate are counted); 0 is dim but
  *  clickable. Then "Reset all overrides" (A6): it clears typed numbers, bumps and console minutes, never stars (NFL D72), so it is
- *  disabled while no row has any, and it asks first (the click in board.js). Then the pull-changes chip. */
+ *  disabled while no row has any, and it asks first (the click in board.js). */
 export function chipsHtml({ players, picks, byId, pickFilter, slate }) {
   const n = (k) => (k === "starred" ? players.filter((p) => p.starred).length : picks[k].filter((id) => byId.has(id)).length);
   const nOvr = players.filter(hasResettable).length;
   return [["locked", "Locked"], ["excluded", "Excluded"], ["starred", "Starred"]].map(([k, label]) => `<button data-chip="${k}" class="chip ${k}${pickFilter === k ? " on" : ""}${n(k) ? "" : " zero"}" title="${pickFilter === k ? "Show everyone again" : `Show only ${label.toLowerCase()} players`}">${label} <b>${n(k)}</b></button>`).join("")
-    + `<button id="ovReset" class="chip ovr${nOvr ? "" : " zero"}"${nOvr ? ` title="${nOvr} ${nOvr === 1 ? "man has" : "men have"} a projection, ownership or bump typed on the board"` : ` disabled title="Nothing typed on the board to reset"`}>Reset all overrides</button>`
-    + pullChipHtml(slate?.pull_changes, players, pickFilter === "changed");
+    + `<button id="ovReset" class="chip ovr${nOvr ? "" : " zero"}"${nOvr ? ` title="${nOvr} ${nOvr === 1 ? "man has" : "men have"} a projection, ownership or bump typed on the board"` : ` disabled title="Nothing typed on the board to reset"`}>Reset all overrides</button>`;
 }
 
 /** A man from the Out list as the card opens him: on the slate's player pool when he is there, else only what the list says. */

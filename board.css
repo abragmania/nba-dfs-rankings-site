@@ -130,14 +130,6 @@ td.gp.proj{font-weight:700}
 /* DK/m TON: the arrow is against the season figure (DK/m SZN, its neighbour). */
 .ton-arr{font-style:normal;font-size:0.5625rem;margin-right:0.25rem;vertical-align:0.0625rem}
 .ton-arr.up{color:var(--gr)}.ton-arr.dn{color:var(--rd)}
-/* Changed since the last pull: the row's mark, its line and each figure's tag. */
-tr.team.moved td:first-child{box-shadow:inset 0.1875rem 0 var(--am)}
-tr.team.moved{background-image:linear-gradient(90deg,#ffb00014 0,transparent 55%)}
-.l2.why{color:var(--am)}.l2.why b{color:var(--tx);font-weight:600}
-/* A move since the last pull (Proj, Min, DK/m TON) hangs over the right end of the figure, in the row's spare height, so no column keeps an empty slot and the numbers sit evenly; the tag is no wider than a figure, so it never reaches a neighbour. */
-td.num:has(>.tagslot){position:relative}
-.tagslot{position:absolute;right:0.25rem;top:0;white-space:nowrap;line-height:1}
-.dtag{display:block;font:700 0.5313rem "Space Grotesk",sans-serif;font-variant-numeric:tabular-nums;line-height:0.625rem;padding:0 0.125rem}
 /* A laptop's window: tighter figure cells, so table and panel still fit beside each other (the LY marker's room stays on the season figures). */
 @media (max-width:2640px){
   #chips .chip{white-space:nowrap;padding:0.25rem 0.375rem} /* with the narrower search box, keeps Columns on the toolbar's first row at 1920 beside the optimizer */
@@ -147,10 +139,6 @@ td.num:has(>.tagslot){position:relative}
   #tbody td.lim,#thead th.lim{width:2.6875rem;min-width:3.875rem;padding:0 0.1875rem}
   #tbody .limb{width:2.3125rem;padding:0 0.1875rem}
 }
-.dtag.up{background:#39e58c1f;color:var(--gr)}.dtag.dn{background:#ff4d5e1f;color:var(--rd)}
-.pullnote:not([hidden]){display:flex;align-items:center;gap:1rem}
-.pullnote button{background:none;border:1px solid var(--am);color:var(--am);font-weight:700;font-size:0.6875rem;padding:0.125rem 0.625rem;white-space:nowrap}
-.pullnote .grow{flex:1}
 .updline{margin:0.25rem 0 0.5rem;font-size:0.6875rem;color:var(--mu);text-align:right}
 .updline.stale{color:var(--rd)}
 /* Pull now (pull-now.js): the button and its line are one group at the end of the header row (order), wrapping together, the line directly right of
@@ -226,9 +214,6 @@ td.num:has(>.tagslot){position:relative}
 .lu .crow.gonetag .sn small{display:block}
 /* A late swap row also holds the slot picker: its slot says the position and the figures read by their format, so the name keeps the room. */
 .lu .crow.lslot .sn1 .pos,.lu .crow.lslot .ss i,.lu .crow.lslot .sp i,.lu .crow.lslot .so i{display:none}
-.chip.movedchip{margin-left:0.375rem;border-color:var(--am);color:var(--am)}.chip.movedchip b{color:var(--am)}
-.chip.movedchip:disabled{cursor:default}
-.chip.movedchip.on{background:var(--am);color:#000}.chip.movedchip.on b{color:#000}
 td.val .v,td.own .v{display:inline-block}
 td.val,td.own{min-width:2.75rem} /* Val and Own are plain figures: no bar, so no room kept for one */
 .miss{color:var(--dim);text-decoration:underline dotted;text-underline-offset:0.1875rem}
@@ -841,13 +826,6 @@ body.fs-list #thead th:last-child,body.fs-list #tbody td:last-child{width:auto} 
   #tbody td.ctl:first-child,#thead th.ctl:first-child{padding-left:0.375rem}
 }
 
-/* On a phone the moved-since-last-pull note stacks: the text full width, then its two buttons in one row of 36px. */
-@media (max-width:899px){
-  .pullnote:not([hidden]){flex-wrap:wrap;gap:0.5rem}
-  .pullnote>span:first-child{flex:1 1 100%}
-  .pullnote .grow{display:none}
-  .pullnote button{flex:1 1 0;height:2.25rem;padding:0 0.625rem}
-}
 /* The console's word on a row (board-marks.js, Adam 11-07). Min and DK/m TON are typeable: the box lays over the figure as Proj's does; his typed
    number wears the typed marker, and a fixed slot after it holds its undo chip so no column moves when one appears. */
 td:has(> .cedit){position:relative}
@@ -883,10 +861,7 @@ body.console-on .syncnote{display:none}
 .sources.bcnotes{margin:0.5rem 0.75rem 0}
 .bcnotes[hidden],body.lineups-on .bcnotes,body.news-on .bcnotes,body.console-on .bcnotes{display:none}
 .bcnotes .bc-lines{display:grid;gap:0.1875rem;margin-top:0.375rem}
-.bcnotes+.pullnote{margin-top:0.5rem}
-.pullnote{margin:1rem 0.75rem 0}
-.pullnote[hidden],body.lineups-on .pullnote:not([hidden]),body.news-on .pullnote:not([hidden]),body.console-on .pullnote:not([hidden]){display:none}
-.bcheck+.sources,.bcnotes+.sources,.pullnote+.sources{margin-top:0.5rem}
+.bcheck+.sources,.bcnotes+.sources{margin-top:0.5rem}
 .sources{margin:1rem 0.75rem 1.5rem;color:var(--mu);font-size:0.75rem}
 .sources summary{cursor:pointer;padding:0.25rem 0;user-select:none}
 .sources ul{list-style:none;margin:0.375rem 0 0;padding:0;display:grid;grid-template-columns:max-content 1fr;gap:0.1875rem 1.125rem}

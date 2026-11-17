@@ -38,7 +38,7 @@ const inTab = (p, tab) => {
  *  range, so a range leaves him out; he is never read as $0. */
 export function filterPlayers(players, f, picks) {
   const q = plain(f.q.trim());
-  const flagged = { starred: (p) => p.starred, changed: (p) => p.pull_move, gap: (p) => minGapOf(p) }[f.pickFilter];
+  const flagged = { starred: (p) => p.starred, gap: (p) => minGapOf(p) }[f.pickFilter];
   const picked = f.pickFilter ? new Set(flagged ? players.filter(flagged).map((p) => p.dk_id) : picks[f.pickFilter]) : null;
   const teams = f.teams.length ? new Set(f.teams) : null;
   const { min, max } = salaryRange(f.minSal, f.maxSal);

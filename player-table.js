@@ -8,7 +8,6 @@ import { rowPin } from "./lateswap-panel.js";
 import { limitCellHtml } from "./row-limits.js";
 import { sgn, dcls } from "./console-model.js";
 import { tonightRate, outFor, isNum } from "./figures.js";
-import { moveLine, moveTag } from "./pull-note.js";
 import { starterChipHtml, undoChipHtml } from "./board-marks.js";
 import { tgMin } from "./lineup-proposals.js";
 
@@ -104,12 +103,12 @@ export const noTonight = (p) => (typeof p.minutes !== "number" ? "no minutes in 
 /** The Tonight cell: the figure, its arrow against the season's and both numbers on hover. */
 function tonightCell(p, col, dash, withWhy, mark) {
   const v = dkTonight(p);
-  if (v === null) return `<td class="${col.cls}"><span class="cu"></span>${dash(noTonight(p))}${moveTag(null)}</td>`;
+  if (v === null) return `<td class="${col.cls}"><span class="cu"></span>${dash(noTonight(p))}</td>`;
   const season = p.dk_per_min, d = typeof season === "number" ? Math.round((v - season) * 100) / 100 : null;
   const yours = hisProj(p) || p.ovr?.steps || hisMin(p) ? " · from your projection or minutes set in the console" : "";
   const title = `${d === null ? `Tonight ${v.toFixed(2)}; no season figure to compare` : `Tonight ${v.toFixed(2)}, season ${season.toFixed(2)}, ${d > 0 ? "+" : ""}${d.toFixed(2)}`}${mark ? " · your typed DK/min" : yours}. Click to type his DK/min; Proj = Min × DK/min`;
   const arrow = d !== null && Math.abs(d) > TON_ARROW_BAND ? `<i class="ton-arr ${d > 0 ? "up" : "dn"}">${d > 0 ? "▲" : "▼"}</i>` : "";
-  return `<td class="${col.cls}" title="${esc(withWhy(title))}"><span class="cu">${undoChipHtml(p.dk_id, "d", mark)}</span>${arrow}<span class="cedit${mark ? " ctyped" : ""}" data-edit="crate" data-id="${esc(p.dk_id)}">${v.toFixed(2)}</span>${moveTag(p.pull_move?.rate, 2, "TwoGun's DK/min", { signed: true })}</td>`;
+  return `<td class="${col.cls}" title="${esc(withWhy(title))}"><span class="cu">${undoChipHtml(p.dk_id, "d", mark)}</span>${arrow}<span class="cedit${mark ? " ctyped" : ""}" data-edit="crate" data-id="${esc(p.dk_id)}">${v.toFixed(2)}</span></td>`;
 }
 /** The table's row order for sort { key, dir }: a blank figure goes last either way, ties by name. */
 export function comparePlayers(a, b, { key, dir }, source = "twogun") {
@@ -158,7 +157,7 @@ function figCell(k, p, x) {
   // A figure's own hover keeps its use and carries why the row is greyed after it, as it hides the row's own hover.
   const also = x.why ?? "";
   const withWhy = (t) => (also ? `${t} · ${also}` : t);
-  if (k === "projection") return `<td class="${col.cls}${struckOut(p) ? " ostruck" : ""}"${projTitle(p) || struckOut(p) ? ` title="${esc([projTitle(p), struckOut(p) ? "Your number is kept while he is Out; it counts once he is In" : ""].filter(Boolean).join(" · "))}"` : ""}>${bumpFigureHtml(p, v == null ? dash(p.proj_note ?? col.title) : v.toFixed(1), also)}${moveTag(p.pull_move?.proj, 1, "TwoGun's projection")}</td>`;
+  if (k === "projection") return `<td class="${col.cls}${struckOut(p) ? " ostruck" : ""}"${projTitle(p) || struckOut(p) ? ` title="${esc([projTitle(p), struckOut(p) ? "Your number is kept while he is Out; it counts once he is In" : ""].filter(Boolean).join(" · "))}"` : ""}>${bumpFigureHtml(p, v == null ? dash(p.proj_note ?? col.title) : v.toFixed(1), also)}</td>`;
   if (k === "dk_tonight") return tonightCell(p, col, dash, withWhy, x.mark?.d);
   if (k === "value" || k === "proj_own") {
     const own = k === "proj_own", typed = own && p.ovr?.proj_own != null;
@@ -186,16 +185,15 @@ function figCell(k, p, x) {
   }
   const shown = v == null ? dash(col.title) : k === "salary" ? money(v) : v.toFixed(1);
   // Minutes set in the console stay across pulls, as a typed projection does, so they wear its marker and name TwoGun's figure.
-  const moved = k === "minutes" ? moveTag(p.pull_move?.min, 1, "TwoGun's minutes") : "";
   if (k === "minutes") {
     // Min is typeable (Adam, 11-07): the number goes to the console as his typed minutes, and the console sends the board his projection.
     const mk = x.mark?.m, applied = v != null && hisMin(p), tg = tgMin(p);
     const tgText = `TwoGun's ${typeof tg === "number" ? tg.toFixed(1) : "none"}`;
     const hover = mk ? `Your typed minutes; ${tgText}. Click to change them` : applied ? `From the console; ${tgText}. Click to type his minutes` : "Click to type his minutes; Proj = Min × DK/min";
     const gap = minGapOf(p), warn = gap ? `<i class="gapw" title="${esc(gapTitle(gap))}">⚠</i>` : "";
-    return `<td class="${col.cls}"><span class="cu">${undoChipHtml(p.dk_id, "m", mk)}</span>${warn}<span class="cedit${mk ? " ctyped" : applied ? " min-typed" : ""}" data-edit="cmin" data-id="${esc(p.dk_id)}" title="${esc(withWhy(hover))}">${shown}</span>${moved}</td>`;
+    return `<td class="${col.cls}"><span class="cu">${undoChipHtml(p.dk_id, "m", mk)}</span>${warn}<span class="cedit${mk ? " ctyped" : applied ? " min-typed" : ""}" data-edit="cmin" data-id="${esc(p.dk_id)}" title="${esc(withWhy(hover))}">${shown}</span></td>`;
   }
-  return `<td class="${col.cls}">${shown}${moved}</td>`;
+  return `<td class="${col.cls}">${shown}</td>`;
 }
 
 /**
@@ -219,7 +217,7 @@ export function rowHtml(p, keys, x) {
   const cell = (k) => {
     switch (k) {
       case "star": return `<td class="ctl"><button class="fav${p.starred ? " on" : ""}" data-star="${id}" title="${p.starred ? "Unstar" : "Star"}">${p.starred ? "★" : "☆"}</button></td>`;
-      case "name": return `<td class="pl"><div class="who">${logo(p.team)}<div class="nm"><div class="l1"><button class="name" data-dk-id="${id}">${esc(p.name)}</button>${starterChipHtml(x.mark?.chip)}${x.tag ? `<span class="pos">${esc(x.tag)}</span>` : ""}${restDot(p)}${statusBadge(p, x.mark?.inj)}</div><div class="l2${p.pull_move ? " why" : ""}"${p.pull_move && p.tip ? ` title="Tip ${esc(x.when(p.tip))}"` : ""}>${esc(p.team)} ${p.oppText ? esc(p.oppText) : dash("no opponent in this slate file")} · ${p.pull_move ? moveLine(p.pull_move) : p.tip ? esc(x.when(p.tip)) : dash("no tip time in this slate file")}</div></div>${tools}</div></td>`;
+      case "name": return `<td class="pl"><div class="who">${logo(p.team)}<div class="nm"><div class="l1"><button class="name" data-dk-id="${id}">${esc(p.name)}</button>${starterChipHtml(x.mark?.chip)}${x.tag ? `<span class="pos">${esc(x.tag)}</span>` : ""}${restDot(p)}${statusBadge(p, x.mark?.inj)}</div><div class="l2">${esc(p.team)} ${p.oppText ? esc(p.oppText) : dash("no opponent in this slate file")} · ${p.tip ? esc(x.when(p.tip)) : dash("no tip time in this slate file")}</div></div>${tools}</div></td>`;
       case "thumbs": return `<td class="bmp">${bumpControlHtml(p)}</td>`;
       // Late swap mode: the slot picker takes the lock button's place; a lock is still set from the player card.
       case "lock": return `<td class="ctl${L ? " ls" : ""}">${L ? rowPin(p, L) : `<button class="lk${lk ? " on" : ""}" data-lock="${id}"${btn("Lock")}>${ICON.lock}</button>`}</td>`;
@@ -229,5 +227,5 @@ export function rowHtml(p, keys, x) {
       default: return figCell(k, p, { ...x, why });
     }
   };
-  return `<tr class="team${p.pull_move ? " moved" : ""}${lk ? " locked" : ""}${ex ? " excl" : ""}${gone ? " started" : ""}${L ? "" : why ? " blk" : " pk"}${x.inl?.has(p.dk_id) ? " inl" : ""}" data-row="${id}" style="--t1:${c.t1};--t2:${c.t2}"${gone ? ` title="Game started"` : why ? ` title="${esc(why)}"` : ""}>${keys.map((k, i) => addClass(cell(k), famClass(keys, i))).join("")}</tr>`;
+  return `<tr class="team${lk ? " locked" : ""}${ex ? " excl" : ""}${gone ? " started" : ""}${L ? "" : why ? " blk" : " pk"}${x.inl?.has(p.dk_id) ? " inl" : ""}" data-row="${id}" style="--t1:${c.t1};--t2:${c.t2}"${gone ? ` title="Game started"` : why ? ` title="${esc(why)}"` : ""}>${keys.map((k, i) => addClass(cell(k), famClass(keys, i))).join("")}</tr>`;
 }

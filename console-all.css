@@ -12,9 +12,9 @@
 #console .ca-chip.ca-quiet{color:var(--mu)}
 #console .ca-chip.on{background:var(--bl);border-color:var(--bl);color:#fff}#console .ca-chip.on b{color:#fff}
 body.light #console .ca-chip.on{background:var(--bl)}
-#console .ca-list{background:var(--p);border:1px solid var(--ln);border-radius:0.25rem}
+#console .ca-list{max-width:80rem;background:var(--p);border:1px solid var(--ln);border-radius:0.25rem}
 #console .ca-empty{padding:1rem 0.875rem;color:var(--mu);font-size:0.9375rem}
-#console .ca-row{display:grid;grid-template-columns:6.75rem 4.25rem 5.5rem minmax(0,1fr) 7.5rem 14.5rem minmax(10rem,16rem);column-gap:0.75rem;align-items:center;min-height:2.5rem;padding:0.3125rem 0.875rem;border-bottom:1px solid var(--ln2);font-size:0.9375rem}
+#console .ca-row{display:grid;grid-template-columns:6.75rem 4.25rem 5.5rem minmax(0,1fr) 7rem 12rem 13rem;column-gap:0.75rem;align-items:center;min-height:2.5rem;padding:0.3125rem 0.875rem;border-bottom:1px solid var(--ln2);font-size:0.9375rem}
 #console .ca-row:last-child{border-bottom:0}
 #console .ca-row:hover{background:color-mix(in srgb,var(--bl) 5%,transparent)}
 #console .ca-row time{font-weight:700;color:var(--tx);white-space:nowrap}
@@ -41,7 +41,7 @@ body.light #console .ca-k-P,body.light #console .ca-k-IN,body.light #console .ca
 #console .ca-call{display:inline-block;padding:0.0625rem 0.5rem;border:1px solid var(--am);border-radius:0.125rem;background:color-mix(in srgb,var(--am) 14%,transparent);color:var(--am);font-weight:800;font-size:0.75rem;white-space:nowrap}
 #console .ca-x{width:1.5rem;height:1.5rem;padding:0;background:none;border:1px solid var(--ln);border-radius:0.125rem;color:var(--mu);font-size:0.75rem}
 #console .ca-x:hover{border-color:var(--tx);color:var(--tx)}
-#console .ca-srcs{display:flex;flex-wrap:wrap;gap:0.25rem;justify-content:flex-end}
+#console .ca-srcs{display:flex;flex-wrap:wrap;gap:0.25rem;justify-content:flex-start}
 #console .ca-src{padding:0 0.375rem;border:1px solid var(--ln);border-radius:0.125rem;color:var(--mu);font-size:0.6875rem;white-space:nowrap}
 #console .ca-row.ca-conf{background:color-mix(in srgb,var(--am) 7%,transparent)}
 #console .ca-foot{margin:0.75rem 0 0;padding:0.5rem 0.125rem 0;border-top:1px solid var(--ln);color:var(--mu);font-size:0.78125rem;line-height:1.5}

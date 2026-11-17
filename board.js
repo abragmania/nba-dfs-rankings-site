@@ -13,7 +13,6 @@ import { createEditors } from "./cell-editor.js";
 import { askConfirm, CONFIRM } from "./confirm.js";
 import { columnsControl, sortNote } from "./columns.js";
 import { headHtml, rowHtml, SORT_KEYS, comparePlayers, minSourceOf, gapChipHtml } from "./player-table.js";
-import { pullNoteHtml } from "./pull-note.js";
 import { boxNote, absenceNote, freshBoxes } from "./box-note.js";
 import { CHECK_MS, takeAnswer, applyHeld, createRefresher, followNewest, mergeFresh, outNamesOf, pickSlate, slateQuery, overrideKey, picksOnBoard, pullOf, rememberRows, rosterCleanup, statusLine } from "./slate-refresh.js";
 import { pressSettle } from "./press-settle.js";
@@ -396,20 +395,12 @@ function renderFilterMarks() {
   $("clearF").disabled = !filtersOn(S);
 }
 function renderTabs() { $("tabs").innerHTML = TABS.map((t) => `<button data-tab="${t}" class="${t === S.tab ? "on" : ""}">${t}</button>`).join(""); }
-// The Locked / Excluded / Starred chips, Reset all overrides and the pull-changes chip (board-views.js chipsHtml).
+// The Locked / Excluded / Starred chips and Reset all overrides (board-views.js chipsHtml).
 function renderChips() {
   $("chips").innerHTML = chipsHtml({ players: S.players, picks: S.picks, byId: S.byId, pickFilter: S.pickFilter, slate: S.slate });
   // The gap chip rides the team-chip row: the toolbar's first row has no room for it at 1920 (renderTeamChips rebuilds that row, and renderRows follows it).
   $("teamChips").querySelector(".gapchip")?.remove();
   $("teamChips").insertAdjacentHTML("afterbegin", gapChipHtml(S.players, S.pickFilter === "gap"));
-  renderPullNote();
-}
-/** Changed since the last pull: the banner, until he dismisses this pull's. The dismissal is a per-viewer convenience, in browser storage, and a newer pull brings the banner back. */
-const pullNoteKey = () => `nbaboard.pullnote.${S.name}`;
-function renderPullNote() {
-  const html = pullNoteHtml(S.slate?.pull_changes, S.players, { dismissed: tryStore(() => localStorage.getItem(pullNoteKey())), filterOn: S.pickFilter === "changed" });
-  $("pullnote").hidden = !html;
-  $("pullnote").innerHTML = html;
 }
 /** The Out list (board-views.js outsHtml), closed on every load. */
 function renderOuts() { $("outs").innerHTML = outsHtml({ out: S.slate.out ?? [], outOpen: S.outOpen, colourOf }); }
@@ -481,14 +472,13 @@ $("tbody").addEventListener("click", (e) => {
 
 // ---------- events ----------
 document.addEventListener("click", (e) => {
-  const t = e.target.closest("[data-sort],[data-tab],[data-game],[data-dk-id],[data-out-i],[data-out-name],[data-lock],[data-excl],[data-unpick],[data-chip],[data-view],[data-theme],[data-star],[data-reset],[data-edit],[data-unmark],[data-fteam],[data-shade],#ovReset,#clearF,#notesBtn,#lsBtn,#csBtn,#outTog,#pullDismiss");
+  const t = e.target.closest("[data-sort],[data-tab],[data-game],[data-dk-id],[data-out-i],[data-out-name],[data-lock],[data-excl],[data-unpick],[data-chip],[data-view],[data-theme],[data-star],[data-reset],[data-edit],[data-unmark],[data-fteam],[data-shade],#ovReset,#clearF,#notesBtn,#lsBtn,#csBtn,#outTog");
   if (!t) { const l = $("notesList"); if (l && !e.target.closest(".notes")) l.hidden = true; return; }
   const d = t.dataset;
   if (t.id === "notesBtn") { const l = $("notesList"); l.hidden = !l.hidden; }
   else if (d.view) { card.close(); if (scenarioConsole.isOn()) setConsole(false); setView(d.view); } // a tab leaves the console, so the bar shows where you are
   else if (t.id === "lsBtn") { setView("list"); panel.toggleLateSwap().then(fixTableWidth); }
   else if (t.id === "csBtn") setConsole(!scenarioConsole.isOn());
-  else if (t.id === "pullDismiss") { tryStore(() => localStorage.setItem(pullNoteKey(), S.slate.pull_changes.pull)); renderPullNote(); }
   else if (t.id === "outTog") { S.outOpen = !S.outOpen; renderOuts(); $("outTog")?.focus({ preventScroll: true }); }
   else if (d.shade) setTheme({ light: d.shade === "light" });
   else if (t.id === "clearF") { setFilters(noFilters()); renderGames(); renderTabs(); renderTeamChips(); renderRows(); }
