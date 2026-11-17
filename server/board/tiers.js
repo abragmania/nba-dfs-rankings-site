@@ -172,10 +172,11 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
   // Adam 1:33 PM 11-17: typed minutes and standing minutes overrides never enter the plan (no pin, no shift to his position's bench men): his figure is replaced after it (figures.js, console-tier.js)
   const all = [...by.values()], known = all.filter((x) => isNum(x.figure)), missing = all.filter((x) => !isNum(x.figure));
   const ps = positionStep(c, xs, by, known, missing, TEAM_MINUTES), pa = (id) => ps.added.get(id) ?? 0; // the lead's fix of 11-17: the Out men's minutes to their position first
-  const fill = fillTeam(known.map((x) => ({ id: x.m.id, starter: x.tier === "starter", figure: x.figure + pa(x.m.id), w: x.figure, ceiling: x.ceiling, floor: x.floor, limited: x.limited, max: x.max })), TEAM_MINUTES, missing.length > 0);
+  const fill = fillTeam(known.map((x) => ({ id: x.m.id, pos: x.m.depth?.pos ?? null, starter: x.tier === "starter", figure: x.figure + pa(x.m.id), w: x.figure, ceiling: x.ceiling, floor: x.floor, limited: x.limited, max: x.max })), TEAM_MINUTES, missing.length > 0);
   notes.push(...planNotes(c, xs, known), ...positionNotes(ps, known), ...fillNotes(fill, missing, outs, TEAM_MINUTES, typedIn), ...overNotes(fill, known, TEAM_MINUTES));
   const out = new Map(), sumOf = (mp) => [...mp.values()].reduce((s, v) => s + v, 0);
   for (const x of known) out.set(x.m.id, entryOf(x, fill, TEAM_MINUTES, pa(x.m.id)));
+  if (!missing.length) notes.push(...benchOverNotes(known, out, TEAM_MINUTES));
   for (const x of missing) out.set(x.m.id, { auto: null, figure: null, computed: null, ceiling: null, computed_ceiling: null, floor: null, spot: x.spot, tier: x.tier, basis: x.basis, used: x.used, skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: 0, label: { ...x.label, fill: 0, trim: 0 }, why: x.words });
   const pot = { sum: r1(fill.sum), gap: r1(fill.gap), out: outs.map((o) => o.name),
     capped: known.filter((x) => x.capped > EPS).map((x) => ({ name: x.m.name, minutes: r1(x.capped) })), proportional: sumOf(fill.prop), rounds: fill.rounds, round_minutes: sumOf(fill.plus), trimmed: fill.trimmed, unassigned: fill.unassigned, untrimmed: fill.untrimmed };
@@ -186,7 +187,7 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
 function entryOf(x, fill, T, pos = 0) {
   const id = x.m.id, e = fill.prop.get(id) ?? 0, p = fill.plus.get(id) ?? 0, cut = fill.cut.get(id) ?? 0, auto = x.figure + pos + e + p - cut;
   const shown = (v) => v >= 0.05; // under a tenth's rounding: in the figure, not worded as "+0" or "-0"
-  const fillWords = `${shown(pos) ? `; +${r1(pos)}: the Out men's minutes by position (each to his own position's bench in role order, then its starters, then the positions next to it; he is ${x.m.depth?.pos ?? "no position"})` : ""}${shown(e) ? `; +${r1(e)} to reach ${T} (in proportion to his figure, none above ${MINUTES_CAP})` : ""}${shown(p) ? `; +${r1(p)} in +1 rounds to reach ${T} (starters, then bench, the last round pro-rated)` : ""}`;
+  const fillWords = `${shown(pos) ? `; +${r1(pos)}: the Out men's minutes by position (each to his own position's starters, then its bench in role order, none above its lowest starter, then the positions next to it; he is ${x.m.depth?.pos ?? "no position"})` : ""}${shown(e) ? `; +${r1(e)} to reach ${T} (in proportion to his figure, none above ${MINUTES_CAP})` : ""}${shown(p) ? `; +${r1(p)} in +1 rounds to reach ${T} (starters, then bench, the last round pro-rated)` : ""}`;
   const trimWords = shown(cut) ? `; -${r1(cut)}: the team's figures are over ${T} (${fill.how.get(id) === "starter" ? "the bench could not absorb it all, so starters were trimmed above their floors" : "the bench trimmed in proportion to their figures"})` : "";
   return { auto, figure: x.figure, computed: x.computed, ceiling: p > 1e-6 ? Math.max(x.ceiling, auto) : x.ceiling, computed_ceiling: x.computed_ceiling, floor: x.floor, spot: x.spot, tier: x.tier, basis: x.basis, used: x.used,
     skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: x.n, label: { ...x.label, fill: shown(e + p + pos) ? r1(e + p + pos) : 0, trim: shown(cut) ? r1(cut) : 0 }, why: `${x.words}${fillWords}${trimWords} = ${r1(auto)}` };
@@ -338,7 +339,9 @@ function positionStep(c, xs, by, known, missing, T) {
   const room = (b) => Math.max(0, Math.min(b.ceiling, b.max ?? MINUTES_CAP) - b.figure); // to 36 (a starter whose own mean is above it has none), or his cap override
   // Adam 5:26 PM 11-17: by role and position only, never by what a man usually plays: every bench man takes to the 36 cap in role order
   const bench = c.healthyOrder.filter((e) => e.x && ids.has(e.x.m.id) && e.pos && !by.get(e.x.m.id).limited).map((e) => ({ id: e.x.m.id, pos: e.pos, starter: false, room: room(by.get(e.x.m.id)) }));
-  const starters = xs.filter((x) => x.tier === "starter" && ids.has(x.m.id) && x.m.depth?.pos && !by.get(x.m.id).limited).map((x) => ({ id: x.m.id, pos: x.m.depth.pos, starter: true, room: room(by.get(x.m.id)) }));
+  // Adam 6:40 PM 11-17: a limited starter takes nothing but still sets his position's ceiling for its bench (figure: each man's before this step)
+  const starters = xs.filter((x) => x.tier === "starter" && ids.has(x.m.id) && x.m.depth?.pos).map((x) => ({ id: x.m.id, pos: x.m.depth.pos, starter: true, figure: by.get(x.m.id).figure, room: by.get(x.m.id).limited ? 0 : room(by.get(x.m.id)) }));
+  for (const b of bench) b.figure = by.get(b.id).figure;
   const men = [...bench, ...starters];
   const f = Math.min(1, gap / total), scaled = demand.map((d) => ({ ...d, amount: d.amount * f })); // never more than the gap (the step cannot over-take the team's minutes); short of it, each position in proportion
   return { ...positionFill(men, scaled), demand: scaled };
@@ -500,9 +503,22 @@ function positionNotes(ps, known) {
 
 /** The team note when the fill had to pass 36 (the lead's call, 11-17: only when the team cannot reach 240 under it): each man over 36 and why. */
 function overNotes(fill, known, T) {
-  if (!fill.over?.length) return [];
-  const name = new Map(known.map((x) => [x.m.id, x.m.name])), n = known.filter((x) => !x.limited).length;
-  return [`Only ${n} men can take minutes, so ${T} cannot be reached with nobody over ${MINUTES_CAP}: ${fill.over.map((m) => `${name.get(m.id)} ${r1(m.total)}`).join(", ")} go past ${MINUTES_CAP} to reach it`];
+  const name = new Map(known.map((x) => [x.m.id, x.m.name])), n = known.filter((x) => !x.limited).length, notes = [];
+  if (fill.over?.length) notes.push(`Only ${n} men can take minutes, so ${T} cannot be reached with nobody over ${MINUTES_CAP}: ${fill.over.map((m) => `${name.get(m.id)} ${r1(m.total)}`).join(", ")} go past ${MINUTES_CAP} to reach it`);
+  // Adam 6:40 PM 11-17: a bench man passes his position's lowest starter only when 240 cannot be reached any other way, and is named
+  if (fill.passed?.length) notes.push(`${T} cannot be reached with every bench man at or under his position's lowest starter: ${fill.passed.map((m) => `${name.get(m.id)} ${r1(m.total)}`).join(", ")} go${fill.passed.length === 1 ? "es" : ""} past him to reach it`);
+  return notes;
+}
+
+/** The check on the plan's output (Adam 6:40 PM 11-17, G62): each bench man above his chart position's lowest starter, and a team not at T, named in the team's note, never silent. out: Map id -> entry. */
+function benchOverNotes(known, out, T) {
+  const low = new Map(), notes = [], pos = (x) => x.m.depth?.pos ?? null;
+  for (const x of known) if (x.tier === "starter" && pos(x)) { const a = out.get(x.m.id).auto; if (!low.has(pos(x)) || a < low.get(pos(x)).auto) low.set(pos(x), { auto: a, name: x.m.name }); }
+  const over = known.filter((x) => x.tier !== "starter" && low.has(pos(x)) && out.get(x.m.id).auto > low.get(pos(x)).auto + 0.05);
+  if (over.length) notes.push(`Bench men above their position's lowest starter: ${over.map((x) => `${x.m.name} ${r1(out.get(x.m.id).auto)} (${pos(x)}: ${low.get(pos(x)).name} ${r1(low.get(pos(x)).auto)})`).join(", ")}; ${T} could not be reached otherwise, or his own figure was already above`);
+  const sum = known.reduce((s, x) => s + out.get(x.m.id).auto, 0);
+  if (Math.abs(sum - T) > 0.05) notes.push(`The team's minutes add to ${r1(sum)}, not ${T}`);
+  return notes;
 }
 
 /** The team's notes on step 5: the fill under 240 or the trim over it, and what nobody could take or give. */
