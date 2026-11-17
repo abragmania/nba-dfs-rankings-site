@@ -21,7 +21,8 @@
 //  TwoGun-far-lower flag (Adam 2:00 PM 11-17: never called a limit): TwoGun far below our figure (FAR_BELOW share and FAR_BELOW_MIN minutes) marks the row; both are shown, ours stands.
 // RECENT_GAMES, BENCH_PLUS_*, FAR_BELOW* are working values Adam may tune. Typed minutes and standing minutes overrides are applied after this (figures.js), never rescaled.
 import { isNum } from "./figures.js";
-import { MINUTES_CAP, GAME_MAX, benchSpots as spotsOf, shareOut, fillTeam, ordinal } from "./team-fill.js";
+import { MINUTES_CAP, GAME_MAX, benchSpots as spotsOf, shareOut, fillTeam, positionFill, ordinal } from "./team-fill.js";
+import { benchOrder } from "./depth-cols.js";
 
 export { shareOut, MINUTES_CAP };
 
@@ -52,7 +53,7 @@ export function quantile(values, q) {
  * Tonight's five: { ids: Set of DraftKings ids (strings), kind: "confirmed" | "agreed" | "expected", note }. order: tonight's playing men, in order [{ id, starter_flag }]; confirmed: { ids, kind } or null
  * (the lineup pages' five). With no five from the pages, TwoGun's starter flags are the five, marked expected; a short five is filled from the top of tonight's order, a long one cut to the top of it. Pure.
  */
-export function chooseFive(order, confirmed) {
+export function chooseFive(order, confirmed, chartTops = null, fill = []) {
   const here = new Set(order.map((o) => String(o.id)));
   let ids = [], kind = "expected", note = null;
   if (confirmed?.ids?.length) {
@@ -61,14 +62,17 @@ export function chooseFive(order, confirmed) {
       note = `the lineup pages' five names ${ids.length} men; the first 5 on tonight's order are used`;
       ids = order.map((o) => String(o.id)).filter((id) => ids.includes(id)).slice(0, 5);
     }
+  } else if (chartTops?.length) { // Adam 11-17: with no five from the pages, the top man at each position on our depth chart starts (never TwoGun's flags)
+    ids = chartTops.map(String).filter((id) => here.has(id)).slice(0, 5); kind = "chart";
   } else {
     const flagged = order.filter((o) => o.starter_flag).map((o) => String(o.id));
     ids = flagged.slice(0, 5);
     if (flagged.length > 5) note = `TwoGun flags ${flagged.length} starters; the first 5 on tonight's order are used`;
   }
   if (ids.length < 5) {
-    const add = order.map((o) => String(o.id)).filter((id) => !ids.includes(id)).slice(0, 5 - ids.length);
-    if (add.length) note = `${note ? `${note}; ` : ""}${kind === "expected" ? "TwoGun flags" : `the lineup pages' five names`} ${ids.length} available starter${ids.length === 1 ? "" : "s"}: ${add.length} filled from the top of tonight's order`;
+    // position for position (Adam 1:19 PM, the lead 11-17): a short five takes first the top man of each column our chart has nobody of the five in (fill), then tonight's order
+    const add = [...new Set([...fill.map(String).filter((id) => here.has(id)), ...order.map((o) => String(o.id))])].filter((id) => !ids.includes(id)).slice(0, 5 - ids.length);
+    if (add.length) note = `${note ? `${note}; ` : ""}${kind === "expected" ? "TwoGun flags" : kind === "chart" ? "the depth chart's tops name" : `the lineup pages' five names`} ${ids.length} available starter${ids.length === 1 ? "" : "s"}: ${add.length} filled from the top of tonight's order`;
     ids = [...ids, ...add];
   }
   return { ids: new Set(ids), kind, note };
@@ -152,22 +156,26 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
   // since / teamGames: given by the console's payload (no ledger games there); else read from `games`
   const notes = [], by = new Map(), since = sinceIn === undefined ? (games ?? []).slice(-RECENT_GAMES)[0]?.date ?? null : sinceIn, teamGames = teamGamesIn ?? (games ?? []).length;
   if (five?.note) notes.push(five.note);
-  notes.push(`Starters: ${five.kind === "expected" ? `expected, TwoGun's starter flags (${five.why ? `the lineup pages' five was not used: ${five.why}` : "the lineup pages have not posted a five"})` : `the lineup pages' ${five.kind} five`}`);
+  const pagesWhy = five.why ? `the lineup pages' five was not used: ${five.why}` : "the lineup pages have not posted a five";
+  notes.push(`Starters: ${five.kind === "expected" ? `expected, TwoGun's starter flags (${pagesWhy})` : five.kind === "chart" ? `the top man at each position on our depth chart (${pagesWhy})` : `the lineup pages' ${five.kind} five`}`);
+  const chartSays = chartDisagrees(men, five);
+  if (chartSays) notes.push(chartSays);
   if (boxNote) notes.push(boxNote);
   // Adam 11-13: the team's median starter figure tonight (the five's own starter-role means), the stand-in when an Out starter's own figure is unknown
   const fiveFigs = boxNote ? [] : men.filter((m) => m.in_five && m.lid && !(m.replaces ?? []).length).map((m) => roleFigure(rowsOf(m.lid) ?? [], "starter", null)).filter((r) => r.source === "role").map((r) => r.value);
   const spots = boxNote ? null : spotsIn !== undefined ? spotsIn : spotsOf(games);
-  const c = { rowsOf, boxNote, since, teamGames, chartNeedsOutMost, outs, spots, medianStarter: quantile(fiveFigs, 0.5), unmatched: [], chartMen: [], noLast: [] };
+  const c = { rowsOf, boxNote, since, teamGames, chartNeedsOutMost, outs: outs.map((o) => ({ ...o })), spots, medianStarter: quantile(fiveFigs, 0.5), unmatched: [], chartMen: [], noLast: [] };
   const xs = men.map((m) => manBase(m, c));
-  placeBench(xs, spots);
+  placeBench(xs, spots, c);
   pairReplaced(xs, outs);
   for (const x of xs) by.set(x.m.id, manFinish(x, c));
   // Adam 1:33 PM 11-17: typed minutes and standing minutes overrides never enter the plan (no pin, no shift to his position's bench men): his figure is replaced after it (figures.js, console-tier.js)
   const all = [...by.values()], known = all.filter((x) => isNum(x.figure)), missing = all.filter((x) => !isNum(x.figure));
-  const fill = fillTeam(known.map((x) => ({ id: x.m.id, starter: x.tier === "starter", figure: x.figure, ceiling: x.ceiling, floor: x.floor, limited: x.limited, max: x.max })), TEAM_MINUTES, missing.length > 0);
-  notes.push(...planNotes(c, xs, known), ...fillNotes(fill, missing, outs, TEAM_MINUTES, typedIn));
+  const ps = positionStep(c, xs, by, known, missing, TEAM_MINUTES), pa = (id) => ps.added.get(id) ?? 0; // the lead's fix of 11-17: the Out men's minutes to their position first
+  const fill = fillTeam(known.map((x) => ({ id: x.m.id, starter: x.tier === "starter", figure: x.figure + pa(x.m.id), w: x.figure, ceiling: x.ceiling, floor: x.floor, limited: x.limited, max: x.max })), TEAM_MINUTES, missing.length > 0);
+  notes.push(...planNotes(c, xs, known), ...positionNotes(ps, known), ...fillNotes(fill, missing, outs, TEAM_MINUTES, typedIn), ...overNotes(fill, known, TEAM_MINUTES));
   const out = new Map(), sumOf = (mp) => [...mp.values()].reduce((s, v) => s + v, 0);
-  for (const x of known) out.set(x.m.id, entryOf(x, fill, TEAM_MINUTES));
+  for (const x of known) out.set(x.m.id, entryOf(x, fill, TEAM_MINUTES, pa(x.m.id)));
   for (const x of missing) out.set(x.m.id, { auto: null, figure: null, computed: null, ceiling: null, computed_ceiling: null, floor: null, spot: x.spot, tier: x.tier, basis: x.basis, used: x.used, skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: 0, label: { ...x.label, fill: 0, trim: 0 }, why: x.words });
   const pot = { sum: r1(fill.sum), gap: r1(fill.gap), out: outs.map((o) => o.name),
     capped: known.filter((x) => x.capped > EPS).map((x) => ({ name: x.m.name, minutes: r1(x.capped) })), proportional: sumOf(fill.prop), rounds: fill.rounds, round_minutes: sumOf(fill.plus), trimmed: fill.trimmed, unassigned: fill.unassigned, untrimmed: fill.untrimmed };
@@ -175,13 +183,13 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
 }
 
 /** One man's plan entry: his figure through the fill and trim, with a why naming each step (Adam 11-17). */
-function entryOf(x, fill, T) {
-  const id = x.m.id, e = fill.prop.get(id) ?? 0, p = fill.plus.get(id) ?? 0, cut = fill.cut.get(id) ?? 0, auto = x.figure + e + p - cut;
+function entryOf(x, fill, T, pos = 0) {
+  const id = x.m.id, e = fill.prop.get(id) ?? 0, p = fill.plus.get(id) ?? 0, cut = fill.cut.get(id) ?? 0, auto = x.figure + pos + e + p - cut;
   const shown = (v) => v >= 0.05; // under a tenth's rounding: in the figure, not worded as "+0" or "-0"
-  const fillWords = `${shown(e) ? `; +${r1(e)} to reach ${T} (in proportion to his figure, none above ${MINUTES_CAP})` : ""}${shown(p) ? `; +${r1(p)} in +1 rounds to reach ${T} (starters, then bench, the last round pro-rated)` : ""}`;
+  const fillWords = `${shown(pos) ? `; +${r1(pos)}: the Out men's minutes by position (each to his own position's bench in role order, then its starters, then the positions next to it; he is ${x.m.depth?.pos ?? "no position"})` : ""}${shown(e) ? `; +${r1(e)} to reach ${T} (in proportion to his figure, none above ${MINUTES_CAP})` : ""}${shown(p) ? `; +${r1(p)} in +1 rounds to reach ${T} (starters, then bench, the last round pro-rated)` : ""}`;
   const trimWords = shown(cut) ? `; -${r1(cut)}: the team's figures are over ${T} (${fill.how.get(id) === "starter" ? "the bench could not absorb it all, so starters were trimmed above their floors" : "the bench trimmed in proportion to their figures"})` : "";
   return { auto, figure: x.figure, computed: x.computed, ceiling: p > 1e-6 ? Math.max(x.ceiling, auto) : x.ceiling, computed_ceiling: x.computed_ceiling, floor: x.floor, spot: x.spot, tier: x.tier, basis: x.basis, used: x.used,
-    skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: x.n, label: { ...x.label, fill: shown(e + p) ? r1(e + p) : 0, trim: shown(cut) ? r1(cut) : 0 }, why: `${x.words}${fillWords}${trimWords} = ${r1(auto)}` };
+    skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: x.n, label: { ...x.label, fill: shown(e + p + pos) ? r1(e + p + pos) : 0, trim: shown(cut) ? r1(cut) : 0 }, why: `${x.words}${fillWords}${trimWords} = ${r1(auto)}` };
 }
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
@@ -234,12 +242,114 @@ export function benchOrderKey(offChart, rows, recent) {
  * Step 3: the bench men in tonight's depth-chart order: each charted man by his place on the standing chart (m.chart_rank: Adam's moves applied, Out men simply absent, so everyone below moves up; review round 1,
  * finding 7: never the rotation step's re-rank by own minutes), the men the chart does not place (m.off_chart) after them (benchOrderKey); the Nth takes spot N (0 past the team's deepest bench).
  */
-function placeBench(xs, spots) {
+function placeBench(xs, spots, c) {
   if (!spots) return;
+  if (xs.some((x) => x.m.depth !== undefined)) return placeByChart(xs, spots, c);
   const rank = (x, i) => (Number.isFinite(x.m.chart_rank) ? x.m.chart_rank : 1e6 + i); // no rank given (direct callers): tonight's order
   const bench = xs.map((x, i) => ({ x, i, r: rank(x, i), o: benchOrderKey(x.m.off_chart === true, x.rows, x.recent) })).filter(({ x }) => x.tier !== "starter");
   bench.sort((a, b) => a.o.group - b.o.group || (a.o.group === 0 ? a.r - b.r : b.o.key - a.o.key) || a.i - b.i);
   bench.forEach(({ x, o }, k) => { x.spot = k + 1; x.spotFig = spots.figs[k] ?? 0; x.order = o; });
+}
+
+/**
+ * Step 3 on our depth chart by position (Adam 2:14 PM 11-17): the bench men in depth-cols.js benchOrder: Bench+ first, then every 2nd, then every 3rd and below, ties by minutes per game over the team's last
+ * RECENT_GAMES; men with no position last. m.depth: { pos (null: none), rank (1 the first man behind the five in his column), idx }. The Nth takes spot N.
+ */
+function placeByChart(xs, spots, c) {
+  // The lead's fix of 11-17: the order is the HEALTHY chart's (m.healthy: the chart with tonight's Out men in their places), so a man keeps his own role's spot when men above him are Out (no slide down the
+  // bench); an Out bench man and a man promoted into the five hold their healthy spots empty, and those minutes go to their position (positionDemand).
+  // Review round 1, finding 1: the list is the healthy chart's bench (its non-starters, here tonight or Out), ordered by healthy places only (rank and place on the unfilled chart, never tonight's), so no
+  // teammate's Out changes anyone's spot. pos: where he plays tonight (who receives); hpos: his healthy position (his order and an Out man's loss).
+  const recentOfOut = (o) => (o.lid && !c.boxNote ? recentOf(c.rowsOf(o.lid) ?? [], c.since) : null), l10 = (r) => (r.n ? r.avg : null);
+  const list = [
+    ...xs.filter((x) => x.tier !== "starter" && !x.m.healthy?.starter).map((x) => ({ key: x.m.id, name: x.m.name, x, bplus: x.tier === "bench_plus", last10: l10(x.recent), rank: x.m.healthy?.rank ?? null, idx: x.m.healthy?.idx ?? null, hpos: x.m.healthy?.pos ?? null, pos: x.m.depth?.pos ?? null })),
+    ...xs.filter((x) => x.tier === "starter" && x.m.healthy && !x.m.healthy.starter).map((x) => ({ key: x.m.id, name: x.m.name, promoted: x, bplus: x.recent.big >= BENCH_PLUS_GAMES, last10: l10(x.recent), rank: x.m.healthy.rank, idx: x.m.healthy.idx ?? null, hpos: x.m.healthy.pos ?? null, at: x.m.depth?.pos ?? x.m.healthy.pos ?? null })), // at: where he starts tonight, where his gain is counted
+    ...c.outs.filter((o) => o.healthy && !o.healthy.starter).map((o, i) => { const r = recentOfOut(o); return { key: `out#${i}`, name: o.name, out: o, bplus: r ? r.big >= BENCH_PLUS_GAMES : o.bplus === true, last10: r ? l10(r) : o.last10 ?? null, rank: o.healthy.rank, idx: o.healthy.idx ?? null, hpos: o.healthy.pos ?? null }; }),
+  ];
+  const places = new Map(list.map((e) => [e.key, { rank: e.hpos ? e.rank : null, idx: e.idx }]));
+  let k = 0;
+  const sorted = benchOrder(list, places);
+  for (const e of sorted) {
+    const fig = spots.figs[k] ?? 0;
+    k++;
+    if (e.out) { e.out.hspot = k; e.out.hfig = fig; continue; }
+    if (e.promoted) { e.promoted.hspot = k; e.promoted.hfig = fig; continue; }
+    setSpot(e.x, k, fig, e.group === 0, e.pos);
+  }
+  c.healthyOrder = sorted; // the role order positionStep hands minutes out in
+  c.displaced = placeDisplaced(xs, sorted, spots, k);
+}
+
+/** A bench man's spot, its figure and the words of his label. */
+function setSpot(x, k, fig, bplus, pos, words = null) {
+  x.spot = k; x.spotFig = fig;
+  x.order = pos ? { group: 0, key: 0 } : benchOrderKey(true, x.rows, x.recent); // the label's words: on the chart, or how a man with no position was placed
+  x.chartWords = words ?? (pos ? `on our depth chart (${bplus ? "Bench+, " : ""}${pos} ${ordinal((x.m.depth?.rank ?? 0) + 1)}${x.recent.n ? `, ${r1(x.recent.avg)} a game over the last ${RECENT_GAMES}` : ""})` : null);
+}
+
+/**
+ * Review round 1, finding 1: a healthy starter out of tonight's five (the pages start another man in his place) takes the healthy bench spot of a man promoted into the five, his own position's first, then any
+ * (PG..C, then name), so nobody else's spot moves; with none free, the spots after the bench. Returns [{ x, pos (healthy), spotFig }] for positionDemand (his starter minutes are his position's loss).
+ */
+function placeDisplaced(xs, sorted, spots, k0) {
+  const free = sorted.filter((e) => e.promoted), out = [], P = ["PG", "SG", "SF", "PF", "C"];
+  let k = k0;
+  const shown = xs.filter((x) => x.tier !== "starter" && x.m.healthy?.starter).sort((a, b) => P.indexOf(a.m.healthy.pos) - P.indexOf(b.m.healthy.pos) || String(a.m.name).localeCompare(String(b.m.name)));
+  for (const x of shown) {
+    const i = free.findIndex((e) => e.hpos === x.m.healthy.pos), pick = free.splice(i >= 0 ? i : 0, free.length ? 1 : 0)[0];
+    const spot = pick ? pick.promoted.hspot : ++k, fig = pick ? pick.promoted.hfig : spots.figs[k - 1] ?? 0, pos = x.m.depth?.pos ?? null;
+    setSpot(x, spot, fig, false, pos, pos ? `on our depth chart (${x.m.healthy.pos} starter out of tonight's five${pick ? `: ${pick.promoted.m.name}'s bench spot` : ""})` : null);
+    out.push({ x, pos: x.m.healthy.pos, spotFig: fig });
+  }
+  return out;
+}
+
+/**
+ * Each position's lost minutes tonight (the lead's fix of 11-17, Adam's "PG replaces PG"): an Out starter's starter figure (else his season mean) and an Out bench man's healthy spot figure, at his chart position,
+ * less what a man promoted into the five at that position took above his own healthy spot. [{ pos, amount, who: [names] }], positive amounts only. Men with no position give none (the team-wide fill takes it).
+ */
+function positionDemand(c, by) {
+  const dem = new Map(), add = (pos, v, who) => { if (!pos) return; const d = dem.get(pos) ?? { pos, amount: 0, who: [] }; d.amount += v; if (who) d.who.push(who); dem.set(pos, d); };
+  for (const o of c.outs) {
+    if (!o.healthy) continue;
+    const w = o.healthy.starter ? (isNum(o.starter_fig) ? o.starter_fig : isNum(o.avg) ? o.avg : 0) : isNum(o.hfig) ? o.hfig : isNum(o.avg) ? o.avg : 0;
+    add(o.healthy.pos, w, o.name);
+  }
+  for (const d of c.displaced ?? []) { const s = roleFigure(d.x.rows, "starter", null).value; if (isNum(s)) add(d.pos, Math.max(0, s - d.spotFig), d.x.m.name); } // a healthy starter out of tonight's five loses his starter minutes at his position
+  // Review round 1, finding 2: a man promoted into the five took his gain from the healthy starter missing from it whose place he filled, so his gain is netted at THAT man's position (his own position's
+  // missing starter first, then PG..C); a teammate's Out then never moves another position's amount (the lead's invariant). A gain left unpaired comes off the team-wide fill, never off another position.
+  const P = ["PG", "SG", "SF", "PF", "C"], byPos = (a, b) => P.indexOf(a.pos) - P.indexOf(b.pos) || String(a.name).localeCompare(String(b.name));
+  const missing = [...c.outs.filter((o) => o.healthy?.starter).map((o) => ({ pos: o.healthy.pos, name: o.name })), ...(c.displaced ?? []).map((d) => ({ pos: d.pos, name: d.x.m.name }))].sort(byPos);
+  const promoted = (c.healthyOrder ?? []).filter((e) => e.promoted).map((e) => ({ e, pos: e.hpos, name: e.name })).sort(byPos);
+  for (const { e } of promoted) {
+    const f = by.get(e.promoted.m.id)?.figure, i = missing.findIndex((m) => m.pos === e.hpos), m = missing.splice(i >= 0 ? i : 0, missing.length ? 1 : 0)[0];
+    if (isNum(f) && m?.pos) add(m.pos, -Math.max(0, f - (e.promoted.hfig ?? 0)), null);
+  }
+  return [...dem.values()].filter((d) => d.amount > EPS).sort((a, b) => b.amount - a.amount || P.indexOf(a.pos) - P.indexOf(b.pos)); // one order on the board and the page
+}
+
+/** The position step before the team-wide fill: { added: Map id -> minutes, by, demand }; nothing with no chart, no gap, or a figure missing (RULES R1: nothing handed out then). */
+function positionStep(c, xs, by, known, missing, T) {
+  const none = { added: new Map(), by: [], demand: [] };
+  if (!c.healthyOrder || missing.length) return none;
+  const gap = T - known.reduce((s, x) => s + x.figure, 0), demand = positionDemand(c, by), total = demand.reduce((s, d) => s + d.amount, 0);
+  if (gap <= EPS || total <= EPS) return none;
+  const ids = new Set(known.map((x) => x.m.id));
+  const room = (b) => Math.max(0, Math.min(b.ceiling, b.max ?? MINUTES_CAP) - b.figure); // to 36 (a starter whose own mean is above it has none), or his cap override
+  // Adam 5:26 PM 11-17: by role and position only, never by what a man usually plays: every bench man takes to the 36 cap in role order
+  const bench = c.healthyOrder.filter((e) => e.x && ids.has(e.x.m.id) && e.pos && !by.get(e.x.m.id).limited).map((e) => ({ id: e.x.m.id, pos: e.pos, starter: false, room: room(by.get(e.x.m.id)) }));
+  const starters = xs.filter((x) => x.tier === "starter" && ids.has(x.m.id) && x.m.depth?.pos && !by.get(x.m.id).limited).map((x) => ({ id: x.m.id, pos: x.m.depth.pos, starter: true, room: room(by.get(x.m.id)) }));
+  const men = [...bench, ...starters];
+  const f = Math.min(1, gap / total), scaled = demand.map((d) => ({ ...d, amount: d.amount * f })); // never more than the gap (the step cannot over-take the team's minutes); short of it, each position in proportion
+  return { ...positionFill(men, scaled), demand: scaled };
+}
+
+/** The team note when the lineup pages' five is not the top man at each position on our chart (Adam 11-17: the pages still name tonight's five; say when they disagree). men carry chart_top. */
+function chartDisagrees(men, five) {
+  if (five.kind === "chart" || five.kind === "expected" || !men.some((m) => m.chart_top !== undefined)) return null;
+  const tops = men.filter((m) => m.chart_top === true), out = tops.filter((m) => !five.ids.has(String(m.id))).map((m) => m.name), inn = men.filter((m) => five.ids.has(String(m.id)) && m.chart_top !== true).map((m) => m.name);
+  if (!out.length && !inn.length) return null;
+  return `The lineup pages' ${five.kind} five is not your depth chart's: they start ${inn.join(", ") || "no one else"}${out.length ? `, and your chart's top man ${out.join(", ")} ${out.length === 1 ? "is" : "are"} on the bench tonight` : ""}`;
 }
 
 /**
@@ -299,7 +409,7 @@ function starterFigure(x, c) {
 function spotFigure(x, c) {
   const { m, spot: k, spotFig: v } = x, games = c.spots.games;
   const o = x.order, last = `last ${Math.min(RECENT_GAMES, x.teamGames)}`, unmatched = !m.lid && !c.boxNote ? "; not matched to the box scores, so no games of his were read" : "";
-  const where = o.group === 0 ? "on tonight's depth chart" : o.group === 1 ? `(not placed on tonight's depth chart: after the charted men, by minutes per game played, ${last}: ${r1(o.key)} over ${x.recent.n})`
+  const where = x.chartWords ? x.chartWords : o.group === 0 ? "on tonight's depth chart" : o.group === 1 ? `(not placed on tonight's depth chart: after the charted men, by minutes per game played, ${last}: ${r1(o.key)} over ${x.recent.n})`
     : o.group === 2 ? `(not placed on tonight's depth chart: after the charted men; no game in the team's ${last})` : "(not placed on tonight's depth chart and no game this season: last)";
   return { value: v, cap: MINUTES_CAP, source: "spot", basis: "bench_spot", n: games, label: { kind: o.group === 0 ? "spot" : "off_chart", spot: k, value: r1(v), n: games }, words: `${prefixOf(x)}Bench spot ${k} ${where}: the team's ${ordinal(k)} man off the bench averages ${r1(v)} (${plural(games, "game")})${unmatched}` };
 }
@@ -378,6 +488,21 @@ function planNotes(c, xs, known) {
   const capped = known.filter((x) => x.capped > EPS);
   if (capped.length) notes.push(`Capped at ${MINUTES_CAP} (only a starter whose own starter mean is higher keeps it): ${capped.map((x) => `${x.m.name} -${r1(x.capped)}`).join(", ")}`);
   return notes;
+}
+
+/** The team's note on the position step: each position's lost minutes and where they went (G62: what its bench and the positions next to it could not take is said, and goes to the team-wide fill). */
+function positionNotes(ps, known) {
+  if (!ps.by.length) return [];
+  const name = new Map(known.map((x) => [x.m.id, x.m.name])), got = [...ps.added].filter(([, v]) => v >= 0.05).map(([id, v]) => `${name.get(id)} +${r1(v)}`);
+  const parts = ps.by.map((b) => `${b.pos} ${r1(b.amount)}${b.spill >= 0.05 ? ` (${r1(b.own)} to ${b.pos}, ${r1(b.spill)} to the positions next to it)` : ""}`);
+  return [`The Out men's minutes by position (PG replaces PG, and so on): ${parts.join(", ")}: ${got.join(", ") || "nobody had room"}${ps.left > 0.05 ? `; ${r1(ps.left)} no bench man of those positions could take goes to the team-wide fill` : ""}`];
+}
+
+/** The team note when the fill had to pass 36 (the lead's call, 11-17: only when the team cannot reach 240 under it): each man over 36 and why. */
+function overNotes(fill, known, T) {
+  if (!fill.over?.length) return [];
+  const name = new Map(known.map((x) => [x.m.id, x.m.name])), n = known.filter((x) => !x.limited).length;
+  return [`Only ${n} men can take minutes, so ${T} cannot be reached with nobody over ${MINUTES_CAP}: ${fill.over.map((m) => `${name.get(m.id)} ${r1(m.total)}`).join(", ")} go past ${MINUTES_CAP} to reach it`];
 }
 
 /** The team's notes on step 5: the fill under 240 or the trim over it, and what nobody could take or give. */

@@ -11,6 +11,7 @@ import { MINUTE_SOURCES, SOURCE_LABEL, defaultSourceOf } from "./depth-chart.js"
 import { syncWords } from "./console-auto.js";
 import { nameChip, outNote, stripHtml } from "./console-news.js";
 import { absenceRow } from "./absence-view.js";
+import { chartModel, chartHtml, sourcesNote } from "./console-chart.js";
 
 export const TEAM_NAMES = {
   ATL: "Atlanta Hawks", BKN: "Brooklyn Nets", BOS: "Boston Celtics", CHA: "Charlotte Hornets", CHI: "Chicago Bulls", CLE: "Cleveland Cavaliers",
@@ -106,7 +107,7 @@ function manRow(team, r, T, S, mk, rank, N) {
   const omark = mk?.out ? chip(team, r.id, "out", mk.out, "out") : "";
   const proj = isNum(r.proj) ? `<b class="pj${r.pinned.m || r.pinned.d ? " pin" : ""}">${f1(r.proj)}</b>` : miss(r.missing.join(", ") || "no projection");
   return `<div class="row${mk ? " marked" : ""}" data-row="${esc(r.id)}">
-<span class="ps">${esc(starter ? pos0(p) || "—" : rank)}</span>
+<span class="ps">${esc(starter ? rank || pos0(p) || "—" : rank)}</span>
 <span class="who">${consoleNameOpen(p, p.name, "span", "nm")}<span class="pp">${esc(p.pos ?? "")}</span>${nameChip(N, p)}</span>
 ${numBox(team, r, "m", mk?.m)}${numBox(team, r, "d", mk?.d)}
 <span class="r">${proj}</span>
@@ -118,11 +119,12 @@ ${tgCell(p.tg_min, "minutes", "tgm")}${tgCell(p.tg_proj, "projection", "tgp")}
 }
 
 /** One man in the Out list: his status and where it comes from; the Out toggle brings him back. */
-function outRow(team, r, T, mk, N) {
+function outRow(team, r, T, mk, N, pos = null) {
   const p = r.p, theirs = T.tonight.includes(r.id), st = STATUS(p.status);
-  const src = theirs ? `<span class="stag k-tg">TwoGun</span>${esc(st ? `${st.toLowerCase()} on TwoGun's board` : "out on TwoGun's board")}` : mk?.out?.news ? `<span class="stag k-ch">News</span>${esc(mk.out.news)}` : `<span class="stag k-you">Yours</span>you marked him Out`; // an Out the lineup news made is the news's, not his
+  const page = theirs && !p.out && (T.tier?.minutes_page?.out ?? []).includes(r.id); // his Minutes-page Out (console-inputs.js withMinutesPage), not TwoGun's
+  const src = page ? `<span class="stag k-you">Yours</span>you marked him Out on the Minutes page` : theirs ? `<span class="stag k-tg">TwoGun</span>${esc(st ? `${st.toLowerCase()} on TwoGun's board` : "out on TwoGun's board")}` : mk?.out?.news ? `<span class="stag k-ch">News</span>${esc(mk.out.news)}` : `<span class="stag k-you">Yours</span>you marked him Out`; // an Out the lineup news made is the news's, not his
   const omark = mk?.out ? chip(team, r.id, "out", mk.out, "in") : "";
-  return `<div class="oline" data-row="${esc(r.id)}"><span class="ps">${esc(pos0(p) || "—")}</span>${consoleNameOpen(p, p.name, "span", "onm")}
+  return `<div class="oline" data-row="${esc(r.id)}"><span class="ps">${esc(pos ?? (pos0(p) || "—"))}</span>${consoleNameOpen(p, p.name, "span", "onm")}
 <span class="tgl"><button class="tg o on" type="button" data-out="${esc(r.id)}" data-team="${esc(team)}" title="Out. Click to bring him back in">Out</button><span class="cs">${omark}</span></span>
 ${outNote(N, p)}<div class="why">${src}${isNum(p.healthy) && p.healthy > 0 ? ` &middot; usual ${f1(p.healthy)} min` : ""}${absenceRow(p.absence)}</div></div>`;
 }
@@ -161,12 +163,14 @@ export function benchPlusHtml(bp) {
 }
 
 /** The team's sections and side column. */
-function teamBody(model, code, news) {
+function teamBody(model, code, news, view = {}) {
   const T = model.TEAMS[code], S = model.ST[code], res = calc(T, S, S.outs), marks = marksOf(T, S), N = news?.N ?? null;
-  const rows = res.rows, playing = rows.filter((r) => !r.out);
-  const starters = playing.filter((r) => r.role === "starter").sort((a, b) => posRank(a.p) - posRank(b.p) || (b.min ?? 0) - (a.min ?? 0));
+  const rows = res.rows, playing = rows.filter((r) => !r.out), cm = chartModel(T, S, rows); // our depth chart (Adam 11-17); null on inputs without one
+  const cpos = (r) => (cm ? cm.posOf(r.id) ?? "—" : ""), cRank = (r) => { const i = POS_ORDER.indexOf(cm?.posOf(r.id) ?? ""); return i < 0 ? 99 : i; };
+  const starters = playing.filter((r) => r.role === "starter").sort((a, b) => (cm ? cRank(a) - cRank(b) : posRank(a.p) - posRank(b.p)) || (b.min ?? 0) - (a.min ?? 0));
   const rest = playing.filter((r) => r.role !== "starter");
-  const inRot = rest.filter((r) => isNum(r.min) && r.min > 0).sort((a, b) => (b.min ?? 0) - (a.min ?? 0) || (a.p.order ?? 0) - (b.p.order ?? 0));
+  const benchAt = cm ? new Map(cm.bench.map((m, i) => [m.id, i])) : null; // the lead, 11-17: with our chart the Bench follows its bench order (Bench+, the 2nds, the 3rds), the numbers as the chart's line says
+  const inRot = rest.filter((r) => isNum(r.min) && r.min > 0).sort((a, b) => (benchAt ? (benchAt.get(a.id) ?? 1e3) - (benchAt.get(b.id) ?? 1e3) : 0) || (b.min ?? 0) - (a.min ?? 0) || (a.p.order ?? 0) - (b.p.order ?? 0));
   const notRot = rest.filter((r) => !inRot.includes(r)).sort((a, b) => (b.p.healthy ?? 0) - (a.p.healthy ?? 0));
   const outs = rows.filter((r) => r.out).sort((a, b) => (b.p.healthy ?? 0) - (a.p.healthy ?? 0));
   const notes = [];
@@ -177,19 +181,21 @@ function teamBody(model, code, news) {
   if (res.chart_note) notes.push(res.chart_note); // one note per team (G68), added whole
   if (res.handout_note) notes.push(res.handout_note); // one note per team, added whole (G68)
   if (res.injured_note) notes.push(res.injured_note); // one note per team, added whole (G68)
+  if (cm) { for (const n of cm.notes) notes.push(n); const sn = sourcesNote(cm, view.when ?? (() => null)); if (sn) notes.push(sn); } // the chart's sources and what they could not place, at the foot (G64)
   const auto = calc(T, { ...S, pins: {} }, T.tonight).totals;
   const typedAdd = (res.totals.min ?? 0) - (auto.min ?? 0);
-  const main = `<section class="box"><h2>Starters <small>${starters.length} &middot; ${f1(sumMin(starters))} min</small></h2>${HEAD("Pos")}${starters.map((r) => manRow(code, r, T, S, marks[r.id], "", N)).join("") || `<div class="none">Nobody is starting. Mark five men S.</div>`}</section>
+  const main = `<section class="box"><h2>Starters <small>${starters.length} &middot; ${f1(sumMin(starters))} min</small></h2>${HEAD("Pos")}${starters.map((r) => manRow(code, r, T, S, marks[r.id], cpos(r), N)).join("") || `<div class="none">Nobody is starting. Mark five men S.</div>`}</section>
 <section class="box"><h2>Bench <small>rotation order &middot; ${f1(sumMin(inRot))} min</small></h2>${HEAD("#")}${inRot.map((r, i) => manRow(code, r, T, S, marks[r.id], String(6 + i), N)).join("") || `<div class="none">Nobody on the bench has minutes.</div>`}${notRot.length ? `<div class="sub">Not in the rotation</div>${notRot.map((r) => manRow(code, r, T, S, marks[r.id], "", N)).join("")}` : ""}<div class="row tot"><span></span><span class="who">Team total</span><span class="mt">${f1(res.totals.min) ?? "—"}</span></div>${benchPlusHtml(T.bench_plus)}</section>`;
   const src = S.source ?? defaultSourceOf(T);
   const srcBox = oursUse(T).ok ? `<section class="box"><h2>Minutes for the optimizer</h2><div class="srcs">${MINUTE_SOURCES.map((k) => `<button class="sv${k === src ? " on" : ""}" type="button" data-source="${k}" data-team="${esc(code)}">${SOURCE_LABEL[k]}</button>`).join("")}<button class="sv all" type="button" data-source-all="${src}" data-team="${esc(code)}" title="Use ${esc(SOURCE_LABEL[src])} on every team with the minutes engine">All teams</button></div></section>` : "";
-  const side = `<section class="box"><h2>Team total</h2><div class="tot">
+  const outBox = `<section class="box"><h2>Out / injured <small>${outs.length} ${outs.length === 1 ? "man" : "men"}</small></h2>${outs.map((r) => outRow(code, r, T, marks[r.id], N, cm ? cm.posOf(r.id) ?? "—" : null)).join("") || `<div class="none">Nobody is out.</div>`}</section>`;
+  const side = `${chartHtml(code, cm, { sel: view.sel ?? null, ro: view.ro === true })}${cm ? outBox : ""}<section class="box"><h2>Team total</h2><div class="tot">
 <div class="big"><span>Minutes tonight</span><b class="${Math.abs(typedAdd) >= 0.05 ? "warn" : ""}">${f1(res.totals.min) ?? "—"} min</b></div>
 <div><span>Without your marks</span><b>${f1(auto.min) ?? "—"} min</b></div>
 ${Math.abs(typedAdd) >= 0.05 ? `<div class="warn"><span>Your marks add</span><b>${typedAdd > 0 ? "+" : ""}${f1(typedAdd)}</b></div>` : ""}
 <div><span>Team projection</span><b>${f1(res.totals.proj) ?? "—"} pts</b></div></div>
 </section>
-<section class="box"><h2>Out / injured <small>${outs.length} ${outs.length === 1 ? "man" : "men"}</small></h2>${outs.map((r) => outRow(code, r, T, marks[r.id], N)).join("") || `<div class="none">Nobody is out.</div>`}</section>${srcBox}${noteList(notes)}`;
+${cm ? "" : outBox}${srcBox}${noteList(notes)}`;
   // the columns that carry an undo chip on this team widen for it (console.css .wrap.mk-*); every other team keeps them tight
   const chipCols = ["m", "d", "r", "out"].filter((k) => playing.some((r) => marks[r.id]?.[k])).map((k) => ` mk-${k === "out" ? "o" : k}`).join("");
   return { main, side, chipCols, marks: Object.keys(marks).length, starterIds: starters.map((r) => r.id) };
@@ -213,7 +219,7 @@ const HELP = "Every change goes to the board and the optimizer at once. Type a m
  */
 export function depthHtml(model, code, opts) {
   const T = model.TEAMS[code], g = opts.games.find((x) => x.away === code || x.home === code), opp = T.opp;
-  const { main, side, starterIds, chipCols } = teamBody(model, code, opts.news);
+  const { main, side, starterIds, chipCols } = teamBody(model, code, opts.news, { sel: opts.chartSel ?? null, ro: opts.readOnly === true, when: opts.when });
   const words = syncWords(opts.sync), syncText = `<span class="sync ${words.cls}" title="${esc([words.text, ...words.lines].join(" · "))}"><i></i>${esc(words.text)}</span>`;
   const held = words.lines.length ? `<ul class="heldline">${words.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : "";
   const head = `<header class="thead" style="--tc:${opts.colourOf(code)}">${logo(code, "xl")}<div class="tn"><h1>${esc(TEAM_NAMES[code] ?? code)}</h1><div class="vs">${T.home ? "vs" : "@"} ${logo(opp, "xs")}<b>${esc(TEAM_NAMES[opp] ?? opp)}</b>${g?.tip ? ` &middot; ${esc(opts.when(g.tip) ?? g.tip)}` : ""}</div></div>

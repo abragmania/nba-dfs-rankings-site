@@ -111,8 +111,12 @@ function stateFor(T, rec) {
   for (const [key, p] of Object.entries(rec?.pins ?? {})) {
     if (key !== "" && key !== T.tonightKey && !saved.includes(key) && hasPins(p)) shown.push(key);
   }
-  return { outs: outsOf(T.tonightKey), tonight: T.tonightKey, source: sourceSet ? rec.source : T.source_default, sourceSet, saved, shown, pins:structuredClone(rec?.pins ?? {}), handouts: structuredClone(rec?.handouts ?? {}), combos: structuredClone(rec?.combos ?? {}), news: structuredClone(rec?.news ?? {}), ...(rec?.mine ? { mine: structuredClone(rec.mine) } : {}) };
+  return { outs: outsOf(T.tonightKey), tonight: T.tonightKey, source: sourceSet ? rec.source : T.source_default, sourceSet, saved, shown, pins:structuredClone(rec?.pins ?? {}), handouts: structuredClone(rec?.handouts ?? {}), combos: structuredClone(rec?.combos ?? {}), news: structuredClone(rec?.news ?? {}), ...(rec?.mine ? { mine: structuredClone(rec.mine) } : {}), ...depthOf(T) };
 }
+
+/** His depth-chart moves as the page starts them (Adam 11-17): the standing chart's saved list from the inputs. Kept in his work so Undo and Redo carry them; never in the scenarios file (recordOf leaves them
+ *  out): the chart file is their one store (console-moves.js saveDepth). Nothing when the inputs carry no chart. */
+export const depthOf = (T) => (Array.isArray(T.tier?.depth?.moves) ? { depth_moves: structuredClone(T.tier.depth.moves) } : {});
 
 /** New inputs on the same work (a pull landed): his pins stay and everything he did not pin moves. Every team is rebased on the new Tonight
  *  (moveTo): a team with nothing of his stays on Tonight, his own Outs and back-ins stay his through any number of pulls, and his pins go with the scenario; a man who left is dropped. */
@@ -123,6 +127,7 @@ export function refreshTeams(model, inputs) {
     const S = model.ST[code];
     if (!S) { model.ST[code] = stateFor(TEAMS[code], null); continue; }
     if (!S.sourceSet) S.source = dflt; // a team he has not chosen for follows the default when the projection setting moves
+    if (!Array.isArray(S.depth_moves)) Object.assign(S, depthOf(TEAMS[code])); // a chart that arrived with these inputs (his own list stays: console.js refresh takes another page's)
     moveTo(TEAMS[code], S, S.outs, model.TEAMS[code]?.tonightKey ?? TEAMS[code].tonightKey);
     pruneFlips(TEAMS[code], S);
   }

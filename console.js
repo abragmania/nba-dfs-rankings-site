@@ -14,6 +14,10 @@ import { defaultSourceOf } from "./depth-chart.js";
 import { teamNews, newsView } from "./console-news.js";
 import { landingHtml, teamBarOf, withAllChip } from "./console-all.js";
 import { statusLine } from "./lineup-bar.js";
+import { chartClick, chartChange, wireChartDrag } from "./console-chart-ui.js";
+
+/** His depth-chart moves as the server holds them, per team (console-moves.js saveDepth compares against it). */
+const depthTexts = (model) => Object.fromEntries(Object.entries(model.TEAMS).map(([code, T]) => [code, JSON.stringify(T.tier?.depth?.moves ?? null)]));
 
 const USAGE_RETRY_MS = 20_000;
 const USAGE_RETRIES = 6;
@@ -86,7 +90,7 @@ function newsOpt(c) {
 /** The page on show: one team's, or the All teams news list (the team bar is the console's own, with "All teams" first). */
 function pageHtml(c, news) {
   const G = c.G;
-  const team = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr: Object.values(c.saveErrs).join(" ") || null, news, help: G.help });
+  const team = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr: Object.values(c.saveErrs).join(" ") || null, news, help: G.help, chartSel: G.chartSel ?? null, readOnly: c.readOnly });
   if (G.view !== "all") return withAllChip(team, false);
   const words = !news ? "No lineup news is wired on this page." : news.state === "loading" ? "Reading the lineup news..." : news.state !== "ok" ? `Lineup news not read: ${news.why}` : null;
   const body = words ? `<section class="ca"><header class="ca-h"><h1>Tonight's lineup news</h1></header><div class="ca-empty">${esc(words)}</div></section>` : landingHtml(news.V, G.newsTeam ?? "", c.inputs.games.flatMap((g) => [g.away, g.home]));
@@ -134,6 +138,7 @@ async function load(c, name) {
     if (name !== c.slate) return;
     takeInputs(c, out);
     c.model = buildModel(c.inputs, out.scenarios.teams, out.scenarios.applied?.keys);
+    c.depthSaved = depthTexts(c.model); // his depth-chart moves as the standing chart holds them
     c.lastSaved = {};
     c.serverSeen = Object.fromEntries(Object.keys(c.model.ST).map((code) => [code, canonRecord(out.scenarios.teams[code])])); // what the server held for each team when this page last looked or wrote
     c.serverHisAt = Object.fromEntries(Object.keys(c.model.ST).map((code) => [code, out.scenarios.teams[code]?.his_at ?? null])); // each team's his_at as read: sent as `base` with every save, so a stale page cannot write over a brought-down record
@@ -167,6 +172,11 @@ async function refresh(c) {
     const was = resultSigs(c);
     takeInputs(c, out);
     refreshTeams(c.model, c.inputs);
+    for (const [code, text] of Object.entries(depthTexts(c.model))) { // another page or the other computer saved a team's chart since this page last did: this page takes it
+      const S = c.model.ST[code], mine = c.depthSaved?.[code];
+      if (S && text !== "null" && mine !== undefined && mine !== "unsaved" && text !== mine) { S.depth_moves = JSON.parse(text); c.depthSaved[code] = text; }
+      else if (c.depthSaved && mine === undefined) c.depthSaved[code] = text;
+    }
     c.serverFileHisAt = out.scenarios.his_at ?? null; // his saves have landed (saveQueue above), so the file's stamp is the base for the next send
     const others = c.saveGen === gen ? takeOthersWork(c, out) : []; // a save of his own during the read makes the comparison unsafe, so it waits for the next one
     resendChanged(c, was); // a pull that moved a team the board holds is sent without a click
@@ -223,6 +233,7 @@ function commitBox(c, inp) {
 }
 
 function onClick(c, e) {
+  if (c.model && chartClick(c, e)) return; // the depth chart's chips and bar (console-chart-ui.js)
   const t = e.target.closest?.("button");
   if (!t || !c.model || t.disabled) return;
   const d = t.dataset;
@@ -260,12 +271,14 @@ export function createConsole({ el, api, toast, colourOf, onPlayers, onWork, new
     E: (id) => el.querySelector(`#${id}`),
     G: { cur: null, view: "all", newsTeam: readStore(FILTER_KEY, ""), pick: null, roleMoves: null, focus: null, hist: [], hi: -1, editing: false, rows: [], modal: null },
     render: () => render(c), drawBar: () => render(c), focusCell: () => {},
+    readOnly: typeof document !== "undefined" && document.documentElement?.classList?.contains("is-site") === true, // the public site: the depth chart is read-only (its routes are the app's only)
   };
   c.auto = createAutoApply(c, { refreshInputs: () => refresh(c), onState: () => { if (c.on) render(c); else c.onWork?.(); } }); // the board shows the send's state too
   // A save the server refused as CHANGED_ELSEWHERE (console-moves.js saveDirty): read the disk's work now, which this page takes for that team, and save what is still its own.
   c.onConflict = () => { clearTimeout(c.conflictTimer); c.conflictTimer = setTimeout(async () => { await refresh(c); saveDirty(c); }, 0); };
   el.addEventListener("click", (e) => onClick(c, e));
-  el.addEventListener("change", (e) => { if (e.target.matches?.("input.fin")) commitBox(c, e.target); });
+  el.addEventListener("change", (e) => { if (e.target.matches?.("input.fin")) commitBox(c, e.target); else if (c.model) chartChange(c, e); });
+  wireChartDrag(c, el);
   el.addEventListener("focusout", () => setTimeout(() => { if (c.redrawLater && c.on) render(c); }, 0)); // the redraw that waited for him to finish typing
   document.addEventListener("keydown", (e) => onKey(c, e));
   return {

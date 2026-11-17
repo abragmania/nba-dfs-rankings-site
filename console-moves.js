@@ -9,6 +9,7 @@ import { roleMove, ROLE_LABEL, swapStarterMove } from "./console-roles.js";
 import { EMPTY_RECORD } from "./figures.js";
 import { MINUTE_SOURCES, SOURCE_LABEL } from "./depth-chart.js";
 import { alignNews, endNewsOuts, manAsLeft, marksOf, stillAsLeft } from "./console-marks.js";
+import { addMove } from "./depth-cols.js";
 
 const THR = { m: 0.05, u: 0.05, d: 0.004, p: 0.05 };
 const STEP = { m: [0.5, 2], u: [0.5, 2], d: [0.01, 0.05], p: [0.1, 1] };
@@ -17,7 +18,7 @@ const EMPTY_RECORD_TEXT = JSON.stringify(EMPTY_RECORD());
 /** A history snapshot: his work without the lineup-news record, which no undo or redo ever changes (it would let news apply twice). */
 export const snap = (c) => JSON.stringify({ ST: Object.fromEntries(Object.entries(c.model.ST).map(([code, S]) => [code, { ...S, news: undefined }])), cur: c.G.cur });
 /** One team's work as the send compares it: who is out and every pin. */
-const teamState = (S) => JSON.stringify([keyOf(S.outs), S.pins, S.source ?? null]);
+const teamState = (S) => JSON.stringify([keyOf(S.outs), S.pins, S.source ?? null, S.depth_moves ?? null]); // a depth-chart move is a change to send like any other
 /** The teams a step changed join c.touched: only those (and teams the board already holds an Apply for) are sent (console-auto.js). */
 function touch(c, before, { track = false } = {}) {
   c.touched ??= new Set();
@@ -124,7 +125,43 @@ export function mutate(c, text, fn) {
   c.render();
   ripple(c, before);
   saveDirty(c);
+  saveDepth(c); // queued with the saves, so the send below reads the saved chart
   kick(c); // the change goes to the board by itself (console-auto.js)
+}
+
+/**
+ * His depth-chart moves (Adam 11-17) for every team whose list changed since this page last saved or read it go to the standing chart (POST /api/minutes/<slate>/team/<TEAM>, action depth), in the save line:
+ * a send waits for it (previewAndSend awaits c.saveQueue), and the send's own refresh then reads the engine on the saved chart. A refusal stays on show like a failed save. The public site saves none (read-only).
+ */
+export function saveDepth(c) {
+  if (c.readOnly) return;
+  const name = c.slate;
+  c.depthSaved ??= {};
+  for (const [code, S] of Object.entries(c.model.ST)) {
+    if (!Array.isArray(S.depth_moves)) continue;
+    const text = JSON.stringify(S.depth_moves);
+    if (text === c.depthSaved[code]) continue;
+    c.depthSaved[code] = text;
+    c.saveQueue = c.saveQueue.then(async () => {
+      try {
+        await c.api(`/api/minutes/${encodeURIComponent(name)}/team/${encodeURIComponent(code)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "depth", moves: JSON.parse(text) }) });
+        if (c.saveErrs[`chart ${code}`] && name === c.slate) { delete c.saveErrs[`chart ${code}`]; c.drawBar(); }
+      } catch (e) {
+        if (name !== c.slate) return;
+        c.depthSaved[code] = "unsaved";
+        c.saveErrs[`chart ${code}`] = `${code}'s depth chart not saved: ${e.message}`; c.drawBar();
+        c.toast(`Could not save ${code}'s depth chart: ${e.message}`, "err");
+      }
+    });
+  }
+}
+
+/** One move on our depth chart (Adam 11-17; depth-cols.js moveAt, stepMove or posMove): his newest move for that man; the minutes run again on the page at once and the list is saved before the send. False when there is no move. */
+export function depthMove(c, t, move, text) {
+  const S = c.model.ST[t];
+  if (!move || !S || c.readOnly) return false;
+  mutate(c, `${t} ${text}`, () => { S.depth_moves = addMove(S.depth_moves ?? c.model.TEAMS[t].tier?.depth?.moves ?? [], move); });
+  return true;
 }
 
 export function restore(c, i) {
@@ -146,6 +183,7 @@ export function restore(c, i) {
   c.render();
   ripple(c, before);
   saveDirty(c);
+  saveDepth(c); // Undo and Redo carry his depth-chart moves back to the chart file
   kick(c);
 }
 export const undo = (c) => restore(c, c.G.hi - 1);
