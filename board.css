@@ -127,7 +127,9 @@ td.fig,th.fig{padding-right:0.875rem}
 td.fig .tg{position:absolute;margin-left:0.125rem;font:700 0.5625rem "JetBrains Mono",monospace;color:var(--mu);transform:translateY(-0.25rem)}
 td.fig .tg.ly{color:var(--am)}
 td.gp.proj{font-weight:700}
-/* DK/m TON: the arrow is against the season figure (DK/m SZN, its neighbour). */
+/* Calculated and reference cells (Adam 4:34 PM 11-17): Value is computed and TG Min is TwoGun's own, so neither carries the "you can type here" box; both sit plain and a shade quieter. */
+td.gp.val{font-weight:400;color:color-mix(in srgb,var(--tx) 72%,var(--mu))}
+/* DK/m TON: the arrow is against the season figure (DK/m SZN), read from the value, not the neighbouring cell. */
 .ton-arr{font-style:normal;font-size:0.5625rem;margin-right:0.25rem;vertical-align:0.0625rem}
 .ton-arr.up{color:var(--gr)}.ton-arr.dn{color:var(--rd)}
 /* A laptop's window: tighter figure cells, so table and panel still fit beside each other (the LY marker's room stays on the season figures). */
@@ -832,8 +834,8 @@ td:has(> .cedit){position:relative}
 .cedit{display:inline-block;min-width:4ch;padding:0 0.1875rem;margin-right:-0.1875rem;text-align:right;cursor:text}
 .cedit.ctyped{outline:1px solid var(--am);outline-offset:-0.0625rem;background:#ffb00014;color:var(--am);font-weight:700}
 /* "You can type here": Proj, Own, Min and DK/m TON (the cells he can edit) rest in one faint box that read-only figures do not have, stronger on hover; his typed numbers keep their amber box (above). Box padding is pulled out by margin so digits stay in line with the column. */
-#tbody .cedit:not(.ctyped):not(.min-typed),#tbody .bump-fig:not(.bump-typed),#tbody td.own .v.ov-own:not(.ov-typed){display:inline-block;min-width:4ch;padding:0 0.25rem;margin-right:-0.25rem;border-radius:0.125rem;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--mu) 24%,transparent)}
-#tbody .cedit:not(.ctyped):not(.min-typed),#tbody .bump-fig:not(.bump-typed):not(.bump-up):not(.bump-down),#tbody td.own .v.ov-own:not(.ov-typed){background:color-mix(in srgb,var(--tx) 3%,transparent)}
+#tbody .cedit:not(.ctyped):not(.min-typed),#tbody .bump-fig:not(.bump-typed),#tbody td.own .v.ov-own:not(.ov-typed){display:inline-block;min-width:4ch;padding:0 0.25rem;margin-right:-0.25rem;border-radius:0.125rem;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--mu) 38%,transparent)}
+#tbody .cedit:not(.ctyped):not(.min-typed),#tbody .bump-fig:not(.bump-typed):not(.bump-up):not(.bump-down),#tbody td.own .v.ov-own:not(.ov-typed){background:color-mix(in srgb,var(--tx) 6%,transparent)}
 #tbody .cedit:not(.ctyped):not(.min-typed):hover,#tbody .bump-fig:not(.bump-typed):hover,#tbody td.own .v.ov-own:not(.ov-typed):hover{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--mu) 75%,transparent);background:color-mix(in srgb,var(--tx) 8%,transparent)}
 /* His undo chip hangs in the gap left of the number and takes no width, so Min and DK/m TON sit at the same spacing as every other figure column. */
 .cu{display:inline-block;position:relative;width:0;height:1rem;vertical-align:middle}

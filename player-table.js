@@ -38,7 +38,8 @@ export function famClass(keys, i) {
   const f = famOf(keys[i]);
   // The controls at the far left (after Star or nothing) get no divider; the limits at the right end do.
   const before = i > 0 ? famOf(keys[i - 1]) : "";
-  return f ? ` g${f}${i > 0 && before !== f && !(f === "c" && !before) ? " gd" : ""}` : "";
+  // TG Min (min_other) is TwoGun's reference figure, not an input: it opens with its own divider (Adam 4:34 PM 11-17).
+  return f ? ` g${f}${i > 0 && ((before !== f && !(f === "c" && !before)) || keys[i] === "min_other") ? " gd" : ""}` : "";
 }
 const addClass = (html, add) => (add ? html.replace(/^(<t[dh] class=")([^"]*)"/, `$1$2${add}"`) : html);
 /** Which source the Min column shows, "twogun" unless the slate says otherwise. Nothing switches it yet. */
