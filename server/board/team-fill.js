@@ -43,7 +43,7 @@ export function shareOut(men, amount) {
 
 /**
  * Rounds of +1 to each starter, then +1 to each bench man, until `amount` is gone; the last part pro-rated over its group. Each man [{ id, room }] takes no more than his room (GAME_MAX or his cap override less
- * what he holds; no room given: no limit). benchCap (optional): (id, added) -> a bench man's further room under his position's lowest starter (Adam 6:40 PM 11-17), read after each starters' round.
+ * what he holds; no room given: no limit). benchCap (optional): (id, added) -> a bench man's further room under the team's lowest starter (R15), read after each starters' round.
  * Returns { added: Map id -> minutes, rounds (whole or part rounds begun), left (what nobody had room for) }. Pure.
  */
 export function plusOneRounds(starters, bench, amount, benchCap = null) {
@@ -51,10 +51,10 @@ export function plusOneRounds(starters, bench, amount, benchCap = null) {
   const room = (x) => Math.min((Number.isFinite(x.room) ? x.room : Infinity) - added.get(x.id), benchCap && isBench.has(x.id) ? benchCap(x.id, added) : Infinity);
   let left = amount, rounds = 0;
   while (left > EPS && rounds < MAX_ROUNDS) {
-    const open = [starters, bench].map((g) => g.filter((x) => room(x) > EPS));
-    if (!open[0].length && !open[1].length) break;
+    if (![...starters, ...bench].some((x) => room(x) > EPS)) break;
     rounds++;
-    for (const grp of open) {
+    for (const g of [starters, bench]) { // each group's open men read at its turn: the starters' +1 raises the bench's ceiling in the same round (R15)
+      const grp = g.filter((x) => room(x) > EPS);
       if (!grp.length || left <= EPS) continue;
       const each = Math.min(1, left / grp.length);
       for (const x of grp) { const v = Math.min(each, room(x)); added.set(x.id, added.get(x.id) + v); left -= v; }
@@ -79,20 +79,20 @@ function inRoleOrder(men, amount, added, roomOf) {
 }
 
 /**
- * A bench man's room under his position's lowest starter (Adam 6:40 PM 11-17: a bench man never ends above the lowest starter at his own chart position): men [{ id, pos, starter }], total(id) his minutes now.
- * Returns (man) -> that starter's total less his own (Infinity: a starter, no position, or no starter at his position). Pure.
+ * A bench man's room under his team's lowest starter (R15; Adam 6:40-6:43 PM 11-17: no bench man ends above the lowest healthy starter on his team): men [{ id, starter }], total(id) his minutes now.
+ * Returns (man) -> the lowest starter's total less his own (Infinity: a starter, or no starter in men). Pure.
  */
 export function starterCeiling(men, total) {
-  const low = new Map();
-  for (const m of men) if (m.starter && m.pos) low.set(m.pos, [...(low.get(m.pos) ?? []), m.id]);
-  return (m) => (m.starter || !m.pos || !low.has(m.pos) ? Infinity : Math.min(...low.get(m.pos).map(total)) - total(m.id));
+  const starters = men.filter((m) => m.starter).map((m) => m.id);
+  return (m) => (m.starter || !starters.length ? Infinity : Math.min(...starters.map(total)) - total(m.id));
 }
 
 /**
  * An Out man's minutes go to his position first (Adam's rulings "PG replaces PG, SG replaces SG" and bench by role; Adam 6:40 PM 11-17: starters before the bench): demand: [{ pos, amount }] (each position's lost
  * minutes); men: [{ id, pos, starter, figure (before this step; 0 if omitted), room (to his cap: 36, or his cap override, less his figure) }], the bench men tonight in role order (Bench+, the 2nds, the 3rds, ties by
- * last-10 minutes) and the starters. Each position's amount goes to its own starters, each to his cap, then its bench men one at a time in that order, none above his position's lowest starter (starterCeiling);
- * what they cannot take goes the same way to the starters, then the bench, of the positions next to it (ADJACENT); what is left is returned for the team-wide fill.
+ * last-10 minutes) and every starter (a starter with no position takes nothing here but sets the ceiling). Each position's amount goes to its own starters, each to his cap, then the starters of the positions next
+ * to it (ADJACENT), then its own bench men one at a time in that order, then the bench of the positions next to it; no bench man above the team's lowest starter (starterCeiling, R15); what is left is returned
+ * for the team-wide fill.
  * Returns { added: Map id -> minutes, left, by: [{ pos, amount, own, spill }] }. Pure.
  */
 export function positionFill(men, demand) {
@@ -102,8 +102,8 @@ export function positionFill(men, demand) {
   let left = 0;
   for (const d of demand) {
     if (!(d.amount > EPS)) continue;
-    // his position's starters (to the cap), then its bench, then the starters and then the bench of the positions next to it; each stage takes only what the one before could not
-    const at = (m) => m.pos === d.pos, near = (m) => (ADJACENT[d.pos] ?? []).includes(m.pos), stages = [(m) => at(m) && m.starter, (m) => at(m) && !m.starter, (m) => near(m) && m.starter, (m) => near(m) && !m.starter];
+    // R15 (Adam 6:43 PM 11-17): his position's starters (to the cap), then the starters next to it, then his position's bench, then the bench next to it; each stage takes only what the one before could not
+    const at = (m) => !!m.pos && m.pos === d.pos, near = (m) => !!m.pos && (ADJACENT[d.pos] ?? []).includes(m.pos), stages = [(m) => at(m) && m.starter, (m) => near(m) && m.starter, (m) => at(m) && !m.starter, (m) => near(m) && !m.starter];
     const before = new Map(added);
     let rest = d.amount;
     for (const s of stages) if (rest > EPS) rest = inRoleOrder(men.filter(s), rest, added, roomOf);
@@ -117,21 +117,21 @@ export function positionFill(men, demand) {
 /**
  * Step 5 of the team plan (Adam 11-17). men: [{ id, starter (bool), figure, ceiling (his cap tonight), floor (a starter's; null otherwise), limited (a cap of his own at or below his figure: no fill),
  * max (his cap override, else GAME_MAX: the +1 rounds never pass it), w (optional: his weight in the proportional share, else his figure; tiers.js passes his figure before the position step, so a man
- * at an unrelated position keeps his share when a teammate goes Out), pos (optional: his chart position; a bench man's total stays at or under his position's lowest starter's, Adam 6:40 PM 11-17) }];
+ * at an unrelated position keeps his share when a teammate goes Out), pos (optional: his chart position) }]; a bench man's total stays at or under the team's lowest starter's (R15, Adam 6:43 PM 11-17);
  * teamMinutes; hold: true when a figure is missing (nothing is handed out then, RULES R1).
  * Returns { sum, gap, prop: Map, plus: Map, cut: Map, how: Map id -> "bench" | "starter", rounds, unassigned, untrimmed, trimmed: { bench, starter } | null, over: [{ id, total }] (men the fill took past 36
- * because 240 could not be reached under it), passed: [{ id, total }] (bench men the fill took past their position's lowest starter because 240 could not be reached otherwise) }. Pure.
+ * because 240 could not be reached under it), passed: [{ id, total }] (bench men the fill took past the team's lowest starter because 240 could not be reached otherwise) }. Pure.
  */
 export function fillTeam(men, teamMinutes, hold = false) {
   const sum = men.reduce((s, x) => s + x.figure, 0), gap = teamMinutes - sum, free = men;
   const res = { sum, gap, prop: new Map(), plus: new Map(), cut: new Map(), how: new Map(), rounds: 0, unassigned: 0, untrimmed: 0, trimmed: null, over: [], passed: [] };
   if (gap > EPS && !hold) {
     const open = free.filter((x) => !x.limited), byId = new Map(free.map((x) => [x.id, x])), none = { added: new Map(), rounds: 0, left: 0 };
-    // Adam 6:40 PM 11-17: a bench man ends no higher than his position's lowest starter (starterCeiling); maps: what each man has gained so far
+    // R15: a bench man ends no higher than the team's lowest starter (starterCeiling); maps: what each man has gained so far
     const ceilAt = (maps) => (id, a) => starterCeiling(free, (j) => byId.get(j).figure + [...maps, a ?? new Map()].reduce((s, mp) => s + (mp.get(j) ?? 0), 0))(byId.get(id));
     const prop = new Map();
     let pLeft = gap;
-    for (let i = 0; i < 50 && pLeft > EPS; i++) { // the share in passes: a starter's gain raises the ceiling of his position's bench for the next pass
+    for (let i = 0; i < 50 && pLeft > EPS; i++) { // the share in passes: the lowest starter's gain raises the bench's ceiling for the next pass
       const cap = ceilAt([prop]), p = shareOut(open.map((x) => ({ id: x.id, w: x.w ?? x.figure, room: Math.max(0, Math.min(Math.min(x.ceiling, x.max ?? GAME_MAX) - x.figure - (prop.get(x.id) ?? 0), cap(x.id))) })), pLeft);
       for (const [id, v] of p.added) prop.set(id, (prop.get(id) ?? 0) + v);
       const took = pLeft - p.left; pLeft = p.left;
