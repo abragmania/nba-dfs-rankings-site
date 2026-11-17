@@ -1,33 +1,33 @@
 /* The public site's few additions to the app's own stylesheets. */
 .site-keep {
   position: fixed;
-  left: 12px;
-  bottom: 12px;
-  padding: 6px 10px;
-  border-radius: 6px;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem;
   background: var(--p);
   color: var(--am);
   border: 1px solid var(--am);
-  font-size: 12px;
+  font-size: 0.75rem;
   z-index: 50;
 }
 /* The Pull now key prompt (site-pull.js askPanel): fixed under the header's right end, outside the header, which is redrawn whole. */
 .pnask {
   position: fixed;
-  top: 56px;
-  right: 24px;
-  max-width: min(520px, calc(100vw - 48px));
+  top: 3.5rem;
+  right: 1.5rem;
+  max-width: min(32.5rem, calc(100vw - 3rem));
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
   background: var(--p2);
   border: 1px solid var(--am);
   color: var(--tx);
-  font-size: 12px;
+  font-size: 0.75rem;
   z-index: 60;
 }
 .pnask div { flex: 1 0 100%; }
-.pnask input { flex: 1 1 220px; min-height: 32px; padding: 2px 8px; font: inherit; background: var(--p); color: var(--tx); border: 1px solid var(--ln); }
-.pnask button { min-height: 32px; padding: 2px 12px; font: inherit; font-weight: 700; background: none; color: var(--tx); border: 1px solid var(--ln); }
+.pnask input { flex: 1 1 13.75rem; min-height: 2rem; padding: 0.125rem 0.5rem; font: inherit; background: var(--p); color: var(--tx); border: 1px solid var(--ln); }
+.pnask button { min-height: 2rem; padding: 0.125rem 0.75rem; font: inherit; font-weight: 700; background: none; color: var(--tx); border: 1px solid var(--ln); }

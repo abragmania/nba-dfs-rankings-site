@@ -48,7 +48,7 @@ export function bumpPatch(id, steps) {
 function thumbsHtml(count) {
   const n = Math.max(1, count);
   const fan = n <= 1 ? 0 : n <= 3 ? 6 : 12 / (n - 1);
-  return { svgs: THUMB_SVG.repeat(n), style: n <= 1 ? "" : ` style="--fan:${Math.floor(fan * 100) / 100}px"` };
+  return { svgs: THUMB_SVG.repeat(n), style: n <= 1 ? "" : ` style="--fan:${Math.floor(fan / 16 * 10000) / 10000}rem"` };
 }
 
 /**

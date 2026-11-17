@@ -1,0 +1,56 @@
+/* The Console's All teams news page and the team page's cleaned news rows (console-all.js; Adam 2:58-3:25 PM 11-17). Every size is rem (16px = 1rem at the 1920 design), every colour a theme variable
+   or mixed from one, so it reads on Dark, Black, Navy and Light. Its own file so the Console's shared css stays as it is; the rows are also used inside the team strip (.ca-c). */
+#console .ca{margin:0.875rem 0 0}
+#console .ca-h{display:flex;align-items:baseline;gap:0.875rem;padding:0 0.125rem 0.5rem}
+#console .ca-h h1{margin:0;font-size:1.375rem;font-weight:700}
+#console .ca-n{color:var(--mu);font-size:0.8125rem}
+#console .ca-chips{display:flex;flex-wrap:wrap;gap:0.375rem 0.5rem;margin-bottom:0.75rem}
+#console .ca-chip{display:inline-flex;align-items:center;gap:0.3125rem;height:2rem;padding:0 0.625rem;background:var(--p);border:1px solid var(--ln);border-radius:0.25rem;color:var(--tx);font-weight:600;font-size:0.875rem}
+#console .ca-chip:hover{border-color:var(--mu)}
+#console .ca-chip b{color:var(--mu);font-weight:700;font-size:0.8125rem}
+#console .ca-chip .logo.xs{margin:0}
+#console .ca-chip.ca-quiet{color:var(--mu)}
+#console .ca-chip.on{background:var(--bl);border-color:var(--bl);color:#fff}#console .ca-chip.on b{color:#fff}
+body.light #console .ca-chip.on{background:var(--bl)}
+#console .ca-list{background:var(--p);border:1px solid var(--ln);border-radius:0.25rem}
+#console .ca-empty{padding:1rem 0.875rem;color:var(--mu);font-size:0.9375rem}
+#console .ca-row{display:grid;grid-template-columns:6.75rem 4.25rem 5.5rem minmax(0,1fr) 7.5rem 14.5rem minmax(10rem,16rem);column-gap:0.75rem;align-items:center;min-height:2.5rem;padding:0.3125rem 0.875rem;border-bottom:1px solid var(--ln2);font-size:0.9375rem}
+#console .ca-row:last-child{border-bottom:0}
+#console .ca-row:hover{background:color-mix(in srgb,var(--bl) 5%,transparent)}
+#console .ca-row time{font-weight:700;color:var(--tx);white-space:nowrap}
+#console .ca-k{display:inline-block;min-width:3.5rem;padding:0.0625rem 0.3125rem;text-align:center;font-size:0.6875rem;font-weight:800;border:1px solid currentColor;border-radius:0.125rem;justify-self:start}
+#console .ca-k-OUT{color:var(--rd)}
+#console .ca-k-Q,#console .ca-k-D,#console .ca-k-CHECK{color:var(--am)}
+#console .ca-k-P,#console .ca-k-IN,#console .ca-k-START{color:var(--gr)}
+#console .ca-k-BENCH{color:var(--mu)}
+#console .ca-k-NOTE,#console .ca-k-INFO{color:var(--bl)}
+body.light #console .ca-k-P,body.light #console .ca-k-IN,body.light #console .ca-k-START,body.light #console .ca-ok{color:#2f9b66}
+#console .ca-tm{display:inline-flex;align-items:center;gap:0.375rem;padding:0;background:none;border:0;color:var(--tx);font-weight:700;font-size:0.9375rem;justify-self:start}
+#console .ca-tm .logo.xs{margin:0}
+#console button.ca-tm:hover b{text-decoration:underline}
+#console .ca-none{color:var(--dim)}
+#console .ca-who{min-width:0;overflow-wrap:anywhere}
+#console .ca-who b{font-weight:700}
+#console .ca-d{color:var(--mu)}
+#console .ca-sides{display:flex;flex-direction:column;margin-top:0.125rem;color:var(--mu);font-size:0.8125rem}
+#console .ca-m{white-space:nowrap;text-align:right;color:var(--mu);font-size:0.8125rem}#console .ca-m b{color:var(--tx);font-size:0.9375rem}
+#console .ca-m.ca-none{color:var(--dim)}
+#console .ca-re{display:flex;align-items:center;gap:0.5rem;font-size:0.8125rem;font-weight:700}
+#console .ca-ok{color:var(--gr);font-weight:700;font-size:0.8125rem}
+#console .ca-wait{color:var(--am);font-weight:700;font-size:0.8125rem}
+#console .ca-call{display:inline-block;padding:0.0625rem 0.5rem;border:1px solid var(--am);border-radius:0.125rem;background:color-mix(in srgb,var(--am) 14%,transparent);color:var(--am);font-weight:800;font-size:0.75rem;white-space:nowrap}
+#console .ca-x{width:1.5rem;height:1.5rem;padding:0;background:none;border:1px solid var(--ln);border-radius:0.125rem;color:var(--mu);font-size:0.75rem}
+#console .ca-x:hover{border-color:var(--tx);color:var(--tx)}
+#console .ca-srcs{display:flex;flex-wrap:wrap;gap:0.25rem;justify-content:flex-end}
+#console .ca-src{padding:0 0.375rem;border:1px solid var(--ln);border-radius:0.125rem;color:var(--mu);font-size:0.6875rem;white-space:nowrap}
+#console .ca-row.ca-conf{background:color-mix(in srgb,var(--am) 7%,transparent)}
+#console .ca-foot{margin:0.75rem 0 0;padding:0.5rem 0.125rem 0;border-top:1px solid var(--ln);color:var(--mu);font-size:0.78125rem;line-height:1.5}
+/* The team page's strip: the same facts, two lines each (time, chip, who, minutes; then what TwoGun did and who said it), the foot line under them. */
+#console .cn .ca-row.ca-c{grid-template-columns:3.75rem 3.75rem minmax(0,1fr) auto;grid-template-rows:auto auto;row-gap:0.0625rem;align-items:center;min-height:0;padding:0.3125rem 0;border-bottom:1px dashed var(--ln);font-size:0.875rem}
+#console .cn .ca-row.ca-c:last-of-type{border-bottom:0}
+#console .cn .ca-row.ca-c:hover{background:none}
+#console .cn .ca-c .ca-k{min-width:0;width:3.25rem;font-size:0.625rem}
+#console .cn .ca-c .ca-sub{grid-column:3 / -1;display:flex;flex-wrap:wrap;align-items:center;gap:0.25rem 0.5rem;font-size:0.8125rem}
+#console .cn .ca-c.ca-conf .ca-who{grid-column:3 / -1}
+#console .cn .ca-fold{margin-top:0.25rem;padding-top:0.25rem;color:var(--mu);font-size:0.75rem}
+#console .cn .ca-feed h3{white-space:nowrap}

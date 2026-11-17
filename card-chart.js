@@ -5,7 +5,7 @@
 // fewer than SMALL games is a hollow dot. One crosshair and one tooltip cover both panels: it snaps to the nearest
 // period and follows the pointer (arrow keys move it when the chart has focus). Team changes are dotted verticals
 // labelled "to ATL". The model comes from card-usage.js; everything here but wireChart is pure and DOM-free.
-import { esc } from "./board-util.js";
+import { esc, remScale } from "./board-util.js";
 
 export const DIMS = { W: 606, L: 42, R: 106, top: 27, ph: 150, gap: 58 };
 // Fewer games than this is a small sample. A copy of board_figures.js SMALL_SAMPLE_GAMES (the server's one copy): the
@@ -218,8 +218,9 @@ export function wireChart(box, model) {
     const px = at ? (at.x - b.left) / z : (g.X(i) / g.W) * (r.width / z), py = at ? (at.y - b.top) / z : box.offsetHeight / 3;
     const tw = tip.offsetWidth, th = tip.offsetHeight;
     // Right of the pointer on the chart's left half, left of it past the middle (so it never covers the right-edge labels).
-    let left = px > box.offsetWidth / 2 ? px - 16 - tw : px + 16;
-    if (left + tw > box.offsetWidth) left = px - 16 - tw;
+    const gapX = 16 * remScale(); // G71: the tooltip sits 16 design px from the pointer
+    let left = px > box.offsetWidth / 2 ? px - gapX - tw : px + gapX;
+    if (left + tw > box.offsetWidth) left = px - gapX - tw;
     tip.style.left = `${Math.max(0, left)}px`;
     tip.style.top = `${Math.min(Math.max(0, py - th / 2), box.offsetHeight - th)}px`;
   };

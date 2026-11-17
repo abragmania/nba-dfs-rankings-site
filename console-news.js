@@ -4,7 +4,10 @@
 import { esc, nameOpen, outNameOpen } from "./board-util.js";
 import { plain } from "./console-model.js";
 import { newsModel, statusChip, timeLabel, etDay } from "./news-model.js";
-import { FIVE_WORD, feedRowHtml, fiveSaid } from "./news-page.js";
+import { FIVE_WORD, fiveSaid } from "./news-page.js";
+import { makeProposals } from "./lineup-proposals.js";
+import { newsFacts } from "./news-facts.js";
+import { factRow } from "./console-all.js";
 
 const POS_ORDER = ["PG", "SG", "SF", "PF", "C", "G", "F"];
 const dash = '<span class="nwd">—</span>';
@@ -12,19 +15,36 @@ const SHORT = { Questionable: "Q", Doubtful: "D", Probable: "P" };
 const SHOWN_INJURIES = 5;
 
 /**
- * One team's news from a read ({ slate (the board's slate with its rows), latest (the lineup read or null), nowMs, tips: { tip, tipAt } }):
- * { team, opp, feed (its 3 newest entries), byId, byName (by plain name), rows, day, hasRead, stale }, or null when the slate has no game row for it.
+ * The whole slate's news from a read ({ slate, latest, nowMs, tips, view, dismissed: { id: signature } the conflicts he hid, notes: the read's own trouble in words }): { model (newsModel), F (news-facts.js
+ * newsFacts: the cleaned facts, what was folded, conflicts held), notes (for the foot), problem (why conflicts could not be checked, or null) }. Reuses newsModel and makeProposals; reads nothing new (Adam 11-17).
  */
-export function teamNews(read, code) {
-  if (!read) return null;
+export function newsView(read) {
   const model = newsModel({ slate: read.slate, latest: read.latest, nowMs: read.nowMs, view: read.view ?? null, ...read.tips });
+  let conflicts = [], problem = null;
+  try {
+    const res = makeProposals({ latest: read.latest, players: read.slate?.players, view: read.view ?? null, nowMs: read.nowMs });
+    const hid = read.dismissed ?? {};
+    conflicts = res.stale ? [] : res.conflicts.filter((r) => hid[r.id] !== r.signature); // a stale read shows nothing from it; a conflict he hid stays hidden until a source changes
+  } catch (e) { problem = e.message; } // G62: said at the foot, never an empty list
+  const F = newsFacts({ log: model.log, players: read.slate?.players, conflicts, latest: read.latest, nowMs: read.nowMs, day: model.day });
+  return { model, F, notes: read.notes ?? [], problem };
+}
+
+/**
+ * One team's news from a read (same as newsView's; V: its answer when the page has it already):
+ * { team, opp, feed (its 3 newest facts), folded (vague notes folded for it), byId, byName (by plain name), rows, day, hasRead, stale }, or null when the slate has no game row for it.
+ */
+export function teamNews(read, code, V = null) {
+  if (!read) return null;
+  V ??= newsView(read);
+  const model = V.model;
   const game = model.games.find((g) => g.away.code === code || g.home.code === code);
   if (!game) return null;
   const team = game.away.code === code ? game.away : game.home, opp = team === game.away ? game.home : game.away;
   const rows = [...team.starters, ...team.bench, ...team.outs];
   return {
     team, opp, rows, day: model.day, hasRead: model.hasRead, stale: model.stale,
-    feed: model.log.filter((e) => e.team === code).slice(0, 3),
+    feed: V.F.facts.filter((f) => f.team === code).slice(0, 3), folded: V.F.folded.byTeam[code] ?? 0, checkedAt: model.asOf?.monster ?? null,
     byId: new Map(rows.filter((r) => r.id).map((r) => [r.id, r])), byName: new Map(rows.map((r) => [plain(r.name), r])),
   };
 }
@@ -75,8 +95,9 @@ function fiveSection(N, starterIds) {
 }
 
 function feedSection(N) {
-  const rows = N.feed.map(feedRowHtml).join("") || `<div class="ann none">No lineup news for ${esc(N.team.code)}.</div>`;
-  return `<section><h3>Latest from the lineup news <em class="n">newest first</em><button class="lnk" type="button" data-go-news="1">All of it on the News tab &rsaquo;</button></h3>${rows}</section>`;
+  const rows = N.feed.map((f) => factRow(f, { team: false, compact: true })).join("") || `<div class="ann none">No lineup news for ${esc(N.team.code)}.</div>`;
+  const fold = N.folded ? `<div class="ca-fold">${N.folded} vague lineup-check note${N.folded === 1 ? "" : "s"} folded${N.checkedAt != null ? ` &middot; checked ${esc(timeLabel(N.checkedAt, { day: N.day }) ?? "")}` : ""}</div>` : "";
+  return `<section class="ca-feed"><h3>Latest from the lineup news <em class="n">newest first</em><button class="lnk" type="button" data-go-all="1">All teams &rsaquo;</button></h3>${rows}${fold}</section>`;
 }
 
 const INJURY_RANK = { ou: 0, db: 1, qu: 2, xx: 3, rt: 4, pr: 5 };
@@ -87,7 +108,7 @@ function injurySection(N) {
   const counts = [];
   for (const r of list) { const w = r.status.word.toLowerCase(), hit = counts.find((c) => c.w === w); if (hit) hit.n++; else counts.push({ w, n: 1 }); }
   const row = (r) => { const at = timeOf(N, r); return `<div class="inj">${chipHtml(r.status)}${r.id ? nameOpen(r.name, r.id, "b") : outNameOpen(r.name, N.team.code, "b")}<span class="n"${r.note ? ` title="${esc(r.note)}"` : ""}>${r.note ? esc(r.note) : dash}</span><time>${at ? esc(at) : ""}</time></div>`; };
-  const more = list.length > SHOWN_INJURIES ? `<div class="inj more"><span class="n">+${list.length - SHOWN_INJURIES} more on the News tab</span></div>` : "";
+  const more = list.length > SHOWN_INJURIES ? `<div class="inj more"><span class="n">+${list.length - SHOWN_INJURIES} more in Out / injured</span></div>` : "";
   return `<section><h3>Injury report${counts.length ? `<em class="n">${counts.map((c) => `${c.n} ${esc(c.w)}`).join(" &middot; ")}</em>` : ""}</h3>${shown.map(row).join("") || `<div class="inj none"><span class="n">Nobody on the injury report</span></div>`}${more}</section>`;
 }
 

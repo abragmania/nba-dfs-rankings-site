@@ -89,22 +89,25 @@ export function feedEntries({ cards, players, out, pullChanges, day = null }) {
     const at = atOf(c), p = c.dk_id != null ? byId.get(String(c.dk_id)) : null, o = c.out_as ? outBy.get(`${c.team}|${c.out_as}`) : null, kind = kindOf(c.label);
     const known = pc && Number.isFinite(pc.prev) && Number.isFinite(pc.now) && at != null;
     let effect = "Not on tonight's slate", effectTitle = "No player on this slate matches this report", flag = false;
+    let mins = null, react = null; // Console news list (Adam 11-17): minutes at stake as figures ("14.1", "3.5 → 6.6", "usually 11.8") and what TwoGun did: "applied" (it moved him, or he is on its Out list), "waiting" (it has not reacted), "newer" (after the last pull), null (no claim)
     if (p) {
-      const tg = tgMin(p), mins = isNum(tg) ? `${tg.toFixed(1)} min` : null, mv = p.pull_move;
-      if (!known || at < pc.prev) { effect = mins ?? "—"; effectTitle = "TwoGun's minutes for him now; this report is older than the pulls compared, so no change is claimed"; } // older than the pulls compared, or no comparison: no claim
-      else if (at > pc.now) { effect = "🕒 Newer than your last pull — press Pull now"; effectTitle = `Reported after the ${t(pc.now)} pull, so it is not in the numbers yet${mins ? `; TwoGun has him at ${mins}` : ""}`; flag = true; }
-      else if (mv?.min) { effect = `Minutes ${moveText(mv.min)}${mv.proj ? ` · pts ${moveText(mv.proj)}` : ""}`; effectTitle = "TwoGun's move between the last two pulls"; }
-      else { effect = `⚠️ TwoGun hasn't moved him yet${mins ? ` (${mins})` : ""}`; effectTitle = `No change in TwoGun's minutes since the ${t(pc.prev)} pull`; flag = true; }
+      const tg = tgMin(p), mins0 = isNum(tg) ? `${tg.toFixed(1)} min` : null, mv = p.pull_move;
+      mins = isNum(tg) ? tg.toFixed(1) : null;
+      if (!known || at < pc.prev) { effect = mins0 ?? "—"; effectTitle = "TwoGun's minutes for him now; this report is older than the pulls compared, so no change is claimed"; } // older than the pulls compared, or no comparison: no claim
+      else if (at > pc.now) { effect = "🕒 Newer than your last pull — press Pull now"; effectTitle = `Reported after the ${t(pc.now)} pull, so it is not in the numbers yet${mins0 ? `; TwoGun has him at ${mins0}` : ""}`; flag = true; react = "newer"; }
+      else if (mv?.min) { effect = `Minutes ${moveText(mv.min)}${mv.proj ? ` · pts ${moveText(mv.proj)}` : ""}`; effectTitle = "TwoGun's move between the last two pulls"; react = "applied"; if (mv.min.from !== mv.min.to) mins = `${mv.min.from.toFixed(1)} → ${mv.min.to.toFixed(1)}`; }
+      else { effect = `⚠️ TwoGun hasn't moved him yet${mins0 ? ` (${mins0})` : ""}`; effectTitle = `No change in TwoGun's minutes since the ${t(pc.prev)} pull`; flag = true; react = "waiting"; }
     } else if (o) {
       const back = kind !== "OUT" && kind !== "NOTE";
-      if (back && known && at >= pc.prev) { effect = `⚠️ Listed Out, report says ${c.word ?? c.label ?? "something else"} — check him`; effectTitle = "He is on TwoGun's Out list but this report says otherwise; TwoGun has not changed him yet"; flag = true; }
-      else { effect = `🚫 Out${isNum(o.usual_minutes) ? ` · usually ${o.usual_minutes.toFixed(1)} min` : ""}`; effectTitle = "On TwoGun's Out list; his usual minutes are taken off the board"; }
+      if (back && known && at >= pc.prev) { effect = `⚠️ Listed Out, report says ${c.word ?? c.label ?? "something else"} — check him`; effectTitle = "He is on TwoGun's Out list but this report says otherwise; TwoGun has not changed him yet"; flag = true; react = "waiting"; }
+      else { effect = `🚫 Out${isNum(o.usual_minutes) ? ` · usually ${o.usual_minutes.toFixed(1)} min` : ""}`; effectTitle = "On TwoGun's Out list; his usual minutes are taken off the board"; if (kind === "OUT") react = "applied"; }
+      if (isNum(o.usual_minutes)) mins = o.usual_minutes.toFixed(1);
     }
     const body = c.body ?? null, said = tidyInjury(body), gl = /g[ -]?league/i.test(`${c.word ?? ""} ${c.label ?? ""} ${body ?? ""}`); // a G League assignment or two-way deal means he is not with the team: never "Playing"
     const lead = gl ? "G League" : LEAD_OF[kind];
     const glSaid = said?.replace(/^G League\s*/, "") ?? "";
     const text = gl ? `G League: ${c.name}${glSaid ? ` — ${glSaid}` : ""}` : lead ? `${lead}: ${c.name}${said ? ` — ${said}` : ""}` : `Note: ${c.name} — ${[c.word ?? c.label, said].filter(Boolean).join(", ")}`;
-    return { at, time: timeLabel(at, { day, precision: c.precision, log: true }), kind: gl ? "NOTE" : kind, team: c.team, text, title: `${c.name}: ${[c.word ?? c.label, body].filter(Boolean).join(" — ")}`, effect, effectTitle, flag, src: "Monster", id: c.id };
+    return { at, time: timeLabel(at, { day, precision: c.precision, log: true }), kind: gl ? "NOTE" : kind, team: c.team, text, title: `${c.name}: ${[c.word ?? c.label, body].filter(Boolean).join(" — ")}`, effect, effectTitle, flag, src: "Monster", id: c.id, name: c.name, said, word: c.word ?? null, mins, react };
   });
   return entries.sort((a, b) => (b.at ?? -Infinity) - (a.at ?? -Infinity));
 }
@@ -117,7 +120,7 @@ export function foundEntries(found, teams, day = null) {
   return (Array.isArray(found) ? found : []).map((f, i) => {
     const at = Date.parse(f?.at ?? "");
     if (!Number.isFinite(at) || typeof f?.text !== "string" || (f.team != null && !teams.has(f.team))) return null;
-    return { at, time: timeLabel(at, { day, log: true }), kind: "NOTE", team: f.team ?? "", text: `Lineup: ${f.text}`, title: `${f.text} (found ${timeLabel(at, { day })} ET)`, effect: `found by the ${f.by === "5-minute lineup check" ? "5-minute lineup check" : String(f.by ?? "lineup check")}`, effectTitle: "The app read the lineup pages itself and saw this change; no pull was pressed", flag: false, src: "Lineups", id: `found-${f.at}-${i}` };
+    return { at, time: timeLabel(at, { day, log: true }), kind: "NOTE", team: f.team ?? "", text: `Lineup: ${f.text}`, title: `${f.text} (found ${timeLabel(at, { day })} ET)`, effect: `found by the ${f.by === "5-minute lineup check" ? "5-minute lineup check" : String(f.by ?? "lineup check")}`, effectTitle: "The app read the lineup pages itself and saw this change; no pull was pressed", flag: false, src: "Lineups", id: `found-${f.at}-${i}`, found: true, raw: f.text };
   }).filter(Boolean);
 }
 

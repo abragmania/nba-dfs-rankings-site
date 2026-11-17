@@ -211,10 +211,10 @@ export function seasonsTable(data, dash) {
 }
 
 const legend = () => {
-  const key = (c) => `<svg width="22" height="10" viewBox="0 0 22 10"><line x1="1" x2="21" y1="5" y2="5" stroke="${c}" stroke-width="2"/><circle cx="11" cy="5" r="4" fill="${c}" stroke="var(--p)" stroke-width="2"/></svg>`;
-  return `<div class="ue-lgd"><span>${key("var(--am)")}${key("var(--bl)")}Player</span><span><svg width="22" height="10" viewBox="0 0 22 10"><line x1="1" x2="21" y1="5" y2="5" stroke="var(--tx)" stroke-width="1.25" opacity=".6"/></svg>his avg</span>`
-    + `<span><svg width="22" height="10" viewBox="0 0 22 10"><line x1="1" x2="21" y1="5" y2="5" stroke="var(--mu)" stroke-width="1.5" stroke-dasharray="5 4"/></svg>league avg</span>`
-    + `<span><svg width="12" height="10" viewBox="0 0 12 10"><circle cx="6" cy="5" r="4" fill="var(--p)" stroke="var(--mu)" stroke-width="1.6"/></svg>under ${SMALL} games</span></div>`;
+  const key = (c) => `<svg style="width:1.375rem;height:0.625rem" viewBox="0 0 22 10"><line x1="1" x2="21" y1="5" y2="5" stroke="${c}" stroke-width="2"/><circle cx="11" cy="5" r="4" fill="${c}" stroke="var(--p)" stroke-width="2"/></svg>`;
+  return `<div class="ue-lgd"><span>${key("var(--am)")}${key("var(--bl)")}Player</span><span><svg style="width:1.375rem;height:0.625rem" viewBox="0 0 22 10"><line x1="1" x2="21" y1="5" y2="5" stroke="var(--tx)" stroke-width="1.25" opacity=".6"/></svg>his avg</span>`
+    + `<span><svg style="width:1.375rem;height:0.625rem" viewBox="0 0 22 10"><line x1="1" x2="21" y1="5" y2="5" stroke="var(--mu)" stroke-width="1.5" stroke-dasharray="5 4"/></svg>league avg</span>`
+    + `<span><svg style="width:0.75rem;height:0.625rem" viewBox="0 0 12 10"><circle cx="6" cy="5" r="4" fill="var(--p)" stroke="var(--mu)" stroke-width="1.6"/></svg>under ${SMALL} games</span></div>`;
 };
 
 /** The section's markup for a usage state and the tab choice. ctx: { dash(title) }. */

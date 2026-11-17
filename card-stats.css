@@ -1,0 +1,18 @@
+/* The player panel's Numbers section (card-tiles.js): one summary line and one table. Every size in rem (G71; 1rem = 16px at the 1920 design). */
+.card .cstats .cs-line{display:flex;flex-wrap:wrap;gap:.15rem 1.1rem;align-items:baseline;margin-bottom:.4rem;font-size:.8125rem}
+.card .cstats .cs-p small{color:var(--mu);font-size:.6875rem;margin-right:.2rem}
+.card .cstats .cs-p b{font-weight:700;color:var(--tx);font-variant-numeric:tabular-nums;white-space:nowrap}
+.card .cs-tbl{width:100%;border-collapse:collapse;font-size:.8125rem;font-variant-numeric:tabular-nums;table-layout:fixed}
+.card .cs-tbl th,.card .cs-tbl td{padding:.2rem .5rem;text-align:right;white-space:nowrap;border-bottom:1px solid var(--ln);color:var(--mu);font-weight:500}
+.card .cs-tbl th{background:none;cursor:default;user-select:text}
+.card .cs-tbl thead tr{background:none}
+.card .cs-tbl thead th{font-size:.6875rem;color:var(--dim);font-weight:700;letter-spacing:.04rem;text-transform:uppercase}
+.card .cs-tbl tbody th{text-align:left;color:var(--mu);font-size:.75rem;font-weight:600}
+.card .cs-tbl th:first-child{width:5rem}
+.card .cs-tbl .cur{color:var(--tx);font-weight:700}
+.card .cs-tbl thead th.cur{color:var(--am)}
+.card .cs-tbl sup{font-size:.625rem;color:var(--dim);margin-left:.2rem;font-weight:500;vertical-align:baseline}
+.card .cs-tbl i{font-style:normal;font-size:.6875rem;margin-left:.15rem}
+.card .cs-tbl i.up{color:color-mix(in srgb,var(--gr) 55%,var(--mu))}
+.card .cs-tbl i.dn{color:color-mix(in srgb,var(--rd) 55%,var(--mu))}
+.card .cs-tbl i.dim{color:var(--mu)}

@@ -1,7 +1,7 @@
 // The player table's columns (optimizer standard A1, A17): the standard's order, and Adam's own ticks and order, remembered
 // per optimizer mode (Cash, GPP) in browser storage, a per-viewer convenience. The state helpers are pure and tested in node;
 // columnsControl wires the Columns button and its list, whose listeners sit on the list's own element so they survive a redraw.
-import { esc, keepFocus } from "./board-util.js";
+import { esc, keepFocus, remScale } from "./board-util.js";
 
 // The player column is always on: a row with no name cannot be read.
 export const COLUMNS = [
@@ -151,7 +151,7 @@ export function columnsControl({ btn, pop, mode, tryStore, onChange }) {
     dragging = k;
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", k);
-    e.dataTransfer.setDragImage(e.target.closest(".colrow"), 8, 8);
+    e.dataTransfer.setDragImage(e.target.closest(".colrow"), 8 * remScale(), 8 * remScale());
   });
   pop.addEventListener("dragover", (e) => {
     const row = e.target.closest?.(".colrow");

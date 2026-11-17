@@ -4,7 +4,7 @@ import { paletteOf, teamColors } from "./teams.js";
 import { assignColours } from "./colours.js";
 import { sourceRows, sourcesHtml } from "./sources-panel.js";
 import { checkFootHtml, checkNotesHtml, checkNoteCount, hisPoolHtml } from "./board-check-foot.js";
-import { esc, logo, tipWhen, tipMs, slateRefMs, shortTime, topStamps, keepFocus } from "./board-util.js";
+import { esc, logo, tipWhen, tipMs, slateRefMs, shortTime, topStamps, keepFocus, remScale } from "./board-util.js";
 import { createPanel } from "./panel.js";
 import { initCard, figureSource } from "./card.js";
 import { cardRoles } from "./card-role.js";
@@ -78,12 +78,11 @@ const shownCols = () => columns.keys({ lateSwap: Boolean(panel.lateSwap()) });
 // The scenario console (console.js), the page's other view; each change there hands back the players' effective figures, as an override save does.
 const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: (t) => colourOf(t).t1, onPlayers: (players) => applyPlayers(players),
   news: { slateData: () => (S.slate ? { ...S.slate, players: S.players } : null), tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; } }, // the lineup news strip and Status column (same inputs as the News tab)
-  onNews: (team) => { card.close(); setConsole(false); setView("news"); const chip = document.querySelector(`#lineupbar .nwchip[data-nw-team="${CSS.escape(team ?? "")}"]`); if (chip && !chip.classList.contains("on")) chip.click(); }, // the News tab opens on that team (its chip, unless already picked)
   onWork: () => { boardMarks.refresh({ news: false }); lineupBar.newsOnly(); } });
 // The console's word on each row (board-marks.js): the S chip, and his typed Min and DK/m TON with their undo chips; those cells write through the console.
 const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, players: () => S.players, onChange: () => { if (!S.slate) return; card.badge(); if (formHasFocus()) { S.rowsLater = true; return; } renderRows(); }, noteEl: $("updline").insertAdjacentElement("beforebegin", Object.assign(document.createElement("div"), { hidden: true })) });
 // The lineup bar above the list (lineup-bar.js): an Out or a confirmed start from the Monster, RotoWire and RotoGrinders pages applies itself through the console, with an undo X; a projected start is words only.
-const lineupBar = createLineupBar({ el: $("lineupbar"), api, slate: () => S.name, players: () => S.players, slateData: () => S.slate, tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; }, console: scenarioConsole, toast, tryStore, tick: true, onLabel: (l) => { S.news = l; renderTop(); }, onModel: (m) => { const f = confirmedByGame(m); if (JSON.stringify(f) !== JSON.stringify(S.fives)) { S.fives = f; if (S.slate) renderGames(); } }, applyInPage: Boolean(globalThis.nbadfsSitePull) });
+const lineupBar = createLineupBar({ api, slate: () => S.name, players: () => S.players, slateData: () => S.slate, tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; }, console: scenarioConsole, toast, tryStore, tick: true, onLabel: (l) => { S.news = l; renderTop(); }, onModel: (m) => { const f = confirmedByGame(m); if (JSON.stringify(f) !== JSON.stringify(S.fives)) { S.fives = f; if (S.slate) renderGames(); } }, applyInPage: Boolean(globalThis.nbadfsSitePull) });
 const applyFullScreen = createFullScreen({ panel, tryStore, stickyHeights: () => stickyHeights(), fixTableWidth: () => fixTableWidth() }); // Full screen button (board-fullscreen.js)
 /** Shows the console or the board. The board's table holds a measured width, so it is measured again on the way back. */
 function setConsole(open) {
@@ -98,14 +97,12 @@ function setConsole(open) {
 
 /** The page's two tabs: the player list (with the working lineup and Build) and the Lineups tab (the built and saved lineups). */
 function setView(v) {
-  const next = v === "lineups" || v === "news" ? v : "list";
+  const next = v === "lineups" ? v : "list"; // the News tab is gone (Adam 11-17): its news is the Console's All teams page
   if (next === (S.view ?? "list")) return; // clicking the tab already on show does nothing
   S.scroll = { ...S.scroll, [S.view ?? "list"]: window.scrollY }; // each tab keeps its own place
   S.view = next;
   document.body.classList.toggle("lineups-on", next === "lineups");
-  document.body.classList.toggle("news-on", next === "news");
   $("lineups").hidden = next !== "lineups";
-  $("news").hidden = next !== "news";
   renderTop();
   if (next === "list") fixTableWidth();
   window.scrollTo(0, S.scroll?.[next] ?? 0);
@@ -316,8 +313,8 @@ const GAME_MIN = 212; // a tile's content at its narrowest (logo, code, spread, 
 function fitGames() {
   const el = $("games"), n = el.children.length;
   if (!n || !el.clientWidth) return;
-  const fit = Math.max(1, Math.floor((el.clientWidth + 8) / (GAME_MIN + 8))), cols = Math.ceil(n / Math.ceil(n / fit));
-  el.style.gridTemplateColumns = `repeat(${cols}, minmax(${GAME_MIN}px, 236px))`;
+  const s = remScale(), fit = Math.max(1, Math.floor((el.clientWidth + 8 * s) / ((GAME_MIN + 8) * s))), cols = Math.ceil(n / Math.ceil(n / fit));
+  el.style.gridTemplateColumns = `repeat(${cols}, minmax(${GAME_MIN / 16}rem, 14.75rem))`;
 }
 
 // ---------- table ----------
@@ -372,12 +369,12 @@ function fixTableWidth() {
  *  sticky stack over the table, the bar and header, so a table control taking the keyboard never lands under them (A15). The lineup
  *  band stacks over the optimizer's own column: --luh is its height, which the controls below it use as scroll-margin-top (board.css). */
 function stickyHeights() {
-  const root = document.documentElement.style, h = (el) => el?.getBoundingClientRect().height ?? 0;
+  const root = document.documentElement.style, h = (el) => el?.getBoundingClientRect().height ?? 0, s = remScale();
   root.setProperty("--fbarh", `${$("fbar").offsetHeight}px`);
   const first = document.querySelector("#thead th:first-child");
   root.setProperty("--plleft", `${first?.classList.contains("ctl") ? Math.ceil(first.getBoundingClientRect().width) : 0}px`);
-  root.setProperty("--luh", `${Math.ceil(h(document.querySelector("#opt .lu"))) + 4}px`);
-  root.scrollPaddingTop = `${Math.ceil(h($("fbar")) + h($("thead"))) + 4}px`;
+  root.setProperty("--luh", `${Math.ceil(h(document.querySelector("#opt .lu"))) + 4 * s}px`);
+  root.scrollPaddingTop = `${Math.ceil(h($("fbar")) + h($("thead"))) + 4 * s}px`;
 }
 /** Sets every filter and the boxes that show them; the caller redraws. */
 function setFilters(f) {

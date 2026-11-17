@@ -6,6 +6,7 @@
 import { PROJ_MAX, OWN_MAX, BUMP_STEP_PCT, PIN_MAX } from "./override-limits.js";
 import { tonightRate } from "./figures.js";
 import { pressSettle } from "./press-settle.js";
+import { remScale } from "./board-util.js";
 
 export const HINT = "Enter saves, Esc cancels";
 // Two decimals, the precision the slate and the server keep, so the box shows the stored number itself.
@@ -58,7 +59,7 @@ export function createEditors({ root, rowOf, save, toast, limits = null, onClose
     e.input.style.right = right;
     e.input.style.top = `${mid}px`;
     e.hint.style.right = right;
-    e.hint.style.top = `${mid + 14}px`;
+    e.hint.style.top = `${mid + 14 * remScale()}px`;
     at.style.visibility = "hidden";
     td.append(e.input, e.hint);
     return true;

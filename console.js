@@ -11,7 +11,9 @@ import { createAutoApply, createPullReads, mayAutoSend, requeueApplied, requeueN
 import { PIN_MAX } from "./override-limits.js";
 import { keyOf } from "./console-engine.js";
 import { defaultSourceOf } from "./depth-chart.js";
-import { teamNews } from "./console-news.js";
+import { teamNews, newsView } from "./console-news.js";
+import { landingHtml, teamBarOf, withAllChip } from "./console-all.js";
+import { statusLine } from "./lineup-bar.js";
 
 const USAGE_RETRY_MS = 20_000;
 const USAGE_RETRIES = 6;
@@ -45,13 +47,26 @@ async function readNews(c) {
   try {
     const out = await c.api(`/api/slate/${encodeURIComponent(name)}/news-lineups`);
     if (name !== c.slate) return;
-    c.newsRead = { state: "ok", latest: out.state === "ok" ? out.latest : null, nowMs: Number.isFinite(out.now_ms) ? out.now_ms : Date.now(), localAt: Date.now() };
+    const line = out.state === "missing" ? "" : statusLine(out); // the read's own trouble (a page not read, men not matched): said at the foot of the All teams page (G62, G64)
+    c.newsRead = { state: "ok", latest: out.state === "ok" ? out.latest : null, nowMs: Number.isFinite(out.now_ms) ? out.now_ms : Date.now(), localAt: Date.now(), notes: line ? [line] : [] };
   } catch (e) {
     if (name === c.slate) c.newsRead = { state: "fail", why: e.message };
   }
 }
 
-/** What the news strip and the Status column draw from now: { state, why, N } (console-news.js), or undefined when the page wired no news. */
+const FILTER_KEY = "nbaboard.console.newsfilter"; // the All teams page's team filter, kept in this browser (Adam 3:25 PM 11-17)
+const dismissKey = (slate) => `nbaboard.lineupdismiss.${slate}`; // the lineup news's own record of conflicts he hid (id -> signature)
+function readStore(key, fallback) {
+  try { const v = localStorage.getItem(key); return v === null ? fallback : v; } catch (e) { console.warn(`Console: ${key} could not be read (${e.message})`); return fallback; }
+}
+function writeStore(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) { console.warn(`Console: ${key} could not be saved (${e.message})`); }
+}
+function readDismissed(slate) {
+  try { return JSON.parse(readStore(dismissKey(slate), "{}")) ?? {}; } catch (e) { console.warn(`Console: the hidden conflicts are unreadable (${e.message})`); return {}; }
+}
+
+/** What the news strip, the Status column and the All teams page draw from now: { state, why, N (the team's), V (the slate's, console-news.js newsView) }, or undefined when the page wired no news. */
 function newsOpt(c) {
   if (!c.news) return undefined;
   const n = c.newsRead;
@@ -60,10 +75,22 @@ function newsOpt(c) {
   try {
     const slate = c.news.slateData();
     if (!slate) return { state: "fail", why: "no slate on show" };
-    return { state: "ok", N: teamNews({ slate, latest: n.latest, nowMs: n.nowMs + (Date.now() - n.localAt), tips: c.news.tips(), view: c.model ? lineupViewOf(c) : null }, c.G.cur) };
+    const read = { slate, latest: n.latest, nowMs: n.nowMs + (Date.now() - n.localAt), tips: c.news.tips(), view: c.model ? lineupViewOf(c) : null, dismissed: readDismissed(c.slate), notes: n.notes };
+    const V = newsView(read);
+    return { state: "ok", V, N: teamNews(read, c.G.cur, V) };
   } catch (e) {
     return { state: "fail", why: e.message };
   }
+}
+
+/** The page on show: one team's, or the All teams news list (the team bar is the console's own, with "All teams" first). */
+function pageHtml(c, news) {
+  const G = c.G;
+  const team = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr: Object.values(c.saveErrs).join(" ") || null, news, help: G.help });
+  if (G.view !== "all") return withAllChip(team, false);
+  const words = !news ? "No lineup news is wired on this page." : news.state === "loading" ? "Reading the lineup news..." : news.state !== "ok" ? `Lineup news not read: ${news.why}` : null;
+  const body = words ? `<section class="ca"><header class="ca-h"><h1>Tonight's lineup news</h1></header><div class="ca-empty">${esc(words)}</div></section>` : landingHtml(news.V, G.newsTeam ?? "", c.inputs.games.flatMap((g) => [g.away, g.home]));
+  return `${withAllChip(teamBarOf(team), true)}${body}`;
 }
 
 function render(c) {
@@ -72,10 +99,7 @@ function render(c) {
   const typing = document.activeElement;
   if (typing && c.el.contains(typing) && typing.matches?.("input.fin") && typedText(typing) !== null) { c.redrawLater = true; return; } // he is part-way through a number: a redraw would end the box (and commit half of it), so it waits until he leaves it
   c.redrawLater = false;
-  const saveErr = Object.values(c.saveErrs).join(" ") || null;
-  keepInput(c, () => {
-    c.E("app").innerHTML = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr, news: newsOpt(c), help: G.help });
-  });
+  keepInput(c, () => { c.E("app").innerHTML = pageHtml(c, newsOpt(c)); });
   c.onWork?.();
 }
 
@@ -116,7 +140,7 @@ async function load(c, name) {
     c.serverFileHisAt = out.scenarios.his_at ?? null; c.conflicted = new Set(); c.saveWaiting = false;
     for (const code of Object.keys(c.model.ST)) c.lastSaved[code] = savedBehind(out.scenarios.teams[code], c.model.ST[code]) ? "unsaved" : JSON.stringify(recordOf(c.model.ST[code])); // work rebased on a newer pull, or cleaned of old copies, is written on the next save
     const G = c.G, first = Object.keys(c.model.TEAMS)[0] ?? null;
-    Object.assign(G, { cur: first, view: "team", editing: false, modal: null, pick: null, roleMoves: null, hist: [], hi: -1, focus: first ? { team: first, id: firstPlaying(c, first), k: "m" } : null });
+    Object.assign(G, { cur: first, view: "all", editing: false, modal: null, pick: null, roleMoves: null, hist: [], hi: -1, focus: first ? { team: first, id: firstPlaying(c, first), k: "m" } : null });
     if (!first) return showError(c, "This slate has no games.");
     pushHist(c, "Start");
     render(c);
@@ -203,8 +227,10 @@ function onClick(c, e) {
   if (!t || !c.model || t.disabled) return;
   const d = t.dataset;
   if (d.teamGo) jumpTeam(c, d.teamGo);
+  else if (d.goAll) { c.G.view = "all"; render(c); }
+  else if ("caFilter" in d) { c.G.newsTeam = d.caFilter; writeStore(FILTER_KEY, d.caFilter); render(c); } // "" is All
+  else if (d.caDismiss) { writeStore(dismissKey(c.slate), JSON.stringify({ ...readDismissed(c.slate), [d.caDismiss]: d.caSig ?? "" })); render(c); }
   else if (d.help) { c.G.help = !c.G.help; render(c); }
-  else if (d.goNews) c.onNews?.(c.G.cur);
   else if (d.undo) dropMark(c, d.team, d.id, d.undo);
   else if (d.s) toggleStarter(c, d.team, d.s);
   else if (d.out) toggleOut(c, d.team, d.out);
@@ -226,13 +252,13 @@ function onKey(c, e) {
 const SHELL = `<div id="app"></div>`;
 
 /** deps: { el, api, toast, colourOf(team) -> css colour, onPlayers(players), onWork() (his work moved: the board reads his marks again), news: { slateData() -> the slate with the board's rows, tips() -> { tip, tipAt } }
- *  (the lineup news strip and the Status column; without it neither reads the news), onNews() (the strip's link: opens the News tab) }. show() never rejects: its trouble goes to showError. */
-export function createConsole({ el, api, toast, colourOf, onPlayers, onWork, news, onNews }) {
+ *  (the lineup news strip, the Status column and the All teams page; without it none reads the news) }. show() never rejects: its trouble goes to showError. */
+export function createConsole({ el, api, toast, colourOf, onPlayers, onWork, news }) {
   el.innerHTML = SHELL;
   const c = {
-    el, api, toast, colourOf, onPlayers, onWork, news, onNews, newsRead: null, on: false, slate: null, inputs: null, model: null, applied: null, loadError: null, lastSaved: {}, saveErrs: {}, saveQueue: Promise.resolve(), usageTimer: null, usageTries: 0, sync: { state: "ok", at: null },
+    el, api, toast, colourOf, onPlayers, onWork, news, newsRead: null, on: false, slate: null, inputs: null, model: null, applied: null, loadError: null, lastSaved: {}, saveErrs: {}, saveQueue: Promise.resolve(), usageTimer: null, usageTries: 0, sync: { state: "ok", at: null },
     E: (id) => el.querySelector(`#${id}`),
-    G: { cur: null, view: "team", pick: null, roleMoves: null, focus: null, hist: [], hi: -1, editing: false, rows: [], modal: null },
+    G: { cur: null, view: "all", newsTeam: readStore(FILTER_KEY, ""), pick: null, roleMoves: null, focus: null, hist: [], hi: -1, editing: false, rows: [], modal: null },
     render: () => render(c), drawBar: () => render(c), focusCell: () => {},
   };
   c.auto = createAutoApply(c, { refreshInputs: () => refresh(c), onState: () => { if (c.on) render(c); else c.onWork?.(); } }); // the board shows the send's state too

@@ -9,7 +9,8 @@ import { esc } from "./board-util.js";
 import { lastName } from "./console-model.js";
 import { autoPlan, makeProposals, staleOf, LINEUP_KEYS } from "./lineup-proposals.js";
 import { newsModel, timeLabel } from "./news-model.js";
-import { newsPageHtml, announceHtml, effectHtml } from "./news-page.js";
+import { announceHtml, effectHtml } from "./news-page.js";
+import { newsFacts } from "./news-facts.js";
 
 const TIME_FMT = { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" };
 const timeText = (iso) => {
@@ -140,16 +141,17 @@ export function barHtml(bar, state = {}) {
 }
 
 /**
- * deps: { el, api(path), slate() -> the slate on show, players() -> its rows, console: { lineupView(slate), autoApplyProposal(slate, proposal), undoNews(team, key) },
+ * deps: { api(path), slate() -> the slate on show, players() -> its rows, console: { lineupView(slate), autoApplyProposal(slate, proposal), undoNews(team, key) },
  * toast(msg, kind), tryStore(fn), now() }. Returns { refresh(), newsOnly() }. refresh asks again for the lineup read, applies what is new and allowed, and redraws;
  * call it when the slate or its numbers change. newsOnly redraws the applied notes from the console; call it when his work moves.
  * applyInPage: only the public site's page applies (autoApplyProposal); on the app the server applies inside every pull (server/slate/news-apply.js), so a page never applies alongside it and never applies twice.
  */
-export function createLineupBar({ el, api, slate, players, slateData = () => null, tips = () => ({}), console: cons, toast, tryStore, now = Date.now, onLabel = () => {}, onModel = () => {}, tick = false, applyInPage = false }) {
+export function createLineupBar({ api, slate, players, slateData = () => null, tips = () => ({}), console: cons, toast, tryStore, now = Date.now, onLabel = () => {}, onModel = () => {}, tick = false, applyInPage = false }) {
   const key = () => `nbaboard.lineupdismiss.${slate()}`;
   const readDismissed = () => { try { return JSON.parse(tryStore(() => localStorage.getItem(key())) ?? "{}") ?? {}; } catch (e) { console.warn("Lineup dismissals unreadable:", e.message); return {}; } };
   const state = { notes: [], team: null }; // team: the log filtered to one team (a click on a team header or a chip)
   const ctx = { latest: null, nowMs: now(), localAt: now(), view: null, slate: null }; // the lineup read, the server clock when it was read (and the browser's then: the clock moves on from there) and the console view the page is drawn from
+  let last = null; // the newest draw's inputs: { bar, state, model, facts, stale }
   let label = { n: 0, check: 0, need: false }; // what the News tab says (newsLabel); onLabel hears each change
   let staleFlag = false; // a read too old to act on shows nothing from it (STALE_MIN, the same test that stops anything being made by itself); draw re-asks staleOf as the clock moves
   let gen = 0, running = null, again = false, shown = { applied: [], info: [], conflicts: [] };
@@ -167,15 +169,12 @@ export function createLineupBar({ el, api, slate, players, slateData = () => nul
     const shownState = stale ? { ...state, notes: [] } : state;
     const data = slateData();
     let model = null;
-    const keepScroll = el.querySelector?.('.nwlrows')?.scrollTop ?? 0;
-    if (!data) el.innerHTML = '<div class="lpempty">No slate on show.</div>';
-    else {
-      model = newsModel({ slate: { ...data, players: players() }, latest: ctx.latest, nowMs: clockMs, view: ctx.view, ...tips() }); // players(): the board's own rows, with his applied minutes
-      el.innerHTML = newsPageHtml({ model, proposals: proposalRows(bar, { ...shownState, readAt: Date.parse(ctx.latest?.generated_at ?? ""), day: model.day }), team: state.team });
-      const box = el.querySelector?.('.nwlrows');
-      if (box) box.scrollTop = keepScroll;
-    }
-    label = newsLabel(bar, shownState, model?.log.length ?? 0);
+    if (data) model = newsModel({ slate: { ...data, players: players() }, latest: ctx.latest, nowMs: clockMs, view: ctx.view, ...tips() }); // players(): the board's own rows, with his applied minutes
+    // The News tab is gone (Adam 11-17): nothing is drawn here. What stays is the model (the game cards' borders), the in-page apply on the public site, and the count on the Console tab: the cleaned facts of the news list.
+    const facts = model ? newsFacts({ log: model.log, players: players(), conflicts: bar.conflicts, latest: ctx.latest, nowMs: clockMs, day: model.day }) : null;
+    const base = newsLabel({ ...bar, conflicts: [] }, shownState, 0), held = facts?.held ?? 0; // the Console tab's count: the cleaned facts shown on the All teams page; amber while a held conflict, a failed change or a note about the read needs him
+    label = { n: facts?.facts.length ?? 0, check: base.check + held, need: base.check + held > 0 };
+    last = { bar, state: { ...shownState, readAt: Date.parse(ctx.latest?.generated_at ?? ""), day: model?.day ?? null }, model, facts, stale }; // what the proposals' rows would show (snapshot: tests and anything that wants the rows); nothing is drawn from it
     onLabel(label);
     onModel(model); // the game cards' border reads each team's five from the same model (game-borders.js)
   }
@@ -247,25 +246,6 @@ export function createLineupBar({ el, api, slate, players, slateData = () => nul
     }
   }
 
-  el.addEventListener("click", async (e) => {
-    const pickTeam = e.target.closest("[data-nw-team]");
-    if (pickTeam) { const t = pickTeam.dataset.nwTeam || null; state.team = t === state.team ? null : t; return draw(); } // a team header or chip: the log shows that team only; again: all
-    const dismiss = e.target.closest("[data-lp-dismiss]"), undo = e.target.closest("[data-lp-undo]");
-    if (dismiss) {
-      const id = dismiss.dataset.lpDismiss, row = [...shown.info, ...shown.conflicts].find((r) => r.id === id), news = shown.applied.find((r) => r.key === id);
-      const sig = row ? row.signature : news ? news.entry.sig + news.entry.state : null;
-      if (sig === null) return;
-      tryStore(() => localStorage.setItem(key(), JSON.stringify({ ...readDismissed(), [id]: sig })));
-      return draw();
-    }
-    if (!undo) return;
-    try {
-      if (!cons.undoNews(undo.dataset.team, undo.dataset.lpUndo)) toast("That change was already taken back.", "notice");
-    } catch (err) {
-      toast(`Could not undo it: ${err.message}`, "err");
-    }
-    await refresh();
-  });
   if (tick) { const h = setInterval(draw, 60_000); h.unref?.(); } // the read's age and the games' status move on with the clock between pulls
-  return { refresh, newsOnly, redraw: draw, label: () => label };
+  return { refresh, newsOnly, redraw: draw, label: () => label, snapshot: () => ({ ...last, html: last ? barHtml(last.bar, last.state) : "" }) };
 }

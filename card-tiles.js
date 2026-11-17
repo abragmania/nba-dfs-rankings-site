@@ -1,9 +1,9 @@
-// The player panel's figure tiles, News box and last-10 bar chart (Adam's Layout A+C, 11-13). DOM-free strings, tested in node.
+// The player panel's numbers table (summary line and a rows-by-time-frames table), News box and last-10 bar chart (Adam's Layout A+C, 11-13). DOM-free strings, tested in node.
 // Every figure is the board's own for him; a missing one is the board's dash with its reason, never zero and never another man's (RULES R1, G62).
 import { esc, money, dec1, figSourceWord, hasHis, isoToEastern } from "./board-util.js";
 import { minGapOf, gapTitle, minChg, dkTonight, noTonight } from "./player-table.js";
 import { tgMin } from "./lineup-proposals.js";
-import { outFor, isNum } from "./figures.js";
+import { isNum } from "./figures.js";
 import { sgn, dcls } from "./console-model.js";
 import { cardWord } from "./news-status.js";
 
@@ -16,9 +16,6 @@ export function summarise(games) {
   return { n: games.length, dk: dk / games.length, min: min / games.length, perMin: min > 0 ? dk / min : null };
 }
 
-/** One tile: label, big value with its unit, and a small line under it (a missing figure passes its dash as `value` with no unit). */
-const tile = (label, value, unit = "", sub = "", cls = "") => `<div class="tile"><small>${label}</small><b${cls ? ` class="${cls}"` : ""}>${value}${unit ? `<em>${unit}</em>` : ""}</b><span>${sub || "&nbsp;"}</span></div>`;
-
 /** The game log's figures for the Stats tiles: { season, last } summaries, or { why } while the log is not in. */
 function logFigures(log) {
   if (log.state === "ok") {
@@ -28,41 +25,53 @@ function logFigures(log) {
   return { why: log.state === "error" ? `no game log: ${log.message}` : "the game log is still loading" };
 }
 
-/** The two tile groups: Tonight (his board row) and Stats (season figures and the game log's averages).
- *  ctx: { dash(title), figs: {source, asOf}, inj: the news ruling or null }. */
-export function cardTilesHtml(p, log, { dash, inj = null }) {
+/** One table cell: a figure (or its dash) and an optional small tag after it. */
+const cell = (v, extra = "", cls = "") => `<td${cls ? ` class="${cls}"` : ""}>${v}${extra}</td>`;
+
+/** The summary line's pairs, label small and quiet, value after it. */
+const pair = (label, v) => `<span class="cs-p"><small>${label}</small> <b>${v}</b></span>`;
+
+/** TwoGun's own projection: its tg_projection, or the board's projection when TwoGun's is the figure on show (never his typed number as TwoGun's). */
+const tgProj = (p) => ("tg_projection" in p ? p.tg_projection : figSourceWord(p, "proj") === "TwoGun" ? p.projection : null);
+
+/** The panel's numbers (Adam 11-17): one summary line (salary, value, own, usage, games) over one table, like things in a row and one time frame in a column:
+ *  rows DK pts / Minutes / DK/min, columns Ours (the board's own figure; headed by whose it is), TwoGun, Season, Last 10, and Usual (a figure on the Minutes row only).
+ *  ctx: { dash(title) }. */
+export function cardTilesHtml(p, log, { dash }) {
   const off = p.dk_id == null ? "he is on the Out list, not in this slate's player pool" : null;
   const num = (v, f, why) => (isNum(v) ? f(v) : dash(off ?? why));
-  const src = (kind, v) => (isNum(v) ? figSourceWord(p, kind) : "");
   const sal = isNum(p.salary) ? money(p.salary) : p.salary_text ? esc(p.salary_text) : dash(off ?? "no salary in this slate file");
-  const tg = tgMin(p), ton = dkTonight(p), out = outFor(p, { engine: true });
-  const status = inj?.word ?? p.injury_status ?? "";
-  const tonight = [
-    tile("Sal", sal),
-    tile("Proj", num(p.projection, (v) => v.toFixed(1), p.proj_note ?? "no projection in this pull"), isNum(p.projection) ? "DK pts" : "", src("proj", p.projection)),
-    tile("Val", num(p.value, (v) => v.toFixed(2), "no value in this pull"), isNum(p.value) ? "x" : ""),
-    tile("Own", num(p.proj_own, (v) => v.toFixed(1), "no projected ownership in this pull"), isNum(p.proj_own) ? "%" : ""),
-    tile("Min", num(p.minutes, dec1, "no projected minutes in this pull"), isNum(p.minutes) ? "min" : "", src("min", p.minutes)),
-    tile("TG Min", num(tg, dec1, "no TwoGun minutes in this pull"), isNum(tg) ? "min" : ""),
-    tile("DK/min Tonight", ton === null ? dash(off ?? noTonight(p)) : ton.toFixed(2), ton === null ? "" : "DK/min"),
-    tile("Out", out ? "Yes" : "No", "", esc(p.his === "out" ? "you put him Out" : p.his === "in" ? "you put him In" : status), out ? "rd" : ""),
-  ].join("");
+  const lf = logFigures(log), tg = tgMin(p), ton = dkTonight(p), tgp = tgProj(p), chg = minChg(p);
+  const line = [pair("Salary", sal), pair("Value", num(p.value, (v) => `${v.toFixed(2)}x`, "no value in this pull")), pair("Own", num(p.proj_own, (v) => `${v.toFixed(1)}%`, "no projected ownership in this pull")),
+    pair("Usage", num(p.usage, (v) => `${v.toFixed(1)}%`, p.usage_note ?? "no usage rate from the server")), pair("Games", lf.why ? dash(lf.why) : String(lf.n))].join("");
+  const pw = isNum(p.projection) ? figSourceWord(p, "proj") : "", mw = isNum(p.minutes) ? figSourceWord(p, "min") : "";
+  const head = pw || mw || "Tonight";
+  const fromLog = (v) => (lf.why ? dash(lf.why) : v === null || v === undefined ? dash("no minutes in these games") : v);
+  const dkpts = [
+    cell(num(p.projection, (v) => v.toFixed(1), p.proj_note ?? "no projection in this pull"), "", "cur"),
+    cell(num(tgp, (v) => v.toFixed(1), "no TwoGun projection in this pull")),
+    cell(fromLog(lf.season?.dk.toFixed(1))),
+    cell(fromLog(lf.last?.dk.toFixed(1))), "<td></td>"].join("");
+  const usual = isNum(p.min_usual) ? dec1(p.min_usual) : dash(off ?? p.min_usual_note ?? "no usual minutes for him in this slate");
+  const diff = chg === null ? "" : ` <i class="${dcls(chg)}" title="Min vs Usual: tonight's minutes minus his usual">${sgn(chg)}</i>`;
+  const minutes = [
+    cell(num(p.minutes, dec1, "no projected minutes in this pull"), mw && mw !== head ? `<sup title="${esc(mw)} minutes">${esc(mw)}</sup>` : "", "cur"),
+    cell(num(tg, dec1, "no TwoGun minutes in this pull")),
+    cell(fromLog(lf.season?.min.toFixed(1))),
+    cell(fromLog(lf.last?.min.toFixed(1))),
+    cell(usual, isNum(p.min_usual) ? diff : "")].join("");
+  const tgRate = isNum(tgp) && isNum(tg) && tg > 0 ? tgp / tg : null;
+  const tgWhy = !isNum(tgp) ? "no TwoGun projection in this pull, so no TwoGun DK/min" : !isNum(tg) ? "no TwoGun minutes in this pull, so no TwoGun DK/min" : "on 0 TwoGun minutes, so no TwoGun DK/min";
+  const tag = p.dk_per_min_tag ? esc(p.dk_per_min_tag) : "";
+  const tagTitle = p.dk_per_min_tag === "LY" ? "last season's figure" : `${tag} sample`;
+  const rate = [
+    cell(ton === null ? dash(off ?? noTonight(p)) : ton.toFixed(2), "", "cur"),
+    cell(tgRate === null ? dash(tgWhy) : tgRate.toFixed(2)),
+    cell(num(p.dk_per_min, (v) => v.toFixed(2), p.dk_per_min_note ?? "no DK points per minute from the server"), isNum(p.dk_per_min) && tag ? `<sup title="${tagTitle}">${tag}</sup>` : ""),
+    cell(lf.why ? dash(lf.why) : lf.last?.perMin == null ? dash("no minutes in these games") : lf.last.perMin.toFixed(2)), "<td></td>"].join("");
   const gap = minGapOf(p);
   const gapHtml = gap ? `<div class="tgap" title="${esc(gapTitle(gap))}">⚠ ${esc(gap.word ?? "Ours")} ${dec1(gap.ours)} vs TwoGun ${dec1(gap.tg)}: a ${dec1(gap.gap)}-minute gap. Check his role before using him.</div>` : "";
-  const lf = logFigures(log), chg = minChg(p);
-  const fromLog = (f, unit, sub) => (lf.why ? tile(f.label, dash(lf.why)) : f.value === null ? tile(f.label, dash(f.why), "", sub) : tile(f.label, f.value, unit, sub));
-  const season = p.dk_per_min;
-  const stats = [
-    tile("DK/min Season", num(season, (v) => v.toFixed(2), p.dk_per_min_note ?? "no DK points per minute from the server"), isNum(season) ? "DK/min" : "", p.dk_per_min_tag ? (p.dk_per_min_tag === "LY" ? "last season's figure" : `${esc(p.dk_per_min_tag)} sample`) : lf.why ? "" : `avg, ${lf.n} game${lf.n === 1 ? "" : "s"}`),
-    fromLog({ label: "Avg DK pts", value: lf.season?.dk.toFixed(1) }, "pts", lf.last ? `last ${lf.last.n}: ${lf.last.dk.toFixed(1)}` : ""),
-    tile("Usage %", num(p.usage, (v) => v.toFixed(1), p.usage_note ?? "no usage rate from the server"), isNum(p.usage) ? "%" : ""),
-    tile("Usual Min", num(p.min_usual, dec1, p.min_usual_note ?? "no usual minutes for him in this slate"), isNum(p.min_usual) ? "min" : "", lf.last ? `last ${lf.last.n}: ${lf.last.min.toFixed(1)}` : ""),
-    tile("Min vs Usual", chg === null ? dash(p.min_usual_note ?? "needs both Min and Usual") : sgn(chg), chg === null ? "" : "min", chg === null ? "" : "vs usual", chg === null ? "" : dcls(chg) === "up" ? "gr" : dcls(chg) === "dn" ? "rd" : ""),
-    fromLog({ label: "Avg min", value: lf.season?.min.toFixed(1) }, "min", "season"),
-    fromLog(lf.last?.perMin == null && !lf.why ? { label: "Avg DK/m", value: null, why: "no minutes in these games" } : { label: "Avg DK/m", value: lf.last?.perMin.toFixed(2) }, "DK/min", lf.last ? `last ${lf.last.n}` : ""),
-    fromLog({ label: "Games", value: lf.n }, "", "played"),
-  ].join("");
-  return `<div class="psec"><h3>Tonight</h3><div class="tiles">${tonight}</div>${gapHtml}</div><div class="psec"><h3>Stats</h3><div class="tiles">${stats}</div></div>`;
+  return `<div class="psec cstats"><h3>Numbers</h3><div class="cs-line">${line}</div><table class="cs-tbl"><thead><tr><th></th><th class="cur">${esc(head)}</th><th>TwoGun</th><th>Season</th><th>${lf.last ? `Last ${lf.last.n}` : "Last 10"}</th><th>Usual</th></tr></thead><tbody><tr><th>DK pts</th>${dkpts}</tr><tr><th>Minutes</th>${minutes}</tr><tr><th>DK/min</th>${rate}</tr></tbody></table>${gapHtml}</div>`;
 }
 
 /** The source line at the foot of the panel: whose figures the Tonight tiles are, as of when, and whether his own changes are in them. */

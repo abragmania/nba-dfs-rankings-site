@@ -26,7 +26,7 @@ export function uploadHtml(L) {
   const old = age && age.minutes > 30;
   return `<div class="up-grid">
 <section class="drop" id="lswDrop" tabindex="0">
-<svg width="52" height="52" viewBox="0 0 52 52" fill="none" stroke="currentColor" stroke-width="3"><path d="M26 36V10M14 21l12-12 12 12M8 38v6h36v-6"/></svg>
+<svg style="width:3.25rem;height:3.25rem" viewBox="0 0 52 52" fill="none" stroke="currentColor" stroke-width="3"><path d="M26 36V10M14 21l12-12 12 12M8 38v6h36v-6"/></svg>
 <h2>Drop your DraftKings entries file here</h2>
 <p>The CSV from DraftKings, Upload Lineups page. Every entry row is read, then matched to a spot, then each spot to a lineup.</p>
 <div class="dbtn"><button class="go" data-lsw="chooseFile">Choose file</button>${last ? `<button class="go ol" data-lsw="useUpload" data-file="last">Use last upload: ${esc(stampET(last.at))}${last.entries != null ? `, ${last.entries} entries` : ""}</button>` : ""}</div>

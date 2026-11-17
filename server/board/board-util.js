@@ -1,6 +1,9 @@
 // Small helpers shared by the board page and the optimizer panel.
 import { isKnownTeam } from "./teams.js";
 
+/** G71: real pixels in one design pixel (1/16 rem): 1 at a 16px root (1920 wide), 1.333 at 2560. For the few JS offsets and limits written in design pixels; 1 outside a browser. */
+export const remScale = () => (typeof document === "undefined" || typeof getComputedStyle !== "function" ? 1 : parseFloat(getComputedStyle(document.documentElement).fontSize) / 16 || 1);
+
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 /** A man's name that opens his player card (board.js reads data-dk-id from any click, so the click reaches no row action); plain text when he has no id. tag: the element, cls: extra classes. A keyboard user reaches it by Tab and opens it with Enter or Space (board.js). One copy for every screen. */
 export const nameOpen = (name, id, tag = "span", cls = "") => (id != null ? `<${tag} class="nml${cls ? ` ${cls}` : ""}" data-dk-id="${esc(id)}" tabindex="0" role="button" title="Open ${esc(name)}'s card">${esc(name)}</${tag}>` : `<${tag}${cls ? ` class="${cls}"` : ""}>${esc(name)}</${tag}>`);
@@ -163,9 +166,9 @@ export function shortTime(s, refMs = Date.now()) {
 }
 
 export const ICON = {
-  lock: '<svg viewBox="0 0 16 16" width="13" height="13"><path fill="currentColor" d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2h.5A1 1 0 0 1 13 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h.5zm1.5 0h4V5a2 2 0 0 0-4 0v2z"/></svg>',
-  x: '<svg viewBox="0 0 16 16" width="12" height="12"><path stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M4 4l8 8M12 4l-8 8"/></svg>',
-  bolt: '<svg viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M9.5 1L3 9h4l-1 6 6.5-8h-4z"/></svg>',
+  lock: '<svg viewBox="0 0 16 16" style="width:0.8125rem;height:0.8125rem"><path fill="currentColor" d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2h.5A1 1 0 0 1 13 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h.5zm1.5 0h4V5a2 2 0 0 0-4 0v2z"/></svg>',
+  x: '<svg viewBox="0 0 16 16" style="width:0.75rem;height:0.75rem"><path stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M4 4l8 8M12 4l-8 8"/></svg>',
+  bolt: '<svg viewBox="0 0 16 16" style="width:0.875rem;height:0.875rem"><path fill="currentColor" d="M9.5 1L3 9h4l-1 6 6.5-8h-4z"/></svg>',
 };
 
 const INJ = { probable: ["P", "var(--gr)"], questionable: ["Q", "var(--bl)"], doubtful: ["D", "var(--or)"], out: ["O", "var(--rd)"], in: ["In", "var(--gr)"] };

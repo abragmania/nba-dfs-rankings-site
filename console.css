@@ -1,8 +1,6 @@
 /* The console (console-depth.js): a plain page in a system font (Adam, 11-07: functional over futuristic) in the board's chosen theme (R9: Dark with Black and Navy, or Light; every colour
    below is a theme variable or mixed from one, so each chip reads on all three). Everything sits under #console so the board's rules stay as they are. */
-/* Adam 2:22-2:23 PM 11-17: the console looks the same at any screen size, filling it. 1920 wide is the design (1rem = 16px there); every console size below is in rem and the root
-   scales with the width, never under 12px or over 22px. Only while the console shows: no other page uses rem, and this rule is off when it closes. */
-html:has(body.console-on){font-size:clamp(12px,0.8333vw,22px)}
+/* G71: every size here is in rem; the root font-size is set once for the whole app in board.css (16px at 1920 wide, scaling with the width). */
 body.console-on .games,body.console-on main.work,body.console-on #dropnote{display:none}
 .csw.on{background:var(--gr);border-color:var(--gr);color:var(--p)}
 #console{
@@ -18,8 +16,8 @@ body.console-on .games,body.console-on main.work,body.console-on #dropnote{displ
   .at{color:var(--dim);font-size:0.75rem}
   .tm{position:relative;display:inline-flex;align-items:center;gap:0.375rem;height:2.125rem;padding:0 0.625rem 0 0.375rem;background:var(--p);border:1px solid var(--ln);border-radius:0.25rem;color:var(--tx);font-weight:600}
   .tm:hover{border-color:var(--tc)}
-  .tm.on{background:var(--tc);border-color:var(--tc);color:#fff;box-shadow:0 1px 0.1875rem #0003}
-  .tm.on .logo{background:#fff;border-radius:50%;padding:1px} /* a logo's own white backing on the team's colour, the same on every theme (R9: every logo visible), not a page colour */
+  .tm.on{background:var(--tc);border-color:var(--tc);color:#fff;box-shadow:0 0.0625rem 0.1875rem #0003}
+  .tm.on .logo{background:#fff;border-radius:50%;padding:0.0625rem} /* a logo's own white backing on the team's colour, the same on every theme (R9: every logo visible), not a page colour */
   .tm .dot{position:absolute;top:-0.1875rem;right:-0.1875rem;width:0.5rem;height:0.5rem;border-radius:50%;background:var(--pin);border:1px solid var(--p)}
   .logo.sw{width:1.5rem;height:1.5rem}
   .logo.xs{width:1.125rem;height:1.125rem;display:inline-block;vertical-align:-0.25rem;margin:0 0.1875rem}
@@ -41,7 +39,7 @@ body.console-on .games,body.console-on main.work,body.console-on #dropnote{displ
   .note{margin:0.625rem 0 0.75rem;color:var(--mu);font-size:0.8125rem}
   /* the table column is exactly the table's width (--tw, the row tracks below); the side column takes the rest */
   .wrap{--wm:4rem;--wd:4rem;--ws:2.25rem;--wo:2.75rem;--wb:16.5rem;--wp:15rem;
-    --tw:calc(2.25rem + var(--wp) + var(--wm) + var(--wd) + 3.25rem + 4rem + 4.25rem + var(--wb) + var(--ws) + var(--wo) + 9 * var(--cg) + 1.5rem + 2px);
+    --tw:calc(2.25rem + var(--wp) + var(--wm) + var(--wd) + 3.25rem + 4rem + 4.25rem + var(--wb) + var(--ws) + var(--wo) + 9 * var(--cg) + 1.5rem + 0.125rem);
     display:grid;grid-template-columns:var(--tw) minmax(22.5rem,1fr);gap:1rem;align-items:start}
   .wrap.mk-m{--wm:8rem}.wrap.mk-d{--wd:8rem}.wrap.mk-r{--ws:5.5rem}.wrap.mk-o{--wo:5.75rem} /* a column widens for its undo chips only on a team that has one */
   .box{background:var(--p);border:1px solid var(--ln);border-radius:0.25rem;margin-bottom:0.875rem;min-width:0}
@@ -67,8 +65,8 @@ body.console-on .games,body.console-on main.work,body.console-on #dropnote{displ
   .cs{display:inline-flex;min-width:0}
   input.fin{width:4rem;height:1.875rem;padding:0 0.4375rem;text-align:right;font-family:inherit;font-size:0.9375rem;font-weight:600;font-variant-numeric:tabular-nums;color:var(--tx);background:var(--p2);border:1px solid var(--bd);border-radius:0.1875rem}
   input.fin:hover{border-color:var(--mu)}
-  input.fin:focus{outline:2px solid var(--bl);outline-offset:-1px;border-color:var(--bl)}
-  input.fin.pin{border:1.5px solid var(--pin);background:color-mix(in srgb,var(--pin) 9%,var(--p));color:var(--pin);font-weight:700}
+  input.fin:focus{outline:2px solid var(--bl);outline-offset:-0.0625rem;border-color:var(--bl)}
+  input.fin.pin{border:0.0938rem solid var(--pin);background:color-mix(in srgb,var(--pin) 9%,var(--p));color:var(--pin);font-weight:700}
   .pj{font-size:0.9375rem;font-weight:700}.pj.pin{color:var(--pin)}
   .rv{display:inline-flex;align-items:center;gap:0.1875rem;height:1.5rem;padding:0 0.4375rem;border:1px solid color-mix(in srgb,var(--pin) 55%,transparent);border-radius:0.1875rem;background:color-mix(in srgb,var(--pin) 10%,var(--p));color:var(--pin);font-size:0.75rem;font-weight:700;white-space:nowrap}
   .rv:hover{background:var(--pin);color:var(--p);border-color:var(--pin)}
@@ -92,7 +90,7 @@ body.console-on .games,body.console-on main.work,body.console-on #dropnote{displ
   .tg.o.on{background:var(--rd);border-color:var(--rd);color:var(--p)}
   .row.marked{background:color-mix(in srgb,var(--pin) 4%,transparent)}
   /* out / injured */
-  .oline{display:grid;grid-template-columns:2.125rem minmax(0,1fr) auto;column-gap:0.625rem;row-gap:2px;align-items:center;padding:0.5rem 0.75rem;border-bottom:1px solid var(--ln2)}
+  .oline{display:grid;grid-template-columns:2.125rem minmax(0,1fr) auto;column-gap:0.625rem;row-gap:0.125rem;align-items:center;padding:0.5rem 0.75rem;border-bottom:1px solid var(--ln2)}
   .oline:last-child{border-bottom:0}
   .oline .ps{color:var(--mu);font-size:0.7813rem}
   .oline .onm{font-weight:600;color:var(--mu);text-decoration:line-through}
@@ -124,7 +122,7 @@ body.console-on .games,body.console-on main.work,body.console-on #dropnote{displ
   }
 }
 /* The lineup news (console-news.js): the strip above the tables, the status chip after a man's name and the Out list's notes. The News tab's own classes (nwc, lpkind, nwat, k-*) are reused, scoped here. */
-#console .nwc{display:inline-block;flex:none;min-width:5.25rem;padding:1px 0.25rem;font-size:0.6563rem}
+#console .nwc{display:inline-block;flex:none;min-width:5.25rem;padding:0.0625rem 0.25rem;font-size:0.6563rem}
 body.light #console .nwc.pr{color:#2f9b66} /* Probable: darkened from the News tab's pale green, which washes out on the light page */
 #console .who .nchip{min-width:0;align-self:center;padding:0 0.25rem;font-size:0.625rem;line-height:0.875rem;cursor:help}
 #console .nchip.news{color:var(--bl)}
@@ -175,27 +173,27 @@ body.light #console .nwc.pr{color:#2f9b66} /* Probable: darkened from the News t
 #console .cn .sub2.opp{margin-top:0.1875rem}
 #console .sn,#console .cn .lprow.le{white-space:normal}
 #console .sn .nt,#console .inj .n,#console .inj b{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow:hidden;line-height:1.25}
-#console .cn .lprow.le{height:auto;min-height:1.4375rem;padding:2px 0;line-height:1.25} /* the log rows are never cut: they wrap */
-#console .inj{height:auto;min-height:1.4375rem;padding:2px 0}
+#console .cn .lprow.le{height:auto;min-height:1.4375rem;padding:0.125rem 0;line-height:1.25} /* the log rows are never cut: they wrap */
+#console .inj{height:auto;min-height:1.4375rem;padding:0.125rem 0}
 /* The player card's role and minutes block (card-role.js), on the board page. */
 #card .logscroll{overflow-x:auto}
 #card .two .crole{padding:0}
-#card .crole .sec{padding:0;font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase}
-#card .crole .hint{float:none;display:block;margin-top:2px}
+#card .crole .sec{padding:0;font-size:0.6563rem;letter-spacing:0.075rem;text-transform:uppercase}
+#card .crole .hint{float:none;display:block;margin-top:0.125rem}
 #card .crole .seg{display:inline-flex;flex-wrap:nowrap}
-#card .crole .rs{display:inline-flex;align-items:center;justify-content:center;height:24px;min-width:34px;padding:0 6px;background:transparent;border:1px solid var(--ln,#333);margin-left:-1px;font-size:11.5px;font-weight:800;line-height:1;color:var(--mu,#999);cursor:pointer}
-#card .crole .mdf{display:inline-block;margin-right:6px;padding:0 4px;font-size:10px;font-weight:800;color:var(--p,#000);background:var(--am,#ffb000)}
-#card .crole .crn{margin:6px 0 0;padding-left:18px;font-size:11.5px;color:var(--mu,#999)}
+#card .crole .rs{display:inline-flex;align-items:center;justify-content:center;height:1.5rem;min-width:2.125rem;padding:0 0.375rem;background:transparent;border:1px solid var(--ln,#333);margin-left:-0.0625rem;font-size:0.7188rem;font-weight:800;line-height:1;color:var(--mu,#999);cursor:pointer}
+#card .crole .mdf{display:inline-block;margin-right:0.375rem;padding:0 0.25rem;font-size:0.625rem;font-weight:800;color:var(--p,#000);background:var(--am,#ffb000)}
+#card .crole .crn{margin:0.375rem 0 0;padding-left:1.125rem;font-size:0.7188rem;color:var(--mu,#999)}
 @media (max-width:899px){
-  #card .crole .rs,#card .crole .crb input{height:36px;min-width:40px}
+  #card .crole .rs,#card .crole .crb input{height:2.25rem;min-width:2.5rem}
   /* The card's header on a narrow card: name and Close on the first line, Lock and Exclude on their own, then the figures. */
   #card .ch .close{order:3}
   #card .ch .acts{order:4;flex-basis:100%}
-  #card .ch .acts button{min-height:36px}
+  #card .ch .acts button{min-height:2.25rem}
   /* Under 900 px there is no room beside the panel: it covers the page, and the tiles go two across. */
   :root{--cardw:100%}
   .card{left:0;width:auto}
-  body.card-docked{padding-right:clamp(20px,2.2vw,60px)}
+  body.card-docked{padding-right:clamp(1.25rem,2.2vw,3.75rem)}
   .card .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.card .two{grid-template-columns:minmax(0,1fr)}
 }
 #card .crole .rs.on.starter{background:var(--gr);border-color:var(--gr);color:var(--p)}
@@ -203,14 +201,14 @@ body.light #console .nwc.pr{color:#2f9b66} /* Probable: darkened from the News t
 #card .crole .rs.on.bench{background:color-mix(in srgb,var(--gr) 22%,var(--p));border-color:var(--gr);color:var(--tx)}
 #card .crole .rs.on.oor{background:color-mix(in srgb,var(--mu) 30%,var(--p));border-color:var(--mu);color:var(--tx)}
 #card .crole .rs.on.out{background:var(--rd);border-color:var(--rd);color:var(--p)}
-#card .crole .rs.on.set{box-shadow:inset 0 -3px 0 var(--am,#ffb000)}
+#card .crole .rs.on.set{box-shadow:inset 0 -0.1875rem 0 var(--am,#ffb000)}
 #card .crole .rs.on.out.set{box-shadow:none}
-#card .crole .crr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-top:6px}
-#card .crole .crf{font-size:12px;color:var(--mu,#999)}#card .crole .crf b{color:inherit;font-size:13px}#card .crole .crf b.pin{color:var(--am,#ffb000)}
-#card .crole .crb{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--mu,#999)}
-#card .crole .crb input{width:58px;height:24px;text-align:right;font-weight:700;background:transparent;border:1px solid var(--ln,#333);color:inherit;padding:0 6px}
+#card .crole .crr{display:flex;flex-wrap:wrap;align-items:center;gap:0.375rem 0.875rem;margin-top:0.375rem}
+#card .crole .crf{font-size:0.75rem;color:var(--mu,#999)}#card .crole .crf b{color:inherit;font-size:0.8125rem}#card .crole .crf b.pin{color:var(--am,#ffb000)}
+#card .crole .crb{display:inline-flex;align-items:center;gap:0.3125rem;font-size:0.75rem;color:var(--mu,#999)}
+#card .crole .crb input{width:3.625rem;height:1.5rem;text-align:right;font-weight:700;background:transparent;border:1px solid var(--ln,#333);color:inherit;padding:0 0.375rem}
 #card .crole .crb.pin input{border-color:var(--am,#ffb000);color:var(--am,#ffb000)}
-#card .crole .crb .x{background:none;border:0;color:var(--am,#ffb000);font-weight:800;cursor:pointer;padding:0 2px}
-#card .crole .crs{font-size:11.5px;color:var(--mu,#999);margin-top:4px}
-#card .crole .crm{font-size:12px;margin-top:4px;color:var(--am,#ffb000)}
-#card .crole .crsaid{font-size:12px;color:var(--mu,#999)}
+#card .crole .crb .x{background:none;border:0;color:var(--am,#ffb000);font-weight:800;cursor:pointer;padding:0 0.125rem}
+#card .crole .crs{font-size:0.7188rem;color:var(--mu,#999);margin-top:0.25rem}
+#card .crole .crm{font-size:0.75rem;margin-top:0.25rem;color:var(--am,#ffb000)}
+#card .crole .crsaid{font-size:0.75rem;color:var(--mu,#999)}

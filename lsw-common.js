@@ -11,7 +11,7 @@ export const signed = (n, fmt) => (Number.isFinite(n) ? `${n > 0 ? "+" : n < 0 ?
 export const tint = (team) => teamColors(team).t1;
 export const feeText = (n) => (Number.isFinite(n) ? `$${Number.isInteger(n) ? n : n.toFixed(2)}` : "—");
 
-const LOCK = '<svg class="lkic" viewBox="0 0 12 14" width="11" height="13"><rect x="1" y="6" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M3.5 6V4a2.5 2.5 0 015 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+const LOCK = '<svg class="lkic" viewBox="0 0 12 14" style="width:0.6875rem;height:0.8125rem"><rect x="1" y="6" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M3.5 6V4a2.5 2.5 0 015 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 export const ICON_LOCK = LOCK;
 
 /** A spot's colour by its place in the list: Cash green, then amber, violet, pink, blue, orange, repeating. */

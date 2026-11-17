@@ -1,7 +1,7 @@
 // The Lineups tab's controller (the markup is lineups-tab.js): draws the tab into the panel's second element, and handles its
 // clicks, its filter box, the swap on a built or a saved lineup, the spots and the downloads. The panel's own steps (render, the
 // CSV writer, the seat, late swap, the build notes) come in as `own`, so this file never imports panel.js back.
-import { keepFocus } from "./board-util.js";
+import { keepFocus, remScale } from "./board-util.js";
 import { lineupRefusals, isOutNow } from "./card-row.js";
 import { lineupsTabHtml, viewModel, builtAtText, viewOf, entriesOf, unavailableMen, unavailableLabel, savedLabel, heldSpots, outNamesOfCtx, SORTS,nextLtSort } from "./lineups-tab.js";
 import { swapContext, swapOptions, swapIds, startedByTip } from "./swap-list.js";
@@ -72,8 +72,9 @@ export function boxHeight(docTop, viewH, { gap = 12, least = 320 } = {}) {
 export function sizeBoxes(el) {
   if (typeof window === "undefined" || !el.querySelectorAll) return;
   const wide = window.matchMedia?.("(min-width:600px)").matches ?? true;
+  const s = remScale();
   for (const b of el.querySelectorAll(SCROLL_BOXES.join(","))) {
-    b.style.maxHeight = wide ? `${boxHeight(b.getBoundingClientRect().top + window.scrollY, window.innerHeight)}px` : "";
+    b.style.maxHeight = wide ? `${boxHeight(b.getBoundingClientRect().top + window.scrollY, window.innerHeight, { gap: 12 * s, least: 320 * s })}px` : "";
   }
 }
 
@@ -93,12 +94,12 @@ export function placeSpotMenu(el) {
   m.classList.remove("up");
   m.style.maxHeight = "";
   const a = m.parentElement.getBoundingClientRect(), box = m.closest(".lt-cards")?.getBoundingClientRect();
-  const p = menuPlacement({ anchorTop: a.top, anchorBottom: a.bottom, roomTop: Math.max(0, box?.top ?? 0), roomBottom: Math.min(window.innerHeight, box?.bottom ?? window.innerHeight), need: m.getBoundingClientRect().height });
+  const p = menuPlacement({ anchorTop: a.top, anchorBottom: a.bottom, roomTop: Math.max(0, box?.top ?? 0), roomBottom: Math.min(window.innerHeight, box?.bottom ?? window.innerHeight), need: m.getBoundingClientRect().height, gap: 6 * remScale(), least: 140 * remScale() });
   m.classList.toggle("up", p.up);
   m.style.maxHeight = `${p.maxHeight}px`;
   // The list opens at the card's own spot, scrolled inside the list only.
   const list = m.querySelector(".splist"), mine = list?.querySelector(".spm.mine");
-  if (mine && list.getBoundingClientRect) list.scrollTop = Math.max(0, mine.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop - 4);
+  if (mine && list.getBoundingClientRect) list.scrollTop = Math.max(0, mine.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop - 4 * remScale());
   m.scrollIntoView?.({ block: "nearest" });
 }
 export function keepScroll(el, same, draw) {

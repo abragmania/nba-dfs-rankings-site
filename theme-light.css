@@ -5,7 +5,6 @@ body.light .opt .slot.pick:hover{background-color:#0000000a}
 body.light td{border-bottom-color:#e3e3dd}
 body.light tbody tr:hover td{background:#00000008}
 body.light tr.team:hover td{background:color-mix(in srgb,var(--t1) 10%,transparent)}
-body.light tr.team:hover td.gp,body.light tbody tr:hover td.gp{background-image:linear-gradient(var(--gpt),var(--gpt))}
 body.light tr.inl td{background-color:#9a5b0012}
 body.light tr.inl:hover td{background-color:#9a5b001f}
 /* Buttons that rest in a dark edge. */
@@ -23,7 +22,7 @@ body.light .game.sel{background:linear-gradient(180deg,#fff3d6,var(--p))}
 body.light .game.cf{--gsel:#fff3d6}
 body.light .capbar{background:#00000012}
 body.light .capbar i{box-shadow:none}
-body.light .logo{filter:drop-shadow(0 0 1px #00000059)}
+body.light .logo{filter:drop-shadow(0 0 0.0625rem #00000059)}
 body.light .chipx{background:#0000000f}
 /* Tints written at dark strength. */
 body.light .stamps .lock{background:#9a5b0012}
@@ -33,7 +32,7 @@ body.light .sl{border-color:#9a5b0080}
 body.light .crow{border-bottom-color:#d6d6cf}
 body.light .crow.tm{background-image:linear-gradient(90deg,color-mix(in srgb,var(--t1) 14%,transparent) 0,color-mix(in srgb,var(--t1) 6%,transparent) 32%,color-mix(in srgb,var(--t2) 4%,transparent) 100%)}
 body.light tr.locked:not(.team) td{background:#0d7a4412}
-body.light tr.team.locked{background:linear-gradient(#0d7a4412,#0d7a4412),linear-gradient(90deg,color-mix(in srgb,var(--t1) 5%,transparent) 0,transparent 120px)}
+body.light tr.team.locked{background:linear-gradient(#0d7a4412,#0d7a4412),linear-gradient(90deg,color-mix(in srgb,var(--t1) 5%,transparent) 0,transparent 7.5rem)}
 body.light .ctl .lk.on{background:#0d7a441a}
 body.light .ctl .ex.on{background:#c21f301a}
 body.light .ctl .fav.on,body.light .bump-fig.bump-typed,body.light td.own .v.ov-typed,body.light .min-typed{background:#9a5b0018}
@@ -52,16 +51,18 @@ body.light .st,body.light .crow.locked .sl,body.light .lsw.on,body.light .lslot.
 body.light .go:disabled{background:#00000014;color:var(--dim)}
 body.light .opt .act .gorun .go:disabled{color:var(--tx)}
 /* Over-page shadows and the player card. */
-body.light .notes .list,body.light .colpop,body.light .cfm-box{box-shadow:0 12px 40px #00000033}
+body.light .notes .list,body.light .colpop,body.light .cfm-box{box-shadow:0 0.75rem 2.5rem #00000033}
 body.light .cfm{background:#00000059}
 body.light .card{--bar:#b4b8c2}body.light .card .tile,body.light .card .news{background:var(--p2)}body.light .card .news .pill{background:#9a5b0022}
 body.light .log td{border-bottom-color:#e3e3dd}
 body.light .log tbody tr:nth-child(even) td{background:#00000006}
 body.light .sst tr.now td{background:#9a5b0012!important}
 body.light .ue-grid{stroke:#00000014}
-body.light .ue-tip{border-color:var(--ln);box-shadow:0 10px 30px #00000033}
+body.light .ue-tip{border-color:var(--ln);box-shadow:0 0.625rem 1.875rem #00000033}
 /* The working lineup's roster card (board.css .lu.wk): solid slot badges take white text on the darker amber and green; a lighter team tint. */
 body.light .lu.wk .wkr:not(.empty) .sl{color:#fff}
 body.light .lu.wk .wkr.tm{background-image:linear-gradient(90deg,color-mix(in srgb,var(--t1) 18%,transparent) 0,color-mix(in srgb,var(--t1) 7%,transparent) 42%,color-mix(in srgb,var(--t2) 5%,transparent) 100%)}
 body.light .lu.wk .wkr{border-bottom-color:#d6d6cf}
 body.light .lu.wk .wkr.empty{background:#00000008}
+/* The "you can type here" box (board.css) is lighter on the light page, where the muted ink is darker. */
+body.light #tbody .cedit:not(.ctyped):not(.min-typed),body.light #tbody .bump-fig:not(.bump-typed),body.light #tbody td.own .v.ov-own:not(.ov-typed){box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--mu) 16%,transparent)}
