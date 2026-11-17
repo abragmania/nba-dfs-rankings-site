@@ -2,33 +2,36 @@
 // Every figure is read from the slate file or its route as given; a missing one is shown as an em dash with a title, never zero.
 import { paletteOf, teamColors } from "./teams.js";
 import { assignColours } from "./colours.js";
-import { sourceRows, sourcesHtml, badgeHtml } from "./sources-panel.js";
+import { sourceRows, sourcesHtml } from "./sources-panel.js";
 import { checkFootHtml, checkNotesHtml, checkNoteCount, hisPoolHtml } from "./board-check-foot.js";
-import { esc, logo, tipWhen, tipMs, slateRefMs, shortTime, isoToEastern, ICON, topStamps, keepFocus } from "./board-util.js";
-import { createPanel, fullScreenPref } from "./panel.js";
-import { tiers, notes } from "./highlight.js";
+import { esc, logo, tipWhen, tipMs, slateRefMs, shortTime, topStamps, keepFocus } from "./board-util.js";
+import { createPanel } from "./panel.js";
 import { initCard, figureSource } from "./card.js";
 import { cardRoles } from "./card-role.js";
 import { bumpPatch, delegateBumpClicks } from "./bump-control.js";
 import { createEditors } from "./cell-editor.js";
 import { askConfirm, CONFIRM } from "./confirm.js";
 import { columnsControl, sortNote } from "./columns.js";
-import { headHtml, rowHtml, SORT_KEYS, comparePlayers, hasResettable, minSourceOf, gapChipHtml } from "./player-table.js";
-import { pullChipHtml, pullNoteHtml } from "./pull-note.js";
-import { boxNote, absenceNote, noteLists as dataNotes, warningCount, freshBoxes } from "./box-note.js";
+import { headHtml, rowHtml, SORT_KEYS, comparePlayers, minSourceOf, gapChipHtml } from "./player-table.js";
+import { pullNoteHtml } from "./pull-note.js";
+import { boxNote, absenceNote, freshBoxes } from "./box-note.js";
 import { CHECK_MS, takeAnswer, applyHeld, createRefresher, followNewest, mergeFresh, outNamesOf, pickSlate, slateQuery, overrideKey, picksOnBoard, pullOf, rememberRows, rosterCleanup, statusLine } from "./slate-refresh.js";
 import { pressSettle } from "./press-settle.js";
 import { createPullNow, firstTipOf } from "./pull-now.js";
 import { noFilters, filtersOn, filterPlayers, salaryRange, teamsOf } from "./filters.js";
 import { limitPatch } from "./row-limits.js";
 import { loadView, saveView, DEFAULT_SORT } from "./view-memory.js";
-import { loadTheme, saveTheme, themeClasses, themeHtml } from "./theme.js";
+import { loadTheme, saveTheme, themeClasses } from "./theme.js";
 import { createConsole } from "./console.js";
 import { createLineupBar } from "./lineup-bar.js";
 import { createBoardMarks } from "./board-marks.js";
-import { confirmedByGame, borderStyle } from "./game-borders.js";
+import { confirmedByGame } from "./game-borders.js";
 import { mountLateSwap } from "./lsw-main.js";
 import { createOptStrip } from "./opt-strip.js";
+import { createToast } from "./toast.js";
+import { createSaves } from "./board-saves.js";
+import { createFullScreen } from "./board-fullscreen.js";
+import { topHtml, gamesHtml, headTitle as viewHeadTitle, chipsHtml, outMan, outsHtml } from "./board-views.js";
 
 const $ = (id) => document.getElementById(id);
 const TABS = ["ALL", "PG", "SG", "SF", "PF", "C", "G", "F"];
@@ -45,31 +48,7 @@ const nameOf = (id) => S.byId.get(id)?.name ?? S.known.get(id)?.name ?? `DraftKi
 // Browser storage holds per-viewer conveniences only (theme, the optimizer's typed settings), the one use the storage
 // rule allows; when it throws (private window, blocked site data) the page works without it and says so in the console.
 const tryStore = (fn) => { try { return fn(); } catch (e) { console.warn("Browser storage unavailable:", e.message); return null; } };
-// A message sits beside the control just clicked (the row, slot or button), amber for a notice and red only for an error
-// (kind "err"); with no clicked control on the page it sits at the bottom. It ends by itself after 4 seconds.
-let lastClick = null; // { el, rect, sel }: the clicked control, where it was, and a selector to find it again after a redraw
-document.addEventListener("click", (e) => {
-  if (e.target.closest?.(".cfm")) return; // a confirm's answer: the message that follows belongs beside the control that asked
-  const el = e.target.closest?.("tr[data-row], .slot, .lslot, .lr, button, .gorun") ?? null;
-  if (!el) { lastClick = null; return; }
-  const key = ["data-row", "data-lock", "data-op", "data-i", "data-id"].filter((k) => el.hasAttribute(k)).map((k) => `[${k}="${CSS.escape(el.getAttribute(k))}"]`).join("");
-  lastClick = { el, rect: el.getBoundingClientRect(), sel: key ? `${el.tagName.toLowerCase()}${key}` : null };
-}, true);
-const toast = (msg, kind = "notice") => {
-  const t = $("toast");
-  t.textContent = msg; t.className = `toast${kind === "err" ? " err" : ""}`; t.style.cssText = ""; t.hidden = false;
-  clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 4000);
-  if (document.body.classList.contains("lineups-on")) return; // on the Lineups tab a message sits at the bottom, over no switch, filter or button
-  const z = parseFloat(getComputedStyle(document.body).zoom) || 1; // 1 now that the page has no zoom; kept so rects stay in screen pixels if one returns
-  const W = window.innerWidth / z, H = window.innerHeight / z;
-  const live = lastClick && (lastClick.el.isConnected ? lastClick.el : lastClick.sel ? document.querySelector(lastClick.sel) : null);
-  const r = live ? live.getBoundingClientRect() : lastClick?.rect;
-  if (!r || !r.width || r.bottom < 0 || r.top > window.innerHeight) return; // no control on screen: the bottom position
-  const a = { left: r.left / z, top: r.top / z, bottom: r.bottom / z };
-  const h = t.offsetHeight, w = Math.min(t.offsetWidth, W - 24);
-  const top = a.bottom + 4 + h > H - 8 ? Math.max(8, a.top - h - 4) : a.bottom + 4;
-  t.style.cssText = `left:${Math.max(12, Math.min(a.left + 16, W - w - 12))}px;top:${top}px;bottom:auto;transform:none`;
-};
+const toast = createToast(); // the message beside the clicked control (toast.js)
 const api = async (url, opts) => {
   const r = await fetch(url, opts);
   const body = await r.json().catch(() => ({}));
@@ -79,6 +58,9 @@ const api = async (url, opts) => {
 const dash = (title) => `<span class="miss" title="${esc(title)}">—</span>`;
 /** A slate stamp in Eastern time; the slate's own date (from its name) settles the year TwoGun's stamps leave out. */
 const when = (s) => tipWhen(S.name)(s);
+// The picks and override saves (board-saves.js); settled() lets a build wait for picks and override saves in flight, since the server reads the saved locks and the saved overrides.
+const saves = createSaves({ S, api, toast, renderRows: () => renderRows(), renderPick: () => renderPick(), renderDropNote: () => renderDropNote(), applyPlayers: (p) => applyPlayers(p) });
+const { savePicks, saveOverride, settled } = saves;
 // The player panel (card.js), docked on the right; it closes itself on Esc. A man's figures follow the board's copy of him (a man from the
 // Out list has none and stays as he was opened).
 const card = initCard({ root: document.body, dash, colourOf, picks: () => S.picks,
@@ -86,8 +68,7 @@ const card = initCard({ root: document.body, dash, colourOf, picks: () => S.pick
   current: (p) => S.byId.get(p.dk_id) ?? p, marks: (id) => boardMarks.of(id), newsState: () => boardMarks.newsState(), onDock: () => { fixTableWidth(); stickyHeights(); }, roles: cardRoles({ api: () => scenarioConsole, slate: () => S.name, toast }) });
 new MutationObserver(() => { if (document.body.classList.contains("lsw-on")) card.close(); }).observe(document.body, { attributes: true, attributeFilter: ["class"] }); // Late swap lists entries, not names: the panel is for the Player list and the Console, so it closes when that screen opens
 createOptStrip({ el: $("optstrip"), opt: $("opt"), onWorking: () => card.close() }); // the compact optimizer row over the table while the player panel is open (opt-strip.js)
-// The optimizer panel (panel.js); settled() lets a build wait for picks and override saves in flight, since the server
-// reads the saved locks and the saved overrides.
+// The optimizer panel (panel.js).
 // Late swap mode lives in the panel; onLateSwap redraws the header switch and the table's slot pickers when it changes.
 // onWork redraws the rows when the lineup on show changes (their in-lineup mark); onMode swaps in that mode's columns.
 const panel = createPanel({ el: $("opt"), lineupsEl: $("lineups"), onView: (v) => setView(v), onTabs: () => renderTop(), isLineupsView: () => S.view === "lineups", api, toast, tryStore, dash, ctx: () => ({ name: S.name, byId: S.byId, outList: S.slate?.out ?? [], outNames: S.outNames, knownName: (id) => S.known.get(id)?.name ?? null, knownRow: (id) => S.known.get(id) ?? null, pull: pullOf(S.slate), refreshGen: S.refreshGen, players: S.players, picks: livePicks(), settled, ovKey: ovKeyOf(), colourOf }), onLateSwap: () => { drawTop(); applyFullScreen(); renderHead(); renderRows(); }, onWork: () => renderRows(), onMode: (m) => columns.setMode(m), onClearLocks: () => savePicks({ locked: [], excluded: livePicks().excluded }), onMemory: () => rememberView() });
@@ -103,28 +84,7 @@ const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: 
 const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, players: () => S.players, onChange: () => { if (!S.slate) return; card.badge(); if (formHasFocus()) { S.rowsLater = true; return; } renderRows(); }, noteEl: $("updline").insertAdjacentElement("beforebegin", Object.assign(document.createElement("div"), { hidden: true })) });
 // The lineup bar above the list (lineup-bar.js): an Out or a confirmed start from the Monster, RotoWire and RotoGrinders pages applies itself through the console, with an undo X; a projected start is words only.
 const lineupBar = createLineupBar({ el: $("lineupbar"), api, slate: () => S.name, players: () => S.players, slateData: () => S.slate, tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; }, console: scenarioConsole, toast, tryStore, tick: true, onLabel: (l) => { S.news = l; renderTop(); }, onModel: (m) => { const f = confirmedByGame(m); if (JSON.stringify(f) !== JSON.stringify(S.fives)) { S.fives = f; if (S.slate) renderGames(); } }, applyInPage: Boolean(globalThis.nbadfsSitePull) });
-// Full screen (Player list header): hides the optimizer panel so the table takes the width. Remembered per viewer; under 900 px
-// wide with nothing stored it starts on. Pin slots (late swap) needs the panel, so the button and the hiding step aside then.
-const FS_KEY = "nbaboard.fullscreen";
-let fullScreen = fullScreenPref(tryStore(() => localStorage.getItem(FS_KEY)), window.innerWidth);
-const fsBtn = document.createElement("button");
-fsBtn.className = "chip"; fsBtn.id = "fsBtn"; fsBtn.type = "button";
-$("colsBtn").closest(".colsw").before(fsBtn);
-function applyFullScreen() {
-  const on = fullScreen && !panel.lateSwap();
-  document.body.classList.toggle("fs-list", on);
-  fsBtn.hidden = Boolean(panel.lateSwap());
-  fsBtn.textContent = fullScreen ? "Show optimizer" : "Full screen";
-  fsBtn.setAttribute("aria-pressed", String(fullScreen));
-  stickyHeights();
-}
-fsBtn.addEventListener("click", () => {
-  fullScreen = !fullScreen;
-  tryStore(() => localStorage.setItem(FS_KEY, fullScreen ? "1" : "0"));
-  applyFullScreen();
-  fixTableWidth(); // the table's held width is the other layout's until measured again
-});
-applyFullScreen();
+const applyFullScreen = createFullScreen({ panel, tryStore, stickyHeights: () => stickyHeights(), fixTableWidth: () => fixTableWidth() }); // Full screen button (board-fullscreen.js)
 /** Shows the console or the board. The board's table holds a measured width, so it is measured again on the way back. */
 function setConsole(open) {
   document.body.classList.toggle("console-on", open);
@@ -295,7 +255,7 @@ const press = pressSettle();
 /** The forms a redraw would disturb: the team-limit and ownership-rule boxes, and a slot picker. A number box in a row is handled apart, row by row. */
 const formHasFocus = () => Boolean(document.activeElement?.matches?.("#opt [data-ov], #opt [data-lr], select[data-lspin], .psel, .rpin, #console input.fin"));
 const refresher = createRefresher({
-  api, name: () => S.name, busy: () => panel.running() || formHasFocus() || press.pressing(), saves: () => ovSaves, apply: applyFresh,
+  api, name: () => S.name, busy: () => panel.running() || formHasFocus() || press.pressing(), saves: saves.saveCount, apply: applyFresh,
   status: ({ failed, waiting = false }) => { S.upd = { ...S.upd, failed, waiting }; renderUpdLine(); },
   onBoxes: async (slate) => { // the box score line and its Data warnings entry, in step with the stored boxes between pulls (box-note.js freshBoxes); nothing on the site
     const f = await freshBoxes(S.slate, () => api("/api/boxes/freshness"));
@@ -328,31 +288,13 @@ const checkAll = async () => { await syncSlates(); if (!loadsOpen) await refresh
 const pullNow = createPullNow({ reload: () => checkAll(),runner: globalThis.nbadfsSitePull ?? null, firstTipMs: () => firstTipOf(S.players, slateRefMs(S.name) ?? Date.now()) }); // the header's Pull now (pull-now.js); new numbers land through the refresh above
 
 // ---------- header ----------
-function slateLabel(name) {
-  const m = name.match(/^(\d{4})-(\d{2})-(\d{2})-(.+)$/);
-  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
-  const day = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
-  return `${day} · ${m[4][0].toUpperCase()}${m[4].slice(1)}`;
-}
-const noteLists = () => dataNotes(S.slate); // conflicts, missing and the box score line (box-note.js)
 /** The box score line lives under Sources and pull times and in Data warnings, nothing at the top; a box-score change only redraws the Sources list (the site, which has no box freshness, shows none). */
 function renderBoxNote() {
   renderSources();
 }
 function renderTop() {
   const s = S.slate; if (!s) return;
-  const { injuries, injuriesAbsent } = topStamps(s);
-  const badges = badgeHtml({ injuriesMissing: injuriesAbsent && !when(injuries), projProblem: s.proj_problem ?? "" });
-  const n = noteLists(); const count = warningCount(n);
-  const list = (h, a) => (a.length ? `<h4>${h}</h4><ul>${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "");
-  $("top").innerHTML = `<div class="brand"><span class="mk"></span>NBA_BOARD<small>dk classic</small></div>
-<select class="slate" id="slateSel">${S.slates.map((x) => `<option value="${esc(x.slate)}"${x.slate === S.name ? " selected" : ""}>${esc(slateLabel(x.slate))}${x.slate === S.name ? ` · ${s.games.length} game${s.games.length === 1 ? "" : "s"}` : ""}</option>`).join("")}</select>
-<span class="vtabs"><button data-view="list" class="${S.view === "lineups" || S.view === "news" || scenarioConsole.isOn() ? "" : "on"}">Player list</button><button data-view="lineups" class="${S.view === "lineups" && !scenarioConsole.isOn() ? "on" : ""}">Lineups${panel.builtCount() ? ` <b>${panel.builtCount()}</b>` : ""}</button><button data-view="news" class="${S.view === "news" && !scenarioConsole.isOn() ? "on" : ""}${S.news?.need ? " need" : ""}" title="${S.news?.need ? "Lineup news that needs your look" : "What the lineup sources say that the console does not show"}">News${S.news?.n ? ` <b>${S.news.n}</b>` : ""}</button></span>
-${badges ? `<div class="stamps">${badges}</div>` : ""}
-${count ? `<div class="notes"><button id="notesBtn" title="${count} data warning${count === 1 ? "" : "s"} on this slate">Data warnings</button><div class="list" id="notesList" hidden>${list("Conflicts", n.conflicts)}${list("Missing", n.missing)}${list("Box scores", n.boxes)}</div></div>` : ""}
-${pullNow.html()}<button id="csBtn" class="lsw csw${scenarioConsole.isOn() ? " on" : ""}" title="${scenarioConsole.isOn() ? "Back to the board" : "Scenario console: minutes and usage when men sit"}">Console</button>
-<button id="lsBtn" class="lsw${panel.lateSwap() ? " on" : ""}" title="${panel.lateSwap() ? "Leave late swap mode" : "Late swap: men whose game has started stay in their slot; pin others to a slot and fill the open ones"}"${panel.running() ? " disabled" : ""}>${ICON.lock} Pin slots</button>
-${themeHtml(theme)}`;
+  $("top").innerHTML = topHtml({ s, slates: S.slates, name: S.name, view: S.view, news: S.news, consoleOn: scenarioConsole.isOn(), panel, pullNow, theme, when });
 }
 function renderDropNote() {
   const el = $("dropnote");
@@ -365,21 +307,7 @@ function renderDropNote() {
 // ---------- games strip ----------
 // Numbers light up by tier (see highlight.js): game totals in house amber, team totals in the team's own colour.
 function renderGames() {
-  const games = [...S.slate.games].sort((a, b) => String(a.tip).localeCompare(String(b.tip)) || a.game.localeCompare(b.game));
-  const gameTotals = games.map((g) => (typeof g.total === "number" ? g.total : null));
-  const gt = tiers(gameTotals), gn = notes(gameTotals, "game total");
-  const flat = games.flatMap((g, gi) => [g.away, g.home].map((t) => ({ gi, t })));
-  const implied = flat.map(({ gi, t }) => (typeof games[gi].implied?.[t] === "number" ? games[gi].implied[t] : null));
-  const it = tiers(implied), inotes = notes(implied, "team total");
-  // Back-to-back (Adam 11-14): the team code's colour says it, orange on the second night, blue when the team plays again tomorrow; the flags ride every man (server/slate/back-to-back.js).
-  const restOf = (t) => { const m = S.players.find((p) => p.team === t); return m?.rest_b2b2nd ? { cls: " b2b2", title: `${t} played last night: second night of a back-to-back` } : m?.rest_plays_tomorrow ? { cls: " b2b1", title: `${t} plays again tomorrow: first night of a back-to-back` } : { cls: "", title: "" }; };
-  const side = (g, t, k) => {
-    const ip = implied[k]; const fav = g.favourite === t; const sp = g.spread; const c = colourOf(t); const rest = restOf(t);
-    const note = typeof sp !== "number" || !g.favourite ? "" : (fav ? "" : "+") + (fav ? sp : Math.abs(sp)).toFixed(1);
-    return `<div class="side${fav ? " fav" : ""}" style="--t1:${c.t1}">${logo(t, "lg")}<b class="code${rest.cls}"${rest.title ? ` title="${esc(rest.title)}"` : ""}>${esc(t)}</b><small class="spr" title="${fav ? "Favourite" : "Underdog"}">${esc(note)}</small>${ip === null ? `<span class="ip">${dash("no implied points in this slate file")}</span>` : `<span class="ip t-${it[k]}" style="--tc:${c.t1}"${inotes[k] ? ` title="${esc(inotes[k])}"` : ""}>${ip.toFixed(1)}</span>`}</div>`;
-  };
-  const bd = (g) => { const s = borderStyle(S.fives?.[g.game]); return s ? ` cf" style="${s}` : ""; }; // thin green/yellow border halves from the News tab's confirmed fives
-  $("games").innerHTML = games.map((g, gi) => `<div class="game${S.game === g.game ? " sel" : ""}${bd(g)}" data-game="${esc(g.game)}"><div class="gh"><span class="tip">${esc(when(g.tip) ?? "—")}</span><span class="tot">O/U ${gameTotals[gi] === null ? dash("no total in this slate file") : `<b class="t-${gt[gi]}" style="--tc:var(--am)"${gn[gi] ? ` title="${esc(gn[gi])}"` : ""}>${gameTotals[gi].toFixed(1)}</b>`}</span></div>${side(g, g.away, gi * 2)}${side(g, g.home, gi * 2 + 1)}</div>`).join("");
+  $("games").innerHTML = gamesHtml({ slateGames: S.slate.games, players: S.players, game: S.game, fives: S.fives, colourOf, when, dash });
   fitGames();
 }
 
@@ -403,15 +331,8 @@ function visible() {
   return rows.sort((a, b) => comparePlayers(a, b, S.sort, minSourceOf(S.slate)));
 }
 function renderHead() { $("thead").innerHTML = headHtml(shownCols(), S.sort, headTitle, minSourceOf(S.slate)); }
-/** A season-figure column's tooltip: its basis, then this season's as-of time (and last season's when an LY figure shows). */
-function headTitle(c) {
-  const f = S.slate?.season_figures?.[c.key];
-  const at = (m) => (m?.as_of ? `as of ${new Date(m.as_of).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })}, ${isoToEastern(m.as_of) ?? m.as_of}` : `not loaded${m?.error ? ` (${m.error})` : ""}`);
-  if (c.key === "min_usual") return S.slate?.min_usual_pull ? `${c.head}, from the board row of the ${S.slate.min_usual_pull} pull (TwoGun NBA board)` : c.head;
-  if (!f) return c.head;
-  const ly = S.players.some((p) => p[c.key + "_tag"] === "LY");
-  return `${c.head}, Basketball-Reference, ${at(f.this_season)}${ly ? `; 2025-26 figures (LY) ${at(f.last_season)}` : ""}`;
-}
+/** A season-figure column's tooltip (board-views.js). */
+const headTitle = (c) => viewHeadTitle(S.slate, S.players, c);
 function renderRows() {
   const rows = visible();
   const lock = new Set(S.picks.locked), ex = new Set(S.picks.excluded);
@@ -478,15 +399,9 @@ function renderFilterMarks() {
   $("clearF").disabled = !filtersOn(S);
 }
 function renderTabs() { $("tabs").innerHTML = TABS.map((t) => `<button data-tab="${t}" class="${t === S.tab ? "on" : ""}">${t}</button>`).join(""); }
-// Locked / Excluded / Starred filter chips with their counts (only men still on the slate are counted); 0 is dim but
-// clickable. Then "Reset all overrides" (A6): it clears typed numbers, bumps and console minutes, never stars (NFL D72), so it is
-// disabled while no row has any, and it asks first (the click below).
+// The Locked / Excluded / Starred chips, Reset all overrides and the pull-changes chip (board-views.js chipsHtml).
 function renderChips() {
-  const n = (k) => (k === "starred" ? S.players.filter((p) => p.starred).length : S.picks[k].filter((id) => S.byId.has(id)).length);
-  const nOvr = S.players.filter(hasResettable).length;
-  $("chips").innerHTML = [["locked", "Locked"], ["excluded", "Excluded"], ["starred", "Starred"]].map(([k, label]) => `<button data-chip="${k}" class="chip ${k}${S.pickFilter === k ? " on" : ""}${n(k) ? "" : " zero"}" title="${S.pickFilter === k ? "Show everyone again" : `Show only ${label.toLowerCase()} players`}">${label} <b>${n(k)}</b></button>`).join("")
-    + `<button id="ovReset" class="chip ovr${nOvr ? "" : " zero"}"${nOvr ? ` title="${nOvr} ${nOvr === 1 ? "man has" : "men have"} a projection, ownership or bump typed on the board"` : ` disabled title="Nothing typed on the board to reset"`}>Reset all overrides</button>`
-    + pullChipHtml(S.slate?.pull_changes, S.players, S.pickFilter === "changed");
+  $("chips").innerHTML = chipsHtml({ players: S.players, picks: S.picks, byId: S.byId, pickFilter: S.pickFilter, slate: S.slate });
   // The gap chip rides the team-chip row: the toolbar's first row has no room for it at 1920 (renderTeamChips rebuilds that row, and renderRows follows it).
   $("teamChips").querySelector(".gapchip")?.remove();
   $("teamChips").insertAdjacentHTML("afterbegin", gapChipHtml(S.players, S.pickFilter === "gap"));
@@ -499,65 +414,11 @@ function renderPullNote() {
   $("pullnote").hidden = !html;
   $("pullnote").innerHTML = html;
 }
-/** A man from the Out list as the card opens him: on the slate's player pool when he is there, else only what the list says. */
-function outMan(o) {
-  const on = S.players.find((p) => p.name === o.name && p.team === o.team);
-  if (on) return o.absence && !on.absence ? { ...on, absence: o.absence } : on;
-  return { dk_id: null, name: o.name, team: o.team, positions: [], injury_status: o.status ?? "Out", salary_text: o.salary_text ?? null, his_in_note: o.his_in_note ?? null, absence: o.absence ?? null };
-}
-/** A salary in dollars from the Out entry: its number when it has one, else the "$4.4K" text; 0 when neither reads. */
-const outSalary = (o) => {
-  if (Number.isFinite(o.salary)) return o.salary;
-  const m = /^\$?\s*([\d.,]+)\s*(k?)$/i.exec(String(o.salary_text ?? "").trim());
-  const n = m ? parseFloat(m[1].replace(/,/g, "")) : NaN;
-  return Number.isFinite(n) ? Math.round(n * (m[2] ? 1000 : 1)) : 0;
-};
-/** The Out list, closed on every load (a per-visit open): one line per team, the teams with the most usual minutes out first, the men by salary; each man keeps his index into slate.out for the click. */
-function renderOuts() {
-  const out = S.slate.out ?? [];
-  if (!out.length) { $("outs").innerHTML = ""; return; }
-  const teams = new Map();
-  out.forEach((o, i) => { if (!teams.has(o.team)) teams.set(o.team, []); teams.get(o.team).push({ o, i }); });
-  const mins = (men) => men.reduce((t, { o }) => t + (Number.isFinite(o.usual_minutes) ? o.usual_minutes : 0), 0);
-  const lines = [...teams].sort((x, y) => mins(y[1]) - mins(x[1]) || String(x[0]).localeCompare(String(y[0]))).map(([team, men]) => {
-    const items = men.sort((x, y) => outSalary(y.o) - outSalary(x.o) || x.i - y.i).map(({ o, i }) => {
-      const st = String(o.status ?? "OUT").toUpperCase(), word = st === "OUT" || st === "O" ? "" : ` <i>${esc(st.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()))}</i>`;
-      return `<span class="o" title="${esc([o.reason, o.usual_minutes != null ? `usual minutes ${o.usual_minutes}` : null].filter(Boolean).join(" · "))}"><button class="oname" data-out-i="${i}" title="Open ${esc(o.name)}'s card">${esc(o.name)}</button>${o.salary_text ? ` <em>${esc(o.salary_text)}</em>` : ""}${word}</span>`;
-    }).join('<span class="osep"> · </span>');
-    return `<div class="otm"><span class="otc" style="color:${esc(colourOf(team).t1)}">${logo(team, "xs")}${esc(team)}</span><span class="oit">${items}</span></div>`;
-  }).join("");
-  $("outs").innerHTML = `<button class="oh2" id="outTog" aria-expanded="${S.outOpen}" title="${S.outOpen ? "Hide" : "Show"} the Out list">Out ${S.outOpen ? "▾" : `(${out.length}) ▸`}</button>${S.outOpen ? `<div class="olist">${lines}</div>` : ""}`; // the strip folds (C2); stored uppercase; shown "Doubtful" and the like only when not plain Out
-}
+/** The Out list (board-views.js outsHtml), closed on every load. */
+function renderOuts() { $("outs").innerHTML = outsHtml({ out: S.slate.out ?? [], outOpen: S.outOpen, colourOf }); }
 const renderPick = () => { panel.render(); card.refresh(); };
 function renderAll() { renderTop(); renderDropNote(); renderBoxNote(); renderGames(); renderTabs(); renderTeamChips(); renderHead(); renderRows(); renderOuts(); renderPick(); }
 
-// ---------- picks ----------
-// Saves go out one at a time, in order, so quick clicks cannot reach the server out of order. After a failed save the
-// page reloads the picks from the server (the saved file is the truth) instead of restoring an older local copy.
-let saveQueue = Promise.resolve();
-/** One promise for "the picks and override saves now queued", the same object until either queue gains a link, so the
- *  panel's until-unchanged wait (picksSettled) covers both: a build reads the saved locks and the saved overrides. */
-let settledOf = [], settledP = Promise.resolve();
-function settled() {
-  if (settledOf[0] !== saveQueue || settledOf[1] !== ovQueue) { settledOf = [saveQueue, ovQueue]; settledP = Promise.all(settledOf); }
-  return settledP;
-}
-function savePicks(next) {
-  S.picks = next; renderRows(); renderPick();
-  const name = S.name, body = JSON.stringify(next);
-  saveQueue = saveQueue.then(async () => {
-    try {
-      await api(`/api/slate/${encodeURIComponent(name)}/picks`, { method: "POST", headers: { "content-type": "application/json" }, body });
-      if ((S.dropped.length || S.rosterDropped.length) && name === S.name) { S.dropped = []; S.rosterDropped = []; renderDropNote(); }
-    } catch (e) {
-      toast(`Could not save picks: ${e.message}`, "err");
-      try {
-        const saved = await api(`/api/slate/${encodeURIComponent(name)}/picks`);
-        if (name === S.name) { S.picks = { locked: saved.locked, excluded: saved.excluded }; renderRows(); renderPick(); }
-      } catch (e2) { toast(`Could not reload picks: ${e2.message}`, "err"); }
-    }
-  });
-}
 function toggle(id, kind) {
   const other = kind === "locked" ? "excluded" : "locked";
   const live = livePicks(); // a save names only men on the slate: the server refuses any other
@@ -566,44 +427,6 @@ function toggle(id, kind) {
   if (kind === "excluded" && !has) panel.dropMan(id); // an excluded man leaves the working lineup (a build would refuse him)
 }
 
-// ---------- overrides (Adam, 5:20 PM ET 2026-10-29; server/slate/overrides.js) ----------
-// Every write goes to the server, one at a time and in order, and the page redraws from the players it answers (the saved
-// file is the truth). A refused write shows its sentence and redraws the rows as they were. `body` may be a function, worked
-// out when the request is sent (a star toggle reads the star the previous answer left, so a double-click toggles twice).
-let ovQueue = Promise.resolve();
-let ovSaves = 0; // moves with every override write and its answer, so a refresh fetched across one is not drawn over it
-function saveOverride(body, what) {
-  const name = S.name;
-  ovSaves++;
-  const run = ovQueue.then(async () => {
-    try {
-      // The slate changed while this waited its turn. A worked-out body reads the slate on show, so it cannot be sent; a plain
-      // one goes to the slate it was made on (the address below), so what was typed is never lost.
-      if (name !== S.name && typeof body === "function") { toast("Not saved: the slate changed."); return false; }
-      const sent = typeof body === "function" ? body() : body;
-      // GitHub's data is being brought down (the server answers 409 SYNC_RUNNING): his typed value is kept as it is and sent again after a few seconds, up to three times, never redrawn away.
-      let out;
-      for (let tries = 0; ; tries++) {
-        try {
-          out = await api(`/api/slate/${encodeURIComponent(name)}/overrides`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sent) });
-          break;
-        } catch (e) {
-          if (e.code !== "SYNC_RUNNING" || tries >= 2) throw e;
-          toast("A sync is running; your change is sent again in a few seconds.");
-          await new Promise((r) => setTimeout(r, 4000));
-        }
-      }
-      if (name === S.name) applyPlayers(out.players);
-      return true;
-    } catch (e) {
-      toast(`Could not save ${what}: ${e.message}`, "err");
-      if (name === S.name) renderRows();
-      return false;
-    }
-  });
-  ovQueue = run;
-  return run;
-}
 /** The figures a build scores from Adam's overrides, as one string: the panel compares it before and after a build to say
  *  "built before your last projection or ownership change" (stars leave it unchanged). */
 function ovKeyOf() {
@@ -611,7 +434,7 @@ function ovKeyOf() {
 }
 /** Takes the override fields from the server's players onto the board's (keeping the season figures and the opponent text). */
 function applyPlayers(players) {
-  ovSaves++;
+  saves.countSave();
   const fresh = new Map((players ?? []).map((p) => [p.dk_id, p]));
   // His In or Out call can add or drop a man from the server's pool (out-pool.js): when the server's men are not the board's, the slate is read again instead of patched.
   if (S.name && fresh.size && (fresh.size !== S.byId.size || [...fresh.keys()].some((id) => !S.byId.has(id)))) { loadSlate(S.name); return; }
@@ -677,8 +500,8 @@ document.addEventListener("click", (e) => {
   else if (d.tab) { S.tab = d.tab; renderTabs(); renderRows(); }
   else if (d.game) { S.game = S.game === d.game ? null : d.game; renderGames(); renderRows(); }
   else if (d.dkId) { const man = S.byId.get(d.dkId); if (man) card.open(man); else toast("He is not in the slate on this page."); }
-  else if (d.outI) card.open(outMan(S.slate.out[+d.outI]));
-  else if (d.outName) { const o = (S.slate.out ?? []).find((x) => x.name === d.outName && x.team === d.outTeam), on = S.players.find((p) => p.name === d.outName && p.team === d.outTeam); if (o) card.open(outMan(o)); else if (on) card.open(on); else toast("He is not on this slate's Out list."); }
+  else if (d.outI) card.open(outMan(S.players, S.slate.out[+d.outI]));
+  else if (d.outName) { const o = (S.slate.out ?? []).find((x) => x.name === d.outName && x.team === d.outTeam), on = S.players.find((p) => p.name === d.outName && p.team === d.outTeam); if (o) card.open(outMan(S.players, o)); else if (on) card.open(on); else toast("He is not on this slate's Out list."); }
   else if (d.lock) toggle(d.lock, "locked");
   else if (d.excl) toggle(d.excl, "excluded");
   else if (d.unpick) { const live = livePicks(); savePicks({ locked: live.locked.filter((x) => x !== d.unpick), excluded: live.excluded.filter((x) => x !== d.unpick) }); }
