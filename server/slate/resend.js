@@ -32,10 +32,11 @@ export function readResend(slate) {
   try { const rec = JSON.parse(raw); return rec && typeof rec === "object" && !Array.isArray(rec) ? rec : { problem: "resend.json is not an object" }; } catch (e) { return { problem: `resend.json is not valid JSON (${e.message})` }; }
 }
 
-/** Saves what a pass did. { at, pull, status: "sent" | "blocked", why, teams, sent, usage_state, usage_message, missing: [{ team, name, why }], base_note }. A failed write is a warning; it never stops the pull. */
+/** Saves what a pass did. { at, pull, status: "sent" | "blocked", why, teams, sent, usage_state, usage_message, missing: [{ team, name, why }], stored: [{ team, why, kind }] (held teams on the Console's numbers, not the engine's, or with no engine figures), base_note }. A failed write is a warning; it never stops the pull. */
 export function writeResend(slate, rec) {
   const was = readResend(slate);
-  if (was && !was.problem && was.status === rec.status && was.why === rec.why && was.pull === rec.pull && JSON.stringify(was.missing ?? []) === JSON.stringify(rec.missing ?? [])) return false; // nothing a reader would see differs: a 5-minute pass does not rewrite the file
+  const same = (k) => JSON.stringify(was[k] ?? null) === JSON.stringify(rec[k] ?? null);
+  if (was && !was.problem && ["status", "why", "pull", "teams", "usage_state", "usage_message", "base_note"].every(same) && JSON.stringify(was.missing ?? []) === JSON.stringify(rec.missing ?? []) && JSON.stringify(was.stored ?? []) === JSON.stringify(rec.stored ?? [])) return false; // nothing a reader would see differs: a 5-minute pass does not rewrite the file
   try { writeFileAtomic(resendFile(slate), `${JSON.stringify(rec, null, 1)}\n`); return true; } catch (e) { warn("resend: the record could not be saved", { slate, error: e.message }); return false; }
 }
 
@@ -48,11 +49,11 @@ export const LOCKED_WHY = "the slate is locked";
 /**
  * The shared core: every held team's saved work rebased on this Tonight, then planApply + writeApply from it. `model`: buildModel(inputs, file.teams, file.applied?.keys), already changed by the caller's
  * news moves; `extra`: teams the caller moved this pass. `players`: the slate's players as the board has them (our engine's figures on), the base planApply compares with and restores to.
- * Returns { teams, sent, wrote, missing, failed }. Nothing is written when `failed` (a scenario key that no longer fits); a failed send puts the team records back and throws.
+ * Returns { teams, sent, wrote, missing, stored: [{ team, why }] (held teams on the Console's numbers, not the engine's, with kind "choice" or "conflict"), failed }. Nothing is written when `failed` (a scenario key that no longer fits); a failed send puts the team records back and throws.
  */
 export function sendHeld({ slate, inputs, model, file, overrides, players, extra = [], usageReady = true, writeSend = writeApply, atIso }) {
   const unknown = sourceRefusal(inputs);
-  if (unknown) return { teams: [], blocked: [], sent: 0, wrote: false, missing: [], failed: unknown }; // fails closed: the board is blank, so no held number is re-sent (recorded in resend.json by the caller)
+  if (unknown) return { teams: [], blocked: [], sent: 0, wrote: false, missing: [], stored: [], failed: unknown }; // fails closed: the board is blank, so no held number is re-sent (recorded in resend.json by the caller)
   const held = new Set([...Object.keys(file.applied?.keys ?? {}), ...Object.entries(model.ST).filter(([, S]) => Object.values(S.news ?? {}).some((e) => e.state === "applied")).map(([t]) => t), ...extra]);
   const all = [...held].filter((t) => model.ST[t]).sort();
   // A usage table that is not ready blocks the RESEND of held teams (their scenario maths needs it; the earlier numbers stay): only teams the news moved this pass (`extra`) are still sent, so a news Out lands.
@@ -66,15 +67,17 @@ export function sendHeld({ slate, inputs, model, file, overrides, players, extra
   }
   const keys = Object.fromEntries(teams.map((t) => [t, keyOf(model.ST[t].outs)]));
   const checked = checkKeys(keys, inputs);
-  if (!checked.ok) return { teams, blocked, sent: 0, wrote: false, missing: [], failed: checked.message };
+  if (!checked.ok) return { teams, blocked, sent: 0, wrote: false, missing: [], stored: [], failed: checked.message };
   if (wrote) writeScenarios(slate, next); // the team records first, so the plan below reads what it sends; a failure here leaves overrides untouched
-  let sent = 0, missing = [];
+  let sent = 0, missing = [], stored = [];
   try {
     if (teams.length) {
       const sendPlan = planApply(inputs, next, overrides, players, checked.keys, new Set(teams));
       sent = sendPlan.changes.length + sendPlan.min_moves;
-      missing = sendPlan.missing.map((m) => ({ team: m.team, name: m.name, why: m.why }));
-      if (sent || sendPlan.flag_moves) { // flag_moves: numbers left as they are whose his-or-news mark changes (console-apply.js setAuto)
+      // kind: "disagree" (the Console and the engine or his own call disagree about him), "his" (his own figure stands over a Console pin of his); none for a number not refreshed
+      missing = [...sendPlan.missing, ...sendPlan.his_notes.map((n) => ({ ...n, kind: "his" }))].map((m) => ({ team: m.team, name: m.name, why: m.why, ...(m.kind ? { kind: m.kind } : {}) }));
+      stored = sendPlan.teams.filter((x) => x.stored_why).map((x) => ({ team: x.team, why: x.stored_why, kind: x.stored_kind, ...(x.blank ? { blank: true } : {}) })); // held teams left on the Console's numbers, not the engine's: why, and whether his choice or a conflict (R4, G62)
+      if (sent || sendPlan.flag_moves || sendPlan.dropped) { // dropped: Apply records on men whose typed number is gone (console-apply.js dropGone); flag_moves: numbers left as they are whose his-or-news mark changes (console-apply.js setAuto)
         writeSend(slate, next, overrides, applyRecord(sendPlan, overrides, next.applied, atIso), players);
         if (sent) wrote = true; // a marks-only send moved no number
       } else if (sendPlan.holds) {
@@ -87,17 +90,18 @@ export function sendHeld({ slate, inputs, model, file, overrides, players, extra
     if (wrote) { try { writeScenarios(slate, file); } catch (e2) { warn("resend: the team record could not be put back after a failed send", { slate, error: e2.message }); } }
     throw e;
   }
-  return { teams, blocked, sent, wrote, missing, failed: null };
+  return { teams, blocked, sent, wrote, missing, stored, failed: null };
 }
 
-/** Records a pass that sent nothing, and why, for every team the board is held for; null when no team is held (nothing stored depends on a send). */
-export function recordBlocked(slate, why, { nowMs, usage = null, pull = null } = {}) {
+/** Records a pass that sent nothing, and why, for every team the board is held for; null when no team is held (nothing stored depends on a send). `missing` and `stored`: what the teams this pass
+ *  still sent (a news Out landing while the usage table is not ready) left unrefreshed or on the Console's numbers, kept beside the block (G62). */
+export function recordBlocked(slate, why, { nowMs, usage = null, pull = null, missing = [], stored = [] } = {}) {
   if (why === LOCKED_WHY) return null;
   let file;
   try { file = readScenarios(slate); } catch (e) { warn("resend: the scenarios file could not be read for the record", { slate, error: e.message }); return null; }
   const teams = [...heldTeams(file)].sort();
   if (!teams.length) return null;
-  const rec = { at: new Date(nowMs ?? Date.now()).toISOString(), pull, status: "blocked", why, teams, sent: 0, usage_state: usage?.state ?? null, usage_message: usage?.message ?? null, missing: [], base_note: null };
+  const rec = { at: new Date(nowMs ?? Date.now()).toISOString(), pull, status: "blocked", why, teams, sent: 0, usage_state: usage?.state ?? null, usage_message: usage?.message ?? null, missing, stored, base_note: null };
   writeResend(slate, rec);
   return rec;
 }
@@ -132,6 +136,6 @@ export function resendHeld(slate, { usage, nowMs = Date.now(), ourPlayers = with
     recordBlocked(slate, r.failed, { nowMs, usage, pull: inputs.basis?.pull ?? null });
     return { status: "blocked", note: r.failed, sent: 0, teams: r.teams };
   }
-  writeResend(slate, { at: new Date(nowMs).toISOString(), pull: inputs.basis?.pull ?? null, status: "sent", why: null, teams: r.teams, sent: r.sent, usage_state: usage.state, usage_message: usage.message ?? null, missing: r.missing, base_note: note });
-  return { status: "ok", note: `${r.teams.length} held team${r.teams.length === 1 ? "" : "s"} re-sent, ${r.sent} number${r.sent === 1 ? "" : "s"} moved${r.missing.length ? `, ${r.missing.length} could not be refreshed` : ""}`, sent: r.sent, teams: r.teams };
+  writeResend(slate, { at: new Date(nowMs).toISOString(), pull: inputs.basis?.pull ?? null, status: "sent", why: null, teams: r.teams, sent: r.sent, usage_state: usage.state, usage_message: usage.message ?? null, missing: r.missing, stored: r.stored, base_note: note });
+  return { status: "ok", note: `${r.teams.length} held team${r.teams.length === 1 ? "" : "s"} re-sent, ${r.sent} number${r.sent === 1 ? "" : "s"} moved${r.missing.some((m) => !m.kind) ? `, ${r.missing.filter((m) => !m.kind).length} could not be refreshed` : ""}`, sent: r.sent, teams: r.teams };
 }

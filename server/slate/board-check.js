@@ -112,9 +112,22 @@ const HELD_WHY = "a held team's send number comes from the console's scenario ma
 
 /** Check 3b: held teams' send numbers are only as current as the last resend. Names, by team, what was not refreshed and why (G62); `resend`: { record, problem, held, currentPull } from board-check-route.js. */
 function checkResend(players, c, resend) {
-  const { un, auto, held } = c;
+  const { un, ex, auto, held } = c;
   if (resend?.locked === true) return; // after lock nothing is re-sent; the last record is final and "locked" is not an unchecked state
   if (resend?.problem && !held.size) { un.add("stored_override", `held teams, if any, cannot be told: ${resend.problem}`); return; }
+  const last = resend?.record;
+  // R4 (11-17; review round 2): what the last pass, sent or blocked, said about held teams (G62). His own choices (a pin, a flip, TwoGun's minutes, his figure over a Console pin) are left-out
+  // lines; a disagreement between the Console and the engine or his own call, and a number not refreshed, are unchecked lines, so the self-check is not green while they stand.
+  if (last && !last.problem && !(last.status === "blocked" && last.why === "the slate is locked")) {
+    for (const s of last.stored ?? []) if (held.has(s.team)) (s.kind === "choice" ? ex : un).add("stored_override", s.blank ? `${s.team}'s numbers are left as they were, because ${s.why}` : `${s.team} shows the Console's numbers, not the engine's, because ${s.why}`, s.team);
+    if (last.base_note) ex.add("stored_override", `at the last resend ${last.base_note}`); // review round 4: what the resend compared with, when it was not plainly the engine's board
+    for (const m of (last.missing ?? []).filter((x) => held.has(x.team))) {
+      if (m.kind === "blank") continue; // the team's own stored line says it
+      if (m.kind === "his") ex.add("stored_override", m.why, `${m.name} (${m.team})`);
+      else if (m.kind === "disagree") un.add("stored_override", m.why, `${m.name} (${m.team})`);
+      else un.add("stored_override", `a held man the last resend could not refresh keeps his earlier number: ${m.why}`, `${m.name} (${m.team})`);
+    }
+  }
   const withNumbers = (teams) => players.filter((p) => teams.includes(p.team) && (auto.proj.has(String(p.dk_id)) || auto.min.has(String(p.dk_id)))).length;
   const teams = [...held].sort().filter((t) => withNumbers([t]) > 0);
   if (!teams.length) return;
@@ -126,7 +139,6 @@ function checkResend(players, c, resend) {
   else {
     if (resend.currentPull && rec.pull !== resend.currentPull) un.add("stored_override", `held teams' numbers were last re-sent against pull ${rec.pull ?? "unknown"}, but the board is on pull ${resend.currentPull}`, teams.join(","), n);
     if (rec.usage_state && rec.usage_state !== "ready") un.add("stored_override", `the usage table was ${rec.usage_state} at the last resend${rec.usage_message ? ` (${rec.usage_message})` : ""}, so scenario numbers that need it were not refreshed`, teams.join(","), n);
-    for (const m of rec.missing ?? []) un.add("stored_override", `a held man the last resend could not refresh keeps his earlier number: ${m.why}`, `${m.name} (${m.team})`);
   }
 }
 

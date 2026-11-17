@@ -127,18 +127,18 @@ async function handleApply(req, res, slate, ctx) {
     if (read.body.basis !== plan.basis) return ctx.fail(res, 409, "CONSOLE_MOVED", "The numbers moved since the preview, so nothing was sent. Look again.");
     // A page that read the scenarios file before GitHub's data came down (or another page wrote) must not send over what is there now.
     if (Object.hasOwn(read.body, "file_base") && (read.body.file_base ?? null) !== (file.his_at ?? null)) return ctx.fail(res, 409, "CHANGED_ELSEWHERE", "Your saved work changed since this page read it (another page, or the other computer's work came down), so nothing was sent.");
-    if (!plan.changes.length && !plan.min_moves && !plan.flag_moves) {
+    if (!plan.changes.length && !plan.min_moves && !plan.flag_moves && !plan.dropped) {
       if (plan.holds) writeScenarios(slate, { ...file, applied: applyRecord(plan, overrides, file.applied, new Date(ctx.now()).toISOString()).applied }, { his }); // no number moved, but the mark is held: only the record is written
       const held = plan.holds ? readScenarios(slate).applied : file.applied;
       const now = shown();
       if (!now) return;
-      return ctx.send(res, 200, { applied: appliedView(held, overrides), changed: 0, min_changed: 0, refused: plan.refused, players: now, his_at: readScenarios(slate).his_at ?? null });
+      return ctx.send(res, 200, { applied: appliedView(held, overrides), changed: 0, min_changed: 0, refused: plan.refused, missing: plan.missing, players: now, his_at: readScenarios(slate).his_at ?? null });
     }
     const rec = applyRecord(plan, overrides, file.applied, new Date(ctx.now()).toISOString());
     const written = writeApply(slate, file, overrides, rec, players, his);
     const now = shown();
     if (!now) return;
-    ctx.send(res, 200, { applied: appliedView(rec.applied, written), changed: plan.changes.length, min_changed: plan.min_moves, refused: plan.refused, players: now, his_at: his ?? file.his_at ?? null });
+    ctx.send(res, 200, { applied: appliedView(rec.applied, written), changed: plan.changes.length, min_changed: plan.min_moves, refused: plan.refused, missing: plan.missing, players: now, his_at: his ?? file.his_at ?? null });
   } catch (e) {
     if (!answerFileError(res, ctx, slate, e)) throw e;
   }

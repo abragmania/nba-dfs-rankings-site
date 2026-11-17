@@ -28,7 +28,7 @@ export function orphanText(o) {
  *  (pins on a scenario not on show; a man Out tonight whom the scenario has playing). */
 export function planNotesList(plan) {
   return [
-    ...(plan.missing ?? []).map((m) => ({ team: m.team, text: `${m.name} has no projection here (${m.why})` })),
+    ...(plan.missing ?? []).map((m) => (m.kind ? { team: m.team, text: m.why, note_only: m.kind !== "blank" } : { team: m.team, text: `${m.name} has no projection here (${m.why})` })), // kind (console-apply.js, R4 11-17): blank (the team was not sent), disagree, his: said in their own words
     ...(plan.kept ?? []).map((k) => ({ team: k.team, text: `${k.name} keeps the projection you typed on the board (${k.typed})` })),
     ...(plan.not_on_board ?? []).map((m) => ({ team: m.team, text: `${m.name} is not on the board, so nothing is sent for him` })),
     ...(plan.back_on_zero ?? []).map((m) => ({ team: m.team, text: `${m.name} is back on 0 minutes` })),

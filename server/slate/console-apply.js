@@ -3,12 +3,12 @@
 import crypto from "../../site/shim/crypto.js";
 import { keyOf, outsOf, scenario, teamFor, emptyPins } from "../board/console-engine.js";
 import { hasPins, label, pinsSame, tableName } from "../board/console-model.js";
-import { effectiveProjection, mergeOverrides } from "./overrides.js";
+import { effectiveProjection, mergeOverrides, MIN_TOL } from "./overrides.js";
 import { PROJ_MAX } from "../board/override-limits.js";
 import { isNum, isPlain, round2, tonightRate } from "../board/figures.js";
 import { validKey, heldTeams } from "./scenarios.js";
 import { newsOwned } from "../board/console-marks.js";
-import { defaultSourceOf } from "../board/depth-chart.js";
+import { defaultSourceOf, MINUTE_SOURCES } from "../board/depth-chart.js";
 
 /** Why no send goes out while the projection setting cannot be read (buildInputs gives source_default "unknown"): the board is blank then, so TwoGun's minutes must not be sent onto it. Null otherwise. */
 export const SOURCE_UNKNOWN_WHY = "the projection setting could not be read, so the board shows no projections and nothing is sent until it is fixed";
@@ -108,10 +108,26 @@ function flagNewsOuts(plan, ctx, file, only) {
   }
 }
 
-/** One man's scenario minutes into the plan when the board shows otherwise: 1 if they move, else 0. Back on the slate's own figure removes the entry. Each man goes, however small, so the board holds the scenario's minutes exactly. */
-function planMinutes(plan, r, ctx, his) {
+/**
+ * One man's scenario minutes into the plan when the board shows otherwise: 1 if they move, else 0. Back on the slate's own figure removes the entry. Each man goes, however small, so the board holds the scenario's minutes exactly.
+ * R4 (Adam 11-17, 3:28 PM): no send freezes a number the live figure already gives. `close`: every man of the team is within MIN_TOL of the board's own figure (planTeam), so a man he did not
+ * type gets no stored number and a stored one comes off, and the board follows each new pull, news read and engine change by itself. Otherwise every figure that differs is stored, as before,
+ * so the team's sum is the scenario's exactly. His typed minutes (pins.m) are stored whatever they are. `keep`: a projection stands stored on him (projStored), so his minutes are stored too.
+ */
+function planMinutes(plan, r, ctx, his, close = false, keep = false) {
   if (!isNum(r.min)) return 0;
   const to = Math.round(r.min * 1000) / 1000, base = ctx.base.get(r.id).minutes, typed = ctx.overrides.min?.[r.id];
+  if (keep && !r.out) { // review round 2, finding 4: a man whose projection stands stored keeps the minutes it was made on, so a pull cannot move one without the other
+    if (typed !== undefined && Math.abs(to - typed) < MIN_FLOOR) { setAuto(plan, ctx, "min", r.id, his, true); return 0; }
+    plan.min[r.id] = to;
+    setAuto(plan, ctx, "min", r.id, his);
+    return 1;
+  }
+  if (close && !r.pinned?.m) {
+    if (typed === undefined) return 0;
+    plan.min[r.id] = null;
+    return 1;
+  }
   if (Math.abs(to - (typed ?? base ?? Infinity)) < MIN_FLOOR) { if (typed !== undefined) setAuto(plan, ctx, "min", r.id, his, true); return 0; }
   if (typed === undefined && !isNum(base) && to === 0) return 0;
   plan.min[r.id] = isNum(base) && Math.abs(to - base) < MIN_FLOOR ? null : to;
@@ -125,11 +141,44 @@ function missingWhy(r, man) {
   return min ? min.slice(5) : Object.values(man.missing)[0] ?? "no projection";
 }
 
-/** One team's moves into the plan. A hand-typed board number with no pin in this scenario, not one an Apply set, stays and is listed as kept. */
+/** One man's scenario projection into the plan (the send's projection rules, Adam 11-07 and 11-09). `r.proj` is the figure to send; null names why it is missing. */
+function planProj(plan, ctx, t, man, r, his, hasPin) {
+  const typedNow = ctx.overrides.proj?.[r.id], earlier = ctx.applied?.set?.[r.id];
+  const fromApply = earlier?.to === typedNow;
+  const from = ctx.board.get(r.id).projection, baseProj = ctx.base.get(r.id).projection;
+  // An Out (Apply's 0) took what was on the board, and he is back in: it comes back as it stood, his typed number or the slate's own (Adam, 11-09).
+  if (r.proj === null) {
+    if (earlier && fromApply && earlier.to === 0 && !r.out) return restoreProj(plan, man, t, earlier, ctx); // no model figure now, so nothing else would take the 0 away
+    if (typedNow !== undefined && fromApply) setAuto(plan, ctx, "proj", r.id, his, true); // an Out's 0 stays on the board: marked his only if he marked the Out
+    const held = earlier && ctx.overrides.proj?.[r.id] === earlier.to ? `; his earlier applied projection ${earlier.to} is still on the board` : "";
+    plan.missing.push({ name: man.name, team: t.code, why: `${missingWhy(r, man)}${held}` });
+    return;
+  }
+  const to = round2(Math.max(0, Math.min(PROJ_MAX, r.proj)));
+  if (earlier && fromApply && earlier.to === 0 && earlier.prev !== null && !hasPin && !r.out) return restoreProj(plan, man, t, earlier, ctx);
+  if (earlier && fromApply && !hasPin && !r.out && isNum(baseProj) && Math.abs(to - baseProj) < MOVE_FLOOR) {
+    // Back on the slate's own figure with no mark of his on him (an undo chip): the typed number comes off and he is on the live figure the chip
+    // showed, never an older typed number from before an Apply (Adam, 11-07: one undo-chip rule).
+    return restoreProj(plan, man, t, { ...earlier, prev: null }, ctx);
+  }
+  const after = effectiveProjection(baseProj, to, ctx.overrides.bump?.[r.id] ?? 0);
+  if (isNum(from) && Math.abs(after - from) < MOVE_FLOOR) { if (typedNow !== undefined && fromApply) setAuto(plan, ctx, "proj", r.id, his, true); plan.unchanged++; return; }
+  if (typedNow !== undefined && !fromApply && !hasPin && !r.out) { plan.kept.push({ id: r.id, name: man.name, team: t.code, typed: typedNow, would: to }); return; }
+  plan.typed[r.id] = to;
+  setAuto(plan, ctx, "proj", r.id, his);
+  plan.changes.push({ id: r.id, name: man.name, short: tableName(shapedTeam(t), man), team: t.code, from: from ?? null, to: after, move: isNum(from) ? round2(after - from) : null });
+}
+
+/** Whether a projection stands stored on him once this plan is written (a send's number or his own): then his minutes are stored with it, never left to the engine alone (R4, review round 2). */
+const projStored = (plan, ctx, id) => { const v = Object.hasOwn(plan.typed, id) ? plan.typed[id] : ctx.overrides.proj?.[id]; return v !== undefined && v !== null; };
+
+/** One team's moves into the plan. A hand-typed board number with no pin in this scenario, not one an Apply set, stays and is listed as kept. On our engine a man on his own call or the engine's Out follows the engine (followEngine). */
 function planTeam(plan, t, rec, key, ctx) {
   const pins = rec?.pins?.[key] ?? emptyPins();
   const res = scenario(teamFor({ ...t, source_default: ctx.dflt }, rec), outsOf(key), pins);
   const before = plan.changes.length;
+  const onBoard = (r) => ctx.board.has(r.id) && t.men.find((p) => p.id === r.id)?.board;
+  const close = res.rows.filter(onBoard).every((r) => r.pinned?.m || pageTyped(ctx.base.get(r.id)) !== null || (isNum(r.min) && isNum(ctx.base.get(r.id).minutes) && Math.abs(r.min - ctx.base.get(r.id).minutes) <= MIN_TOL));
   let minMoves = 0;
   for (const r of res.rows) {
     const man = t.men.find((p) => p.id === r.id);
@@ -142,61 +191,176 @@ function planTeam(plan, t, rec, key, ctx) {
     }
     ctx.men.set(r.id, { man, t });
     const his = isHis(rec, key, pins, r, t);
-    minMoves += planMinutes(plan, r, ctx, his);
-    const typedNow = ctx.overrides.proj?.[r.id], earlier = ctx.applied?.set?.[r.id];
-    const fromApply = earlier?.to === typedNow;
-    const from = ctx.board.get(r.id).projection, baseProj = ctx.base.get(r.id).projection;
-    // An Out (Apply's 0) took what was on the board, and he is back in: it comes back as it stood, his typed number or the slate's own (Adam, 11-09).
-    const backFromOut = () => {
-      const back = effectiveProjection(baseProj, earlier.prev, ctx.overrides.bump?.[r.id] ?? 0);
-      plan.typed[r.id] = earlier.prev;
-      plan.restoring.add(r.id);
-      plan.changes.push({ id: r.id, name: man.name, short: tableName(shapedTeam(t), man), team: t.code, from: from ?? null, to: back ?? null, move: isNum(from) && isNum(back) ? round2(back - from) : null });
-    };
-    if (r.proj === null) {
-      if (earlier && fromApply && earlier.to === 0 && !r.out) { backFromOut(); continue; } // no model figure now, so nothing else would take the 0 away
-      if (typedNow !== undefined && fromApply) setAuto(plan, ctx, "proj", r.id, his, true); // an Out's 0 stays on the board: marked his only if he marked the Out
-      const held = earlier && ctx.overrides.proj?.[r.id] === earlier.to ? `; his earlier applied projection ${earlier.to} is still on the board` : "";
-      plan.missing.push({ name: man.name, team: t.code, why: `${missingWhy(r, man)}${held}` });
-      continue;
-    }
-    const hasPin = ["m", "u", "d", "p", "r"].some((k) => Object.hasOwn(pins[k] ?? {}, r.id));
-    const to = round2(Math.max(0, Math.min(PROJ_MAX, r.proj)));
-    if (earlier && fromApply && earlier.to === 0 && earlier.prev !== null && !hasPin && !r.out) { backFromOut(); continue; }
-    if (earlier && fromApply && !hasPin && !r.out && isNum(baseProj) && Math.abs(to - baseProj) < MOVE_FLOOR) {
-      // Back on the slate's own figure with no mark of his on him (an undo chip): the typed number comes off and he is on the live figure the chip
-      // showed, never an older typed number from before an Apply (Adam, 11-07: one undo-chip rule).
-      const back = effectiveProjection(baseProj, null, ctx.overrides.bump?.[r.id] ?? 0);
-      plan.typed[r.id] = null;
-      plan.restoring.add(r.id);
-      plan.changes.push({ id: r.id, name: man.name, short: tableName(shapedTeam(t), man), team: t.code, from: from ?? null, to: back ?? null, move: isNum(from) && isNum(back) ? round2(back - from) : null });
-      continue;
-    }
-    const after = effectiveProjection(baseProj, to, ctx.overrides.bump?.[r.id] ?? 0);
-    if (isNum(from) && Math.abs(after - from) < MOVE_FLOOR) { if (typedNow !== undefined && fromApply) setAuto(plan, ctx, "proj", r.id, his, true); plan.unchanged++; continue; }
-    if (typedNow !== undefined && !fromApply && !hasPin && !r.out) { plan.kept.push({ id: r.id, name: man.name, team: t.code, typed: typedNow, would: to }); continue; }
-    plan.typed[r.id] = to;
-    setAuto(plan, ctx, "proj", r.id, his);
-    plan.changes.push({ id: r.id, name: man.name, short: tableName(shapedTeam(t), man), team: t.code, from: from ?? null, to: after, move: isNum(from) ? round2(after - from) : null });
+    const followed = followEngine(plan, ctx, t, man, r, pins, his);
+    if (followed !== null) { minMoves += followed; continue; }
+    planProj(plan, ctx, t, man, r, his, ["m", "u", "d", "p", "r"].some((k) => Object.hasOwn(pins[k] ?? {}, r.id)));
+    const kept = projStored(plan, ctx, r.id);
+    minMoves += planMinutes(plan, r, ctx, his, close && !kept, kept);
   }
   return { moves: plan.changes.length - before, min_moves: minMoves, totals: res.totals };
 }
 
-/** A team he has moved back to Tonight, with no pins: each man an earlier Apply set, whose typed number is still that one, goes back to what he had.
- *  Only a team with an applied key has been moved back: a record with none, written before keys were kept, is left for Reverse. */
+/** An engine-Out man's projection on the send: 0 in place of any other number (his typed one included), the number held in applied.set to come back when he plays. 1 when it moves. */
+function zeroOut(plan, ctx, t, man, his) {
+  const typedNow = ctx.overrides.proj?.[man.id], set = ctx.applied?.set?.[man.id];
+  if (typedNow === undefined) return 0; // the engine's own 0
+  if (typedNow === 0) { if (set?.to === 0) setAuto(plan, ctx, "proj", man.id, his, true); return 0; }
+  const from = ctx.board.get(man.id).projection;
+  plan.typed[man.id] = 0;
+  setAuto(plan, ctx, "proj", man.id, his);
+  plan.changes.push({ id: man.id, name: man.name, short: tableName(shapedTeam(t), man), team: t.code, from: from ?? null, to: 0, move: isNum(from) ? round2(-from) : null });
+  return 1;
+}
+
+const PIN_UNSENT = { m: "minutes", u: "usage", d: "DK/min" };
+/**
+ * R4 (Adam 11-17; review round 2): on the scenario's send, a man whose board figure is the engine's on his own call or the engine's Out follows the engine, never the Console. Null for a man
+ * the Console's numbers still decide; else the minutes moves. Engine Out: his stored minutes come off and his projection is 0 (zeroOut). His Minutes-page minutes, or his In against the
+ * Console's Out: his minutes are the engine's, a projection pin of his is still sent (p as typed; d times his engine minutes), an Apply's projection on him comes off, and any pin not sent
+ * is named in `missing`. Where the Console disagrees about him, that is named in `missing` too (G62).
+ */
+function followEngine(plan, ctx, t, man, r, pins, his) {
+  const p = ctx.base.get(r.id);
+  if (p?.proj_source !== "ours" || typeof p.ours?.playing !== "boolean") return null;
+  const page = pageTyped(p), engineOut = p.ours.playing === false, hisOut = engineOut && (p.his === "out" || p.ours.marks?.status?.by === "you");
+  if (!engineOut && page === null && (!r.out || p.his === "out")) return null; // review round 4: the engine playing a man the Console has Out on the news follows the engine (Adam 5:34 PM: "if he's IN -- projection"); his own Out stands
+  const note = (why) => plan.missing.push({ name: man.name, team: t.code, why, kind: "disagree" });
+  let moves = 0;
+  if (Object.hasOwn(ctx.overrides.min ?? {}, r.id)) { plan.min[r.id] = null; moves++; }
+  if (engineOut) {
+    zeroOut(plan, ctx, t, man, r.out ? his : hisOut);
+    if (!r.out) note(`${man.name} is Out ${hisOut ? "on his own call" : "in the engine"}, and the Console's numbers for his teammates have him playing`);
+    return moves;
+  }
+  const mins = p.ours.minutes, to = Object.hasOwn(pins.p ?? {}, r.id) ? pins.p[r.id] : Object.hasOwn(pins.d ?? {}, r.id) && isNum(mins) ? round2(mins * pins.d[r.id]) : undefined;
+  if (to !== undefined) planProj(plan, ctx, t, man, { ...r, out: false, proj: to }, his, true);
+  else { const set = ctx.applied?.set?.[r.id]; if (set && ctx.overrides.proj?.[r.id] === set.to) restoreProj(plan, man, t, set, ctx); }
+  const typedTonight = p.ours.marks?.minutes?.undo === true; // typed on the Minutes page tonight; a standing or look-back override of his has no undo there
+  const hisIn = p.his === "in", whose = page !== null ? `his ${typedTonight ? "Minutes-page" : "typed"} ${page} minutes on ${man.name}` : `${man.name} playing ${hisIn ? "on his own call" : "in the engine"}`;
+  for (const k of ["m", "u", "d"]) if (Object.hasOwn(pins[k] ?? {}, r.id) && !(k === "d" && to !== undefined && !Object.hasOwn(pins.p ?? {}, r.id))) plan.his_notes.push({ name: man.name, team: t.code, why: `${whose} stand${page !== null ? "" : "s"} over his Console ${PIN_UNSENT[k]} pin of ${pins[k][r.id]}${k === "u" ? "; the engine's DK/min stands" : ""}` });
+  if (r.out) note(page === null && !hisIn ? `the Console has ${man.name} Out and the engine has him playing; the board shows the engine's figures` : `the Console has ${man.name} Out, but ${whose} stand${page !== null ? "" : "s"}`);
+  return moves;
+}
+
+/** His Minutes-page minutes on a man (typed tonight or a standing override: the engine's mark is his), or null. The engine's figure is then his number, and no send stores one over it (R4, 11-17). */
+export function pageTyped(p) {
+  return p?.proj_source === "ours" && p.ours?.playing !== false && p.ours?.marks?.minutes?.by === "you" && isNum(p.ours.minutes) ? p.ours.minutes : null;
+}
+
+const PIN_WORDS = { m: "minutes", u: "a usage", d: "a DK/min", p: "a projection" };
+/** Whether a role the news flipped a man to is the role the engine gives him: Starter for Starter, any bench tier for a bench flip, not playing (or 0 minutes) for out of rotation.
+ *  The news writes no "out" flip (console-card.js: an Out is a scenario Out, kind "out"); one read here is taken as out of rotation. */
+const sameRole = (role, p) => (role === "starter" ? p?.ours?.tier === "starter" : role === "oor" || role === "out" ? p?.ours?.playing === false || p?.ours?.minutes === 0 : p?.ours?.playing === true && p.ours.tier !== "starter");
+
+/**
+ * R4 (Adam 11-17, 3:28 PM: board minutes are the current engine plus the current news; no send freezes a number; only his typed minutes stand as typed): a held team whose scenario is only
+ * the news, on our engine, is the engine itself, which reads the same news and is worked again on every read. { ok, why }: ok when the team feeds the optimizer from Ours (or Ours + my edits),
+ * he has no pin on the scenario and no role flip of his own (a flip the news made counts only where the engine gives him another role), the board's base is the engine's for every man on it,
+ * and the scenario's Outs are the men the engine has not playing (a man the engine has In or Out on his own call, Minutes page or Console, agrees whatever the scenario says).
+ * Otherwise `why` names the first difference as a clause ("because <why>") and `kind` says whose it is: "choice" (his pin, his own flip, TwoGun's minutes chosen; the foot's left-out lines)
+ * or "conflict" (the engine and the Console disagree, or the engine gave no figures; the foot's unchecked lines, so the self-check is not green). Only marks on men on the team and playing
+ * in the scenario count, as the scenario itself reads them (console-engine.js pinsOnPlaying).
+ */
+export function engineOwns(t, rec, key, ctx) {
+  const choice = (why) => ({ ok: false, why, kind: "choice", notes: [] });
+  const src = MINUTE_SOURCES.includes(rec?.source) ? rec.source : ctx.dflt;
+  if (src === "twogun") return choice(MINUTE_SOURCES.includes(rec?.source) ? "he set its Optimizer minutes to TwoGun" : "the board's projection setting is TwoGun, so its Optimizer minutes are TwoGun's by default");
+  const outs = new Set(outsOf(key)), name = (id) => t.men.find((m) => m.id === id)?.name ?? id;
+  const onBoard = t.men.map((m) => [m, ctx.base.get(m.id)]).filter(([, p]) => p); // a man off the board (TwoGun's Out list) carries no figure either way
+  if (onBoard.some(([, p]) => p.proj_source === "twogun")) return choice("he set its Optimizer minutes to Ours on a board that shows TwoGun's projections");
+  if (onBoard.some(([, p]) => p.proj_source !== "ours")) return { ok: false, why: "the board's players carry no figures from our engine", kind: "conflict", notes: [] }; // no engine wired (a caller with no ourPlayers): the Console's numbers are sent, and the check is not green
+  // review round 3: an engine with no figures for the team fails closed (nothing planned, stripped or written; the key stays), never a switch to the Console's numbers
+  if (!onBoard.length) return { ok: false, blank: true, kind: "conflict", why: "none of its men is on the board", notes: [] };
+  const blank = engineBlank(t, ctx);
+  if (blank) return { ok: false, blank: true, kind: "conflict", why: blank, notes: [] };
+  const live = (sec) => Object.entries(sec ?? {}).filter(([id]) => t.men.some((m) => m.id === id) && !outs.has(id));
+  const pins = rec?.pins?.[key] ?? {};
+  for (const k of ["m", "u", "d", "p"]) { const [hit] = live(pins[k]); if (hit) return choice(`he pinned ${PIN_WORDS[k]} on ${name(hit[0])} in the Console`); }
+  // his usage hand-outs for a sitter of his (not on Tonight) and his combined ones: the scenario's usage reads them, the engine does not (console-engine.js usageFor)
+  const sitter = [...outs].find((id) => !t.tonight.includes(id) && Object.keys(rec?.handouts?.[id]?.u ?? {}).length);
+  if (sitter) return choice(`he set usage hand-outs for ${name(sitter)} in the Console`);
+  if (outs.size >= 2 && Object.keys(rec?.combos?.[keyOf([...outs])]?.u ?? {}).length) return choice(`he set combined usage hand-outs for ${[...outs].map(name).join(" + ")} in the Console`);
+  const newsFlips = newsOwned(newsView(rec, key)).r, notes = [];
+  for (const [id, role] of live(pins.r)) {
+    if (!newsFlips.has(id)) return choice(`he flipped ${name(id)}'s role in the Console`);
+    if (!sameRole(role, ctx.base.get(id))) notes.push({ name: name(id), why: `the news flipped ${name(id)} to ${role.replace("_", " ")} in the Console, a role the engine does not give him; the board shows the engine's figures`, kind: "disagree" });
+  }
+  // review round 3: a man the engine has no row for is skipped and named; an Out the Console and the engine disagree on, not his call, follows the engine ("engine plus news") and is named
+  for (const [man, p] of onBoard) {
+    if (typeof p.ours?.playing !== "boolean") { notes.push({ name: man.name, why: `the engine has no figures for him${p.ours?.missing ? ` (${p.ours.missing})` : ""}, so his earlier numbers stand` }); continue; }
+    const engineOut = p.ours.playing === false;
+    if (engineOut !== outs.has(man.id) && p.his !== (engineOut ? "out" : "in")) notes.push({ name: man.name, why: engineOut ? `the engine has ${man.name} Out and the Console has him playing; the board shows the engine's figures` : `the Console has ${man.name} Out and the engine has him playing; the board shows the engine's figures`, kind: "disagree" });
+  }
+  return { ok: true, why: null, kind: null, notes };
+}
+
+/** An Apply record on a man whose typed number is gone (he cleared it on the board): the record is dropped, so it holds no team and restores nothing later (review round 3). True when dropped.
+ *  Counted in plan.dropped, never as a moved number (review round 4): the send writes for it, and no note says a number moved. */
+function dropGone(plan, ctx, t, man) {
+  if (!ctx.applied?.set?.[man.id] || ctx.overrides.proj?.[man.id] !== undefined) return false;
+  plan.typed[man.id] = null; // nothing to remove on the board; applyRecord drops the set entry of a man restoring
+  plan.restoring.add(man.id);
+  plan.dropped++;
+  return true;
+}
+
+/** No engine figures for the team: why, or null. Only a board on our engine is judged; a man off the board carries no figure either way (review rounds 3 and 4). */
+function engineBlank(t, ctx) {
+  const onBoard = t.men.map((m) => ctx.base.get(m.id)).filter((p) => p && p.proj_source === "ours");
+  if (!onBoard.length || onBoard.some((p) => typeof p.ours?.playing === "boolean")) return null;
+  return `the engine has no figures for its men${onBoard[0].ours?.missing ? ` (${onBoard[0].ours.missing})` : ""}`;
+}
+
+/** An earlier Apply's projection on a man comes off: he goes back to what he had (his typed number, or the board's own). */
+function restoreProj(plan, man, t, set, ctx) {
+  const after = effectiveProjection(ctx.base.get(man.id).projection, set.prev, ctx.overrides.bump?.[man.id] ?? 0);
+  const from = ctx.board.get(man.id).projection;
+  plan.typed[man.id] = set.prev;
+  plan.restoring.add(man.id);
+  plan.changes.push({ id: man.id, name: man.name, short: tableName(shapedTeam(t), man), team: t.code, from: from ?? null, to: after ?? null, move: isNum(from) && isNum(after) ? round2(after - from) : null });
+}
+
+/**
+ * A team he has moved back to Tonight, with no pins: each man an earlier Apply set, whose typed number is still that one, goes back to what he had. A man our engine has Out shows 0 instead
+ * (zeroOut; the number held in applied.set) and makes the team `held`, not undone, so its applied key stays and his number comes back when he plays (review round 2, finding 1).
+ * Only a team with an applied key has been moved back: a record with none, written before keys were kept, is left for Reverse.
+ */
 function undoTeam(plan, t, ctx) {
-  if (!Object.hasOwn(ctx.applied?.keys ?? {}, t.code)) return { moves: 0, min_moves: 0 };
+  if (!Object.hasOwn(ctx.applied?.keys ?? {}, t.code)) return { moves: 0, min_moves: 0, held: false };
+  let moves = 0, minMoves = 0, held = false;
+  for (const man of t.men) {
+    ctx.men.set(man.id, { man, t });
+    const set = ctx.applied?.set?.[man.id], p = ctx.base.get(man.id);
+    if (p?.proj_source === "ours" && typeof p.ours?.playing !== "boolean") continue; // no engine row for him: whether he plays is unknown, so his numbers stand (review round 4)
+    if (Object.hasOwn(ctx.overrides.min ?? {}, man.id)) { plan.min[man.id] = null; minMoves++; }
+    if (!ctx.board.has(man.id)) continue;
+    if (dropGone(plan, ctx, t, man)) { moves++; continue; }
+    if (p?.ours?.playing === false && (set || (ctx.overrides.proj?.[man.id] ?? 0) !== 0)) { moves += zeroOut(plan, ctx, t, man, p.his === "out"); held = true; continue; }
+    if (!set || ctx.overrides.proj?.[man.id] !== set.to) continue;
+    restoreProj(plan, man, t, set, ctx);
+    moves++;
+  }
+  return { moves, min_moves: minMoves, held };
+}
+
+/**
+ * A held team engineOwns names (R4, 11-17): every stored minutes figure comes off, so the board is the engine's. A man the engine has Out shows 0: a projection on him (his typed one
+ * included) becomes the send's 0, its earlier number held in applied.set (applyRecord) to come back when he plays. A man playing goes back to what an earlier Apply took from him; a number
+ * he typed on the board, with no Apply on it, stands.
+ */
+function engineTeam(plan, t, ctx) {
   let moves = 0, minMoves = 0;
   for (const man of t.men) {
     ctx.men.set(man.id, { man, t });
+    const p = ctx.base.get(man.id);
+    if (p && typeof p.ours?.playing !== "boolean") continue; // no engine row for him: his numbers stand, and engineOwns named him (review round 3)
     if (Object.hasOwn(ctx.overrides.min ?? {}, man.id)) { plan.min[man.id] = null; minMoves++; }
-    const set = ctx.applied?.set?.[man.id];
-    if (!set || ctx.overrides.proj?.[man.id] !== set.to || !ctx.board.has(man.id)) continue;
-    const after = effectiveProjection(ctx.base.get(man.id).projection, set.prev, ctx.overrides.bump?.[man.id] ?? 0);
-    const from = ctx.board.get(man.id).projection;
-    plan.typed[man.id] = set.prev;
-    plan.restoring.add(man.id);
-    plan.changes.push({ id: man.id, name: man.name, short: tableName(shapedTeam(t), man), team: t.code, from: from ?? null, to: after ?? null, move: isNum(from) && isNum(after) ? round2(after - from) : null });
+    if (!p || !ctx.board.has(man.id)) continue;
+    if (dropGone(plan, ctx, t, man)) { moves++; continue; }
+    const typedNow = ctx.overrides.proj?.[man.id], set = ctx.applied?.set?.[man.id];
+    if (p.ours.playing === false) { moves += zeroOut(plan, ctx, t, man, p.his === "out"); continue; }
+    if (!set || typedNow !== set.to) continue;
+    restoreProj(plan, man, t, set, ctx);
     moves++;
   }
   return { moves, min_moves: minMoves };
@@ -237,25 +401,44 @@ export function planApply(inputs, file, overrides, players, keys, only = null) {
     board: new Map(mergeOverrides(players, overrides, { held: heldTeams(file) }).map((p) => [String(p.dk_id), p])),
     base: new Map(players.map((p) => [String(p.dk_id), p])),
   };
-  const plan = { changes: [], typed: {}, min: {}, auto: { proj: {}, min: {} }, flag_ids: new Set(), restoring: new Set(), teams: [], refused: [], kept: [], missing: [], clamped: [], back_on_zero: [], not_on_board: [], back_in: [], unchanged: 0 };
+  const plan = { changes: [], typed: {}, min: {}, auto: { proj: {}, min: {} }, flag_ids: new Set(), restoring: new Set(), teams: [], refused: [], kept: [], missing: [], his_notes: [], dropped: 0, clamped: [], back_on_zero: [], not_on_board: [], back_in: [], unchanged: 0 };
   for (const t of Object.values(inputs.teams)) {
     if (only && !only.has(t.code)) continue; // a team not asked for is not planned, sent or undone (the console sends only the teams he changed)
     const rec = Object.hasOwn(file.teams, t.code) ? file.teams[t.code] : null, key = keys[t.code], tonight = keyOf(t.tonight);
     const name = label(shapedTeam(t), key);
     const ownSource = Boolean(rec?.source) && rec.source !== ctx.dflt; // a source other than the board's default feeds the optimizer here, so Tonight with no pins is still a send
+    const blankFirst = engineBlank(t, ctx); // review round 4: a team with no engine figures is held as it stands, before any undo could restore a number onto a man Out
+    if (blankFirst && (Object.hasOwn(file.applied?.keys ?? {}, t.code) || key !== tonight || hasPins(rec?.pins?.[key]) || ownSource)) {
+      plan.teams.push({ team: t.code, key, tonight, name, moves: 0, min_moves: 0, min_total: null, held: true, blank: true, stored_why: blankFirst, stored_kind: "conflict" });
+      plan.missing.push({ name: t.code, team: t.code, why: `${t.code} was not sent: ${blankFirst}`, kind: "blank" });
+      continue;
+    }
     if (key === tonight && !hasPins(rec?.pins?.[key]) && !ownSource) {
-      const { moves, min_moves } = undoTeam(plan, t, ctx);
-      if (moves || min_moves) plan.teams.push({ team: t.code, key, tonight, name, moves, min_moves, min_total: null, undone: true });
+      const { moves, min_moves, held } = undoTeam(plan, t, ctx);
+      if (held) plan.teams.push({ team: t.code, key, tonight, name, moves, min_moves, min_total: null, held: true }); // a man our engine has Out still holds an Apply number: the key stays until he plays (review round 2)
+      else if (moves || min_moves) plan.teams.push({ team: t.code, key, tonight, name, moves, min_moves, min_total: null, undone: true });
+      continue;
+    }
+    const owns = engineOwns(t, rec, key, ctx);
+    for (const n of owns.notes) plan.missing.push({ name: n.name, team: t.code, why: n.why, ...(n.kind ? { kind: n.kind } : {}) });
+    if (owns.blank) { // review round 3: no engine figures for the team: nothing planned, stripped or written, the key kept, and the foot says why (unchecked)
+      plan.teams.push({ team: t.code, key, tonight, name, moves: 0, min_moves: 0, min_total: null, held: true, blank: true, stored_why: owns.why, stored_kind: owns.kind });
+      plan.missing.push({ name: t.code, team: t.code, why: `${t.code} was not sent: ${owns.why}`, kind: "blank" }); // the page's preview and Apply answer say it (G62)
+      continue;
+    }
+    if (owns.ok) { // held on the news (and engine-vs-Console differences that are not his call, named): what an earlier send stored comes off and the board is the engine's (R4, 11-17)
+      const { moves, min_moves } = engineTeam(plan, t, ctx);
+      plan.teams.push({ team: t.code, key, tonight, name, moves, min_moves, min_total: null, held: true, engine: true });
       continue;
     }
     const { moves, min_moves, totals } = planTeam(plan, t, rec, key, ctx);
-    plan.teams.push({ team: t.code, key, tonight, name, moves, min_moves, min_total: totals.min, held: true });
+    plan.teams.push({ team: t.code, key, tonight, name, moves, min_moves, min_total: totals.min, held: true, stored_why: owns.why, stored_kind: owns.kind }); // stored_why, stored_kind: why the board keeps the Console's numbers here, not the engine's (resend.json, board foot)
   }
   plan.min_moves = Object.keys(plan.min).length;
   flagNewsOuts(plan, ctx, file, only);
   plan.flag_moves = plan.flag_ids.size; // numbers left as they are whose "his or news's" mark changes: written, not counted as a move
   // A mark that moved no number is still held: the applied record names its team and scenario, so a reload sends it again and the header does not call it unsent.
-  plan.holds = plan.teams.some((t) => { const ak = file.applied?.keys?.[t.team], k = typeof ak === "string" ? ak : ak?.key; return t.held && k !== t.key; });
+  plan.holds = plan.teams.some((t) => { const ak = file.applied?.keys?.[t.team], k = typeof ak === "string" ? ak : ak?.key; return t.held && !t.blank && k !== t.key; });
   plan.changes.sort((a, b) => Math.abs(b.move ?? Infinity) - Math.abs(a.move ?? Infinity) || a.name.localeCompare(b.name));
   plan.rows = changedRows(plan, ctx);
   plan.orphaned_pins = orphanedPins(inputs, file, keys).filter((o) => !only || only.has(o.team));
@@ -292,6 +475,7 @@ export function applyRecord(plan, overrides, applied, atIso) {
   // rebased from that Tonight onto the current one, and only moving off it undoes it.
   const keys = { ...(applied?.keys ?? {}) };
   for (const t of plan.teams) {
+    if (t.blank) continue; // no engine figures: the key stays as it was (review round 3)
     if (t.undone) delete keys[t.team];
     else if (t.moves > 0 || t.min_moves > 0 || t.held || Object.hasOwn(keys, t.team)) keys[t.team] = { key: t.key, tonight: t.tonight };
   }
