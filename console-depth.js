@@ -1,6 +1,6 @@
 // The console's screen (Adam, 11-07: plain and readable, light, the team always obvious): a header with the team's logo, name, opponent and
 // tip; a team switcher with logos; then the Starters (the men starting, a position on every row), the Bench in rotation order and the men
-// Out, each row with his minutes, DK/min, projection, where his minutes come from, an S toggle and an Out toggle, and an undo chip on every
+// Out, each row with his minutes, DK/min, projection, TwoGun's minutes and projection, the basis of his minutes, an S toggle and an Out toggle, and an undo chip on every
 // mark he made. A side column holds the team total, the notes and which minutes feed the optimizer. Pure strings, tested in node.
 import { oursUse } from "./console-ours.js";
 import { esc, logo, nameOpen, consoleNameOpen } from "./board-util.js";
@@ -9,7 +9,7 @@ import { keyOf, outsOf } from "./console-engine.js";
 import { marksOf, liveText } from "./console-marks.js";
 import { MINUTE_SOURCES, SOURCE_LABEL, defaultSourceOf } from "./depth-chart.js";
 import { syncWords } from "./console-auto.js";
-import { noteCell, outNote, stripHtml } from "./console-news.js";
+import { nameChip, outNote, stripHtml } from "./console-news.js";
 import { absenceRow } from "./absence-view.js";
 
 export const TEAM_NAMES = {
@@ -30,31 +30,76 @@ const posRank = (p) => { const i = POS_ORDER.indexOf(pos0(p)); return i < 0 ? 99
 /** An undo chip: drops one mark; its text is the live figure, its hover says so. */
 const chip = (team, id, kind, mark, text) => `<button class="rv" type="button" data-undo="${kind}" data-id="${esc(id)}" data-team="${esc(team)}" title="${esc(`${mark.news ? `From the lineup news (${mark.news}). ` : ""}${liveText(kind, mark)}. Click to drop ${mark.news ? "it" : "your mark"}`)}">&#8634; ${esc(text)}</button>`;
 
-/** Where his minutes come from, as a source tag and words. */
+const SUFFIX = /^(?:jr\.?|sr\.?|ii|iii|iv|v)$/i;
+const lastName = (n) => { const w = String(n ?? "").trim().split(/\s+/); while (w.length > 1 && SUFFIX.test(w.at(-1))) w.pop(); return w.at(-1) ?? ""; };
+const poss = (n) => (/s$/i.test(n) ? `${n}'` : `${n}'s`);
+const ROLE_SHORT = { starter: "Starts", bench_plus: "Bench+", bench: "Bench" };
+const MINUS = "−";
+
+/**
+ * The Basis column's short words (Adam 2:02 PM 11-17: short words and the key number, one line): { text, delta } from the engine's label (tiers.js entry label, console-tier.js typed and override kinds);
+ * delta is the fill, trim or cap that moved him ("+1.4 fill", "−0.8 trim"), "" when none. null for no label. Pure.
+ */
+export function shortBasis(l) {
+  if (!l) return null;
+  const v = f1(l.value), g = isNum(l.n) && l.n > 0 ? ` (${l.n} g)` : "";
+  const words = {
+    starts: () => `Starts avg ${v}${g}`, paired: () => `${poss(lastName(l.name))} starts (${l.pos}) ${v}`, median: () => `Team starter avg ${v}`, spot: () => `Bench ${l.spot}: ${v}`, off_chart: () => `Off chart: ${v}`,
+    own: () => `${l.returning ? "Returning" : ROLE_SHORT[l.role] ?? "Own"} avg ${v}${g}`, chart: () => `Chart usual ${v}`, twogun: () => (v === null ? "TwoGun: none" : `TwoGun ${v}`), override: () => `Your usual ${v}`,
+    ov_minutes: () => `Your override ${v}`, typed: () => "Yours", none: () => "No figure",
+  }[l.kind];
+  if (!words) return null;
+  const delta = [l.fill > 0 ? `+${f1(l.fill)} fill` : "", l.trim > 0 ? `${MINUS}${f1(l.trim)} trim` : "", l.capped > 0 ? `${MINUS}${f1(l.capped)} cap` : ""].filter(Boolean).join(" ");
+  return { text: words(), delta: l.kind === "typed" ? "" : delta };
+}
+
+/** A row flag's short word (the full sentence goes in its tooltip). */
+const FLAG_WORD = { twogun_far_below: "TG far lower", no_starts_starter: "No starts", no_role_games: "No games", no_games_chart: "No games", no_figure: "Missing", not_matched: "Unmatched" };
+/** The worded chips after the Basis words: the row flag (and "TG far lower" when it rides on another flag's sentence), and "Limit N" for a cap override that holds him. */
+export function flagChips(flag, limit) {
+  const out = [];
+  if (flag) {
+    out.push({ word: FLAG_WORD[flag.kind] ?? "Check", cls: flag.kind === "twogun_far_below" ? "tgl-far" : "warn", title: flag.text });
+    if (flag.kind !== "twogun_far_below" && /TwoGun far lower/.test(flag.text ?? "")) out.push({ word: "TG far lower", cls: "tgl-far", title: flag.text });
+  }
+  if (isNum(limit)) out.push({ word: `Limit ${Number.isInteger(limit) ? limit : f1(limit)}`, cls: "lim", title: `Your cap override holds him at ${f1(limit)} minutes: no fill above it` });
+  return out;
+}
+
+/** Where his minutes come from: { tag (ch: the engine, tg: TwoGun's, you: typed), text, delta, title (the full why), chips }. */
 function basisOf(r, T, S) {
   const p = r.p;
-  if (r.pinned.m) return { tag: "you", word: "Yours", text: "minutes typed by you" };
-  if (r.min_from_ours || ((S.source ?? defaultSourceOf(T)) !== "twogun" && r.min_basis)) return { tag: "ch", word: "Tier", text: r.min_basis ?? "the minutes engine", flag: r.min_flag ?? null };
-  if (r.min_basis) return { tag: "tg", word: "Role", text: r.min_basis };
-  if (isNum(r.min) && isNum(p.min) && Math.abs(r.min - p.min) < 0.05) return { tag: "tg", word: "TwoGun", text: p.starter ? "TwoGun starter" : "TwoGun projection" };
+  if (r.pinned.m) return { tag: "you", text: "Yours", delta: "", title: "minutes typed by you", chips: [] };
+  if (r.min_from_ours || ((S.source ?? defaultSourceOf(T)) !== "twogun" && r.min_basis)) {
+    const s = shortBasis(r.min_label) ?? { text: "Minutes engine", delta: "" };
+    return { tag: "ch", ...s, title: r.min_basis ?? "the minutes engine", chips: flagChips(r.min_flag, r.min_label?.limit) };
+  }
+  if (r.min_basis) return { tag: "tg", text: "Role figure", delta: "", title: r.min_basis, chips: [] };
+  if (isNum(r.min) && isNum(p.min) && Math.abs(r.min - p.min) < 0.05) return { tag: "tg", text: "TwoGun", delta: "", title: p.starter ? "TwoGun starter" : "TwoGun projection", chips: [] };
   if (isNum(r.min) && isNum(p.min)) {
     const d = r.min - p.min, why = outsOf(keyOf(S.outs)).filter((id) => !T.tonight.includes(id)).map((id) => T.byId[id]?.name).filter(Boolean);
-    return { tag: "tg", word: "TwoGun", text: `TwoGun ${f1(p.min)}, ${d > 0 ? "+" : ""}${f1(d)} ${why.length ? `with ${why.join(", ")} out` : "with the men out shared"}` };
+    return { tag: "tg", text: `TwoGun ${f1(p.min)}`, delta: d > 0 ? `+${f1(d)} Outs` : `${MINUS}${f1(-d)}`, title: `TwoGun ${f1(p.min)}, ${d > 0 ? "+" : ""}${f1(d)} ${why.length ? `with ${why.join(", ")} out` : "with the men out shared"}`, chips: [] };
   }
-  return { tag: "tg", word: "TwoGun", text: p.missing?.min ?? "no minutes" };
+  return { tag: "tg", text: "No minutes", delta: "", title: p.missing?.min ?? "no minutes", chips: [] };
 }
+
+/** TwoGun's own figure for the TG Min and TG Proj columns: plain read-only text, a muted dash with the reason when missing. */
+const tgCell = (v, what, cls) => `<span class="tgv ${cls}">${isNum(v) ? f1(v) : `<span class="tgmiss" title="${esc(`TwoGun's board row has no ${what} for him`)}">—</span>`}</span>`;
 
 /** A typed number box (minutes or DK/min) with its undo chip slot. */
 function numBox(team, r, k, mark) {
   const v = k === "m" ? r.min : r.rate, shown = k === "m" ? f1(v) : f2(v);
   const label = k === "m" ? "minutes" : "DK points per minute";
   const box = `<input class="fin${mark ? " pin" : ""}" data-k="${k}" data-id="${esc(r.id)}" data-team="${esc(team)}" value="${shown ?? ""}" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="${esc(r.p.name)} ${label}" title="${mark ? "Your number. " : ""}Type his ${label}; Enter keeps it. Projection = minutes x DK/min"${shown === null ? ` placeholder="—"` : ""}>`;
-  return `<span class="nb">${box}<span class="cs">${mark ? chip(team, r.id, k, mark, k === "m" ? f1(mark.live) ?? "—" : f2(mark.live) ?? "—") : ""}</span></span>`;
+  return `<span class="nb nb-${k}">${box}<span class="cs">${mark ? chip(team, r.id, k, mark, k === "m" ? f1(mark.live) ?? "—" : f2(mark.live) ?? "—") : ""}</span></span>`;
 }
 
 const STATUS = (s) => String(s ?? "").trim();
 
-/** One man in the Starters or the Bench. N: the team's news (console-news.js teamNews) or null; his status and latest note have their own cell. */
+/**
+ * One man in the Starters or the Bench (Adam 2:02-2:04 PM 11-17): Pos/#, Player with his status chip, Min and DK/min boxes, Proj, TwoGun's own minutes and projection as plain text, the Basis in short
+ * words (the full why on hover), S and Out. N: the team's news (console-news.js teamNews) or null.
+ */
 function manRow(team, r, T, S, mk, rank, N) {
   const p = r.p, b = basisOf(r, T, S), starter = r.role === "starter";
   const rmark = mk?.r ? chip(team, r.id, "r", mk.r, mk.r.live === "starter" ? "S" : mk.r.live === "oor" ? "DNP" : "bench") : "";
@@ -62,11 +107,11 @@ function manRow(team, r, T, S, mk, rank, N) {
   const proj = isNum(r.proj) ? `<b class="pj${r.pinned.m || r.pinned.d ? " pin" : ""}">${f1(r.proj)}</b>` : miss(r.missing.join(", ") || "no projection");
   return `<div class="row${mk ? " marked" : ""}" data-row="${esc(r.id)}">
 <span class="ps">${esc(starter ? pos0(p) || "—" : rank)}</span>
-<span class="who">${consoleNameOpen(p, p.name, "span", "nm")}<span class="pp">${esc(p.pos ?? "")}</span></span>
+<span class="who">${consoleNameOpen(p, p.name, "span", "nm")}<span class="pp">${esc(p.pos ?? "")}</span>${nameChip(N, p)}</span>
 ${numBox(team, r, "m", mk?.m)}${numBox(team, r, "d", mk?.d)}
 <span class="r">${proj}</span>
-<span class="why" title="${esc(b.text)}">${b.flag ? `<span class="fl" title="${esc(b.flag.text)}">!</span>` : ""}<span class="stag k-${b.tag}">${b.word}</span>${esc(b.text)}</span>
-${noteCell(N, p)}
+${tgCell(p.tg_min, "minutes", "tgm")}${tgCell(p.tg_proj, "projection", "tgp")}
+<span class="why" title="${esc(b.title)}"><span class="bw k-${b.tag}">${esc(b.text)}</span>${b.delta ? `<span class="bd">${esc(b.delta)}</span>` : ""}${b.chips.map((c) => `<span class="fc ${c.cls}" title="${esc(c.title)}">${esc(c.word)}</span>`).join("")}</span>
 <span class="tgl"><button class="tg s${starter ? " on" : ""}" type="button" data-s="${esc(r.id)}" data-team="${esc(team)}" title="${starter ? "Starting. Click to send him to the bench" : "Click to mark him a starter (S)"}">S</button><span class="cs">${rmark}</span></span>
 <span class="tgl"><button class="tg o" type="button" data-out="${esc(r.id)}" data-team="${esc(team)}" title="Click to mark him Out">Out</button><span class="cs">${omark}</span></span>
 </div>`;
@@ -82,7 +127,7 @@ function outRow(team, r, T, mk, N) {
 ${outNote(N, p)}<div class="why">${src}${isNum(p.healthy) && p.healthy > 0 ? ` &middot; usual ${f1(p.healthy)} min` : ""}${absenceRow(p.absence)}</div></div>`;
 }
 
-const HEAD = (first) => `<div class="hd"><span>${first}</span><span>Player</span><span>Min</span><span>DK/min</span><span class="r">Proj</span><span>Where his minutes come from</span><span>Status and latest note</span><span class="c">S</span><span class="c">Out</span></div>`;
+const HEAD = (first) => `<div class="hd"><span>${first}</span><span>Player</span><span>Min</span><span>DK/min</span><span class="r">Proj</span><span class="tgv tgm" title="TwoGun's minutes">TG Min</span><span class="tgv tgp" title="TwoGun's projection">TG Proj</span><span>Basis</span><span class="c">S</span><span class="c">Out</span></div>`;
 const sumMin = (rows) => rows.reduce((s, r) => s + (isNum(r.min) ? r.min : 0), 0);
 
 /** A roles note in the side column's width: the no-chart sentence says the same in fewer words, so it holds one line. */
@@ -145,7 +190,9 @@ ${Math.abs(typedAdd) >= 0.05 ? `<div class="warn"><span>Your marks add</span><b>
 <div><span>Team projection</span><b>${f1(res.totals.proj) ?? "—"} pts</b></div></div>
 </section>
 <section class="box"><h2>Out / injured <small>${outs.length} ${outs.length === 1 ? "man" : "men"}</small></h2>${outs.map((r) => outRow(code, r, T, marks[r.id], N)).join("") || `<div class="none">Nobody is out.</div>`}</section>${srcBox}${noteList(notes)}`;
-  return { main, side, marks: Object.keys(marks).length, starterIds: starters.map((r) => r.id) };
+  // the columns that carry an undo chip on this team widen for it (console.css .wrap.mk-*); every other team keeps them tight
+  const chipCols = ["m", "d", "r", "out"].filter((k) => playing.some((r) => marks[r.id]?.[k])).map((k) => ` mk-${k === "out" ? "o" : k}`).join("");
+  return { main, side, chipCols, marks: Object.keys(marks).length, starterIds: starters.map((r) => r.id) };
 }
 
 /** The team switcher: each game's two teams together, the team on show filled in its colour, a dot on a team that holds his marks. */
@@ -166,11 +213,11 @@ const HELP = "Every change goes to the board and the optimizer at once. Type a m
  */
 export function depthHtml(model, code, opts) {
   const T = model.TEAMS[code], g = opts.games.find((x) => x.away === code || x.home === code), opp = T.opp;
-  const { main, side, starterIds } = teamBody(model, code, opts.news);
+  const { main, side, starterIds, chipCols } = teamBody(model, code, opts.news);
   const words = syncWords(opts.sync), syncText = `<span class="sync ${words.cls}" title="${esc([words.text, ...words.lines].join(" · "))}"><i></i>${esc(words.text)}</span>`;
   const held = words.lines.length ? `<ul class="heldline">${words.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : "";
   const head = `<header class="thead" style="--tc:${opts.colourOf(code)}">${logo(code, "xl")}<div class="tn"><h1>${esc(TEAM_NAMES[code] ?? code)}</h1><div class="vs">${T.home ? "vs" : "@"} ${logo(opp, "xs")}<b>${esc(TEAM_NAMES[opp] ?? opp)}</b>${g?.tip ? ` &middot; ${esc(opts.when(g.tip) ?? g.tip)}` : ""}</div></div>
 <div class="grow"></div><div class="acts">${syncText}<button class="ub" type="button" data-hist="-1"${opts.canUndo ? "" : " disabled"} title="Undo (Ctrl+Z)">&#8630; Undo</button><button class="ub" type="button" data-hist="1"${opts.canRedo ? "" : " disabled"} title="Redo (Ctrl+Y)">Redo &#8631;</button><button class="help${opts.help ? " on" : ""}" type="button" data-help="1" aria-expanded="${opts.help ? "true" : "false"}" title="${esc(HELP)}">?</button></div></header>`;
   const err = opts.saveErr ? `<div class="errline">${esc(opts.saveErr)}</div>` : "";
-  return `${switcherHtml(model, code, opts.games, opts.colourOf)}${head}${held}${err}${opts.help ? `<p class="note">${esc(HELP)}</p>` : ""}${stripHtml(opts.news, starterIds)}<div class="wrap"><div class="mainc">${main}</div><aside>${side}</aside></div>`;
+  return `${switcherHtml(model, code, opts.games, opts.colourOf)}${head}${held}${err}${opts.help ? `<p class="note">${esc(HELP)}</p>` : ""}${stripHtml(opts.news, starterIds)}<div class="wrap${chipCols}"><div class="mainc">${main}</div><aside>${side}</aside></div>`;
 }

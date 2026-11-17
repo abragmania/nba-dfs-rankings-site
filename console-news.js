@@ -1,9 +1,9 @@
 // The Console's lineup news (Adam approved the mock-up 11-09): one slim strip above the tables (the team's starting five and who said it, the three newest lineup-news entries, the
-// injury report) and, on every man, the "Status and latest note" cell. All of it is the News tab's own data and words: newsModel / teamModel and the page's FIVE_WORD, fiveSaid and
+// injury report) and, on every man, a small status chip after his name (nameChip; Adam 2:02 PM 11-17 retired the "Status and latest note" column). All of it is the News tab's own data and words: newsModel / teamModel and the page's FIVE_WORD, fiveSaid and
 // feedRowHtml, never a second copy. Pure strings, tested in node. A figure the read does not have is a dash or a plain "not read", never a stand-in. Look: console.css (#console .cn, .sn).
 import { esc, nameOpen, outNameOpen } from "./board-util.js";
 import { plain } from "./console-model.js";
-import { newsModel, statusChip, timeLabel } from "./news-model.js";
+import { newsModel, statusChip, timeLabel, etDay } from "./news-model.js";
 import { FIVE_WORD, feedRowHtml, fiveSaid } from "./news-page.js";
 
 const POS_ORDER = ["PG", "SG", "SF", "PF", "C", "G", "F"];
@@ -34,15 +34,15 @@ const timeOf = (N, r) => (r?.noteAt != null ? timeLabel(r.noteAt, { day: N.day, 
 const rowOf = (N, p) => N?.byId.get(String(p.id)) ?? N?.byName.get(plain(p.name)) ?? null;
 
 /**
- * The "Status and latest note" cell for a man of the console: his status chip (none when he is active), the newest report on him and its time. The time shows only beside a report.
- * With no read it is the board's own status word and nothing else; a man with neither shows a dash.
+ * The small chip after a man's name in the console's tables (Adam 2:02 PM 11-17, the Status column retired): his status in short (GTD, Q, D, P, or the word as written) with the newest report and its
+ * time in the tooltip; an active man with a report from the slate's own day gets a "News" chip instead; nothing at all when there is neither. With no read: the board's status word alone.
  */
-export function noteCell(N, p) {
+export function nameChip(N, p) {
   const r = rowOf(N, p), st = r ? r.status : statusChip(p.status), at = timeOf(N, r);
-  const note = r?.note ? `<span class="nt" title="${esc(r.note)}">${esc(r.note)}</span>` : "";
-  const when = at ? `<time class="nwat">${esc(at)}</time>` : "";
-  const chip = chipHtml(st.cls === "ok" && r?.note ? { word: "Available", cls: "ok" } : st); // a man with a report and no injury status reads "Available" beside it
-  return `<span class="sn">${chip}${note}${when}${chip || note || when ? "" : dash}</span>`;
+  const tip = [st.cls === "ok" ? null : st.word, r?.note ? `${r.note}${at ? ` (${at})` : ""}` : null].filter(Boolean).join(": ");
+  if (st.cls !== "ok" && st.word !== "—") return `<span class="nwc nchip ${st.cls}" title="${esc(tip)}">${esc(SHORT[st.word] ?? st.word)}</span>`;
+  const fresh = r?.note && r.noteAt != null && N?.day && etDay(r.noteAt) === N.day;
+  return fresh ? `<span class="nwc nchip news" title="${esc(tip)}">News</span>` : "";
 }
 /** The note under a man in the Out list: his report and its time; "" when the read has none (his source line says why he is out). */
 export function outNote(N, p) {

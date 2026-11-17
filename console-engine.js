@@ -209,26 +209,26 @@ function minutesFor(team, outSet, tonightSet, pins, flips, implicit = {}) {
   const edits = settleTyped(typed, (rest) => modelledMinutes(team, outSet, tonightSet, new Set([...Object.keys(rest), ...Object.keys(moved)]))); // a man typed at his own figure is no edit: he takes his hand-out and nobody moves
   const closed = new Set([...Object.keys(edits), ...Object.keys(moved)]);
   const modelled = modelledMinutes(team, outSet, tonightSet, closed);
-  const minutes = {}, basis = {}, flag = {}, median = new Set(), fromOurs = new Set();
+  const minutes = {}, basis = {}, flag = {}, label = {}, median = new Set(), fromOurs = new Set();
   const src = sourceOf(team), ours = src === "twogun" ? null : oursFor(team, outSet, flips, edits, src === "ours_edits"); // the settled edits: a man typed at his own figure is no edit and moves nobody
   const flipFig = src === "twogun" ? null : src === "ours_edits" ? ours : oursFor(team, outSet, flips, {}, true); // a flipped man's chart figure is the rule's figure for him in his new role
   for (const p of team.men) {
     if (outSet.has(p.id)) { minutes[p.id] = 0; continue; }
     if (own(typed, p.id)) { minutes[p.id] = typed[p.id]; basis[p.id] = "typed"; continue; }
     const chartOwn = src === "ours_edits" && own(implicit, p.id) && !own(flips, p.id) ? ours?.[p.id] : null; // on Ours + my edits a man a flip moved has the chart's own figure
-    if (chartOwn && isNum(chartOwn.min)) { minutes[p.id] = chartOwn.min; basis[p.id] = chartOwn.basis; flag[p.id] = chartOwn.flag ?? null; fromOurs.add(p.id); if (chartOwn.median) median.add(p.id); continue; }
+    if (chartOwn && isNum(chartOwn.min)) { minutes[p.id] = chartOwn.min; basis[p.id] = chartOwn.basis; flag[p.id] = chartOwn.flag ?? null; label[p.id] = chartOwn.label ?? null; fromOurs.add(p.id); if (chartOwn.median) median.add(p.id); continue; }
     if (own(moved, p.id)) {
       const f = flipFig?.[p.id] ?? roleMinutes(p, moved[p.id]); // the chart's figure, a null one included, only when ours feeds the optimizer (TwoGun stays as it was)
-      minutes[p.id] = f.min; flag[p.id] = f.flag ?? null; basis[p.id] = own(implicit, p.id) && !own(flips, p.id) ? `${f.basis}; moved by your role flip` : f.basis;
+      minutes[p.id] = f.min; flag[p.id] = f.flag ?? null; label[p.id] = f.label ?? null; basis[p.id] = own(implicit, p.id) && !own(flips, p.id) ? `${f.basis}; moved by your role flip` : f.basis;
       if (f.median) median.add(p.id);
       continue;
     }
     const o = ours?.[p.id];
-    if (o) { minutes[p.id] = o.min; basis[p.id] = o.basis; flag[p.id] = o.flag ?? null; if (isNum(o.min)) fromOurs.add(p.id); if (o.median) median.add(p.id); continue; } // a missing chart figure stays missing, with its reason: TwoGun's number never stands in for it (R1)
+    if (o) { minutes[p.id] = o.min; basis[p.id] = o.basis; flag[p.id] = o.flag ?? null; label[p.id] = o.label ?? null; if (isNum(o.min)) fromOurs.add(p.id); if (o.median) median.add(p.id); continue; } // a missing chart figure stays missing, with its reason: TwoGun's number never stands in for it (R1)
     if (ours) { minutes[p.id] = null; basis[p.id] = "the minutes engine has no inputs for him"; flag[p.id] = null; continue; } // on an Ours source TwoGun's number never stands in for the engine's (R1); the team note counts him
     minutes[p.id] = modelled[p.id];
   }
-  return { minutes, basis, flag, median, fromOurs, totalNote: ours?.totalNote ?? null };
+  return { minutes, basis, flag, label, median, fromOurs, totalNote: ours?.totalNote ?? null };
 }
 
 /** Hand-out and combination minute edits count only on TwoGun (modelledMinutes runs only there): one team foot note naming them when the engine's minutes are in use, else null. */
@@ -317,7 +317,7 @@ function implicitFlips(team, outSet, flips, roles) {
 }
 
 /**
- * The scenario: { rows: [{ id, out, role, min, min_basis, min_median (his flipped minutes are a position median, not his own), usg, rate, formula, proj, pinned: { m, u, d, p, r }, clamped, back_on_zero, missing: [...] }],
+ * The scenario: { rows: [{ id, out, role, min, min_basis, min_label (the engine's short basis, tiers.js label; null off the engine), min_median (his flipped minutes are a position median, not his own), usg, rate, formula, proj, pinned: { m, u, d, p, r }, clamped, back_on_zero, missing: [...] }],
  * totals: { min, usg, proj, usg_off, usg_why, proj_missing }, roles_note }. role: console-roles.js's role; min_basis: "typed", a flipped man's role
  * figure basis, or null for the model's. min is the team's total for reference only. usg_off is the difference from 100; a total no man has a figure
  * for is null. usg_why: why typed usage misses 100, with the fix; null when nothing is wrong. Nothing here refuses Apply.
@@ -329,13 +329,13 @@ export function scenario(team, outs = [], pins = emptyPins()) {
   const { roles, note: rolesNote } = resolveRoles(team, outSet, pins.r);
   const implicit = implicitFlips(team, outSet, flips, roles);
   const moved = { ...implicit, ...flips };
-  const { minutes: m, basis, flag, median, fromOurs, totalNote } = minutesFor(team, outSet, tonightSet, pins.m ?? {}, flips, implicit);
+  const { minutes: m, basis, flag, label, median, fromOurs, totalNote } = minutesFor(team, outSet, tonightSet, pins.m ?? {}, flips, implicit);
   const use = oursUse(team), clean = oursFor(team, outSet);
   const oursNote = sourceOf(team) !== "twogun" && !use.ok ? `${team.source_set ? "Ours minutes are chosen" : "Ours is the default"} but ${use.why ?? "this team has no minutes engine inputs"}, so TwoGun's minutes are in use.` : null; // the chart's minutes on this scenario's outs alone, for the "Ours" column beside TwoGun's
   const u = usageFor(team, outSet, tonightSet, m, pins, moved);
   const rows = team.men.map((p) => {
     const oc = clean?.[p.id], oursFields = { ours_min: isNum(oc?.min) ? oc.min : null, ours_basis: oc?.basis ?? (use.ok ? "the minutes engine has no inputs for him" : use.why), ours_median: false, ours_tier: oc?.tier ?? null, ours_flag: oc?.flag ?? null };
-    if (outSet.has(p.id)) return { id: p.id, out: true, role: "out", ...oursFields, min_from_ours: false, min_flag: null, min: 0, min_basis: null, min_median: false, usg: 0, rate: isNum(p.rate) ? p.rate : null, formula: 0, proj: 0, pinned: OFF_SCENARIO, clamped: false, back_on_zero: false, missing: [] };
+    if (outSet.has(p.id)) return { id: p.id, out: true, role: "out", ...oursFields, min_from_ours: false, min_flag: null, min_label: null, min: 0, min_basis: null, min_median: false, usg: 0, rate: isNum(p.rate) ? p.rate : null, formula: 0, proj: 0, pinned: OFF_SCENARIO, clamped: false, back_on_zero: false, missing: [] };
     const pinned = { m: own(pins.m, p.id), u: own(pins.u, p.id), d: own(pins.d, p.id), p: own(pins.p, p.id), r: own(flips, p.id) };
     const held = pinned.d ? { rate: pins.d[p.id], clamped: false }
       : p.rate_source === "typed" ? { rate: p.rate, clamped: false } // a DK/min he typed on the board is held like a pin: no usage scaling
@@ -351,7 +351,7 @@ export function scenario(team, outs = [], pins = emptyPins()) {
     if (proj === null) missing.push("proj");
     if (held.clamped) missing.push("rate clamped");
     if (backOnZero) missing.push("back on 0 minutes; pin his minutes");
-    return { id: p.id, out: false, role: roles[p.id], ...oursFields, min_from_ours: fromOurs.has(p.id), min_flag: flag[p.id] ?? null, min: m[p.id], min_basis: basis[p.id] ?? null, min_median: median.has(p.id), usg: u.shown[p.id], rate: held.rate, formula, proj, pinned, clamped: held.clamped, back_on_zero: backOnZero, missing };
+    return { id: p.id, out: false, role: roles[p.id], ...oursFields, min_from_ours: fromOurs.has(p.id), min_flag: flag[p.id] ?? null, min_label: label[p.id] ?? null, min: m[p.id], min_basis: basis[p.id] ?? null, min_median: median.has(p.id), usg: u.shown[p.id], rate: held.rate, formula, proj, pinned, clamped: held.clamped, back_on_zero: backOnZero, missing };
   });
   const playing = rows.filter((r) => !r.out); // a man out is on 0 by the scenario, which says nothing about whether the figure is known
   const min = sum(playing, "min"), usg = sum(playing, "usg");
