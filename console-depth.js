@@ -101,7 +101,9 @@ function numBox(team, r, k, mark) {
 export const salaryText = (p) => (Number.isInteger(p.salary) && p.salary > 0 ? `$${p.salary.toLocaleString("en-US")}` : null);
 export const valueText = (r) => { const v = valuePer1k(r.proj, r.p.salary); return v === null ? null : v.toFixed(2); }; // two decimals, as the board's Value column
 const salCell = (p) => `<span class="r ro sal">${salaryText(p) ?? miss("no salary for him on this slate")}</span>`;
-const valCell = (r) => `<span class="r ro val${r.pinned.m || r.pinned.d ? " pin" : ""}">${valueText(r) ?? miss(salaryText(r.p) ? "no projection, so no value" : "no salary, so no value")}</span>`;
+/** Value's colour: muted for the team's lowest, bright green for its highest (a mix of two theme variables, so it reads on every theme); vr = { lo, hi } over the team's men with a value. */
+const valTone = (v, vr) => `color:color-mix(in srgb,var(--gr) ${Math.round(30 + 70 * (vr && vr.hi > vr.lo ? (v - vr.lo) / (vr.hi - vr.lo) : 1))}%,var(--mu))`;
+const valCell = (r, vr) => `<span class="r ro val"${valuePer1k(r.proj, r.p.salary) === null ? "" : ` style="${valTone(valuePer1k(r.proj, r.p.salary), vr)}"`}>${valueText(r) ?? miss(salaryText(r.p) ? "no projection, so no value" : "no salary, so no value")}</span>`;
 
 /**
  * Avg Min (Season) and Avg Min (Last 10): his mean minutes over the box-score rows the Console inputs already carry (tier.men[id].rows, overtime-scaled, games he played this season; the same rows Bench+ reads).
@@ -127,7 +129,7 @@ const STATUS = (s) => String(s ?? "").trim();
  * One man in the Starters or the Bench (Adam 2:02-2:04 PM 11-17): Pos/#, Player with his status chip, Min and DK/min boxes, Proj, TwoGun's own minutes and projection as plain text, the Basis in short
  * words (the full why on hover), S and Out. N: the team's news (console-news.js teamNews) or null.
  */
-function manRow(team, r, T, S, mk, rank, N) {
+function manRow(team, r, T, S, mk, rank, N, vr) {
   const p = r.p, b = basisOf(r, T, S), starter = r.role === "starter", av = avgFigures(T, p);
   const rmark = mk?.r ? chip(team, r.id, "r", mk.r, mk.r.live === "starter" ? "S" : mk.r.live === "oor" ? "DNP" : "bench") : "";
   const omark = mk?.out ? chip(team, r.id, "out", mk.out, "out") : "";
@@ -136,7 +138,7 @@ function manRow(team, r, T, S, mk, rank, N) {
 <span class="ps">${esc(starter ? rank || pos0(p) || "—" : rank)}</span>
 <span class="who">${consoleNameOpen(p, p.name, "span", "nm")}<span class="pp">${esc(p.pos ?? "")}</span>${nameChip(N, p)}</span>
 ${salCell(p)}${numBox(team, r, "m", mk?.m)}${numBox(team, r, "d", mk?.d)}
-<span class="r">${proj}</span>${tgCell(p.tg_proj, "projection", "tgp")}${valCell(r)}${tgCell(p.tg_min, "minutes", "tgm")}${avgCell(av.season, av.whySeason, av.nSeason, "avs")}${avgCell(av.last10, av.whyLast, av.nLast, "avl")}
+<span class="r">${proj}</span>${tgCell(p.tg_proj, "projection", "tgp")}${valCell(r, vr)}${tgCell(p.tg_min, "minutes", "tgm")}${avgCell(av.season, av.whySeason, av.nSeason, "avs")}${avgCell(av.last10, av.whyLast, av.nLast, "avl")}
 <span class="why" title="${esc(b.title)}"><span class="bw k-${b.tag}">${esc(b.text)}</span>${b.delta ? `<span class="bd">${esc(b.delta)}</span>` : ""}${b.chips.map((c) => `<span class="fc ${c.cls}" title="${esc(c.title)}">${esc(c.word)}</span>`).join("")}</span>
 <span class="tgl"><button class="tg s${starter ? " on" : ""}" type="button" data-s="${esc(r.id)}" data-team="${esc(team)}" title="${starter ? "Starting. Click to send him to the bench" : "Click to mark him a starter (S)"}">S</button><span class="cs">${rmark}</span></span>
 <span class="tgl"><button class="tg bp${r.role === "bench_plus" ? " on" : ""}" type="button" data-dbp="1" data-id="${esc(r.id)}" data-team="${esc(team)}"${starter ? ' disabled title="A starter is not Bench+"' : ` title="${r.role === "bench_plus" ? "Bench+ tonight. Click to make him plain Bench" : "Click to make him Bench+ tonight: he goes to the head of the bench order"}"`}>B+</button></span>
@@ -203,6 +205,7 @@ function teamBody(model, code, news, view = {}) {
   else if (starters.length < 5) notes.push(`Only ${starters.length} starters: mark a man S.`);
   const disagree = disagreeNote(N?.team?.five, T.tier?.confirmed); // the foot says what was really used when the header says the sources disagree
   for (const n of String(res.roles_note ?? "").split(/\n+|(?<=\.)\s+/).filter(Boolean).map(shortNote).map((x) => (disagree && /^Starters: the lineup pages' (?:agreed|confirmed) five/.test(x) ? disagree : x))) if (!notes.some((x) => x.slice(0, 12) === n.slice(0, 12)) && !/starters marked|Only \d starters/.test(n)) notes.push(n);
+  const vals = playing.map((r) => valuePer1k(r.proj, r.p.salary)).filter((v) => v !== null), vr = vals.length ? { lo: Math.min(...vals), hi: Math.max(...vals) } : null;
   const noSal = playing.filter((r) => !salaryText(r.p));
   if (noSal.length) notes.push(`${noSal.length} ${noSal.length === 1 ? "man has" : "men have"} no salary on this slate, so ${noSal.length === 1 ? "his Value shows" : "their Value shows"} a dash: ${noSal.map((r) => r.p.name).join(", ")}`);
   const avgs = playing.map((r) => ({ r, a: avgFigures(T, r.p) }));
@@ -215,8 +218,8 @@ function teamBody(model, code, news, view = {}) {
   if (cm) { for (const n of cm.notes) notes.push(n); const sn = sourcesNote(cm, view.when ?? (() => null)); if (sn) notes.push(sn); } // the chart's sources and what they could not place, at the foot (G64)
   const auto = calc(T, { ...S, pins: {} }, T.tonight).totals;
   const typedAdd = (res.totals.min ?? 0) - (auto.min ?? 0);
-  const main = `<section class="box"><h2>Starters <small>${starters.length} &middot; ${f1(sumMin(starters))} min</small></h2>${HEAD("Pos")}${starters.map((r) => manRow(code, r, T, S, marks[r.id], cpos(r), N)).join("") || `<div class="none">Nobody is starting. Mark five men S.</div>`}</section>
-<section class="box"><h2>Bench <small>bench order &middot; ${f1(sumMin(bench))} min</small></h2>${HEAD("#")}${bench.map((r, i) => manRow(code, r, T, S, marks[r.id], String(6 + i), N)).join("") || `<div class="none">Nobody is on the bench.</div>`}<div class="row tot"><span></span><span class="who">Team total</span><span></span><span class="mt">${f1(res.totals.min) ?? "—"}</span></div>${benchPlusHtml(T.bench_plus)}</section>`;
+  const main = `<section class="box"><h2>Starters <small>${starters.length} &middot; ${f1(sumMin(starters))} min</small></h2>${HEAD("Pos")}${starters.map((r) => manRow(code, r, T, S, marks[r.id], cpos(r), N, vr)).join("") || `<div class="none">Nobody is starting. Mark five men S.</div>`}</section>
+<section class="box"><h2>Bench <small>bench order &middot; ${f1(sumMin(bench))} min</small></h2>${HEAD("#")}${bench.map((r, i) => manRow(code, r, T, S, marks[r.id], String(6 + i), N, vr)).join("") || `<div class="none">Nobody is on the bench.</div>`}<div class="row tot"><span></span><span class="who">Team total</span><span></span><span class="mt">${f1(res.totals.min) ?? "—"}</span></div>${benchPlusHtml(T.bench_plus)}</section>`;
   const src = S.source ?? defaultSourceOf(T);
   const srcBox = oursUse(T).ok ? `<section class="box"><h2>Minutes for the optimizer</h2><div class="srcs">${MINUTE_SOURCES.map((k) => `<button class="sv${k === src ? " on" : ""}" type="button" data-source="${k}" data-team="${esc(code)}">${SOURCE_LABEL[k]}</button>`).join("")}<button class="sv all" type="button" data-source-all="${src}" data-team="${esc(code)}" title="Use ${esc(SOURCE_LABEL[src])} on every team with the minutes engine">All teams</button></div></section>` : "";
   const outBox = `<section class="box"><h2>Out / injured <small>${outs.length} ${outs.length === 1 ? "man" : "men"}</small></h2>${outs.map((r) => outRow(code, r, T, marks[r.id], N, cm ? cm.posOf(r.id) ?? "—" : null)).join("") || `<div class="none">Nobody is out.</div>`}</section>`;

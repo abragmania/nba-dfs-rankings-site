@@ -68,8 +68,8 @@ body.console-on .games,body.console-on main.work,body.console-on #dropnote{displ
   input.fin:focus{outline:2px solid var(--bl);outline-offset:-0.0625rem;border-color:var(--bl)}
   input.fin.pin{border:0.0938rem solid var(--pin);background:color-mix(in srgb,var(--pin) 9%,var(--p));color:var(--pin);font-weight:700}
   .row .ro{font-size:0.875rem;font-weight:400;color:var(--mu);font-variant-numeric:tabular-nums;white-space:nowrap} /* Salary and Value: plain read-only text, no box, no hover, no cursor (Adam 10:17 AM 11-18) */
-  .row .ro.val{font-size:0.9375rem;font-weight:700;color:var(--tx)}.row .ro.val.pin{color:var(--pin)}
-  .pj{font-size:0.9375rem;font-weight:700}.pj.pin{color:var(--pin)}
+  .row .ro.val{font-size:0.9375rem;font-weight:700;color:var(--gr)} /* the inline colour scales it: muted for the team's lowest value to bright green for its highest */ /* orange is the cell he typed into and its undo chip only (Adam 11:38 AM 11-18): Proj, Value and Basis stay plain after his edit */
+  .pj{font-size:0.9375rem;font-weight:700;color:var(--bl)} /* ours: Proj in the theme's blue, never the amber that marks his own typing */
   .rv{display:inline-flex;align-items:center;gap:0.1875rem;height:1.5rem;padding:0 0.4375rem;border:1px solid color-mix(in srgb,var(--pin) 55%,transparent);border-radius:0.1875rem;background:color-mix(in srgb,var(--pin) 10%,var(--p));color:var(--pin);font-size:0.75rem;font-weight:700;white-space:nowrap}
   .rv:hover{background:var(--pin);color:var(--p);border-color:var(--pin)}
   /* TwoGun's own figures (Adam 2:04 PM 11-17): plain read-only text in a faint shared band, never a box; the band's shadow covers the gap between the two columns */
@@ -81,7 +81,7 @@ body.console-on .games,body.console-on main.work,body.console-on #dropnote{displ
   /* the Basis: short words and the key number on one line, the fill or trim small after them, then any worded flag chip; the full why is the cell's tooltip */
   .row .why{padding-left:0.5rem;display:flex;flex-wrap:wrap;align-items:center;gap:0.125rem 0.4375rem;min-width:0;overflow:hidden;font-size:0.8438rem} /* never into the S column: the words keep their room and the chips go under them when both do not fit (the full why is on hover) */
   .row .why .bw{min-width:0;white-space:normal;line-height:1.15;overflow-wrap:anywhere}.row .why .bd,.row .why .fc{flex:none}
-  .bw{color:var(--tx)}.bw.k-tg{color:var(--mu)}.bw.k-you{color:var(--pin);font-weight:700}
+  .bw{color:var(--tx)}.bw.k-tg{color:var(--mu)}.bw.k-you{color:var(--tx)}
   .bd{font-size:0.75rem;color:var(--mu)}
   .fc{display:inline-block;padding:0 0.375rem;border:1px solid currentColor;border-radius:0.1875rem;font-size:0.6875rem;font-weight:700;line-height:1.0625rem;white-space:nowrap}
   .fc.tgl-far{color:var(--or)}.fc.warn{color:var(--am)}.fc.lim{color:var(--rd)}
@@ -94,7 +94,6 @@ body.console-on .games,body.console-on main.work,body.console-on #dropnote{displ
   .tg.bp.on{background:var(--am);border-color:var(--am);color:#000} /* Bench+ as the chart's B+ mark: dark text on amber reads on every theme */
   .tg.bp:disabled{opacity:.35;cursor:default}
   .tg.o.on{background:var(--rd);border-color:var(--rd);color:var(--p)}
-  .row.marked{background:color-mix(in srgb,var(--pin) 4%,transparent)}
   /* out / injured */
   .oline{display:grid;grid-template-columns:2.125rem minmax(0,1fr) auto;column-gap:0.625rem;row-gap:0.125rem;align-items:center;padding:0.5rem 0.75rem;border-bottom:1px solid var(--ln2)}
   .oline:last-child{border-bottom:0}
