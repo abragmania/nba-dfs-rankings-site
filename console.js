@@ -2,7 +2,7 @@
 // inputs route; his work saves to the slate's scenarios.json as he goes, and each change goes to the board and the optimizer by itself
 // (console-auto.js), so there is no Apply step. This file holds the shared state, drawing, loading and the screen's clicks and keys;
 // console-moves.js acts on the state.
-import { esc, tipWhen } from "./board-util.js";
+import { esc, isoToEastern, tipWhen } from "./board-util.js";
 import { buildModel, buildTeam, canonRecord, recordOf, refreshTeams, savedBehind, typedText } from "./console-model.js";
 import { depthHtml } from "./console-depth.js";
 import { dropMark, firstPlaying, jumpTeam, pushHist, redo, saveDirty, setPin, setSource, toggleOut, toggleStarter, undo } from "./console-moves.js";
@@ -21,6 +21,15 @@ const depthTexts = (model) => Object.fromEntries(Object.entries(model.TEAMS).map
 
 const USAGE_RETRY_MS = 20_000;
 const USAGE_RETRIES = 6;
+/** After a failed read of the inputs, the next try: the board's own check runs once a minute (slate-refresh.js CHECK_MS), and a failed read has already taken its stamp. */
+export const READ_RETRY_MS = 60_000;
+
+const etAt = (ms) => (Number.isFinite(ms) ? isoToEastern(new Date(ms).toISOString()) : null) ?? "an unknown time";
+/** The muted line at the page's foot after a failed read of the inputs (G64: never the main view): the chart on show is the last good one, and from when. "" when the last read worked. Pure. */
+export function readFootHtml(fail, goodMs) {
+  if (!fail) return "";
+  return `<p class="cfoot">The depth chart and minutes could not be refreshed at ${esc(etAt(fail.ms))} (${esc(fail.why)}), so they are as read at ${esc(etAt(goodMs))}. The console tries again by itself.</p>`;
+}
 
 /** A team's colour for its switcher button and header rule. On the light console a pale colour would vanish, so it is darkened to read. */
 function teamColour(c, team) {
@@ -91,10 +100,11 @@ function newsOpt(c) {
 function pageHtml(c, news) {
   const G = c.G;
   const team = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr: Object.values(c.saveErrs).join(" ") || null, news, help: G.help, chartSel: G.chartSel ?? null, readOnly: c.readOnly });
-  if (G.view !== "all") return withAllChip(team, false);
+  const foot = readFootHtml(c.readFail, c.inputsAt); // a failed refresh: at the page's foot, under either view
+  if (G.view !== "all") return `${withAllChip(team, false)}${foot}`;
   const words = !news ? "No lineup news is wired on this page." : news.state === "loading" ? "Reading the lineup news..." : news.state !== "ok" ? `Lineup news not read: ${news.why}` : null;
   const body = words ? `<section class="ca"><header class="ca-h"><h1>Tonight's lineup news</h1></header><div class="ca-empty">${esc(words)}</div></section>` : landingHtml(news.V, G.newsTeam ?? "", c.inputs.games.flatMap((g) => [g.away, g.home]));
-  return `${withAllChip(teamBarOf(team), true)}${body}`;
+  return `${withAllChip(teamBarOf(team), true)}${body}${foot}`;
 }
 
 function render(c) {
@@ -131,12 +141,14 @@ function ensure(c, name) {
 async function load(c, name) {
   clearTimeout(c.usageTimer);
   clearTimeout(c.retryTimer);
-  Object.assign(c, { slate: name, loadError: null, model: null, newsRead: null, usageTries: 0, saveErrs: {}, sync: { state: "ok", at: null }, touched: new Set(), pending: new Set() }); // another slate: nothing changed on it yet
+  clearTimeout(c.readTimer);
+  Object.assign(c, { slate: name, loadError: null, model: null, newsRead: null, usageTries: 0, saveErrs: {}, sync: { state: "ok", at: null }, touched: new Set(), pending: new Set(), readFail: null, inputsAt: null }); // another slate: nothing changed on it yet
   c.E("app").innerHTML = `<div class="fatalc dimc">Loading ${esc(name)}...</div>`;
   try {
     const out = await c.api(`/api/slate/${encodeURIComponent(name)}/console`);
     if (name !== c.slate) return;
     takeInputs(c, out);
+    c.inputsAt = Date.now();
     c.model = buildModel(c.inputs, out.scenarios.teams, out.scenarios.applied?.keys);
     c.depthSaved = depthTexts(c.model); // his depth-chart moves as the standing chart holds them
     c.lastSaved = {};
@@ -159,7 +171,13 @@ async function load(c, name) {
   }
 }
 
-/** New inputs on the work on show: his marks stay and the numbers move. Comes on every show, while the usage table is loading, and when a send finds a newer pull. */
+const readFailMsg = (why) => `The console could not read the new inputs, so the board may be behind: ${why}`;
+
+/**
+ * New inputs on the work on show: his marks stay and the numbers move (R12: redrawn in place; his typed minutes are read, never written). Comes on every show, while the usage table is loading, when a
+ * send finds a newer pull, and when the board's check sees a new pull, position read or Ours minutes record (pull-moves.js pullStamp, console onPull). A failed read keeps the last good chart, says so
+ * at the page's foot (readFootHtml) and tries again after READ_RETRY_MS, one timer at a time.
+ */
 async function refresh(c) {
   const name = c.slate;
   try {
@@ -171,6 +189,9 @@ async function refresh(c) {
     if (name !== c.slate || !c.model) return;
     const was = resultSigs(c);
     takeInputs(c, out);
+    clearTimeout(c.readTimer);
+    if (c.readFail) { c.readFail = null; c.auto?.readOk(readFailMsg(c.readFailWhy)); }
+    c.inputsAt = Date.now();
     refreshTeams(c.model, c.inputs);
     for (const [code, text] of Object.entries(depthTexts(c.model))) { // another page or the other computer saved a team's chart since this page last did: this page takes it
       const S = c.model.ST[code], mine = c.depthSaved?.[code];
@@ -183,9 +204,24 @@ async function refresh(c) {
     render(c);
     if (others.length) c.toast(`${others.join(", ")} changed outside this page (the lineup news or another page): it took those marks and sent nothing over them.`, "notice");
   } catch (e) {
-    c.toast(`Could not refresh the console's inputs: ${e.message}`, "err");
-    c.auto?.fail(`The console could not read the new inputs, so the board may be behind: ${e.message}`); // the header is not green
+    if (name !== c.slate || !c.model) return;
+    c.readFail = { ms: Date.now(), why: e.message }; c.readFailWhy = e.message; // the chart on show stays; the foot says from when (G64: no toast in the main view)
+    clearTimeout(c.readTimer);
+    c.readTimer = setTimeout(() => { if (name === c.slate) pullRead(c, name); }, c.retryMs ?? READ_RETRY_MS);
+    c.auto?.fail(readFailMsg(e.message)); // the header is not green (it draws the page, foot included, when the console is open)
+    render(c);
   }
+}
+
+/** A pull, position read or Ours record landed (the board's check), or a failed read is tried again: the work loads if it has not, else its inputs are read again, one read at a time
+ *  (console-auto.js createPullReads); each team whose result moved, and any still not on the board, is sent by the console's own line. */
+function pullRead(c, name) {
+  c.pullName = name;
+  return (c.pullReads ??= createPullReads({
+    read: () => (c.pullName !== c.slate || !c.model ? ensure(c, c.pullName) : refresh(c)),
+    kick: () => { if (mayAutoSend(c.inputs)) c.auto.kick(true); }, // a pull's kick: no click of his
+    pending: () => c.pending ?? new Set(),
+  }))();
 }
 
 /** A team whose saved record on the server is not the one this page last saved was written by another page: this page takes the server's record for it (marks, scenario, source) and does not send its own copy. The teams taken. */
@@ -263,11 +299,12 @@ function onKey(c, e) {
 const SHELL = `<div id="app"></div>`;
 
 /** deps: { el, api, toast, colourOf(team) -> css colour, onPlayers(players), onWork() (his work moved: the board reads his marks again), news: { slateData() -> the slate with the board's rows, tips() -> { tip, tipAt } }
- *  (the lineup news strip, the Status column and the All teams page; without it none reads the news) }. show() never rejects: its trouble goes to showError. */
-export function createConsole({ el, api, toast, colourOf, onPlayers, onWork, news }) {
+ *  (the lineup news strip, the Status column and the All teams page; without it none reads the news), retryMs (after a failed read of the inputs, the wait before the next; tests shorten it) }.
+ *  show() never rejects: its trouble goes to showError. */
+export function createConsole({ el, api, toast, colourOf, onPlayers, onWork, news, retryMs = READ_RETRY_MS }) {
   el.innerHTML = SHELL;
   const c = {
-    el, api, toast, colourOf, onPlayers, onWork, news, newsRead: null, on: false, slate: null, inputs: null, model: null, applied: null, loadError: null, lastSaved: {}, saveErrs: {}, saveQueue: Promise.resolve(), usageTimer: null, usageTries: 0, sync: { state: "ok", at: null },
+    el, api, toast, colourOf, onPlayers, onWork, news, retryMs, readFail: null, inputsAt: null, newsRead: null, on: false, slate: null, inputs: null, model: null, applied: null, loadError: null, lastSaved: {}, saveErrs: {}, saveQueue: Promise.resolve(), usageTimer: null, usageTries: 0, sync: { state: "ok", at: null },
     E: (id) => el.querySelector(`#${id}`),
     G: { cur: null, view: "all", newsTeam: readStore(FILTER_KEY, ""), pick: null, roleMoves: null, focus: null, hist: [], hi: -1, editing: false, rows: [], modal: null },
     render: () => render(c), drawBar: () => render(c), focusCell: () => {},
@@ -285,9 +322,10 @@ export function createConsole({ el, api, toast, colourOf, onPlayers, onWork, new
     /** The slate on show changed. Nothing loads until the console is opened or the board asks. */
     setSlate(name) {
       if (name === c.slate) return;
-      Object.assign(c, { slate: name, model: null, inputs: null, loadError: null, newsRead: null });
+      Object.assign(c, { slate: name, model: null, inputs: null, loadError: null, newsRead: null, readFail: null, inputsAt: null });
       clearTimeout(c.usageTimer);
       clearTimeout(c.retryTimer);
+      clearTimeout(c.readTimer);
       if (c.on) load(c, name);
     },
     show(name) {
@@ -304,15 +342,11 @@ export function createConsole({ el, api, toast, colourOf, onPlayers, onWork, new
     },
     hide() { c.on = false; el.hidden = true; },
     isOn: () => c.on,
-    /** An in-place pull refresh landed on the open page (board.js applyFresh), console open or not: the work loads if it has not (a load re-checks every team the board holds), else its inputs are
-     *  read again and each team whose result moved is sent by the console's own send line, one at a time after any send in flight. One read at a time; teams with nothing held send nothing. */
+    /** An in-place pull refresh landed on the open page (board.js applyFresh: a new pull, position read or Ours minutes record moves the board's stamp), console open or not: the work loads if it has not
+     *  (a load re-checks every team the board holds), else its inputs are read again and each team whose result moved is sent by the console's own send line, one at a time after any send in flight.
+     *  One read at a time; teams with nothing held send nothing. */
     async onPull(name) {
-      c.pullName = name;
-      await (c.pullReads ??= createPullReads({
-        read: () => (c.pullName !== c.slate || !c.model ? ensure(c, c.pullName) : refresh(c)),
-        kick: () => { if (mayAutoSend(c.inputs)) c.auto.kick(true); }, // a pull's kick: no click of his
-        pending: () => c.pending ?? new Set(),
-      }))();
+      await pullRead(c, name);
       return !c.loadError && Boolean(c.model);
     },
     /** The player card's and the board's reads and writes on the same work (console-card.js). */

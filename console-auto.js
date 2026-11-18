@@ -215,6 +215,8 @@ export function createAutoApply(c, { refreshInputs, onState }) {
     settleNow() { if (!c.pending.size && !["sending", "waiting", "error"].includes(c.sync?.state)) settle(null, [], new Set(c.pending)); },
     /** A read of the inputs failed: the header says so instead of staying green. */
     fail(msg) { set("error", { msg }); },
+    /** A read that failed has worked again: the header's error `msg` from it goes (to "unsent" or "up to date", as settleNow); a send's own error or anything since is left alone. */
+    readOk(msg) { if (c.sync?.state === "error" && c.sync.msg === msg) settle(null, [], new Set(c.pending)); },
   };
   return api;
 }

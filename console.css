@@ -37,6 +37,7 @@ body.console-on .games,body.console-on main.work,body.console-on #dropnote{displ
   .ub:hover:not(:disabled){border-color:var(--tx)}.ub:disabled{opacity:.45;cursor:default}
   .errline{margin-top:0.5rem;padding:0.5rem 0.75rem;background:color-mix(in srgb,var(--rd) 8%,transparent);border:1px solid color-mix(in srgb,var(--rd) 35%,transparent);border-radius:0.25rem;color:var(--rd);font-weight:600}
   .note{margin:0.625rem 0 0.75rem;color:var(--mu);font-size:0.8125rem}
+  .cfoot{margin:0.75rem 0 0;padding:0.5rem 0.125rem 0;border-top:1px solid var(--ln);color:var(--mu);font-size:0.78125rem;line-height:1.5} /* a failed refresh of the inputs, at the page's foot (console.js readFootHtml, G64) */
   /* the table column is exactly the table's width (--tw, the row tracks below); the side column takes the rest */
   .wrap{--wm:4rem;--wd:4rem;--ws:2.25rem;--wo:2.75rem;--wb:16.5rem;--wp:15rem;
     --tw:calc(2.25rem + var(--wp) + var(--wm) + var(--wd) + 3.25rem + 4rem + 4.25rem + var(--wb) + var(--ws) + var(--wo) + 9 * var(--cg) + 1.5rem + 0.125rem);
