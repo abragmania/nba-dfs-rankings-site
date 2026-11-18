@@ -65,4 +65,4 @@ body.light .lu.wk .wkr.tm{background-image:linear-gradient(90deg,color-mix(in sr
 body.light .lu.wk .wkr{border-bottom-color:#d6d6cf}
 body.light .lu.wk .wkr.empty{background:#00000008}
 /* The "you can type here" box (board.css) is lighter on the light page, where the muted ink is darker. */
-body.light #tbody .cedit:not(.ctyped):not(.min-typed),body.light #tbody .bump-fig:not(.bump-typed),body.light #tbody td.own .v.ov-own:not(.ov-typed){box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--mu) 16%,transparent)}
+body.light #tbody .cedit:not(.ctyped):not(.min-typed),body.light #tbody td.own .v.ov-own:not(.ov-typed){box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--mu) 16%,transparent)}

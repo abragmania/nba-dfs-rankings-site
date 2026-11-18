@@ -11,19 +11,19 @@ export const COLUMNS = [
   { key: "lock", label: "Lock" },
   { key: "exclude", label: "Exclude" },
   { key: "name", label: "Player", required: true },
+  { key: "pos", label: "Pos" },
   { key: "salary", label: "Salary" },
-  // Tonight's block (Adam 4:34 PM 11-17): the four typed inputs Proj, Min, DK/min, Own % with the calculated Value among them, then TG Min, a read-only reference after a divider (player-table.js famClass).
+  // The Projections / Tonight block (Adam 2:29 PM 11-18): Proj and Value (calculated), then the typed inputs Min, DK/min, Own %, then TG Min, a read-only reference after a divider (player-table.js famClass).
   { key: "projection", label: "Proj" },
+  { key: "value", label: "Value" },
   { key: "minutes", label: "Min" },
   { key: "dk_tonight", label: "DK/min Tonight" },
-  { key: "value", label: "Value" },
   { key: "proj_own", label: "Own %" },
   { key: "min_other", label: "TG Min" },
   // Stats, what happened; DK/min Season meets DK/min Tonight at the family boundary.
   { key: "dk_per_min", label: "DK/min Season" },
   { key: "usage", label: "Usage %" },
   { key: "min_usual", label: "Mins (usual)" },
-  { key: "min_chg", label: "Chg (Min vs Usual)" },
   // The lineup limits, side by side at the right end.
   { key: "min_pct", label: "Min Exp %" },
   { key: "max_pct", label: "Max Exp %" },
@@ -31,16 +31,16 @@ export const COLUMNS = [
 const BY_KEY = new Map(COLUMNS.map((c) => [c.key, c]));
 const STANDARD = COLUMNS.map((c) => c.key);
 
-/** The remembered state's version. 5 (Adam 4:34 PM 11-17): Proj, Min, DK/min, Value, Own %, TG Min; 4 (Adam, 11-13): the five controls first, then Player, the limits last; 3 (11-09) put projections, stats, then controls. A state from before 5 takes the standard's
+/** The remembered state's version. 6 (Adam 2:29 PM 11-18): Pos before Salary, then Proj, Value, Min, DK/min, Own %, TG Min, and Chg removed; 5 (Adam 4:34 PM 11-17): Proj, Min, DK/min, Value, Own %, TG Min; 4 (Adam, 11-13): the five controls first, then Player, the limits last; 3 (11-09) put projections, stats, then controls. A state from before 6 takes the standard's
  *  order once (its ticks kept, so what he hid stays hidden) and can be reordered from the Columns list afterwards. 2 (11-07) put Min and DK/m TON beside Val. */
-export const COLUMNS_VERSION = 5;
+export const COLUMNS_VERSION = 6;
 const BESIDE_VAL = ["minutes", "min_other", "dk_tonight"];
 
 /** The standard's order with every column ticked. */
 export const defaultColumns = () => ({ v: COLUMNS_VERSION, order: [...STANDARD], hidden: [] });
 
 /** A remembered state made safe: unknown and repeated keys dropped, a column it does not know put back after its standard
- *  neighbour, a required column never hidden. A state from before version 5 takes the standard's order, once, with its ticks kept
+ *  neighbour, a required column never hidden. A state from before version 6 takes the standard's order, once, with its ticks kept
  *  (before version 2 Min and DK/m TON were also ticked on). Anything that is not a state gives the standard's. */
 export function cleanColumns(saved) {
   if (!saved || typeof saved !== "object" || !Array.isArray(saved.order)) return defaultColumns();

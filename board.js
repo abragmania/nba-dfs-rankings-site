@@ -34,7 +34,6 @@ import { topHtml, gamesHtml, headTitle as viewHeadTitle, chipsHtml, outMan, outs
 
 const $ = (id) => document.getElementById(id);
 const TABS = ["ALL", "PG", "SG", "SF", "PF", "C", "G", "F"];
-const SINGLE = ["PG", "SG", "SF", "PF", "C"];
 /** The slate's assigned colours for a team, {t1, t2}; the fixed table's colours if the team is not on the slate. */
 const colourOf = (t) => (S.colours?.[t] ? { t1: S.colours[t].main, t2: S.colours[t].second } : teamColors(t));
 
@@ -317,11 +316,6 @@ function fitGames() {
 }
 
 // ---------- table ----------
-const posTag = (p) => {
-  if (!SINGLE.includes(S.tab)) return p.positions.join("/");
-  const rest = p.positions.filter((x) => x !== S.tab);
-  return rest.length ? "+" + rest.join("/") : "";
-};
 function visible() {
   const rows = filterPlayers(S.players, S, S.picks);
   return rows.sort((a, b) => comparePlayers(a, b, S.sort, minSourceOf(S.slate)));
@@ -346,7 +340,7 @@ function renderRows() {
   $("cnt").textContent = `${rows.length} player${rows.length === 1 ? "" : "s"}${sortNote(keys, S.sort)}`;
   // A keyboard user keeps his place, and an open box what he typed: the rows redraw on every pick, save and answer from the server.
   editors.around(() => keepFocus($("tbody"), () => {
-    $("tbody").innerHTML = rows.length ? rows.map((p) => rowHtml(p, keys, { minSource: minSourceOf(S.slate), dash, when, colourOf, tag: posTag(p), lock, ex, L, inl, blocks, limits: panel.limits(), marks: boardMarks.of })).join("") : `<tr><td colspan="${keys.length}" class="nores">No players match.</td></tr>`;
+    $("tbody").innerHTML = rows.length ? rows.map((p) => rowHtml(p, keys, { minSource: minSourceOf(S.slate), dash, when, colourOf, lock, ex, L, inl, blocks, limits: panel.limits(), marks: boardMarks.of })).join("") : `<tr><td colspan="${keys.length}" class="nores">No players match.</td></tr>`;
   }));
 }
 // The table is only as wide as its content, so its width would follow the visible rows and the optimizer beside it would
@@ -370,7 +364,7 @@ function fixTableWidth() {
 function stickyHeights() {
   const root = document.documentElement.style, h = (el) => el?.getBoundingClientRect().height ?? 0, s = remScale();
   root.setProperty("--fbarh", `${$("fbar").offsetHeight}px`);
-  const first = document.querySelector("#thead th:first-child");
+  const first = document.querySelector("#thead tr:last-child th:first-child");
   root.setProperty("--plleft", `${first?.classList.contains("ctl") ? Math.ceil(first.getBoundingClientRect().width) : 0}px`);
   root.setProperty("--luh", `${Math.ceil(h(document.querySelector("#opt .lu"))) + 4 * s}px`);
   root.scrollPaddingTop = `${Math.ceil(h($("fbar")) + h($("thead"))) + 4 * s}px`;

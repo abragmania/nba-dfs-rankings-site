@@ -6,32 +6,32 @@ import { esc, money, logo, ICON, statusBadge, restDot, figSourceWord, hisProj, h
 import { bumpControlHtml, bumpFigureHtml } from "./bump-control.js";
 import { rowPin } from "./lateswap-panel.js";
 import { limitCellHtml } from "./row-limits.js";
-import { sgn, dcls } from "./console-model.js";
 import { tonightRate, outFor, isNum } from "./figures.js";
 import { starterChipHtml, undoChipHtml } from "./board-marks.js";
 import { tgMin } from "./lineup-proposals.js";
 
 export const FIG_COLS = {
+  // His DraftKings positions as the slate file gives them (PG, SF/PF, C), a column of its own left of Salary (Adam 2:29 PM 11-18).
+  pos: { key: "pos", label: "Pos", cls: "posc", title: "no position in this slate file", head: "DraftKings position" },
   salary: { key: "salary", label: "Salary", cls: "num sal", title: "no salary in this slate file", head: "DraftKings salary" },
   minutes: { key: "minutes", label: "Min", cls: "num", title: "no minutes in this pull", head: "Minutes: tonight's minutes on this board (click a figure to type your own)" },
   // The other source's minutes, beside Min (Adam, 11-09): Ours while TwoGun's is in force, TG if ours ever is. Blank, dim and with its reason on hover until a figure exists.
   min_other: { key: "min_other", label: "Our Min", cls: "num alt", title: "no figure from the other source for him" },
   min_usual: { key: "min_usual", label: "Mins", cls: "num fig", title: "no usual minutes for him in this slate", head: "Usual minutes (Mins): his healthy-minutes figure, the one the console shows as Usual" },
-  min_chg: { key: "min_chg", label: "Chg", cls: "num fig chg", title: "needs both Min and Usual", head: "Chg: Min minus Usual minutes, how far tonight's minutes sit from his usual" },
   // This season's figures from Basketball-Reference, attached by the server (usage/board_figures.js); each player's
   // *_note says why a figure is missing, and *_tag marks last season's figure ("LY") or a 1-2 game sample ("1g", "2g").
   dk_per_min: { key: "dk_per_min", label: "DK/min", cls: "num fig", title: "no DK points per minute from the server", head: "DK/min, season: average DraftKings points per minute, which doesn't change with tonight's news: +3 per triple-double; the +1.5 double-double bonus is left out (Basketball-Reference season totals carry no double-double count). 2026-27 regular season" },
   dk_tonight: { key: "dk_tonight", label: "DK/min", cls: "num ton", head: "DK/min, tonight: expected DraftKings points per minute: Proj divided by Min as the board shows them, so it follows minutes set in the console and typed numbers. The arrow compares tonight with the season figure; the small signed number is the move since the last pull" },
   usage: { key: "usage", label: "Usage %", cls: "num fig", title: "no usage rate from the server", head: "Usage rate (usage %), 2026-27 regular season" },
-  projection: { key: "projection", label: "Proj", cls: "num proj", title: "no projection in this pull", head: "Projected DraftKings points tonight (click a figure to type your own)" },
+  projection: { key: "projection", label: "Proj", cls: "num proj", title: "no projection in this pull", head: "Projected DraftKings points tonight. Min and DK/min are the boxes you type in; the thumbs raise and lower this figure" },
   value: { key: "value", label: "Value", cls: "num val", title: "no value in this pull", head: "Value: projected points per $1,000 of salary" },
   proj_own: { key: "proj_own", label: "Own %", cls: "num own", title: "no projected ownership in this pull", head: "Projected ownership: the share of lineups that will hold him (click a figure to type your own)" },
 };
 /** The three groups of figure columns (Adam, 11-09): "p" tonight's projections, tinted as one band; "s" stats, what happened, quieter; "c" the controls.
  *  Sal, Star and Player belong to none. A column that opens a group after another group or after Sal gets the divider. */
-const FAM = { projection: "p", value: "p", proj_own: "p", minutes: "p", min_other: "p", dk_tonight: "p", dk_per_min: "s", usage: "s", min_usual: "s", min_chg: "s", thumbs: "c", lock: "c", exclude: "c", min_pct: "c", max_pct: "c" };
+const FAM = { projection: "p", value: "p", proj_own: "p", minutes: "p", min_other: "p", dk_tonight: "p", dk_per_min: "s", usage: "s", min_usual: "s", thumbs: "c", lock: "c", exclude: "c", min_pct: "c", max_pct: "c" };
 /** The band names over the projection and stats families. */
-const BAND = { p: "Tonight", s: "Season Stats" };
+const BAND = { p: "Projections / Tonight", s: "Season" };
 export const famOf = (k) => FAM[k] ?? "";
 /** The classes a column's cell and header carry for its group: " gp"/" gs"/" gc", and " gd" where the group starts. */
 export function famClass(keys, i) {
@@ -89,8 +89,10 @@ export const minChg = (p) => (typeof p.minutes === "number" && typeof p.min_usua
 export const dkTonight = (p) => tonightRate(p.projection, p.minutes);
 /** Tonight's DK/min against the season's, inside this far no arrow shows. Builder's value, not Adam's. */
 export const TON_ARROW_BAND = 0.02;
+/** His positions as DraftKings writes them, "PG/SG"; "" when the slate file has none. */
+export const posText = (p) => (Array.isArray(p?.positions) ? p.positions.join("/") : "");
 /** The figure a sort on column key reads. */
-export const sortValue = (p, key, source = "twogun") => (key === "min_chg" ? minChg(p) : key === "dk_tonight" ? dkTonight(p) : key === "min_other" ? minOtherOf(p, source).value : p[key]);
+export const sortValue = (p, key, source = "twogun") => (key === "pos" ? posText(p) : key === "dk_tonight" ? dkTonight(p) : key === "min_other" ? minOtherOf(p, source).value : p[key]);
 /** The Proj cell's hover under our minutes engine: why his figure is missing, or ours against TwoGun's; null on TwoGun's own figures. */
 export function projTitle(p) {
   if (p.proj_note) return p.proj_note;
@@ -115,10 +117,11 @@ function tonightCell(p, col, dash, withWhy, mark) {
 export function comparePlayers(a, b, { key, dir }, source = "twogun") {
   if (key === "name") return dir * a.name.localeCompare(b.name);
   const x = sortValue(a, key, source), y = sortValue(b, key, source);
-  if (x == null && y == null) return a.name.localeCompare(b.name);
-  if (x == null) return 1;
-  if (y == null) return -1;
-  return dir * (x - y) || a.name.localeCompare(b.name);
+  const blank = (v) => v == null || v === "";
+  if (blank(x) && blank(y)) return a.name.localeCompare(b.name);
+  if (blank(x)) return 1;
+  if (blank(y)) return -1;
+  return dir * (typeof x === "string" ? x.localeCompare(y) : x - y) || a.name.localeCompare(b.name);
 }
 /** Whether a row holds anything a board reset clears: a projection, ownership or bump typed on the board (board-util.js boardTyped). Console figures and news's keep it off. */
 export const hasResettable = (p) => boardTyped(p);
@@ -142,10 +145,19 @@ export function headHtml(keys, sort, headTitle, minSource = "twogun") {
     const c = FIG_COLS[k];
     return `<th class="${c.cls}${on(k)}" data-sort="${k}"${k === "min_other" ? (minSource === "ours" ? "" : ` title="${MIN_OTHER_HEAD}"`) : c.head ? ` title="${esc(headTitle(c))}"` : ""}>${k === "min_other" ? minOtherLabel(minSource) : c.label}</th>`;
   };
-  // A small band name over the first shown column of the projection family ("Tonight") and the stats family ("Season Stats"), drawn by board.css from data-band.
-  const band = (k, i) => (i > 0 && famOf(keys[i - 1]) === famOf(k) ? "" : BAND[famOf(k)] ?? "");
-  const withBand = (html, b) => (b ? html.replace(/^(<th[^>]*)>/, `$1 data-band="${b}">`) : html);
-  return `<tr>${keys.map((k, i) => withBand(addClass(cell(k), famClass(keys, i)), band(k, i))).join("")}</tr>`;
+  return `${bandRowHtml(keys)}<tr>${keys.map((k, i) => addClass(cell(k), famClass(keys, i))).join("")}</tr>`;
+}
+
+/** The band row over the column headers: one title spanning each run of shown columns in the projection family ("Projections / Tonight") and the stats family ("Season"); every other run is an empty spacer. Empty when no banded column is shown. */
+export function bandRowHtml(keys) {
+  const runs = [];
+  keys.forEach((k, i) => {
+    const b = BAND[famOf(k)] ?? "", last = runs[runs.length - 1];
+    if (last && last.b === b && (b === "" || famOf(keys[i - 1]) === famOf(k))) last.n++;
+    else runs.push({ b, f: famOf(k), n: 1, gd: famClass(keys, i).includes(" gd") });
+  });
+  if (!runs.some((r) => r.b)) return "";
+  return `<tr class="bandrow">${runs.map((r) => (r.b ? `<th class="band g${r.f}${r.gd ? " gd" : ""}" colspan="${r.n}">${esc(r.b)}</th>` : `<th class="bandgap" colspan="${r.n}"></th>`)).join("")}</tr>`;
 }
 
 /** A number he typed on a man who is Out: kept, drawn struck, and used once he is In (figures.js outFor). */
@@ -173,9 +185,9 @@ function figCell(k, p, x) {
     return o.value === null ? `<td class="${col.cls} dim"${x.minSource === "ours" ? "" : ` title="${esc(withWhy(o.note))}"`}></td>` : `<td class="${col.cls}" title="${esc(withWhy(o.note))}">${o.value.toFixed(1)}</td>`;
   }
   if (k === "min_usual") return `<td class="${col.cls}">${v == null ? dash(p.min_usual_note ?? col.title) : v.toFixed(1)}</td>`;
-  if (k === "min_chg") {
-    const c = minChg(p);
-    return c == null ? `<td class="${col.cls}">${dash(p.min_usual_note ?? col.title)}</td>` : `<td class="${col.cls} ${dcls(c)}">${sgn(c)}</td>`;
+  if (k === "pos") {
+    const t = posText(p);
+    return `<td class="${col.cls}">${t ? esc(t) : dash(col.title)}</td>`;
   }
   if (k === "dk_per_min" || k === "usage") {
     const note = p[k + "_note"], tag = p[k + "_tag"];
@@ -198,7 +210,7 @@ function figCell(k, p, x) {
 }
 
 /**
- * One player row. x: { dash, when(stamp), colourOf(team), tag (his position tag on this tab), lock, ex (Sets of dk_ids),
+ * One player row. x: { dash, when(stamp), colourOf(team), lock, ex (Sets of dk_ids),
  * L (lateSwap view or null), inl (Set of the lineup on show, or null), blocks (Map of dk_id to why he cannot go into the
  * working lineup, or null: a greyed row, its figures and controls still there, standard A18), limits (dk_id to
  * his { min, max }, standard B10), marks(dk_id) (board-marks.js: his S chip and typed minutes and DK/min, or null) }.
@@ -218,7 +230,7 @@ export function rowHtml(p, keys, x) {
   const cell = (k) => {
     switch (k) {
       case "star": return `<td class="ctl"><button class="fav${p.starred ? " on" : ""}" data-star="${id}" title="${p.starred ? "Unstar" : "Star"}">${p.starred ? "★" : "☆"}</button></td>`;
-      case "name": return `<td class="pl"><div class="who">${logo(p.team)}<div class="nm"><div class="l1"><button class="name" data-dk-id="${id}">${esc(p.name)}</button>${starterChipHtml(x.mark?.chip)}${x.tag ? `<span class="pos">${esc(x.tag)}</span>` : ""}${restDot(p)}${statusBadge(p, x.mark?.inj)}</div><div class="l2">${esc(p.team)} ${p.oppText ? esc(p.oppText) : dash("no opponent in this slate file")} · ${p.tip ? esc(x.when(p.tip)) : dash("no tip time in this slate file")}</div></div>${tools}</div></td>`;
+      case "name": return `<td class="pl"><div class="who">${logo(p.team)}<div class="nm"><div class="l1"><button class="name" data-dk-id="${id}">${esc(p.name)}</button>${starterChipHtml(x.mark?.chip)}${restDot(p)}${statusBadge(p, x.mark?.inj)}</div><div class="l2">${esc(p.team)} ${p.oppText ? esc(p.oppText) : dash("no opponent in this slate file")} · ${p.tip ? esc(x.when(p.tip)) : dash("no tip time in this slate file")}</div></div>${tools}</div></td>`;
       case "thumbs": return `<td class="bmp">${bumpControlHtml(p)}</td>`;
       // Late swap mode: the slot picker takes the lock button's place; a lock is still set from the player card.
       case "lock": return `<td class="ctl${L ? " ls" : ""}">${L ? rowPin(p, L) : `<button class="lk${lk ? " on" : ""}" data-lock="${id}"${btn("Lock")}>${ICON.lock}</button>`}</td>`;

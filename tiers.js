@@ -184,11 +184,14 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
   const out = new Map(), sumOf = (mp) => [...mp.values()].reduce((s, v) => s + v, 0);
   for (const x of known) out.set(x.m.id, entryOf(x, fill, TEAM_MINUTES, pa(x.m.id)));
   if (!missing.length) notes.push(...benchOverNotes(known, out, TEAM_MINUTES));
-  for (const x of missing) out.set(x.m.id, { auto: null, figure: null, computed: null, ceiling: null, computed_ceiling: null, floor: null, spot: x.spot, tier: x.tier, basis: x.basis, used: x.used, skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: 0, label: { ...x.label, fill: 0, trim: 0 }, why: x.words });
+  for (const x of missing) out.set(x.m.id, { auto: null, figure: null, computed: null, ceiling: null, computed_ceiling: null, floor: null, spot: x.spot, tier: x.tier, basis: x.basis, used: x.used, skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: 0, label: { ...x.label, ...spotOf(x), fill: 0, trim: 0 }, why: x.words });
   const pot = { sum: r1(fill.sum), gap: r1(fill.gap), out: outs.map((o) => o.name),
     capped: known.filter((x) => x.capped > EPS).map((x) => ({ name: x.m.name, minutes: r1(x.capped) })), proportional: sumOf(fill.prop), rounds: fill.rounds, round_minutes: sumOf(fill.plus), trimmed: fill.trimmed, unassigned: fill.unassigned, untrimmed: fill.untrimmed };
   return { byId: out, notes, total: missing.length ? null : fill.sum + pot.proportional + pot.round_minutes - sumOf(fill.cut), pot };
 }
+
+// Every bench man's label carries his bench spot (a Bench+ man's own-mean label has none of its own), so the Console's bench list sorts by the engine's spot, Bench+ first (Adam 2:14 PM 11-17).
+const spotOf = (x) => (isNum(x.spot) && !isNum(x.label?.spot) ? { spot: x.spot } : {});
 
 /** One man's plan entry: his figure through the fill and trim, with a why naming each step (Adam 11-17). */
 function entryOf(x, fill, T, pos = 0) {
@@ -197,7 +200,7 @@ function entryOf(x, fill, T, pos = 0) {
   const fillWords = `${shown(pos) ? `; +${r1(pos)}: the Out men's minutes by position (each to his own position's starters, then the starters next to it, then all Bench+ men share in proportion to their typical minutes, then his position's plain bench in role order, then the plain bench next to it, no plain bench man above the team's lowest starter; he is ${x.m.depth?.pos ?? "no position"})` : ""}${shown(e) ? `; +${r1(e)} to reach ${T} (in proportion to his figure, none above ${MINUTES_CAP})` : ""}${shown(p) ? `; +${r1(p)} in +1 rounds to reach ${T} (starters, then bench, the last round pro-rated)` : ""}`;
   const how = fill.how.get(id), trimWords = shown(cut) ? `; -${r1(cut)}: the team's figures are over ${T} (${how === "starter" ? "the bench could not absorb it all, so starters were trimmed above their floors" : how === "bench_plus" ? "the plain bench could not absorb it all, so Bench+ men were trimmed above their typical minutes" : "the plain bench trimmed in proportion to their figures"})` : "";
   return { auto, figure: x.figure, computed: x.computed, ceiling: p > 1e-6 ? Math.max(x.ceiling, auto) : x.ceiling, computed_ceiling: x.computed_ceiling, floor: x.floor, spot: x.spot, tier: x.tier, basis: x.basis, used: x.used,
-    skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: x.n, label: { ...x.label, fill: shown(e + p + pos) ? r1(e + p + pos) : 0, trim: shown(cut) ? r1(cut) : 0 }, why: `${x.words}${fillWords}${trimWords} = ${r1(auto)}` };
+    skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: x.n, label: { ...x.label, ...spotOf(x), fill: shown(e + p + pos) ? r1(e + p + pos) : 0, trim: shown(cut) ? r1(cut) : 0 }, why: `${x.words}${fillWords}${trimWords} = ${r1(auto)}` };
 }
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;

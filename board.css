@@ -82,12 +82,14 @@ thead tr{background:var(--p2)}th.pl{text-align:left}th.s{color:var(--am)}th.ctl{
 /* The sort arrow hangs after the label and takes no width (its negative margin cancels it), so a sort moves no column and the label stays over its numbers; the sorted header sits one layer up so the arrow shows over the next header's padding. */
 th[data-sort]::after{content:"▾";display:inline-block;width:0.5rem;margin:0 -0.625rem 0 0.125rem;font-size:0.5rem;text-align:left;visibility:hidden}th.s::after{visibility:visible}th.s.up::after{content:"▴"}
 #thead th.s{z-index:2}
-#thead th{padding-top:1.25rem;vertical-align:bottom}
-/* Band names (player-table.js BAND): a small label above the first column of the Tonight and Season Stats families. */
-#thead th[data-band]{z-index:2}
-#thead th[data-band]::before{content:attr(data-band);position:absolute;top:0.3125rem;left:0.5rem;font-size:0.625rem;font-weight:800;line-height:1;letter-spacing:0.0625rem;text-transform:uppercase;color:var(--mu);pointer-events:none}
-/* A group is told apart by its small label and the thin divider at its left edge (td.gd); no tint and no coloured rule (amber is kept for meaning). */
-#thead th.ctl,#thead th.bmp{padding-top:1.25rem}
+#thead th{padding-top:0.375rem;vertical-align:bottom}
+/* Band row (player-table.js bandRowHtml): one title spanning each group's columns, over its own header row. The title reads at the same weight as a column head but one step larger, sits on a plate of the group's tone and is underlined by a rule the width of the group; the thin divider at the group's left edge runs through both rows. Amber is kept for meaning. */
+#thead{--bandh:1.625rem}
+#thead .bandrow th{height:var(--bandh);padding:0 0.875rem;text-align:left;vertical-align:middle;font-size:0.75rem;font-weight:700;line-height:1;background:var(--p2);color:var(--mu);cursor:default;box-shadow:none}
+#thead .bandrow th.band{box-shadow:inset 0 -0.125rem 0 color-mix(in srgb,var(--mu) 45%,transparent)}
+#thead .bandrow th.band.gp{background:color-mix(in srgb,var(--tx) 7%,var(--p2));color:var(--tx);box-shadow:inset 0 -0.125rem 0 color-mix(in srgb,var(--tx) 60%,transparent)}
+#thead .bandrow th.bandgap{background:var(--p2)}
+#thead tr.bandrow~tr th{top:calc(var(--fbarh,0rem) + var(--bandh) - 0.0625rem)}
 td{padding:0.125rem 0.75rem;border-bottom:1px solid #18181c;text-align:right;white-space:nowrap}
 tbody tr:hover td{background:#ffffff0d}
 tr.team:hover td{background:color-mix(in srgb,var(--t1) 7%,transparent)}
@@ -106,19 +108,23 @@ td.pl{text-align:left;padding-left:0.375rem;padding-right:0.75rem}
 .name{font:600 0.875rem "Space Grotesk",sans-serif;background:none;border:0;padding:0;color:var(--tx);text-align:left;cursor:pointer}
 .l1 .name{line-height:1rem}
 .pos{font-weight:700;font-size:0.6563rem;line-height:0.875rem;color:var(--am);border:1px solid #ffb00055;padding:0 0.3125rem}
-#tbody .pos{color:var(--mu);border-color:var(--ln);font-weight:600} /* in the player list the position is quiet text in a faint box, so it does not compete with the name or the amber S */
 .st{display:inline-flex;align-items:center;justify-content:center;width:1rem;height:1rem;font-weight:800;font-size:0.6563rem;line-height:1;color:#000;flex-shrink:0}
 .l2{font-size:0.6875rem;line-height:0.8125rem;color:var(--dim);margin-top:0}
 /* The Player column is as wide as the longest name with its chips: a long matchup or "moved since the pull" line wraps inside that width instead of stretching the column (it pushed Salary far from the names). */
 #tbody td.pl .l2{white-space:nowrap}
 /* Figure columns: one even gap everywhere (the same padding both sides, no minimum width); the season figures add room for the LY/1g/2g marker (below). */
 td.num,th.num{padding-left:0.5rem;padding-right:0.5rem}
-td.chg.up{color:color-mix(in srgb,var(--gr) 55%,var(--mu))}td.chg.dn{color:color-mix(in srgb,var(--rd) 55%,var(--mu))}td.chg.dim{color:var(--mu)} /* Chg is in the quiet stats family: its sign shows in a muted green or red, not the loud colour of a TON arrow */
+/* Position column (player-table.js pos): quiet left-aligned text, a gap before Salary. */
+td.posc,th.posc{text-align:left;padding-left:0.5rem;padding-right:0.5rem}
+td.posc{color:var(--mu);font-size:0.75rem;font-weight:600}
+/* Salary closes the left half; the Projections / Tonight group opens after a wider gap so the divider never crowds it. */
+td.sal,th.sal{padding-right:1.125rem}
+td.num.gd,th.num.gd{padding-left:1rem}
 td.alt{color:var(--mu);font-weight:400}td.alt.dim{color:var(--dim)} /* Ours beside Min (player-table.js min_other): the other source, so a shade quieter than Min; blank and dimmer with no figure */
 td.sal{color:var(--mu)}
 /* Two groups of figures (player-table.js famOf). Projections (Proj, Val, Own, Min, Ours, DK/m TON): tonight's numbers, one tinted band down header and rows,
-   one size, text colour, weight 500, right-aligned; Proj alone is bold as the headline. Stats (DK/m SZN, Usg, Usual, Chg): what happened, untinted, muted, weight 400, one right edge with room for the LY/1g/2g marker.
-   Colour is kept only for meaning: the TON arrow and Chg's sign (green up, red down), a typed number's amber box, the amber LY marker. A thin divider opens each group. */
+   one size, text colour, weight 500, right-aligned; Proj alone is bold as the headline. Stats (DK/m SZN, Usg, Usual): what happened, untinted, muted, weight 400, one right edge with room for the LY/1g/2g marker.
+   Colour is kept only for meaning: the TON arrow (green up, red down), a typed number's amber box, the amber LY marker. A thin divider opens each group. */
 td.gd,th.gd{border-left:1px solid color-mix(in srgb,var(--mu) 38%,var(--ln))}
 td.gp{font-weight:500;color:var(--tx)}td.gp.alt{font-weight:400;color:var(--mu)}td.gp.alt.dim{color:var(--dim)}
 td.fig{color:var(--mu);font-weight:400}
@@ -383,7 +389,7 @@ tr.excl td{opacity:.3}tr.excl .name{text-decoration:line-through}
 /* One sans family and one size on every player row and lineup row (standard D11); only the matchup's second line is smaller (A1), and the position and injury marks keep their own small boxes. */
 #tbody td,#tbody .name,#tbody td.proj,#tbody td.ton,#tbody td.fig,#tbody .v,#tbody .bump-fig,#tbody .limb,.crow,.crow .pn,.opt .crow .pn,.sn b,.so,.ss,.sp{font-family:"Space Grotesk",sans-serif;font-size:0.8438rem;font-variant-numeric:tabular-nums}
 #tbody .l2,.sn small{font-family:"Space Grotesk",sans-serif}
-#tbody .pos,#tbody .st,.crow .pos,.crow .st,.crow .sl,.crow i{font-family:"Space Grotesk",sans-serif}
+#tbody .st,.crow .pos,.crow .st,.crow .sl,.crow i{font-family:"Space Grotesk",sans-serif}
 /* Optimizer settings, lineup switcher, actions and saved list (panel.js); every rule is scoped to the panel. */
 .opt input,.opt select{color:var(--tx);letter-spacing:0;text-transform:none}
 .opt input:focus,.opt select:focus{outline:none;border-color:var(--am)}
@@ -642,13 +648,14 @@ body.light .optstrip .osseg button.on{color:#fff}
 .bump-btn.is-on .thumb{stroke:var(--p2);stroke-width:6.5;paint-order:stroke}
 .bump-btn.is-on[data-action="bump-up"] .thumb{fill:var(--gr)}
 .bump-btn.is-on[data-action="bump-down"] .thumb{fill:var(--rd)}
-.bump-fig{display:inline-block;min-width:5ch;padding:0 0.125rem;text-align:right;font-variant-numeric:tabular-nums;vertical-align:middle;cursor:text}
+/* Proj is a plain figure, not an input (Adam 2:29 PM 11-18): no box, no text cursor. A bump tints it and a number typed earlier keeps its amber colour and tint, without the input outline. */
+.bump-fig{display:inline-block;min-width:5ch;padding:0 0.125rem;text-align:right;font-variant-numeric:tabular-nums;vertical-align:middle;cursor:default}
 .bump-fig.bump-up{background:#39e58c1f;color:var(--gr)}
 .bump-fig.bump-down{background:#ff4d5e1f;color:var(--rd)}
-.bump-fig.bump-typed,td.own .v.ov-typed,.min-typed{outline:1px solid var(--am);outline-offset:-0.0625rem;background:#ffb00014;color:var(--am)}
+td.own .v.ov-typed,.min-typed{outline:1px solid var(--am);outline-offset:-0.0625rem;background:#ffb00014;color:var(--am)}
 /* A typed number's box: room on the right inside it, pulled out by the same amount so its digits stay in line with the column. */
 .min-typed{display:inline-block;min-width:5ch;padding:0 0.25rem;margin-right:-0.25rem;text-align:right}
-.bump-fig.bump-typed{padding-right:0.375rem;margin-right:-0.25rem}
+.bump-fig.bump-typed{background:#ffb00014;color:var(--am)}
 td.own .v.ov-typed{padding-right:0.25rem;margin-right:-0.25rem}
 td.own .v.ov-own{cursor:text}
 /* Typed and bumped: the marker outline keeps the bump's colour, so the direction still reads. */
@@ -785,6 +792,7 @@ body.fs-list #thead th:last-child,body.fs-list #tbody td:last-child{width:auto} 
   .work,.pool{min-width:0;max-width:100%}
   .tbl{position:sticky;top:var(--fbarh,0rem);overflow:auto;max-height:calc(100dvh - var(--fbarh,0rem) - 0.75rem)}
   #thead th{top:0}
+  #thead tr.bandrow~tr th{top:calc(var(--bandh) - 0.0625rem)}
   .tools,.chips,.top .stamps,.top{flex-wrap:wrap}
   .colsw{margin-left:0}
   .cnt{min-width:0;margin-left:0}
@@ -815,7 +823,7 @@ body.fs-list #thead th:last-child,body.fs-list #tbody td:last-child{width:auto} 
   #tbody .who .nm{min-width:0;flex:1;overflow:hidden}
   #tbody .l1{overflow:hidden}
   #tbody .l1 .name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #tbody .l1 .pos,#tbody .l2{display:none}
+  #tbody .l2{display:none}
   /* The row's note and reset buttons drop to a second line under the name, inside the same 128px sticky cell, so no figure column is pushed. */
   #tbody .who{flex-wrap:wrap;row-gap:0.125rem}
   #tbody .ovt{flex-basis:100%;margin-left:1.75rem;padding-left:0}
@@ -834,9 +842,9 @@ td:has(> .cedit){position:relative}
 .cedit{display:inline-block;min-width:4ch;padding:0 0.1875rem;margin-right:-0.1875rem;text-align:right;cursor:text}
 .cedit.ctyped{outline:1px solid var(--am);outline-offset:-0.0625rem;background:#ffb00014;color:var(--am);font-weight:700}
 /* "You can type here": Proj, Own, Min and DK/m TON (the cells he can edit) rest in one faint box that read-only figures do not have, stronger on hover; his typed numbers keep their amber box (above). Box padding is pulled out by margin so digits stay in line with the column. */
-#tbody .cedit:not(.ctyped):not(.min-typed),#tbody .bump-fig:not(.bump-typed),#tbody td.own .v.ov-own:not(.ov-typed){display:inline-block;min-width:4ch;padding:0 0.25rem;margin-right:-0.25rem;border-radius:0.125rem;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--mu) 38%,transparent)}
-#tbody .cedit:not(.ctyped):not(.min-typed),#tbody .bump-fig:not(.bump-typed):not(.bump-up):not(.bump-down),#tbody td.own .v.ov-own:not(.ov-typed){background:color-mix(in srgb,var(--tx) 6%,transparent)}
-#tbody .cedit:not(.ctyped):not(.min-typed):hover,#tbody .bump-fig:not(.bump-typed):hover,#tbody td.own .v.ov-own:not(.ov-typed):hover{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--mu) 75%,transparent);background:color-mix(in srgb,var(--tx) 8%,transparent)}
+#tbody .cedit:not(.ctyped):not(.min-typed),#tbody td.own .v.ov-own:not(.ov-typed){display:inline-block;min-width:4ch;padding:0 0.25rem;margin-right:-0.25rem;border-radius:0.125rem;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--mu) 38%,transparent)}
+#tbody .cedit:not(.ctyped):not(.min-typed),#tbody td.own .v.ov-own:not(.ov-typed){background:color-mix(in srgb,var(--tx) 6%,transparent)}
+#tbody .cedit:not(.ctyped):not(.min-typed):hover,#tbody td.own .v.ov-own:not(.ov-typed):hover{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--mu) 75%,transparent);background:color-mix(in srgb,var(--tx) 8%,transparent)}
 /* His undo chip hangs in the gap left of the number and takes no width, so Min and DK/m TON sit at the same spacing as every other figure column. */
 .cu{display:inline-block;position:relative;width:0;height:1rem;vertical-align:middle}
 .cu>.cundo{position:absolute;right:0.25rem;top:0}

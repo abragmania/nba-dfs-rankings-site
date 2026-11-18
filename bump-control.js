@@ -79,24 +79,25 @@ export function bumpControlHtml(p, { enabled = true } = {}) {
 /**
  * The Proj figure's span: plain; bumped (.bump-up / .bump-down, hover "Base 40.8 → 42.8 (+5%)"); typed (.bump-typed, the
  * board's marker for Adam's own number, hover with the base); or typed and bumped (both, hover "Typed 30.0 → 31.5 (+5%)"
- * then the base). It carries data-edit so a click opens the editor. `also` follows on the hover (why the row is greyed).
+ * then the base). It is a plain figure, not an editor (Adam 2:29 PM 11-18: Proj is no longer typed on; a number typed earlier still applies and keeps its amber mark). `also` follows on the hover (why the row is greyed).
  */
 export function bumpFigureHtml(p, text, also = "") {
   const steps = bumpStepsOf(p);
   const id = esc(String(p?.dk_id ?? ""));
   const typed = hasTypedProj(p), base = dec1(p?.base?.projection) ?? "—";
-  let cls = "bump-fig", title = "Click to type your own projection";
+  let cls = "bump-fig", title = "";
   if (steps) cls += steps > 0 ? " bump-up" : " bump-down";
   if (typed) {
     cls += " bump-typed";
     title = steps
-      ? `Typed ${dec1(p.ovr.projection) ?? "—"} → ${dec1(p?.projection) ?? "—"} (${bumpPctText(steps)}); base ${base}. Click to change the typed number, or reset the row`
-      : `Your number. Base ${base}; click to change it, or reset the row`;
+      ? `Typed ${dec1(p.ovr.projection) ?? "—"} → ${dec1(p?.projection) ?? "—"} (${bumpPctText(steps)}); base ${base}. reset the row to clear the typed number`
+      : `Your number. Base ${base}; reset the row to clear it`;
   } else if (steps) {
     const from = p?.auto?.proj ? dec1(p?.ovr?.projection) ?? base : base; // under a news or engine number the bump scales that number
     title = `Base ${from} → ${dec1(p?.projection) ?? "—"} (${bumpPctText(steps)})`;
   }
-  return `<span class="${cls}" data-edit="proj" data-id="${id}" title="${esc(also ? `${title} · ${also}` : title)}">${text}</span>`;
+  const hover = [title, also].filter(Boolean).join(" · ");
+  return `<span class="${cls}" data-id="${id}"${hover ? ` title="${esc(hover)}"` : ""}>${text}</span>`;
 }
 
 const inFlight = new Set(); // ids whose bump request is out: a press for one of them is ignored until it is answered
