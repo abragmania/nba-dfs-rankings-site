@@ -26,7 +26,7 @@ function buildFile(state, args, includeUnchanged) {
     }
     if (spots && !spots.includes(spot)) continue;
     inScope.add(spot);
-    if (hold.includes(spot)) { heldBack.push({ entryId: entry.entryId, contestName: entry.contestName, spot, amber: true, reasons: ["The Lineups tab took this spot's lineup back; answer that on the Late swap screen before this entry goes in a file."] }); continue; }
+    if (hold.includes(spot)) { heldBack.push({ entryId: entry.entryId, contestName: entry.contestName, spot, amber: true, reasons: ["The Lineups tab took this spot's lineup back; answer that on the Entries screen before this entry goes in a file."] }); continue; }
     const { status, reasons } = entryStatus(entry, lineup, ctx, Object.hasOwn(state.spots, spot) ? state.spots[spot].confirmedOut : []);
     if (status === "held") heldBack.push({ entryId: entry.entryId, contestName: entry.contestName, spot, amber: true, reasons });
     else if (status === "changed") { rows.push(entryRow(entry, lineup, cellOf)); changed.push(entry.entryId); } else if (includeUnchanged) { rows.push(entry.rowText); unchanged.push(entry.entryId); }

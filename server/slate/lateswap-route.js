@@ -99,7 +99,7 @@ async function handle(req, res, slate, ctx) {
     const refused = refuseCrossSiteRead(req.headers);
     if (refused) return ctx.fail(res, refused.status, refused.code, refused.message);
   }
-  let slateData = ctx.openSlate(req, res, slate, "Late swap");
+  let slateData = ctx.openSlate(req, res, slate, "Entries");
   if (!slateData) return;
   let body = null;
   if (req.method === "POST") {
@@ -159,7 +159,7 @@ async function handle(req, res, slate, ctx) {
     return respond(res, ctx, slate, slateData, next, { ...extra, outcomes: out.outcomes, confirms: out.confirms, overMax: out.overMax ?? [], mapResult: out.mapResult }, t0);
   } catch (e) {
     error("late swap failed", { slate, message: e.message });
-    return ctx.fail(res, 500, "LATESWAP_FAILED", `The late swap screen could not finish: ${e.message}`);
+    return ctx.fail(res, 500, "LATESWAP_FAILED", `The Entries screen could not finish: ${e.message}`);
   }
 }
 

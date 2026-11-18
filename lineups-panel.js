@@ -328,7 +328,7 @@ async function assignInOrder(X, own, { skip = new Set(), confirmedAll = false } 
   try { await P.spotQueue; } catch (e) { console.warn("A spot change failed before Assign in order:", e.message); } // its own failure was already said by sendSpot
   await readSpotsFor(X, slate, own);
   if (slate !== X.ctx().name || !P.spotsReady) return;
-  if (P.uploaded === null) { X.toast("Assign in order waited: the late swap screen's state could not be read, so the spots holding the uploaded lineups are unknown.", "err"); return; }
+  if (P.uploaded === null) { X.toast("Assign in order waited: the Entries screen's state could not be read, so the spots holding the uploaded lineups are unknown.", "err"); return; }
   const got = orderPlan(X, own, skip);
   if (!got) return;
   const { plan, byId } = got;
@@ -338,7 +338,7 @@ async function assignInOrder(X, own, { skip = new Set(), confirmedAll = false } 
       : plan.cashLeft.length && plan.cashLeft.length === got.byId.size ? "the lineups shown are Cash lineups, and Cash lineups are never put on GPP spots."
         : plan.keptUploaded.length ? `${plan.keptUploaded.join(", ")} still ${plan.keptUploaded.length === 1 ? "holds" : "hold"} the lineup from the uploaded DraftKings file; tick Replace current to give ${plan.keptUploaded.length === 1 ? "it" : "them"} a saved lineup.`
           : "every lineup shown already holds a spot, or no GPP spot is free (tick Replace current to give them anyway).";
-    X.toast(`Nothing to assign: ${words} Save lineups first on the Recently generated tab, or upload your DraftKings entries file on the Late swap screen to get spots.`);
+    X.toast(`Nothing to assign: ${words} Save lineups first on the Recently generated tab, or upload your DraftKings entries file on the Entries screen to get spots.`);
     return own.render(X);
   }
   const bad = plan.assignments.map((a) => ({ id: a.lineupId, e: byId.get(a.lineupId) })).map(({ id, e }) => ({ id, label: labelOf(X, e), men: unavailableMen(e.men) })).filter((b) => b.men.length);
@@ -431,7 +431,7 @@ export function tabClick(X, d, own) {
       const u = P.spotUndo;
       if (!u) return true;
       P.spotUndo = null;
-      sendSpot(X, X.ctx().name, { restore: { spots: u.before, expect: u.after } }, own, { onOk: () => X.toast("Undone on the Lineups tab: its spots are back as they were. The Late swap screen asks before it takes anything back.") });
+      sendSpot(X, X.ctx().name, { restore: { spots: u.before, expect: u.after } }, own, { onOk: () => X.toast("Undone on the Lineups tab: its spots are back as they were. The Entries screen asks before it takes anything back.") });
       redraw();
       return true;
     }

@@ -6,10 +6,10 @@ import { shortTime } from "./board-util.js";
 
 const COLS = ["Entry ID", "Contest Name", "Contest ID", "Entry Fee", "PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"];
 const STEPS = [
-  ["Upload", "Drop the DraftKings entries file. Started men are locked at once."],
+  ["Upload", "Drop the DraftKings entries file. Before the first tip every slot is open; once a game starts, its men are locked in their slots."],
   ["Match", "Give each entry a spot (Cash, GPP #1, GPP #2), then give each spot one lineup. Set once, kept for next time."],
   ["Swap", "Remove a player from one spot or every spot holding him, or edit a single slot."],
-  ["Export", "Changed entries only, one spot, or the whole file with just the changed ones edited."],
+  ["Export", "Changed entries only, one spot, or the whole file with just the changed ones edited; upload it on DraftKings' Upload Lineups page."],
 ];
 
 const when = (iso) => { const t = shortTime(iso, Date.now()); return t ?? iso; };
@@ -34,10 +34,10 @@ export function uploadHtml(L) {
 ${L.upMsg ? `<div class="msg err">${esc(L.upMsg)}</div>` : ""}
 </section>
 <aside class="how">
-<h4>How late swap works</h4>
+<h4>How entries work</h4>
 ${STEPS.map((s, i) => `<div class="step"><b>${i + 1}</b><div><h3>${s[0]}</h3><p>${esc(s[1])}</p></div></div>`).join("")}
 <div class="agebox ${old ? "old" : ""}"><span>Board</span><b>${age ? esc(age.label) : "—"}</b><span>${age ? `${age.minutes} min old` : "age unknown"}</span></div>
-<div class="warn">If your board is more than 30 minutes old, pull it before you swap: late news will not be in these numbers.</div>
+<div class="warn">If your board is more than 30 minutes old, pull it before you fill or swap: late news will not be in these numbers.</div>
 </aside>
 <section class="cols"><h4>What the app looks for in the file</h4><div class="colgrid">${COLS.map((c) => `<span>${esc(c)}</span>`).join("")}</div></section>
 <section class="recent"><h4>Recent uploads</h4>
