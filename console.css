@@ -4,7 +4,7 @@
 body.console-on .games,body.console-on main.work,body.console-on #dropnote{display:none}
 .csw.on{background:var(--gr);border-color:var(--gr);color:var(--p)}
 #console{
-  --ln2:color-mix(in srgb,var(--ln) 60%,transparent);--pin:var(--am);--bd:color-mix(in srgb,var(--mu) 45%,var(--p));--cg:0.5rem;--tgt:color-mix(in srgb,var(--bl) 7%,var(--p));
+  --ln2:color-mix(in srgb,var(--ln) 60%,transparent);--pin:var(--am);--bd:color-mix(in srgb,var(--mu) 45%,var(--p));--cg:0.4rem;--tgt:color-mix(in srgb,var(--bl) 7%,var(--p));
   margin-top:0.625rem;font:0.875rem/1.4 "Segoe UI",system-ui,-apple-system,Arial,sans-serif;font-variant-numeric:tabular-nums;color:var(--tx);
   button{font:inherit;cursor:pointer}
   .grow{flex:1}
@@ -39,19 +39,18 @@ body.console-on .games,body.console-on main.work,body.console-on #dropnote{displ
   .note{margin:0.625rem 0 0.75rem;color:var(--mu);font-size:0.8125rem}
   .cfoot{margin:0.75rem 0 0;padding:0.5rem 0.125rem 0;border-top:1px solid var(--ln);color:var(--mu);font-size:0.78125rem;line-height:1.5} /* a failed refresh of the inputs, at the page's foot (console.js readFootHtml, G64) */
   /* the table column is exactly the table's width (--tw, the row tracks below); the side column takes the rest */
-  .wrap{--wm:4rem;--wd:4rem;--ws:2.25rem;--wo:2.75rem;--wb:11rem;--wp:13rem;
-    --tw:calc(2.25rem + var(--wp) + 4rem + var(--wm) + var(--wd) + 3.25rem + 3rem + 4rem + 4.25rem + var(--wb) + var(--ws) + 2.125rem + var(--wo) + 12 * var(--cg) + 1.5rem + 0.125rem);
+  .wrap{--wm:4rem;--wd:4rem;--ws:2.25rem;--wo:2.75rem;--wb:9rem;--wp:10.5rem;
+    --tw:calc(2.25rem + var(--wp) + 3.75rem + var(--wm) + var(--wd) + 3.25rem + 3.5rem + 3rem + 3.25rem + 3.5rem + 3.5rem + var(--wb) + var(--ws) + 2.125rem + var(--wo) + 14 * var(--cg) + 1.5rem + 0.125rem);
     display:grid;grid-template-columns:var(--tw) minmax(22.5rem,1fr);gap:1rem;align-items:start}
   .wrap.mk-m{--wm:8rem}.wrap.mk-d{--wd:8rem}.wrap.mk-r{--ws:6.5rem}.wrap.mk-o{--wo:5.75rem} /* a column widens for its undo chips only on a team that has one */
   .box{background:var(--p);border:1px solid var(--ln);border-radius:0.25rem;margin-bottom:0.875rem;min-width:0}
   .box h2{margin:0;display:flex;justify-content:space-between;align-items:baseline;gap:0.75rem;padding:0.5625rem 0.75rem;border-bottom:1px solid var(--ln);background:var(--p2);font-size:0.9375rem;font-weight:700}
   .box h2 small{font-size:0.7813rem;font-weight:500;color:var(--mu)}
   .none{padding:0.625rem 0.75rem;color:var(--mu);font-size:0.875rem}
-  .sub{padding:0.375rem 0.75rem;font-size:0.75rem;font-weight:600;color:var(--mu);background:var(--p2);border-top:1px solid var(--ln);border-bottom:1px solid var(--ln2)}
   /* a man's row: one column template for the header and every row */
   /* Adam 2:02 PM 11-17: Pos/# | Player | Min | DK/min | Proj | TG Min | TG Proj | Basis | S | Out; each track fits its content (the Basis its longest words and one chip), no empty band */
-  .hd,.row{display:grid;grid-template-columns:2.25rem var(--wp) 4rem var(--wm) var(--wd) 3.25rem 3rem 4rem 4.25rem var(--wb) var(--ws) 2.125rem var(--wo);column-gap:var(--cg);align-items:center;padding:0 0.75rem}
-  .hd{height:1.875rem;font-size:0.75rem;font-weight:600;color:var(--mu);border-bottom:1px solid var(--ln)}
+  .hd,.row{display:grid;grid-template-columns:2.25rem var(--wp) 3.75rem var(--wm) var(--wd) 3.25rem 3.5rem 3rem 3.25rem 3.5rem 3.5rem var(--wb) var(--ws) 2.125rem var(--wo);column-gap:var(--cg);align-items:center;padding:0 0.75rem}
+  .hd{min-height:2.375rem;padding-top:0.125rem;padding-bottom:0.125rem;line-height:1.15;font-size:0.75rem;font-weight:600;color:var(--mu);border-bottom:1px solid var(--ln)}
   .hd .r,.row .r{text-align:right}
   .row{min-height:2.75rem;border-bottom:1px solid var(--ln2)}
   .row.tot{font-weight:700;background:var(--p2);border-bottom:0}.row.tot .mt{width:4rem;padding-right:0.5rem;text-align:right;font-size:0.9375rem;font-variant-numeric:tabular-nums}
@@ -69,17 +68,19 @@ body.console-on .games,body.console-on main.work,body.console-on #dropnote{displ
   input.fin:focus{outline:2px solid var(--bl);outline-offset:-0.0625rem;border-color:var(--bl)}
   input.fin.pin{border:0.0938rem solid var(--pin);background:color-mix(in srgb,var(--pin) 9%,var(--p));color:var(--pin);font-weight:700}
   .row .ro{font-size:0.875rem;font-weight:400;color:var(--mu);font-variant-numeric:tabular-nums;white-space:nowrap} /* Salary and Value: plain read-only text, no box, no hover, no cursor (Adam 10:17 AM 11-18) */
+  .row .ro.val{font-size:0.9375rem;font-weight:700;color:var(--tx)}.row .ro.val.pin{color:var(--pin)}
   .pj{font-size:0.9375rem;font-weight:700}.pj.pin{color:var(--pin)}
   .rv{display:inline-flex;align-items:center;gap:0.1875rem;height:1.5rem;padding:0 0.4375rem;border:1px solid color-mix(in srgb,var(--pin) 55%,transparent);border-radius:0.1875rem;background:color-mix(in srgb,var(--pin) 10%,var(--p));color:var(--pin);font-size:0.75rem;font-weight:700;white-space:nowrap}
   .rv:hover{background:var(--pin);color:var(--p);border-color:var(--pin)}
   /* TwoGun's own figures (Adam 2:04 PM 11-17): plain read-only text in a faint shared band, never a box; the band's shadow covers the gap between the two columns */
   .tgv{align-self:stretch;display:flex;align-items:center;justify-content:flex-end;padding:0 0.5rem;background:var(--tgt);color:var(--mu);font-size:0.875rem;font-variant-numeric:tabular-nums}
-  .tgv.tgm{box-shadow:var(--cg) 0 0 var(--tgt);border-left:1px solid var(--ln)}
+  .tgv{padding:0 0.375rem;text-align:right}
+  .hd .bh{padding-left:0.5rem}
   .hd .tgv{font-size:0.75rem;font-weight:600}
   .tgmiss{color:var(--dim)}
   /* the Basis: short words and the key number on one line, the fill or trim small after them, then any worded flag chip; the full why is the cell's tooltip */
-  .row .why{display:flex;flex-wrap:wrap;align-items:center;gap:0.125rem 0.4375rem;min-width:0;overflow:hidden;font-size:0.8438rem;white-space:nowrap} /* never into the S column: the words keep their room and the chips go under them when both do not fit (the full why is on hover) */
-  .row .why .bw{min-width:0;overflow:hidden;text-overflow:ellipsis}.row .why .bd,.row .why .fc{flex:none}
+  .row .why{padding-left:0.5rem;display:flex;flex-wrap:wrap;align-items:center;gap:0.125rem 0.4375rem;min-width:0;overflow:hidden;font-size:0.8438rem} /* never into the S column: the words keep their room and the chips go under them when both do not fit (the full why is on hover) */
+  .row .why .bw{min-width:0;white-space:normal;line-height:1.15;overflow-wrap:anywhere}.row .why .bd,.row .why .fc{flex:none}
   .bw{color:var(--tx)}.bw.k-tg{color:var(--mu)}.bw.k-you{color:var(--pin);font-weight:700}
   .bd{font-size:0.75rem;color:var(--mu)}
   .fc{display:inline-block;padding:0 0.375rem;border:1px solid currentColor;border-radius:0.1875rem;font-size:0.6875rem;font-weight:700;line-height:1.0625rem;white-space:nowrap}

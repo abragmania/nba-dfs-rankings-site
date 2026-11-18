@@ -4,6 +4,7 @@
 // mark he made. A side column holds the team total, the notes and which minutes feed the optimizer. Pure strings, tested in node.
 import { oursUse } from "./console-ours.js";
 import { valuePer1k } from "./figures.js";
+import { recentOf, RECENT_GAMES } from "./tiers.js";
 import { esc, logo, nameOpen, consoleNameOpen } from "./board-util.js";
 import { calc } from "./console-model.js";
 import { keyOf, outsOf } from "./console-engine.js";
@@ -100,7 +101,25 @@ function numBox(team, r, k, mark) {
 export const salaryText = (p) => (Number.isInteger(p.salary) && p.salary > 0 ? `$${p.salary.toLocaleString("en-US")}` : null);
 export const valueText = (r) => { const v = valuePer1k(r.proj, r.p.salary); return v === null ? null : v.toFixed(2); }; // two decimals, as the board's Value column
 const salCell = (p) => `<span class="r ro sal">${salaryText(p) ?? miss("no salary for him on this slate")}</span>`;
-const valCell = (r) => `<span class="r ro val">${valueText(r) ?? miss(salaryText(r.p) ? "no projection, so no value" : "no salary, so no value")}</span>`;
+const valCell = (r) => `<span class="r ro val${r.pinned.m || r.pinned.d ? " pin" : ""}">${valueText(r) ?? miss(salaryText(r.p) ? "no projection, so no value" : "no salary, so no value")}</span>`;
+
+/**
+ * Avg Min (Season) and Avg Min (Last 10): his mean minutes over the box-score rows the Console inputs already carry (tier.men[id].rows, overtime-scaled, games he played this season; the same rows Bench+ reads).
+ * Last 10 is tiers.js recentOf: his games on or after the date of the team's 10th-last game. null with the reason when there is none, never 0.
+ */
+export function avgFigures(T, p) {
+  const tier = T.tier, none = (why) => ({ season: null, last10: null, whySeason: why, whyLast: why });
+  if (!tier || tier.missing) return none(tier?.missing ?? "no minutes engine inputs for this team");
+  if (tier.box_note) return none(`no box scores read: ${tier.box_note}`);
+  const m = tier.men?.[p.id];
+  if (!m) return none("not on the minutes engine's list for this team");
+  if (!m.matched) return none("not matched to the box scores, so none of his games were read");
+  const rows = (m.rows ?? []).map(([min, , date]) => ({ min, date })), n = rows.length;
+  if (!n) return none("no game played this season in the box scores");
+  const season = rows.reduce((t, r) => t + r.min, 0) / n, rec = recentOf(rows, tier.since);
+  return { season, last10: rec.avg, whySeason: null, whyLast: `no game of his in the team's last ${Math.min(RECENT_GAMES, tier.team_games ?? RECENT_GAMES)}`, nSeason: n, nLast: rec.n };
+}
+const avgCell = (v, why, n, cls) => `<span class="r ro avg ${cls}"${isNum(v) && n ? ` title="${n} game${n === 1 ? "" : "s"} played"` : ""}>${isNum(v) ? f1(v) : miss(why)}</span>`;
 
 const STATUS = (s) => String(s ?? "").trim();
 
@@ -109,7 +128,7 @@ const STATUS = (s) => String(s ?? "").trim();
  * words (the full why on hover), S and Out. N: the team's news (console-news.js teamNews) or null.
  */
 function manRow(team, r, T, S, mk, rank, N) {
-  const p = r.p, b = basisOf(r, T, S), starter = r.role === "starter";
+  const p = r.p, b = basisOf(r, T, S), starter = r.role === "starter", av = avgFigures(T, p);
   const rmark = mk?.r ? chip(team, r.id, "r", mk.r, mk.r.live === "starter" ? "S" : mk.r.live === "oor" ? "DNP" : "bench") : "";
   const omark = mk?.out ? chip(team, r.id, "out", mk.out, "out") : "";
   const proj = isNum(r.proj) ? `<b class="pj${r.pinned.m || r.pinned.d ? " pin" : ""}">${f1(r.proj)}</b>` : miss(r.missing.join(", ") || "no projection");
@@ -117,8 +136,7 @@ function manRow(team, r, T, S, mk, rank, N) {
 <span class="ps">${esc(starter ? rank || pos0(p) || "—" : rank)}</span>
 <span class="who">${consoleNameOpen(p, p.name, "span", "nm")}<span class="pp">${esc(p.pos ?? "")}</span>${nameChip(N, p)}</span>
 ${salCell(p)}${numBox(team, r, "m", mk?.m)}${numBox(team, r, "d", mk?.d)}
-<span class="r">${proj}</span>${valCell(r)}
-${tgCell(p.tg_min, "minutes", "tgm")}${tgCell(p.tg_proj, "projection", "tgp")}
+<span class="r">${proj}</span>${tgCell(p.tg_proj, "projection", "tgp")}${valCell(r)}${tgCell(p.tg_min, "minutes", "tgm")}${avgCell(av.season, av.whySeason, av.nSeason, "avs")}${avgCell(av.last10, av.whyLast, av.nLast, "avl")}
 <span class="why" title="${esc(b.title)}"><span class="bw k-${b.tag}">${esc(b.text)}</span>${b.delta ? `<span class="bd">${esc(b.delta)}</span>` : ""}${b.chips.map((c) => `<span class="fc ${c.cls}" title="${esc(c.title)}">${esc(c.word)}</span>`).join("")}</span>
 <span class="tgl"><button class="tg s${starter ? " on" : ""}" type="button" data-s="${esc(r.id)}" data-team="${esc(team)}" title="${starter ? "Starting. Click to send him to the bench" : "Click to mark him a starter (S)"}">S</button><span class="cs">${rmark}</span></span>
 <span class="tgl"><button class="tg bp${r.role === "bench_plus" ? " on" : ""}" type="button" data-dbp="1" data-id="${esc(r.id)}" data-team="${esc(team)}"${starter ? ' disabled title="A starter is not Bench+"' : ` title="${r.role === "bench_plus" ? "Bench+ tonight. Click to make him plain Bench" : "Click to make him Bench+ tonight: he goes to the head of the bench order"}"`}>B+</button></span>
@@ -137,7 +155,7 @@ function outRow(team, r, T, mk, N, pos = null) {
 ${outNote(N, p)}<div class="why">${src}${isNum(p.healthy) && p.healthy > 0 ? ` &middot; usual ${f1(p.healthy)} min` : ""}${absenceRow(p.absence)}</div></div>`;
 }
 
-const HEAD = (first) => `<div class="hd"><span>${first}</span><span>Player</span><span class="r" title="DraftKings salary">Salary</span><span>Min</span><span>DK/min</span><span class="r">Proj</span><span class="r" title="Projection per $1,000 of salary">Value</span><span class="tgv tgm" title="TwoGun's minutes">TG Min</span><span class="tgv tgp" title="TwoGun's projection">TG Proj</span><span>Basis</span><span class="c">S</span><span class="c" title="Bench+ tonight">B+</span><span class="c">Out</span></div>`;
+const HEAD = (first) => `<div class="hd"><span>${first}</span><span>Player</span><span class="r" title="DraftKings salary">Salary</span><span>Min</span><span>DK/min</span><span class="r">Proj</span><span class="tgv tgp" title="TwoGun's projection">TwoGun Proj</span><span class="r" title="Projection per $1,000 of salary">Value</span><span class="tgv tgm" title="TwoGun's minutes">TG Min</span><span class="r" title="His mean minutes a game over the games he played this season (box scores, overtime scaled)">Avg Min (Season)</span><span class="r" title="His mean minutes a game over his games in the team's last 10 games (box scores, overtime scaled): the games he played since the date of the team's 10th-last game">Avg Min (Last 10)</span><span class="bh">Basis</span><span class="c">S</span><span class="c" title="Bench+ tonight">B+</span><span class="c">Out</span></div>`;
 const sumMin = (rows) => rows.reduce((s, r) => s + (isNum(r.min) ? r.min : 0), 0);
 
 /** A roles note in the side column's width: the no-chart sentence says the same in fewer words, so it holds one line. */
@@ -178,8 +196,7 @@ function teamBody(model, code, news, view = {}) {
   const starters = playing.filter((r) => r.role === "starter").sort((a, b) => (cm ? cRank(a) - cRank(b) : posRank(a.p) - posRank(b.p)) || (b.min ?? 0) - (a.min ?? 0));
   const rest = playing.filter((r) => r.role !== "starter");
   const benchAt = cm ? new Map(cm.bench.map((m, i) => [m.id, i])) : null; // the lead, 11-17: with our chart the Bench follows its bench order (Bench+, the 2nds, the 3rds), the numbers as the chart's line says
-  const inRot = rest.filter((r) => isNum(r.min) && r.min > 0).sort((a, b) => (benchAt ? (benchAt.get(a.id) ?? 1e3) - (benchAt.get(b.id) ?? 1e3) : 0) || (b.min ?? 0) - (a.min ?? 0) || (a.p.order ?? 0) - (b.p.order ?? 0));
-  const notRot = rest.filter((r) => !inRot.includes(r)).sort((a, b) => (b.p.healthy ?? 0) - (a.p.healthy ?? 0));
+  const bench = [...rest].sort((a, b) => (benchAt ? (benchAt.get(a.id) ?? 1e3) - (benchAt.get(b.id) ?? 1e3) : 0) || (b.min ?? 0) - (a.min ?? 0) || (a.p.order ?? 0) - (b.p.order ?? 0));
   const outs = rows.filter((r) => r.out).sort((a, b) => (b.p.healthy ?? 0) - (a.p.healthy ?? 0));
   const notes = [];
   if (starters.length > 5) notes.push(`${starters.length} starters marked: unmark one.`);
@@ -188,6 +205,10 @@ function teamBody(model, code, news, view = {}) {
   for (const n of String(res.roles_note ?? "").split(/\n+|(?<=\.)\s+/).filter(Boolean).map(shortNote).map((x) => (disagree && /^Starters: the lineup pages' (?:agreed|confirmed) five/.test(x) ? disagree : x))) if (!notes.some((x) => x.slice(0, 12) === n.slice(0, 12)) && !/starters marked|Only \d starters/.test(n)) notes.push(n);
   const noSal = playing.filter((r) => !salaryText(r.p));
   if (noSal.length) notes.push(`${noSal.length} ${noSal.length === 1 ? "man has" : "men have"} no salary on this slate, so ${noSal.length === 1 ? "his Value shows" : "their Value shows"} a dash: ${noSal.map((r) => r.p.name).join(", ")}`);
+  const avgs = playing.map((r) => ({ r, a: avgFigures(T, r.p) }));
+  const noSeason = avgs.filter((x) => x.a.season === null), noLast = avgs.filter((x) => x.a.season !== null && x.a.last10 === null);
+  if (noSeason.length) notes.push(`${noSeason.length} ${noSeason.length === 1 ? "man shows" : "men show"} a dash for both Avg Min columns (${[...new Set(noSeason.map((x) => x.a.whySeason))].join("; ")}): ${noSeason.map((x) => x.r.p.name).join(", ")}`);
+  if (noLast.length) notes.push(`${noLast.length} ${noLast.length === 1 ? "man shows" : "men show"} a dash for Avg Min (Last 10), no game in the team's last ${Math.min(RECENT_GAMES, T.tier?.team_games ?? RECENT_GAMES)}: ${noLast.map((x) => x.r.p.name).join(", ")}`);
   if (res.chart_note) notes.push(res.chart_note); // one note per team (G68), added whole
   if (res.handout_note) notes.push(res.handout_note); // one note per team, added whole (G68)
   if (res.injured_note) notes.push(res.injured_note); // one note per team, added whole (G68)
@@ -195,7 +216,7 @@ function teamBody(model, code, news, view = {}) {
   const auto = calc(T, { ...S, pins: {} }, T.tonight).totals;
   const typedAdd = (res.totals.min ?? 0) - (auto.min ?? 0);
   const main = `<section class="box"><h2>Starters <small>${starters.length} &middot; ${f1(sumMin(starters))} min</small></h2>${HEAD("Pos")}${starters.map((r) => manRow(code, r, T, S, marks[r.id], cpos(r), N)).join("") || `<div class="none">Nobody is starting. Mark five men S.</div>`}</section>
-<section class="box"><h2>Bench <small>rotation order &middot; ${f1(sumMin(inRot))} min</small></h2>${HEAD("#")}${inRot.map((r, i) => manRow(code, r, T, S, marks[r.id], String(6 + i), N)).join("") || `<div class="none">Nobody on the bench has minutes.</div>`}${notRot.length ? `<div class="sub">Not in the rotation</div>${notRot.map((r) => manRow(code, r, T, S, marks[r.id], "", N)).join("")}` : ""}<div class="row tot"><span></span><span class="who">Team total</span><span class="mt">${f1(res.totals.min) ?? "—"}</span></div>${benchPlusHtml(T.bench_plus)}</section>`;
+<section class="box"><h2>Bench <small>bench order &middot; ${f1(sumMin(bench))} min</small></h2>${HEAD("#")}${bench.map((r, i) => manRow(code, r, T, S, marks[r.id], String(6 + i), N)).join("") || `<div class="none">Nobody is on the bench.</div>`}<div class="row tot"><span></span><span class="who">Team total</span><span></span><span class="mt">${f1(res.totals.min) ?? "—"}</span></div>${benchPlusHtml(T.bench_plus)}</section>`;
   const src = S.source ?? defaultSourceOf(T);
   const srcBox = oursUse(T).ok ? `<section class="box"><h2>Minutes for the optimizer</h2><div class="srcs">${MINUTE_SOURCES.map((k) => `<button class="sv${k === src ? " on" : ""}" type="button" data-source="${k}" data-team="${esc(code)}">${SOURCE_LABEL[k]}</button>`).join("")}<button class="sv all" type="button" data-source-all="${src}" data-team="${esc(code)}" title="Use ${esc(SOURCE_LABEL[src])} on every team with the minutes engine">All teams</button></div></section>` : "";
   const outBox = `<section class="box"><h2>Out / injured <small>${outs.length} ${outs.length === 1 ? "man" : "men"}</small></h2>${outs.map((r) => outRow(code, r, T, marks[r.id], N, cm ? cm.posOf(r.id) ?? "—" : null)).join("") || `<div class="none">Nobody is out.</div>`}</section>`;
