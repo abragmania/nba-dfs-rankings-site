@@ -1,10 +1,10 @@
 {
-  "publishedAt": "2026-11-18T22:00:37.313Z",
-  "sourceCommit": "1a75150bd2b5f69bdd9f3474a1be3ecd0918b562",
+  "publishedAt": "2026-11-18T22:08:11.126Z",
+  "sourceCommit": "fd44bfb0f39d5cc9bdcedcc71bb46be38d8cb838",
   "latest": {
     "slate": "2026-11-18-main",
     "players": 239,
-    "pulled_at": "2026-11-18T16:45:20-05:00"
+    "pulled_at": "2026-11-18T17:06:57-05:00"
   },
   "slates": [
     "2026-11-18-main",

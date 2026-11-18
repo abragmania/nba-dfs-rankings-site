@@ -11,18 +11,18 @@ import { readExposure, countLimits } from "../lineup/exposure.js";
 import { lineupOf, spotEntries, spotNames, sameLineup, cleanName, unusableIn, modeFromName } from "./maps.js";
 import { contextFor, nameOf, frozenWhy, notAddableWhy, holdsMen, spotBlocks, spotPins, lineupProblems, partLineupProblems, frozenProblems, movesBetween, outAlert, isBoardOut } from "./entry-state.js";
 
-const refused = (state, error) => ({ state, outcomes: [], error });
+export const refused = (state, error) => ({ state, outcomes: [], error });
 const idsOf = (state, spot) => spotEntries(state, spot).map((e) => e.entryId);
-const flagged = (state, spot, reason, { amber = false, proven = null, notes = [] } = {}) => ({ spot, entryIds: idsOf(state, spot), status: "flagged", reason, amber, moves: [], proven, notes, duplicate: null, alert: null });
+export const flagged = (state, spot, reason, { amber = false, proven = null, notes = [] } = {}) => ({ spot, entryIds: idsOf(state, spot), status: "flagged", reason, amber, moves: [], proven, notes, duplicate: null, alert: null });
 
 /** An outcome for a spot going from lineup `before` to `after`: changed, or unchanged with `reason`. alert names any man in `after` who is Out or gone. */
-function moved(state, spot, before, after, ctx, { reason = null, proven = null, notes = [], duplicate = null } = {}) {
+export function moved(state, spot, before, after, ctx, { reason = null, proven = null, notes = [], duplicate = null } = {}) {
   const status = sameLineup(before, after) ? "unchanged" : "changed";
   return { spot, entryIds: idsOf(state, spot), status, reason: status === "unchanged" ? reason : null, amber: false, moves: movesBetween(before, after, ctx, spotEntries(state, spot)), proven, notes, duplicate, alert: outAlert(after, ctx) };
 }
 
 /** The ask-first outcome: nothing applied, and the same call with confirmOut: true goes ahead. */
-const confirmFirst = (state, spot, alert) => ({ ...flagged(state, spot, alert.text, { amber: true }), status: "confirm", alert });
+export const confirmFirst = (state, spot, alert) => ({ ...flagged(state, spot, alert.text, { amber: true }), status: "confirm", alert });
 
 /** The alert for men in `lineup` not yet gone ahead for on this spot and not in `already`, or null. */
 function askFor(state, spot, lineup, ctx, already = []) {
@@ -52,11 +52,11 @@ function spotRefusal(state, spot, lineup, ctx, confirmed = []) {
   return frozen.length || legal.length ? [...frozen, ...legal].join(" ") : null;
 }
 
-const holds = (state, spot, id) => lineupOf(state, spot).includes(id) || spotEntries(state, spot).some((e) => e.uploaded.includes(id));
+export const holds = (state, spot, id) => lineupOf(state, spot).includes(id) || spotEntries(state, spot).some((e) => e.uploaded.includes(id));
 
 /** The spots a scope names: { names } or { error }. scope = { type: "one", spot } | { type: "chosen", spots } | { type: "holding" },
  *  the last meaning every spot holding `man`. */
-function readScope(state, scope, man) {
+export function readScope(state, scope, man) {
   const all = spotNames(state);
   if (scope?.type === "holding") {
     if (man == null) return { error: "Choosing every spot holding a man needs the man." };
@@ -72,7 +72,7 @@ function readScope(state, scope, man) {
 
 /** The limits across the set: { maxOf: Map dk_id -> most entries } or { error }. Percent of the assigned entries; only a Max binds
  *  here; optimize() refuses limits alongside pins, so the count is kept here, spot by spot. */
-function readLimits(state, exposure, ctx, isGpp) {
+export function readLimits(state, exposure, ctx, isGpp) {
   const read = readExposure(exposure);
   if (read.error) return { error: read.error };
   const off = Object.keys(read.exposure).filter((id) => !ctx.man(id));
@@ -102,11 +102,12 @@ function maxNotes(barred, limit, ctx) {
 }
 
 /** The men this spot's entries would carry past their Max: a Set of dk_ids. Every other spot counts with its lineup now, except a spot that
- *  will re-fill later in this action (pending): only its frozen men are sure, and the rest of its lineup is about to be decided. */
-function atLimit(maxOf, state, spot, pending, ctx, isGpp) {
+ *  will re-fill later in this action (pending): only its frozen men and the men this action locks into it (heldLater: spot -> ids) are sure,
+ *  and the rest of its lineup is about to be decided. */
+export function atLimit(maxOf, state, spot, pending, ctx, isGpp, heldLater = null) {
   const out = new Set(), here = spotEntries(state, spot).length;
   for (const [id, most] of maxOf) {
-    const counts = (s) => (pending.includes(s) ? id in spotPins(state, s, ctx) : lineupOf(state, s).includes(id));
+    const counts = (s) => (pending.includes(s) ? id in spotPins(state, s, ctx) || (heldLater?.get(s) ?? []).includes(id) : lineupOf(state, s).includes(id));
     const elsewhere = spotNames(state).filter((s) => s !== spot && isGpp(s) && counts(s)).reduce((t, s) => t + spotEntries(state, s).length, 0);
     if (elsewhere + here > most) out.add(id);
   }
@@ -114,7 +115,7 @@ function atLimit(maxOf, state, spot, pending, ctx, isGpp) {
 }
 
 /** Each man past his Max once the action is done: [{ dk_id, name, entries, most, spots }]. Frozen men and locked backups can put him there. */
-function overMax(maxOf, state, ctx, isGpp) {
+export function overMax(maxOf, state, ctx, isGpp) {
   const out = [];
   for (const [id, most] of maxOf) {
     const spots = spotNames(state).filter((s) => isGpp(s) && lineupOf(state, s).includes(id));
@@ -125,7 +126,7 @@ function overMax(maxOf, state, ctx, isGpp) {
 }
 
 /** Calls optimize() for this spot, best first; { lineups: [{ ids, proven, arranged }], note } or { why, proven }. A throw from its last guards is a flag. */
-function runFill(args) {
+export function runFill(args) {
   let r;
   try { r = optimize(args); } catch (e) { return { why: e.message, proven: null }; }
   if (r.error) return { why: r.error, proven: null };
@@ -133,7 +134,7 @@ function runFill(args) {
   return { lineups: r.lineups.map((l) => ({ ids: l.slots.map((p) => p.dk_id), proven: l.proven, arranged: l.late_swap })), note: r.note };
 }
 
-const menKey = (ids) => [...ids].sort().join("|");
+export const menKey = (ids) => [...ids].sort().join("|");
 // The most lineups one look for a different fill asks for: one per spot a slate can hold, so every other spot's lineup can be
 // passed over (a build itself may make up to MAX_COUNT, slots.js).
 const MAX_LOOK = MAX_SPOTS;
@@ -157,11 +158,20 @@ function fillAvoiding(args, taken) {
 }
 
 /**
- * Re-fills one spot: frozen men stay in the slots their entries hold them in, every other slot reopens on the newest figures, without
- * anyone in `out`. lock: men who must be in it, in any open slot. Returns { outcome, state? }.
+ * What one spot's re-fill hands optimize(), shared by every re-fill, the options list and the Min % costing: { args, pinned, scoreless,
+ * stays, notAddable }. Frozen men are pinned to the slots their entries hold them in; nobody in `out` or `overLimit` is added; lock: men
+ * who must be in it, in any open slot. games: the games Adam excluded on the Entries screen, whose men are never added (a frozen or
+ * locked man stays). keep: the men Adam locked into this spot; one whose game has not started stays, pinned to his slot in the spot's
+ * lineup when keepSlots is true and that slot is free, else held in any slot (a started one is frozen already).
  */
-function refill(state, spot, ctx, { out, lock, mode, settings, settingsByMode = null, overLimit, limit = null, taken, extra = [] }) {
-  const pinned = spotPins(state, spot, ctx), before = lineupOf(state, spot), entries = spotEntries(state, spot);
+export function fillArgs(state, spot, ctx, { out, lock: given = [], keep = [], keepSlots = true, mode = null, settings = null, settingsByMode = null, overLimit = new Set(), games = new Set() }) {
+  const pinned = spotPins(state, spot, ctx), now = lineupOf(state, spot), lock = [...given];
+  const taken = new Set(Object.values(pinned));
+  for (const id of keep) {
+    if (id in pinned || lock.includes(id) || ctx.started.has(id) || ctx.untimed.has(id)) continue;
+    const at = now.indexOf(id);
+    if (keepSlots && at >= 0 && !taken.has(SLOTS[at])) { pinned[id] = SLOTS[at]; taken.add(SLOTS[at]); } else lock.push(id);
+  }
   // A pin with no projection still counts his salary, team, game and slot. The stand-in 0 goes only to this search, where every lineup
   // carries it alike, so it cannot change the pick; it is never stored, and spotView's total for him is missing, never zero (RULES R1).
   // A backup locked in on Adam's go-ahead is the same: he is in every lineup of the run.
@@ -171,13 +181,41 @@ function refill(state, spot, ctx, { out, lock, mode, settings, settingsByMode = 
   const notAddable = new Set([...ctx.started, ...ctx.untimed]);
   const excluded = new Set(leftOut({ players: ctx.players, started: notAddable, pinned }).excluded);
   for (const id of [...out, ...overLimit]) excluded.add(id); // a man Out is left to optimize() itself, which skips him and says so
+  for (const p of ctx.players) if (games.has(p.game)) excluded.add(p.dk_id);
   const excludedList = [...excluded].filter((id) => typeof id === "string" && ctx.byId.has(id) && !stays.has(id));
   const runMode = mode ?? (Object.hasOwn(state.spots, spot) ? state.spots[spot].mode : modeFromName(spot));
-  const fill = fillAvoiding({ players: searchMen, mode: runMode, settings: { ...(settingsByMode?.[runMode] ?? settings), pinned }, locked: lock, excluded: excludedList, refMs: ctx.refMs }, taken);
+  return { pinned, lock, scoreless, stays, notAddable, args: { players: searchMen, mode: runMode, settings: { ...(settingsByMode?.[runMode] ?? settings ?? {}), pinned }, locked: lock, excluded: excludedList, refMs: ctx.refMs } };
+}
+
+/**
+ * One search with Adam's kept men: first each in his own slot, and when that finds nothing, again with them in any legal slot. run(args)
+ * searches; lineupOf(result) is its first lineup or null. Returns fillArgs' fields, the result as fill, and keptNotes naming a kept man
+ * who moved slot.
+ */
+export function keptFill(state, spot, ctx, opts, run, lineupOf1) {
+  let f = fillArgs(state, spot, ctx, opts), fill = run(f.args);
+  const slotted = (opts.keep ?? []).filter((id) => id in f.pinned && !(id in spotPins(state, spot, ctx)));
+  if (!lineupOf1(fill) && slotted.length) { f = fillArgs(state, spot, ctx, { ...opts, keepSlots: false }); fill = run(f.args); }
+  const now = lineupOf(state, spot), got = lineupOf1(fill);
+  const movedMen = got ? slotted.filter((id) => got.indexOf(id) !== now.indexOf(id)) : [];
+  const keptNotes = movedMen.length ? [`Kept, in another slot so the lineup stays legal: ${movedMen.map((id) => `${nameOf(id, ctx)} (${SLOTS[now.indexOf(id)]} to ${SLOTS[got.indexOf(id)]})`).join(", ")}.`] : [];
+  return { ...f, fill, keptNotes };
+}
+
+/** A fill's score as the search sees it: its men's projections, a man with none counting 0 (fillArgs). */
+export const fillScore = (ids, ctx) => ids.reduce((t, id) => t + (Number.isFinite(ctx.man(id)?.projection) ? ctx.man(id).projection : 0), 0);
+
+/**
+ * Re-fills one spot: frozen men stay in the slots their entries hold them in, every other slot reopens on the newest figures, without
+ * anyone in `out` or from a game in `games`. lock: men who must be in it, in any open slot; keep: Adam's locked men (fillArgs). Returns { outcome, state? }.
+ */
+export function refill(state, spot, ctx, { out, lock, keep = [], mode, settings, settingsByMode = null, overLimit, limit = null, taken, extra = [], games = new Set() }) {
+  const before = lineupOf(state, spot), entries = spotEntries(state, spot);
+  const { fill, scoreless, stays, notAddable, keptNotes } = keptFill(state, spot, ctx, { out, lock, keep, mode, settings, settingsByMode, overLimit, games }, (args) => fillAvoiding(args, taken), (f) => f.lineup);
   if (!fill.lineup) return { outcome: flagged(state, spot, `No legal fill: ${fill.why}`, { amber: true, proven: fill.proven, notes: extra }) };
   const bad = [...entries.filter(holdsMen).flatMap((e) => frozenProblems(e, fill.lineup, ctx, lock)), ...lineupProblems(fill.lineup, ctx)];
   if (bad.length) return { outcome: flagged(state, spot, `No legal fill: ${bad.join(" ")}`, { amber: true, proven: fill.proven, notes: extra }) };
-  const notes = [...extra];
+  const notes = [...extra, ...keptNotes];
   if (fill.proven === false) notes.push("The search stopped early, so this lineup is legal but not proven best.");
   if (fill.arranged === false) notes.push("A man's tip time is unreadable, so the open men are in plain slot order, not late-swap order.");
   const leftUntimed = [...ctx.untimed].filter((id) => !stays.has(id));
@@ -193,7 +231,7 @@ function refill(state, spot, ctx, { out, lock, mode, settings, settingsByMode = 
 }
 
 /** Writes each man past his Max onto the outcomes of the spots holding him, and onto their rows unless the spot was flagged. */
-function noteOverMax(state, outcomes, over) {
+export function noteOverMax(state, outcomes, over) {
   let s = state;
   for (const o of over) {
     const text = `${o.name} is in ${o.entries} entries, past his Max of ${o.most}.`;
@@ -206,8 +244,19 @@ function noteOverMax(state, outcomes, over) {
   return s;
 }
 
+/** The games Adam excluded, read against the slate: { games: Set, notes } or { error }. A game no man on the slate plays in is refused by
+ *  name; the notes say once which games a re-fill leaves out. */
+export function readGames(list, ctx) {
+  if (list == null) return { games: new Set(), notes: [] };
+  if (!Array.isArray(list) || !list.every((g) => typeof g === "string")) return { error: "Excluded games must be a list of games, like ATL@CHA." };
+  const onSlate = new Set(ctx.players.map((p) => p.game));
+  const unknown = list.filter((g) => !onSlate.has(g));
+  if (unknown.length) return { error: `No game ${unknown.join(", ")} on this slate.` };
+  return { games: new Set(list), notes: list.length ? [`Men from ${list.join(", ")} were not added: ${list.length === 1 ? "that game is" : "those games are"} excluded on this screen.`] : [] };
+}
+
 /** The shared path of actions a and b; y is the backup or null. { state, outcomes, overMax, error }. */
-function removeAction(state, { man: x, backup: y = null, scope, slate, nowMs, mode = null, settings: given = null, exposure = null, excluded: barred = null, confirmOut = false, settingsByMode = null, notes: extra = [] }) {
+function removeAction(state, { man: x, backup: y = null, scope, slate, nowMs, mode = null, settings: given = null, exposure = null, excluded: barred = null, excludedGames = null, keep = null, confirmOut = false, settingsByMode = null, notes: boardNotes = [] }) {
   if (typeof x !== "string" || !x) return refused(state, "Say which man comes out, by DraftKings id.");
   if (y != null && y === x) return refused(state, "The man coming out and his backup are the same man.");
   const settings = given ?? {};
@@ -222,12 +271,17 @@ function removeAction(state, { man: x, backup: y = null, scope, slate, nowMs, mo
   const isGpp = (spot) => (mode ?? (Object.hasOwn(state.spots, spot) ? state.spots[spot].mode : modeFromName(spot))) === "GPP";
   const limits = readLimits(state, exposure, ctx, isGpp);
   if (limits.error) return refused(state, limits.error);
+  const gm = readGames(excludedGames, ctx);
+  if (gm.error) return refused(state, gm.error);
+  const kept = readKeep(keep, sc.names, [x], ctx);
+  if (kept.error) return refused(state, kept.error);
+  const extra = [...boardNotes, ...gm.notes];
   const backup = { x, y, yWhy: y == null ? null : notAddableWhy(y, ctx), yAlert: y == null || confirmOut ? null : outAlert([y], ctx) };
   let s = state;
   const outcomes = [], taken = new Map(); // spots go in map order, so the same action repeats exactly
   for (const [k, spot] of sc.names.entries()) {
     const pending = sc.names.slice(k + 1).filter((later) => !removeRefusal(s, later, ctx, backup)); // a spot that will not re-fill keeps its lineup, and counts whole
-    const r = removeRefusal(s, spot, ctx, backup) ?? refill(s, spot, ctx, { out: new Set([...unusableIn(s, spot), ...excluded, x]), lock: y == null ? [] : [y], mode, settings, settingsByMode, extra, limit: limits, overLimit: isGpp(spot) ? atLimit(limits.maxOf, s, spot, pending, ctx, isGpp) : new Set(), taken });
+    const r = removeRefusal(s, spot, ctx, backup) ?? refill(s, spot, ctx, { out: new Set([...unusableIn(s, spot), ...excluded, x]), lock: y == null ? [] : [y], mode, settings, settingsByMode, extra, limit: limits, overLimit: isGpp(spot) ? atLimit(limits.maxOf, s, spot, pending, ctx, isGpp) : new Set(), taken, games: gm.games });
     outcomes.push(r.outcome);
     if (r.state) s = r.state;
     if (r.outcome.status === "changed") s = { ...s, unusable: { ...s.unusable, [spot]: [...new Set([...unusableIn(s, spot), x])] } }; // only the spots this action changed

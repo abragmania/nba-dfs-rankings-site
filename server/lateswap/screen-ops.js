@@ -6,6 +6,7 @@
 // a different lineup.
 import { startState, reuploadEntries, moveEntries, settleRows, dropRows, spotNames, lineupOf, sameLineup, restoreUsable, confirmOutMan, unusableIn } from "./maps.js";
 import { removeAndReoptimize, removeAndLockBackup, handSwap, resetSpots, assignLineup } from "./actions.js";
+import { spotOptions, pickOption } from "./reopt.js";
 import { contextFor, nameOf, outAlert } from "./entry-state.js";
 import { exportChanged, exportAll } from "./export.js";
 import { mapFp } from "./screen-model.js";
@@ -202,7 +203,7 @@ const NOT_FOR_REFILL = ["count", "minUnique", "pinned", "exposure", "variancePct
  * Max % across the set (body.exposure). Returns the engine's { excluded, settingsByMode, exposure, notes }; whatever it cannot apply or was not
  * given is named in notes, which the engine puts on every spot it re-fills. A Min % does not apply across a set of entries (actions.js refuses it), so it is dropped and named.
  */
-function boardState(body, picks, state, slate, nowMs) {
+function boardState(body, picks, state, slate, nowMs, gamesOff = []) {
   const notes = [];
   const excluded = Array.isArray(picks?.excluded) ? picks.excluded.map(String) : [];
   if (!Array.isArray(picks?.excluded)) notes.push("The board's excluded men were not available to this re-fill, so none were left out for that reason.");
@@ -245,7 +246,26 @@ function boardState(body, picks, state, slate, nowMs) {
     }
     if (!Object.keys(exposure).length) exposure = null;
   }
-  return { excluded, settingsByMode, exposure, notes };
+  // The games excluded on this screen (saved with its state); one no longer on the slate is named and dropped, never a refusal of the run.
+  const offSlate = ctx ? gamesOff.filter((g) => !games.has(g)) : [];
+  if (offSlate.length) notes.push(`Excluded ${offSlate.join(", ")} is not on this slate now, so it was not applied.`);
+  return { excluded, settingsByMode, exposure, excludedGames: gamesOff.filter((g) => !offSlate.includes(g)), notes };
+}
+
+/** The games excluded on this screen, set whole from body.games: { saved } or { error }. A game not on the slate is refused by name; so is
+ *  excluding a game that has started (its men are fixed already). Letting a started game back in is always allowed. */
+function setExcludedGames(saved, body, slate, nowMs) {
+  const list = body.games;
+  if (!Array.isArray(list) || !list.every((g) => typeof g === "string")) return { error: "Excluded games must be a list of games, like ATL@CHA." };
+  const { ctx, error } = contextFor(saved.state, slate, nowMs);
+  if (error) return { error };
+  const onSlate = new Set(ctx.players.map((p) => p.game));
+  const unknown = list.filter((g) => !onSlate.has(g));
+  if (unknown.length) return { error: `No game ${unknown.join(", ")} on this slate, so nothing was changed.` };
+  const had = saved.excludedGames ?? [];
+  const tipped = list.filter((g) => !had.includes(g) && ctx.players.some((p) => p.game === g && (ctx.started.has(p.dk_id) || ctx.untimed.has(p.dk_id))));
+  if (tipped.length) return { error: `${tipped.join(", ")} has started (or its tip cannot be read), so its men are fixed already; it was not excluded.` };
+  return { saved: { ...saved, excludedGames: [...new Set(list)].sort() } };
 }
 
 function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {}, picks = null }) {
