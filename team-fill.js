@@ -1,11 +1,12 @@
 // Adam 11-17 (11:40-11:58 AM): the team's bench-spot figures and the step that brings a team to 240, pure; tests/minutes_tiers.test.mjs. Runs in the browser too (console page), so nothing is imported from tools/.
 //  Bench spot N: the team's per-game minutes of its Nth man off the bench this season (games before the night, each scaled to 240 with overtime out; a game with fewer than N bench men counts 0 for spot N).
-//  Fill: under 240, the gap is spread over the men under MINUTES_CAP (limited men excluded; typed minutes never enter, Adam 1:33 PM 11-17) in proportion to their figures, none above his cap; still short, rounds of +1 to each starter, then +1 to
-//  each bench man, the last round pro-rated so the team lands on 240 (this step may pass 36, never GAME_MAX or a man's cap override). Over 240: the plain bench is trimmed in proportion to their figures, toward 0;
-//  what it cannot absorb comes off the Bench+ men, then the starters, in proportion to what they hold above their floors (Adam 9:50 AM 11-18). What nobody can take or give is returned, never dropped (G62).
+//  Fill (Adam 3:02 PM 11-18): under 240, the gap goes to the Bench+ men first (in proportion to their figures), then the plain bench (same, none above the team's lowest starter, R15), then the starters (same), each only up to his
+//  own ceiling (ownCeiling, Adam 3:03 PM 11-18: the mean of his top quarter of games this season, at most 36; typed minutes never enter, Adam 1:33 PM 11-17); still short, rounds of +1 to each starter, then +1 to each bench man, first
+//  to his ceiling, then to 36, then to GAME_MAX or his cap override (the last resort, the men named), the last round pro-rated so the team lands on 240. Over 240: the plain bench is trimmed in proportion to their figures, toward 0;
+//  what it cannot absorb comes off the Bench+ men, then the starters, in proportion to what they hold above their floors (Adam 9:50 AM 11-18); still over: all of them in proportion to their figures, to the total exactly. What nobody can take or give is returned, never dropped (G62).
 export const MINUTES_CAP = 36; // Adam 11-17: nobody above 36 projected minutes, except a starter whose own starter mean is above it
 export const GAME_MAX = 48; // review round 1, finding 5: a regulation game; the +1 rounds never give a man more
-const REGULATION = 48, OT_PERIOD = 5, EPS = 1e-9, MAX_ROUNDS = 1000;
+const REGULATION = 48, OT_PERIOD = 5, EPS = 1e-9, MAX_ROUNDS = 1000, MIN_PLAYED = 4;
 
 /** 1st, 2nd, 3rd, 4th ... */
 export const ordinal = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
@@ -30,6 +31,26 @@ export function benchSpots(games) {
     bench.forEach((v, i) => { sums[i] = (sums[i] ?? 0) + v; });
   }
   return { figs: sums.map((s) => s / list.length), games: list.length, unflagged };
+}
+
+const playedDesc = (mins) => (mins ?? []).filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => b - a), avg = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+
+/** Adam 3:03 PM 11-18: a man's own ceiling for the fill: min(cap, mean of the top quarter (ceil(n/4)) of his minutes in the n games he played this season); fewer than 4 games: the cap (36). mins: his minutes, games played only.
+ *  Returns { value, top, of } (top/of: the games it rests on; top 0 when it falls back to the cap). Pure. */
+export function ownCeiling(mins, cap = MINUTES_CAP) {
+  const p = playedDesc(mins);
+  if (p.length < MIN_PLAYED) return { value: cap, top: 0, of: p.length };
+  const top = Math.ceil(p.length / 4);
+  return { value: Math.min(cap, avg(p.slice(0, top))), top, of: p.length };
+}
+
+/** Adam 3:11 PM 11-18: a starter's and a Bench+ man's figure: (mean of his top half (ceil(n/2)) of games + his season mean) / 2 over every game he played this season (starts and bench games together); fewer than 4 games: null
+ *  (his usual figure stands). Returns { value, topHalf, season, n, top } or null. Pure. */
+export function seasonBlend(mins) {
+  const p = playedDesc(mins);
+  if (p.length < MIN_PLAYED) return null;
+  const top = Math.ceil(p.length / 2), topHalf = avg(p.slice(0, top)), season = avg(p);
+  return { value: (topHalf + season) / 2, topHalf, season, n: p.length, top };
 }
 
 /** Hands `amount` out over men [{ id, w, room }] in proportion to w, none past his room. Returns { added: Map id -> minutes, left }. Pure. */
@@ -67,30 +88,6 @@ export function plusOneRounds(starters, bench, amount, benchCap = null) {
   return { added, rounds, left: Math.max(0, left) };
 }
 
-/** The positions next to each (the guard, forward and big families): an Out man's minutes his own position cannot take go to these. */
-export const ADJACENT = { PG: ["SG"], SG: ["PG", "SF"], SF: ["SG", "PF"], PF: ["SF", "C"], C: ["PF"] };
-
-/** One man at a time in role order (`men` [{ id, room }]: Bench+, then the 2nd, then the 3rd), each to his cap before the next takes any (PROJECT.md Part 3; the lead's call under Adam's bench minutes by role).
- *  roomOf(x): his room now. Adds into `added`; returns what nobody had room for. */
-function inRoleOrder(men, amount, added, roomOf) {
-  let left = amount;
-  for (const x of men) {
-    if (left <= EPS) break;
-    const v = Math.min(left, roomOf(x));
-    if (v > EPS) { added.set(x.id, (added.get(x.id) ?? 0) + v); left -= v; }
-  }
-  return Math.max(0, left);
-}
-
-/** Adam 10:10 AM 11-18 ("shared split"): all Bench+ men on the team share `amount` in proportion to their typical minutes (figure), each to his room, what a full man cannot take going to the others (shareOut).
- *  A man whose figure is 0 or missing shares with the lowest positive Bench+ figure as his weight (review); none positive: equal shares. roomOf(x): his room now. Adds into `added`; returns what nobody had room for. */
-function inProportion(men, amount, added, roomOf) {
-  const pos = men.map((m) => m.figure).filter((f) => Number.isFinite(f) && f > 0), low = pos.length ? Math.min(...pos) : 1;
-  const s = shareOut(men.map((m) => ({ id: m.id, w: Number.isFinite(m.figure) && m.figure > 0 ? m.figure : low, room: roomOf(m) })), amount);
-  for (const [id, v] of s.added) if (v > EPS) added.set(id, (added.get(id) ?? 0) + v);
-  return s.left;
-}
-
 /**
  * A plain bench man's room under his team's lowest starter (R15; Adam 6:40-6:43 PM 11-17: no bench man ends above the lowest healthy starter on his team; Adam 9:50 AM 11-18: not a Bench+ man, whose cap is 36
  * like everyone's): men [{ id, starter, bplus }], total(id) his minutes now. Returns (man) -> the lowest starter's total less his own (Infinity: a starter, a Bench+ man, or no starter in men). Pure.
@@ -101,73 +98,49 @@ export function starterCeiling(men, total) {
 }
 
 /**
- * An Out man's minutes go to his position first (Adam's rulings "PG replaces PG, SG replaces SG" and bench by role; Adam 6:40 PM 11-17: starters before the bench; Adam 9:46 AM 11-18: Bench+ before the plain bench
- * at any position): demand: [{ pos, amount }] (each position's lost minutes); men: [{ id, pos (null: none), starter, bplus (a Bench+ man), figure (before this step; 0 if omitted), room (to his cap: 36, or his cap
- * override, less his figure) }], the bench men tonight in role order (Bench+, the 2nds, the 3rds, ties by a blend of last 10 and season minutes a game) and every starter (a starter with no position takes nothing here but sets the ceiling).
- * Each position's amount goes to its own starters, each to his cap, then the starters of the positions next to it (ADJACENT), then all Bench+ men on the team, whatever their position, sharing in proportion to their
- * typical minutes, each to 36 (Adam 10:10 AM 11-18), then its own plain bench, then the plain bench next to it; starters and the plain bench one man at a time in role order;
- * no plain bench man above the team's lowest starter (starterCeiling, R15); what is left is returned for the team-wide fill.
- * Returns { added: Map id -> minutes, left, by: [{ pos, amount, own, spill, elsewhere (Bench+ men at no position next to it) }] }. Pure.
- */
-export function positionFill(men, demand) {
-  const added = new Map(), by = [], fig = new Map(men.map((m) => [m.id, m.figure ?? 0]));
-  const under = starterCeiling(men, (id) => fig.get(id) + (added.get(id) ?? 0));
-  const roomOf = (x) => Math.max(0, Math.min(x.room - (added.get(x.id) ?? 0), under(x)));
-  let left = 0;
-  for (const d of demand) {
-    if (!(d.amount > EPS)) continue;
-    // R15 (Adam 6:43 PM 11-17): his position's starters (to the cap), then the starters next to it; Adam 9:46 AM 11-18: then every Bench+ man, then his position's plain bench, then the plain bench next to it;
-    // each stage takes only what the one before could not
-    const at = (m) => !!m.pos && m.pos === d.pos, near = (m) => !!m.pos && (ADJACENT[d.pos] ?? []).includes(m.pos), plus = (m) => !m.starter && m.bplus === true, plain = (m) => !m.starter && m.bplus !== true;
-    // Adam 10:10 AM 11-18: all Bench+ men on the team, whatever their position, share in proportion to their typical minutes (inProportion), one group; starters and the plain bench by position, one man at a time (inRoleOrder)
-    const stages = [[(m) => at(m) && m.starter, inRoleOrder], [(m) => near(m) && m.starter, inRoleOrder], [plus, inProportion], [(m) => plain(m) && at(m), inRoleOrder], [(m) => plain(m) && near(m), inRoleOrder]];
-    const before = new Map(added);
-    let rest = d.amount;
-    for (const [s, give] of stages) if (rest > EPS) rest = give(men.filter(s), rest, added, roomOf);
-    const gained = (ids) => ids.reduce((s, id) => s + (added.get(id) ?? 0) - (before.get(id) ?? 0), 0);
-    by.push({ pos: d.pos, amount: d.amount, own: gained(men.filter(at).map((m) => m.id)), spill: gained(men.filter(near).map((m) => m.id)), elsewhere: gained(men.filter((m) => !at(m) && !near(m)).map((m) => m.id)) });
-    left += rest;
-  }
-  return { added, left, by };
-}
-
-/**
- * Step 5 of the team plan (Adam 11-17). men: [{ id, starter (bool), bplus (a Bench+ man), figure, ceiling (his cap tonight), floor (a starter's or a Bench+ man's typical minutes; null otherwise), limited (a cap
- * of his own at or below his figure: no fill), max (his cap override, else GAME_MAX: the +1 rounds never pass it), w (optional: his weight in the proportional share, else his figure; tiers.js passes his figure
- * before the position step, so a man at an unrelated position keeps his share when a teammate goes Out), pos (optional: his chart position) }]; a plain bench man's total stays at or under the team's lowest
- * starter's (R15, Adam 6:43 PM 11-17; not a Bench+ man's, Adam 9:50 AM 11-18); teamMinutes; hold: true when a figure is missing (nothing is handed out then, RULES R1).
- * Returns { sum, gap, prop: Map, plus: Map, cut: Map, how: Map id -> "bench" | "bench_plus" | "starter", rounds, unassigned, untrimmed, trimmed: { bench, bench_plus, starter } | null, over: [{ id, total }] (men the
- * fill took past 36 because 240 could not be reached under it), passed: [{ id, total }] (plain bench men the fill took past the team's lowest starter because 240 could not be reached otherwise) }. Pure.
+ * Step 5 of the team plan (Adam 11-17; order of the gap Adam 3:02 PM 11-18). men: [{ id, starter (bool), bplus (a Bench+ man), figure, ceiling (his own ceiling for the fill, ownCeiling), hard (his cap tonight: 36, a starter's own
+ * higher mean, or his cap override; default his ceiling), floor (a starter's or a Bench+ man's typical minutes; null otherwise), limited (a cap of his own at or below his figure: no fill), max (his cap override, else GAME_MAX: the +1
+ * rounds never give more) }]; a plain bench man's total stays at or under the team's lowest starter's (R15, Adam 6:43 PM 11-17; not a Bench+ man's); teamMinutes; hold: true when a figure is missing (nothing is handed out then, RULES R1).
+ * Returns { sum, gap, prop: Map, plus: Map, cut: Map, how: Map id -> "bench" | "bench_plus" | "starter", rounds, unassigned, untrimmed, trimmed: { bench, bench_plus, starter } | null, over: [{ id, total }] (men the fill took past
+ * their cap, 36 as a rule, because 240 could not be reached under it), pastCeiling: [{ id, total }] (men past their own ceiling, not past the cap), passed: [{ id, total }] (plain bench men past the team's lowest starter) }. Pure.
  */
 export function fillTeam(men, teamMinutes, hold = false) {
   const sum = men.reduce((s, x) => s + x.figure, 0), gap = teamMinutes - sum, free = men;
-  const res = { sum, gap, prop: new Map(), plus: new Map(), cut: new Map(), how: new Map(), rounds: 0, unassigned: 0, untrimmed: 0, trimmed: null, over: [], passed: [] };
+  const res = { sum, gap, prop: new Map(), plus: new Map(), cut: new Map(), how: new Map(), rounds: 0, unassigned: 0, untrimmed: 0, trimmed: null, over: [], pastCeiling: [], passed: [] };
   if (gap > EPS && !hold) {
-    const open = free.filter((x) => !x.limited), byId = new Map(free.map((x) => [x.id, x])), none = { added: new Map(), rounds: 0, left: 0 };
+    const open = free.filter((x) => !x.limited), byId = new Map(free.map((x) => [x.id, x]));
     // R15: a bench man ends no higher than the team's lowest starter (starterCeiling); maps: what each man has gained so far
     const ceilAt = (maps) => (id, a) => starterCeiling(free, (j) => byId.get(j).figure + [...maps, a ?? new Map()].reduce((s, mp) => s + (mp.get(j) ?? 0), 0))(byId.get(id));
-    const prop = new Map();
+    const prop = new Map(), cap = (x) => Math.min(x.ceiling, x.max ?? GAME_MAX);
     let pLeft = gap;
-    for (let i = 0; i < 50 && pLeft > EPS; i++) { // the share in passes: the lowest starter's gain raises the bench's ceiling for the next pass
-      const cap = ceilAt([prop]), p = shareOut(open.map((x) => ({ id: x.id, w: x.w ?? x.figure, room: Math.max(0, Math.min(Math.min(x.ceiling, x.max ?? GAME_MAX) - x.figure - (prop.get(x.id) ?? 0), cap(x.id))) })), pLeft);
-      for (const [id, v] of p.added) prop.set(id, (prop.get(id) ?? 0) + v);
-      const took = pLeft - p.left; pLeft = p.left;
-      if (took <= EPS) break;
+    // Adam 3:02 PM 11-18: Bench+ men, then the plain bench, then the starters, each group in proportion to its figures and only to each man's own ceiling
+    for (const grp of [open.filter((x) => !x.starter && x.bplus === true), open.filter((x) => !x.starter && x.bplus !== true), open.filter((x) => x.starter)]) {
+      for (let i = 0; i < 50 && pLeft > EPS && grp.length; i++) { // passes: the lowest starter's gain raises the bench's ceiling for the next pass
+        const at = ceilAt([prop]), p = shareOut(grp.map((x) => ({ id: x.id, w: x.figure, room: Math.max(0, Math.min(cap(x) - x.figure - (prop.get(x.id) ?? 0), at(x.id))) })), pLeft);
+        for (const [id, v] of p.added) prop.set(id, (prop.get(id) ?? 0) + v);
+        const took = pLeft - p.left; pLeft = p.left;
+        if (took <= EPS) break;
+      }
     }
     res.prop = prop;
-    // the lead's call under Adam's "fill each team to 240" and "no one over 36": the +1 rounds stay under each man's cap first (a man of figure 0 has room the proportional share gave him none of);
-    // only when 240 cannot be reached under 36 (a short roster) may they pass it, up to GAME_MAX or his cap override, and each man over 36 is named (res.over); a bench man passes his starter only last (res.passed)
-    const held = (x, ...extra) => (prop.get(x.id) ?? 0) + extra.reduce((s, mp) => s + (mp.get(x.id) ?? 0), 0);
-    const under = (x) => ({ id: x.id, room: Math.max(0, Math.min(x.ceiling, x.max ?? GAME_MAX) - x.figure - held(x)) }), S = open.filter((x) => x.starter), B = open.filter((x) => !x.starter);
-    const r = plusOneRounds(S.map(under), B.map(under), pLeft, ceilAt([prop]));
-    const past = (...ex) => (x) => ({ id: x.id, room: Math.max(0, (x.max ?? GAME_MAX) - x.figure - held(x, ...ex)) });
-    const o = r.left > EPS ? plusOneRounds(S.map(past(r.added)), B.map(past(r.added)), r.left, ceilAt([prop, r.added])) : { ...none, left: r.left };
-    const q = o.left > EPS ? plusOneRounds(S.map(past(r.added, o.added)), B.map(past(r.added, o.added)), o.left) : { ...none, left: o.left };
-    res.plus = new Map([...r.added].map(([id, v]) => [id, v + (o.added.get(id) ?? 0) + (q.added.get(id) ?? 0)]));
-    res.rounds = pLeft > EPS ? r.rounds + o.rounds + q.rounds : 0; res.unassigned = q.left;
-    res.over = open.filter((x) => (o.added.get(x.id) ?? 0) + (q.added.get(x.id) ?? 0) > EPS).map((x) => ({ id: x.id, total: x.figure + held(x, res.plus) })).filter((m) => m.total > MINUTES_CAP + EPS);
+    // the lead's call under Adam's "fill each team to 240" and "no one over 36": the +1 rounds go to each man's ceiling, then to his cap (36), and only when 240 cannot be reached under those may they pass it, up to GAME_MAX or his
+    // cap override; the men past their ceiling or cap are named (res.pastCeiling, res.over); a bench man passes his starter only last (res.passed)
+    const held = (x, ...extra) => (prop.get(x.id) ?? 0) + extra.reduce((s, mp) => s + (mp.get(x.id) ?? 0), 0), S = open.filter((x) => x.starter), B = open.filter((x) => !x.starter);
+    const levels = [[cap, true], [(x) => Math.min(Math.max(x.hard ?? x.ceiling, x.ceiling), x.max ?? GAME_MAX), true], [(x) => x.max ?? GAME_MAX, true], [(x) => x.max ?? GAME_MAX, false]];
+    const adds = [];
+    let left = pLeft;
+    levels.forEach(([lim, r15]) => {
+      if (left <= EPS) return;
+      const room = (x) => ({ id: x.id, room: Math.max(0, lim(x) - x.figure - held(x, ...adds)) }), r = plusOneRounds(S.map(room), B.map(room), left, r15 ? ceilAt([prop, ...adds]) : null);
+      adds.push(r.added); left = r.left; res.rounds += r.rounds;
+    });
+    res.unassigned = left;
+    res.plus = new Map(open.map((x) => [x.id, adds.reduce((s, mp) => s + (mp.get(x.id) ?? 0), 0)]).filter(([, v]) => v > 0));
+    const late = (x) => adds.slice(1).reduce((s, mp) => s + (mp.get(x.id) ?? 0), 0), total = (x) => x.figure + held(x, res.plus), hardOf = (x) => Math.max(x.hard ?? x.ceiling, x.ceiling);
+    res.over = open.filter((x) => late(x) > EPS && total(x) > hardOf(x) + EPS).map((x) => ({ id: x.id, total: total(x) }));
+    res.pastCeiling = open.filter((x) => late(x) > EPS && total(x) > x.ceiling + EPS && total(x) <= hardOf(x) + EPS).map((x) => ({ id: x.id, total: total(x) }));
     const finalCap = ceilAt([prop, res.plus]);
-    res.passed = B.filter((x) => (q.added.get(x.id) ?? 0) > EPS && finalCap(x.id) < -EPS).map((x) => ({ id: x.id, total: x.figure + held(x, res.plus) }));
+    res.passed = B.filter((x) => (adds[3]?.get(x.id) ?? 0) > EPS && finalCap(x.id) < -EPS).map((x) => ({ id: x.id, total: total(x) }));
   } else if (gap < -EPS) {
     // Adam 9:50 AM 11-18: the plain bench first (toward 0), then Bench+ men down toward their floors (their typical minutes), then starters above their floors
     const bench = free.filter((x) => !x.starter && x.bplus !== true), plus = free.filter((x) => !x.starter && x.bplus === true), starters = free.filter((x) => x.starter);
@@ -175,9 +148,11 @@ export function fillTeam(men, teamMinutes, hold = false) {
     const above = (x) => Math.max(0, x.figure - (x.floor ?? (x.bplus === true ? x.figure : 0))), none = (left) => ({ added: new Map(), left }); // a Bench+ man with no floor given keeps his figure
     const bp = b.left > EPS ? shareOut(plus.map((x) => ({ id: x.id, w: above(x), room: above(x) })), b.left) : none(b.left);
     const s = bp.left > EPS ? shareOut(starters.map((x) => ({ id: x.id, w: above(x), room: above(x) })), bp.left) : none(bp.left);
-    for (const [kind, mp] of [["bench", b.added], ["bench_plus", bp.added], ["starter", s.added]]) for (const [id, v] of mp) if (v > EPS) { res.cut.set(id, v); res.how.set(id, kind); }
-    res.trimmed = { bench: -gap - b.left, bench_plus: b.left - bp.left, starter: bp.left - s.left };
-    res.untrimmed = s.left;
+    // review of 11-18 (lead): still over with the plain bench at 0 and every starter and Bench+ man at his floor: all of them give in proportion to their figures down to the total exactly (named), the team never stays over
+    const kept = (x) => Math.max(0, x.figure - (bp.added.get(x.id) ?? 0) - (s.added.get(x.id) ?? 0)), forced = s.left > EPS ? shareOut([...plus, ...starters].map((x) => ({ id: x.id, w: kept(x), room: kept(x) })), s.left) : none(s.left);
+    for (const [kind, mp] of [["bench", b.added], ["bench_plus", bp.added], ["starter", s.added], ["forced", forced.added]]) for (const [id, v] of mp) if (v > EPS) { res.cut.set(id, (res.cut.get(id) ?? 0) + v); res.how.set(id, res.how.get(id) && kind === "forced" ? "forced" : kind); }
+    res.trimmed = { bench: -gap - b.left, bench_plus: b.left - bp.left, starter: bp.left - s.left, forced: s.left - forced.left };
+    res.untrimmed = forced.left;
   }
   return res;
 }

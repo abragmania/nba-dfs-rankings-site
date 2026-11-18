@@ -47,13 +47,13 @@ export function shortBasis(l) {
   if (!l) return null;
   const v = f1(l.value), g = isNum(l.n) && l.n > 0 ? ` (${l.n} g)` : "";
   const words = {
-    starts: () => `Starts avg ${v}${g}`, paired: () => `${poss(lastName(l.name))} starts (${l.pos}) ${v}`, median: () => `Team starter avg ${v}`, spot: () => `Bench ${l.spot}: ${v}`, off_chart: () => `Off chart: ${v}`,
+    starts: () => `Starts avg ${v}${g}`, blend: () => `Blend ${v}${g}`, paired: () => `${poss(lastName(l.name))} starts (${l.pos}) ${v}`, median: () => `Team starter avg ${v}`, spot: () => `Bench ${l.spot}: ${v}`, off_chart: () => `Off chart: ${v}`,
     own: () => `${l.returning ? "Returning" : ROLE_SHORT[l.role] ?? "Own"} avg ${v}${g}`, chart: () => `Chart usual ${v}`, twogun: () => (v === null ? "TwoGun: none" : `TwoGun ${v}`), override: () => `Your usual ${v}`,
     ov_minutes: () => `Your override ${v}`, typed: () => "Yours", none: () => "No figure",
   }[l.kind];
   if (!words) return null;
   const delta = [l.fill > 0 ? `+${f1(l.fill)} fill` : "", l.trim > 0 ? `${MINUS}${f1(l.trim)} trim` : "", l.capped > 0 ? `${MINUS}${f1(l.capped)} cap` : ""].filter(Boolean).join(" ");
-  return { text: words(), delta: l.kind === "typed" ? "" : delta };
+  return { text: words(), delta: l.kind === "typed" ? "" : delta, ceil: l.ceil_words ?? "" }; // Adam 3:03 PM 11-18: his ceiling and its basis, said in the row's tooltip
 }
 
 /** A row flag's short word (the full sentence goes in its tooltip). */
@@ -75,7 +75,7 @@ function basisOf(r, T, S) {
   if (r.pinned.m) return { tag: "you", text: "Yours", delta: "", title: "minutes typed by you", chips: [] };
   if (r.min_from_ours || ((S.source ?? defaultSourceOf(T)) !== "twogun" && r.min_basis)) {
     const s = shortBasis(r.min_label) ?? { text: "Minutes engine", delta: "" };
-    return { tag: "ch", ...s, title: r.min_basis ?? "the minutes engine", chips: flagChips(r.min_flag, r.min_label?.limit) };
+    return { tag: "ch", ...s, title: `${r.min_basis ?? "the minutes engine"}${s.ceil ? `; ${s.ceil}` : ""}`, chips: flagChips(r.min_flag, r.min_label?.limit) };
   }
   if (r.min_basis) return { tag: "tg", text: "Role figure", delta: "", title: r.min_basis, chips: [] };
   if (isNum(r.min) && isNum(p.min) && Math.abs(r.min - p.min) < 0.05) return { tag: "tg", text: "TwoGun", delta: "", title: p.starter ? "TwoGun starter" : "TwoGun projection", chips: [] };

@@ -122,7 +122,7 @@ export function depthPlaces(view, five) {
 
 /**
  * The healthy chart (the lead's fix of 11-17): the chart cut to tonight's men AND the team's Out men, each in his place; its column tops are the healthy five. Map key -> { pos, rank (as depthPlaces, against
- * the healthy five), starter (a healthy top) }. Out men's minutes are lost from their own position (tiers.js positionDemand); every man keeps his healthy role's bench spot. Pure.
+ * the healthy five), starter (a healthy top) }. Used for an Out man's healthy role (pairing); bench spots count the men here tonight only (Adam 3:02 PM 11-18). Pure.
  */
 export function healthyPlaces(chart, keys) {
   const view = tonightCols(chart, keys), tops = new Set(columnTops(view)), pl = depthPlaces(view, tops);

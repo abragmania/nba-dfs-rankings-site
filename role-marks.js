@@ -37,7 +37,7 @@ export function stampMarks(prev, next, at) {
 export const marksStamp = (marks) => JSON.stringify((marks ?? []).map((m) => [m.key, m.role, m.at ?? null]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
 
 /**
- * His mark on an Out man (the review of 11-18, money): it sets the role his absence takes away, for the pairing and his lost minutes (tiers.js pairReplaced, placeByChart, positionDemand). A Starter mark makes
+ * His mark on an Out man (the review of 11-18, money): it sets the role his absence takes away, for the pairing and his lost minutes (tiers.js pairReplaced). A Starter mark makes
  * him an Out starter (a healthy top at his position); a Bench+ or Bench mark makes him an Out bench man, Bench+ only with the Bench+ mark (o.mark). The same for the board's engine and the console. Mutates o.
  */
 export function markOut(o, role) {
@@ -45,8 +45,7 @@ export function markOut(o, role) {
   const starter = role === "starter", was = o.healthy?.starter === true;
   o.mark = role;
   o.starter = starter;
-  // the second review of 11-18: no present bench man's spot moves for a mark on an Out man (tiers.js placeByChart): a healthy starter marked off takes a spot after every present bench man (after);
-  // a healthy bench man marked Starter keeps holding his own spot empty (holds), as an Out bench man does
+  // flags on the healthy place only (after, holds); since Adam 3:02 PM 11-18 no Out man holds a bench spot (tiers.js placeByChart counts the men here only)
   if (o.healthy) o.healthy = { ...o.healthy, starter, ...(was && !starter ? { after: true } : {}), ...(!was && starter ? { holds: true } : {}) };
   return o;
 }
