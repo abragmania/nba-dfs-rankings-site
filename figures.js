@@ -21,3 +21,5 @@ export const aOrAn = (code) => (/^[AEIO]/.test(code) ? "an" : "a");
 export const round2 = (v) => Math.round(v * 100) / 100;
 /** Tonight's expected DK points per minute: projection over minutes. Null with either missing or on zero minutes, never zero. */
 export const tonightRate = (projection, minutes) => (isNum(projection) && isNum(minutes) && minutes > 0 ? projection / minutes : null);
+/** A man's value: projection per $1,000 of salary, unrounded; null with either missing or no salary above 0 (R1: never 0). The server's copy, slate/overrides.js valueFrom, is not loadable in the browser. */
+export const valuePer1k = (projection, salary) => (isNum(projection) && Number.isInteger(salary) && salary > 0 ? (projection * 1000) / salary : null);

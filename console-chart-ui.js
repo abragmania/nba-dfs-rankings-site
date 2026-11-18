@@ -18,10 +18,14 @@ const at = () => new Date().toISOString();
 /** A click inside the chart: true when it was the chart's. */
 export function chartClick(c, e) {
   const chip = e.target.closest?.("[data-dchip]"), btn = e.target.closest?.("button");
-  if (btn?.dataset.dstep || btn?.dataset.dbp) {
+  if (btn?.dataset.dbp) { // the chart's B+ and the team table's B+ (console-depth.js manRow): one move, the card's role button's (console-moves.js setRole); no chart needed
+    const { team, id } = btn.dataset, row = c.model?.TEAMS[team] ? calc(c.model.TEAMS[team], c.model.ST[team], c.model.ST[team].outs).rows.find((r) => r.id === id) : null;
+    if (row && !c.readOnly && row.role !== "starter") setRole(c, team, id, row.role === "bench_plus" ? "bench" : "bench_plus");
+    return true;
+  }
+  if (btn?.dataset.dstep) {
     const { team, id } = btn.dataset, ch = chartNow(c, team);
     if (!ch || c.readOnly) return true;
-    if (btn.dataset.dbp) { const row = calc(c.model.TEAMS[team], c.model.ST[team], c.model.ST[team].outs).rows.find((r) => r.id === id); if (row) setRole(c, team, id, row.role === "bench_plus" ? "bench" : "bench_plus"); return true; }
     const key = ch.keyOf(id), mv = stepMove(ch.cm.view, key, Number(btn.dataset.dstep), at());
     if (mv) depthMove(c, team, mv, `${ch.nameOf(id)} ${btn.dataset.dstep === "-1" ? "up" : "down"} at ${mv.pos}`);
     return true;

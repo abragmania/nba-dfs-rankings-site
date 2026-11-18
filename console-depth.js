@@ -3,6 +3,7 @@
 // Out, each row with his minutes, DK/min, projection, TwoGun's minutes and projection, the basis of his minutes, an S toggle and an Out toggle, and an undo chip on every
 // mark he made. A side column holds the team total, the notes and which minutes feed the optimizer. Pure strings, tested in node.
 import { oursUse } from "./console-ours.js";
+import { valuePer1k } from "./figures.js";
 import { esc, logo, nameOpen, consoleNameOpen } from "./board-util.js";
 import { calc } from "./console-model.js";
 import { keyOf, outsOf } from "./console-engine.js";
@@ -95,6 +96,12 @@ function numBox(team, r, k, mark) {
   return `<span class="nb nb-${k}">${box}<span class="cs">${mark ? chip(team, r.id, k, mark, k === "m" ? f1(mark.live) ?? "—" : f2(mark.live) ?? "—") : ""}</span></span>`;
 }
 
+/** Salary and Value: read-only plain text (Adam 10:17 AM 11-18, never a box). A missing salary or projection is a dash with the reason, never 0. */
+export const salaryText = (p) => (Number.isInteger(p.salary) && p.salary > 0 ? `$${p.salary.toLocaleString("en-US")}` : null);
+export const valueText = (r) => { const v = valuePer1k(r.proj, r.p.salary); return v === null ? null : v.toFixed(2); }; // two decimals, as the board's Value column
+const salCell = (p) => `<span class="r ro sal">${salaryText(p) ?? miss("no salary for him on this slate")}</span>`;
+const valCell = (r) => `<span class="r ro val">${valueText(r) ?? miss(salaryText(r.p) ? "no projection, so no value" : "no salary, so no value")}</span>`;
+
 const STATUS = (s) => String(s ?? "").trim();
 
 /**
@@ -109,11 +116,12 @@ function manRow(team, r, T, S, mk, rank, N) {
   return `<div class="row${mk ? " marked" : ""}" data-row="${esc(r.id)}">
 <span class="ps">${esc(starter ? rank || pos0(p) || "—" : rank)}</span>
 <span class="who">${consoleNameOpen(p, p.name, "span", "nm")}<span class="pp">${esc(p.pos ?? "")}</span>${nameChip(N, p)}</span>
-${numBox(team, r, "m", mk?.m)}${numBox(team, r, "d", mk?.d)}
-<span class="r">${proj}</span>
+${salCell(p)}${numBox(team, r, "m", mk?.m)}${numBox(team, r, "d", mk?.d)}
+<span class="r">${proj}</span>${valCell(r)}
 ${tgCell(p.tg_min, "minutes", "tgm")}${tgCell(p.tg_proj, "projection", "tgp")}
 <span class="why" title="${esc(b.title)}"><span class="bw k-${b.tag}">${esc(b.text)}</span>${b.delta ? `<span class="bd">${esc(b.delta)}</span>` : ""}${b.chips.map((c) => `<span class="fc ${c.cls}" title="${esc(c.title)}">${esc(c.word)}</span>`).join("")}</span>
 <span class="tgl"><button class="tg s${starter ? " on" : ""}" type="button" data-s="${esc(r.id)}" data-team="${esc(team)}" title="${starter ? "Starting. Click to send him to the bench" : "Click to mark him a starter (S)"}">S</button><span class="cs">${rmark}</span></span>
+<span class="tgl"><button class="tg bp${r.role === "bench_plus" ? " on" : ""}" type="button" data-dbp="1" data-id="${esc(r.id)}" data-team="${esc(team)}"${starter ? ' disabled title="A starter is not Bench+"' : ` title="${r.role === "bench_plus" ? "Bench+ tonight. Click to make him plain Bench" : "Click to make him Bench+ tonight: he goes to the head of the bench order"}"`}>B+</button></span>
 <span class="tgl"><button class="tg o" type="button" data-out="${esc(r.id)}" data-team="${esc(team)}" title="Click to mark him Out">Out</button><span class="cs">${omark}</span></span>
 </div>`;
 }
@@ -129,7 +137,7 @@ function outRow(team, r, T, mk, N, pos = null) {
 ${outNote(N, p)}<div class="why">${src}${isNum(p.healthy) && p.healthy > 0 ? ` &middot; usual ${f1(p.healthy)} min` : ""}${absenceRow(p.absence)}</div></div>`;
 }
 
-const HEAD = (first) => `<div class="hd"><span>${first}</span><span>Player</span><span>Min</span><span>DK/min</span><span class="r">Proj</span><span class="tgv tgm" title="TwoGun's minutes">TG Min</span><span class="tgv tgp" title="TwoGun's projection">TG Proj</span><span>Basis</span><span class="c">S</span><span class="c">Out</span></div>`;
+const HEAD = (first) => `<div class="hd"><span>${first}</span><span>Player</span><span class="r" title="DraftKings salary">Salary</span><span>Min</span><span>DK/min</span><span class="r">Proj</span><span class="r" title="Projection per $1,000 of salary">Value</span><span class="tgv tgm" title="TwoGun's minutes">TG Min</span><span class="tgv tgp" title="TwoGun's projection">TG Proj</span><span>Basis</span><span class="c">S</span><span class="c" title="Bench+ tonight">B+</span><span class="c">Out</span></div>`;
 const sumMin = (rows) => rows.reduce((s, r) => s + (isNum(r.min) ? r.min : 0), 0);
 
 /** A roles note in the side column's width: the no-chart sentence says the same in fewer words, so it holds one line. */
@@ -178,6 +186,8 @@ function teamBody(model, code, news, view = {}) {
   else if (starters.length < 5) notes.push(`Only ${starters.length} starters: mark a man S.`);
   const disagree = disagreeNote(N?.team?.five, T.tier?.confirmed); // the foot says what was really used when the header says the sources disagree
   for (const n of String(res.roles_note ?? "").split(/\n+|(?<=\.)\s+/).filter(Boolean).map(shortNote).map((x) => (disagree && /^Starters: the lineup pages' (?:agreed|confirmed) five/.test(x) ? disagree : x))) if (!notes.some((x) => x.slice(0, 12) === n.slice(0, 12)) && !/starters marked|Only \d starters/.test(n)) notes.push(n);
+  const noSal = playing.filter((r) => !salaryText(r.p));
+  if (noSal.length) notes.push(`${noSal.length} ${noSal.length === 1 ? "man has" : "men have"} no salary on this slate, so ${noSal.length === 1 ? "his Value shows" : "their Value shows"} a dash: ${noSal.map((r) => r.p.name).join(", ")}`);
   if (res.chart_note) notes.push(res.chart_note); // one note per team (G68), added whole
   if (res.handout_note) notes.push(res.handout_note); // one note per team, added whole (G68)
   if (res.injured_note) notes.push(res.injured_note); // one note per team, added whole (G68)
