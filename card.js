@@ -52,18 +52,11 @@ export function readLogResponse(status, ok, text) {
 /** The card's state, DOM-free. fetchLog(player, signal) -> Promise<{ status, ok, text }>; onChange() is called after
  *  every change. Opening a player sets Loading and a new ticket before anything is drawn, so a swap never shows the
  *  previous player's games; an answer whose ticket is stale is dropped. */
-export function createCardState({ fetchLog, onChange = () => {} }) {
-  let player = null, log = { state: "idle" }, ticket = 0, ctl = null;
-  const stop = () => { ticket++; if (ctl) ctl.abort(); ctl = null; };
-  async function load(p, mine, signal) {
-    let next;
-    try {
-      const r = await fetchLog(p, signal);
-      next = readLogResponse(r.status, r.ok, r.text);
-    } catch (e) {
-      next = { state: "error", message: `the board server could not be reached (${e.message})` };
-    }
-    if (mine !== ticket) return; // the card was closed or swapped while this was in flight
+export function createCardState({ fetchLog, onChange = () => {}, retryMs = 3000, tries = 10 }) {
+  let player = null, log = { state: "idle" }, ticket = 0, ctl = null, timer = null, wake = null;
+  const stop = () => { ticket++; if (ctl) ctl.abort(); ctl = null; if (timer) clearTimeout(timer); timer = null; if (wake) wake(); wake = null; }; // wake ends a wait at once, so the load returns
+  const wait = () => new Promise((resolve) => { wake = resolve; timer = setTimeout(() => { timer = null; wake = null; resolve(); }, retryMs); });
+  const show = (next) => {
     log = next;
     try {
       onChange();
@@ -71,6 +64,25 @@ export function createCardState({ fetchLog, onChange = () => {} }) {
       // A log the card cannot draw becomes the error state, so the card never stays on Loading.
       log = { state: "error", message: `the game log could not be drawn (${e.message})` };
       onChange();
+    }
+  };
+  // A network failure (not an HTTP answer, not an abort) waits and re-reads our own local server: every retryMs, up to `tries` reads in all.
+  async function load(p, mine, signal) {
+    for (let n = 1; ; n++) {
+      let next, netFail = null;
+      try {
+        const r = await fetchLog(p, signal);
+        next = readLogResponse(r.status, r.ok, r.text);
+      } catch (e) {
+        netFail = e.message;
+      }
+      if (mine !== ticket) return; // the card was closed or swapped while this was in flight
+      if (netFail === null) return show(next);
+      if (n >= tries) return show({ state: "error", message: `the board server could not be reached after ${Math.round((retryMs * tries) / 1000)} seconds (${netFail})` });
+      show({ state: "waiting" });
+      if (mine !== ticket) return;
+      await wait();
+      if (mine !== ticket) return;
     }
   }
   return {
@@ -128,6 +140,7 @@ export function cardHtml(p, log, { dash, colourOf, picks, figs = null, usage = {
     + games.map((g) => `<tr><td class="d">${esc(shortDay(g.date))}</td><td class="o">${esc(g.home_away)} ${esc(g.opp)}</td><td class="r ${g.result === "W" ? "w" : "l"}">${esc(g.result)} ${esc(g.score)}</td>${startCell(g)}<td>${mins(g.min)}</td><td>${g.pts}</td><td>${g.reb}</td><td>${g.ast}</td><td>${g.fg3m}</td><td>${g.stl}</td><td>${g.blk}</td><td>${g.to}</td>${usgCell(g.date, usage, dash)}<td class="k">${g.dk.toFixed(2)}</td></tr>`).join("")
     + `</tbody></table>`;
   const lastTen = () => {
+    if (log.state === "waiting") return `<div class="sec">Last 10 games</div><div class="cardmsg">Waiting for the board server…</div>`;
     if (log.state === "loading" || log.state === "idle") return `<div class="sec">Last 10 games</div><div class="cardmsg">Loading the game log…</div>`;
     if (log.state === "error") return `<div class="sec">Last 10 games</div><div class="cardmsg err">No game log for ${esc(p.name)}: ${esc(log.message)}</div>`;
     const games = log.data.games, recent = games.slice(0, LAST_N), s = summarise(recent); // the log is the whole season, newest first
