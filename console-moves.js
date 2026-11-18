@@ -1,7 +1,7 @@
 // The console's moves on his work: history and ripple, saving, pins, roles, who is out, hand-outs. Each takes the console's shared state `c`.
 import { oursUse } from "./console-ours.js";
 import { keyOf, outsOf, usageStart } from "./console-engine.js";
-import { calc, canonRecord, chipName, dropCopies, hasPins, label, moveTo, noteOuts, pinsOf, recordOf, savedFor, sgn } from "./console-model.js";
+import { calc, canonRecord, chipName, dropCopies, hasPins, label, moveTo, noteOuts, pinsOf, recordOf, rolesText, savedFor, sgn } from "./console-model.js";
 import { FN, fmtv } from "./console-cmd.js";
 import { COLS } from "./console-render.js";
 import { PIN_MAX } from "./override-limits.js";
@@ -10,6 +10,7 @@ import { EMPTY_RECORD } from "./figures.js";
 import { MINUTE_SOURCES, SOURCE_LABEL } from "./depth-chart.js";
 import { alignNews, endNewsOuts, manAsLeft, marksOf, stillAsLeft } from "./console-marks.js";
 import { addMove } from "./depth-cols.js";
+import { MARK_ROLES } from "./role-marks.js";
 
 const THR = { m: 0.05, u: 0.05, d: 0.004, p: 0.05 };
 const STEP = { m: [0.5, 2], u: [0.5, 2], d: [0.01, 0.05], p: [0.1, 1] };
@@ -18,7 +19,7 @@ const EMPTY_RECORD_TEXT = JSON.stringify(EMPTY_RECORD());
 /** A history snapshot: his work without the lineup-news record, which no undo or redo ever changes (it would let news apply twice). */
 export const snap = (c) => JSON.stringify({ ST: Object.fromEntries(Object.entries(c.model.ST).map(([code, S]) => [code, { ...S, news: undefined }])), cur: c.G.cur });
 /** One team's work as the send compares it: who is out and every pin. */
-const teamState = (S) => JSON.stringify([keyOf(S.outs), S.pins, S.source ?? null, S.depth_moves ?? null]); // a depth-chart move is a change to send like any other
+const teamState = (S) => JSON.stringify([keyOf(S.outs), S.pins, S.source ?? null, S.depth_moves ?? null, rolesText(S.role_marks)]); // a depth-chart move or a role mark is a change to send like any other
 /** The teams a step changed join c.touched: only those (and teams the board already holds an Apply for) are sent (console-auto.js). */
 function touch(c, before, { track = false } = {}) {
   c.touched ??= new Set();
@@ -126,6 +127,7 @@ export function mutate(c, text, fn) {
   ripple(c, before);
   saveDirty(c);
   saveDepth(c); // queued with the saves, so the send below reads the saved chart
+  saveRoles(c); // and his role marks, the same way
   kick(c); // the change goes to the board by itself (console-auto.js)
 }
 
@@ -151,6 +153,44 @@ export function saveDepth(c) {
         c.depthSaved[code] = "unsaved";
         c.saveErrs[`chart ${code}`] = `${code}'s depth chart not saved: ${e.message}`; c.drawBar();
         c.toast(`Could not save ${code}'s depth chart: ${e.message}`, "err");
+      }
+    });
+  }
+}
+
+/**
+ * His standing role marks (Adam 10:25 AM 11-18) for every team whose list changed since this page last saved or read it go to the standing chart (POST /api/minutes/<slate>/team/<TEAM>, action role), in
+ * the save line as saveDepth's are: [{ key, role }] for tonight's men (the route keeps a mark on a man not on tonight's board). A refusal stays on show like a failed save. The public site saves none.
+ */
+export function saveRoles(c) {
+  if (c.readOnly) return;
+  const name = c.slate;
+  c.rolesSaved ??= {};
+  for (const [code, S] of Object.entries(c.model.ST)) {
+    if (!S.role_marks) continue;
+    const text = rolesText(S.role_marks), T = c.model.TEAMS[code];
+    if (c.rolesSaved[code] === undefined) { c.rolesSaved[code] = rolesText(T?.tier?.role_marks); if (text === c.rolesSaved[code]) continue; } // first sight: the inputs' list is what the server holds
+    if (text === c.rolesSaved[code]) continue;
+    c.rolesSaved[code] = text;
+    const marks = Object.entries(S.role_marks).map(([id, role]) => ({ key: T?.tier?.men?.[id]?.key ?? null, role })).filter((m) => m.key);
+    c.saveQueue = c.saveQueue.then(async () => {
+      c.rolesBase ??= {};
+      const base = c.rolesBase[code] ?? T?.tier?.role_marks_stamp ?? "[]"; // the marks as this page last read or saved them, read at send time (a quick second click follows the first save)
+      try {
+        const r = await c.api(`/api/minutes/${encodeURIComponent(name)}/team/${encodeURIComponent(code)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "role", marks, base }) });
+        if (typeof r?.stamp === "string") c.rolesBase[code] = r.stamp;
+        if (c.saveErrs[`roles ${code}`] && name === c.slate) { delete c.saveErrs[`roles ${code}`]; c.drawBar(); }
+      } catch (e) {
+        if (name !== c.slate) return;
+        if (e.code === "MINUTES_ROLES_MOVED") { // another page or the other computer saved this team's marks since this page read them: the next refresh takes theirs, said
+          c.rolesSaved[code] = "conflict";
+          c.toast(`${code}'s role marks changed elsewhere (another page or the other computer), so your last mark on it was not written over them.`, "notice");
+          c.onConflict?.(code);
+          return;
+        }
+        c.rolesSaved[code] = "unsaved";
+        c.saveErrs[`roles ${code}`] = `${code}'s role marks not saved: ${e.message}`; c.drawBar();
+        c.toast(`Could not save ${code}'s role marks: ${e.message}`, "err");
       }
     });
   }
@@ -184,6 +224,7 @@ export function restore(c, i) {
   ripple(c, before);
   saveDirty(c);
   saveDepth(c); // Undo and Redo carry his depth-chart moves back to the chart file
+  saveRoles(c); // and his role marks
   kick(c);
 }
 export const undo = (c) => restore(c, c.G.hi - 1);
@@ -225,6 +266,11 @@ export function toggleStarter(c, t, id) {
   if (row.role !== "starter") return setRole(c, t, id, "starter");
   const mark = marksOf(T, S)[id]?.r;
   if (mark?.v === "starter" && mark.live !== "starter") return clearFlip(c, t, id);
+  if (S.role_marks?.[id] === "starter") { // his standing S mark: it comes off when the app would not start him without it, else he goes to Bench
+    const rest = { ...S.role_marks };
+    delete rest[id];
+    if (calc(T, { ...S, role_marks: rest }, S.outs).rows.find((r) => r.id === id)?.role !== "starter") return clearStanding(c, t, id);
+  }
   return setRole(c, t, id, "bench");
 }
 /** An undo chip: drops one of his marks on a man (marksOf's kinds m, d, r, out), and the man goes back to what the app has live. */
@@ -256,7 +302,7 @@ export function undoNews(c, t, key, ends = { state: "undone" }) {
       if (!manAsLeft(cur, m)) continue; // he is not as the news left him: what he is now is his own mark, and stays
       if (m.kind === "out" && !tonight.has(m.id)) {
         toggleOut(c, t, m.id);
-        if (m.was !== undefined && setRole(c, t, m.id, m.was) === null) { const S2 = c.model.ST[t]; mutate(c, `${t} ${nameOf(c, t, m.id)} role back`, () => { pinsOf(S2, keyOf(S2.outs)).r[m.id] = m.was; }); } // the flip he had when the Out applied comes back on the scenario he lands on, whatever that scenario held
+        if (m.was !== undefined && setRole(c, t, m.id, m.was, { perNight: true }) === null) { const S2 = c.model.ST[t]; mutate(c, `${t} ${nameOf(c, t, m.id)} role back`, () => { pinsOf(S2, keyOf(S2.outs)).r[m.id] = m.was; }); } // the flip he had when the Out applied comes back on the scenario he lands on, whatever that scenario held
       } else if (m.kind === "out") mutate(c, `${t} ${nameOf(c, t, m.id)} news Out undone`, () => { cur.mine.out = cur.mine.out.filter((x) => x !== m.id); }); // TwoGun has him Out too now: he stays Out, never "back in", for as long as TwoGun says so; a history step, so Ctrl+Z then Ctrl+Y keeps it
       else if (m.kind === "r") clearFlip(c, t, m.id);
     }
@@ -316,11 +362,18 @@ function flipChanges(before, after) {
  * them; his other pins, and everyone's, come along. Returns the men the rule moved as [{ id, from, to }], also kept on c.G.roleMoves for
  * the page to name; an unchanged role does nothing and returns null.
  */
-export function setRole(c, t, id, role) {
+export function setRole(c, t, id, role, { perNight = false } = {}) { // perNight: the lineup news's own role calls stay tonight's flips (it tracks and undoes them); his clicks write the standing mark
   const T = c.model.TEAMS[t], S = c.model.ST[t], key = keyOf(S.outs);
   const rows = calc(T, S, S.outs).rows, mine = rows.find((r) => r.id === id);
-  if (!mine || mine.role === role) return null;
-  const res = roleMove({ ...T, source: S.source }, S.outs, pinsOf(S, key).r, id, role, Object.fromEntries(rows.map((r) => [r.id, r.min])));
+  if (!mine) return null;
+  // Adam 10:25 AM 11-18: Starter, Bench+ or Bench on a man the engine knows is his standing mark (the chart file, saveRoles), which stands on later nights; Out and out of rotation stay tonight's
+  const standing = !perNight && S.role_marks !== undefined && MARK_ROLES.includes(role) && Boolean(T.tier?.men?.[id]?.key);
+  if (mine.role === role) { // the review of 11-18: a click on the role he already has writes the mark, so he can freeze it (Bench on a man who may cross 20)
+    if (!standing || S.role_marks[id] === role) return null;
+    mutate(c, `${t} ${nameOf(c, t, id)} ${ROLE_LABEL[role]} (kept as your mark)`, () => { S.role_marks = { ...S.role_marks, [id]: role }; });
+    return [];
+  }
+  const res = roleMove({ ...T, source: S.source, role_marks: S.role_marks ?? null }, S.outs, pinsOf(S, key).r, id, role, Object.fromEntries(rows.map((r) => [r.id, r.min])));
   const also = res.moved.map((m) => `${nameOf(c, t, m.id)} to ${ROLE_LABEL[m.to]}`).join(", ");
   const flips = Object.fromEntries(Object.entries(res.flips).filter(([fid]) => T.byId[fid])); // a man no longer on the team keeps no flip
   const next = keyOf(res.outs), opened = opensSaved(S, key, next);
@@ -330,9 +383,17 @@ export function setRole(c, t, id, role) {
     if (next === key) pinsOf(S, next).r = flips;
     else if (opened) carryPins(S, T, key, next, changes);
     else { carryPins(S, T, key, next, changes); pinsOf(S, next).r = flips; }
+    if (standing) { S.role_marks = { ...S.role_marks, [id]: role }; delete pinsOf(S, keyOf(S.outs)).r[id]; } // the standing mark, in place of tonight's flip on him
     c.G.roleMoves = { team: t, moved: res.moved };
   });
   return res.moved;
+}
+/** His standing role mark on a man comes off (Adam 10:25 AM 11-18): the man goes back to the role the app gives him. False when he had none. */
+export function clearStanding(c, t, id) {
+  const S = c.model.ST[t];
+  if (!S.role_marks || !Object.hasOwn(S.role_marks, id)) return false;
+  mutate(c, `${t} ${nameOf(c, t, id)} role mark cleared`, () => { const r = { ...S.role_marks }; delete r[id]; S.role_marks = r; });
+  return true;
 }
 /** Which minutes feed the optimizer (depth-chart.js MINUTE_SOURCES): one team, or every team that has a chart. It is saved with his work and takes Ctrl+Z like any move. */
 export function setSource(c, t, source, all = false) {
@@ -353,13 +414,13 @@ export function swapStarter(c, t, inId, outId) {
   if (res === null) return null;
   if (res.backIn) {
     // He is Out here: back in on a non-starting role first (the scenario moves once), then the swap in the scenario he is back in, so both flips land there; one history step.
-    const base = histMark(c), first = setRole(c, t, res.backIn.id, res.backIn.role);
+    const base = histMark(c), first = setRole(c, t, res.backIn.id, res.backIn.role, { perNight: true });
     if (first === null) return null;
     const second = swapStarter(c, t, inId, outId);
     foldHistory(c, base);
     return [...first, ...(second ?? [])];
   }
-  if (res.call) return setRole(c, t, res.call.id, res.call.role); // the plain role move
+  if (res.call) return setRole(c, t, res.call.id, res.call.role, { perNight: true }); // the plain role move (the news's start: tonight only)
   const flips = Object.fromEntries(Object.entries(res.flips).filter(([fid]) => T.byId[fid]));
   mutate(c, `${t} ${nameOf(c, t, inId)} Starter (${nameOf(c, t, outId)} to Bench)`, () => {
     pinsOf(S, key).r = flips;

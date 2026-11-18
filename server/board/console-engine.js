@@ -47,7 +47,7 @@ export const outsOf = (key) => (key ? key.split("+") : []);
 export const emptyPins = () => ({ m: {}, u: {}, d: {}, p: {}, r: {} });
 
 /** The engine's team from the inputs route's team and his saved record for it. */
-export const teamFor = (input, record) => ({ men: input.men, tonight: input.tonight ?? [], healthy_exact: Boolean(input.healthy_exact), tables: input.tables ?? {}, handouts: record?.handouts ?? {}, combos: record?.combos ?? {}, tier: input.tier, depth: input.depth ?? null, depth_moves: Array.isArray(record?.depth_moves) ? record.depth_moves : null, source_default: defaultSourceOf(input), source_set: record?.sourceSet ?? MINUTE_SOURCES.includes(record?.source), source: MINUTE_SOURCES.includes(record?.source) ? record.source : defaultSourceOf(input) });
+export const teamFor = (input, record) => ({ men: input.men, tonight: input.tonight ?? [], healthy_exact: Boolean(input.healthy_exact), tables: input.tables ?? {}, handouts: record?.handouts ?? {}, combos: record?.combos ?? {}, tier: input.tier, depth: input.depth ?? null, depth_moves: Array.isArray(record?.depth_moves) ? record.depth_moves : null, role_marks: record?.role_marks && typeof record.role_marks === "object" && !Array.isArray(record.role_marks) ? record.role_marks : null, source_default: defaultSourceOf(input), source_set: record?.sourceSet ?? MINUTE_SOURCES.includes(record?.source), source: MINUTE_SOURCES.includes(record?.source) ? record.source : defaultSourceOf(input) });
 
 const positions = (man) => (typeof man.pos === "string" ? man.pos.split("/").filter(Boolean) : []);
 

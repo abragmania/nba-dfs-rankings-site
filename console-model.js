@@ -111,12 +111,17 @@ function stateFor(T, rec) {
   for (const [key, p] of Object.entries(rec?.pins ?? {})) {
     if (key !== "" && key !== T.tonightKey && !saved.includes(key) && hasPins(p)) shown.push(key);
   }
-  return { outs: outsOf(T.tonightKey), tonight: T.tonightKey, source: sourceSet ? rec.source : T.source_default, sourceSet, saved, shown, pins:structuredClone(rec?.pins ?? {}), handouts: structuredClone(rec?.handouts ?? {}), combos: structuredClone(rec?.combos ?? {}), news: structuredClone(rec?.news ?? {}), ...(rec?.mine ? { mine: structuredClone(rec.mine) } : {}), ...depthOf(T) };
+  return { outs: outsOf(T.tonightKey), tonight: T.tonightKey, source: sourceSet ? rec.source : T.source_default, sourceSet, saved, shown, pins:structuredClone(rec?.pins ?? {}), handouts: structuredClone(rec?.handouts ?? {}), combos: structuredClone(rec?.combos ?? {}), news: structuredClone(rec?.news ?? {}), ...(rec?.mine ? { mine: structuredClone(rec.mine) } : {}), ...depthOf(T), ...rolesOf(T) };
 }
 
 /** His depth-chart moves as the page starts them (Adam 11-17): the standing chart's saved list from the inputs. Kept in his work so Undo and Redo carry them; never in the scenarios file (recordOf leaves them
  *  out): the chart file is their one store (console-moves.js saveDepth). Nothing when the inputs carry no chart. */
 export const depthOf = (T) => (Array.isArray(T.tier?.depth?.moves) ? { depth_moves: structuredClone(T.tier.depth.moves) } : {});
+/** His standing role marks as the page starts them (Adam 10:25 AM 11-18): { id: role } from the inputs, kept in his work so Undo and Redo carry them, never in the scenarios file (recordOf leaves them out):
+ *  the chart file is their one store (console-moves.js saveRoles). Nothing when the inputs carry no engine inputs. */
+/** One text for a team's role marks ({ id: role }), whatever order they were set in: what the page saved and what the server holds are compared by it. */
+export const rolesText = (marks) => JSON.stringify(Object.entries(marks ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+export const rolesOf = (T) => (T.tier?.role_marks && typeof T.tier.role_marks === "object" ? { role_marks: structuredClone(T.tier.role_marks) } : {});
 
 /** New inputs on the same work (a pull landed): his pins stay and everything he did not pin moves. Every team is rebased on the new Tonight
  *  (moveTo): a team with nothing of his stays on Tonight, his own Outs and back-ins stay his through any number of pulls, and his pins go with the scenario; a man who left is dropped. */
@@ -128,6 +133,7 @@ export function refreshTeams(model, inputs) {
     if (!S) { model.ST[code] = stateFor(TEAMS[code], null); continue; }
     if (!S.sourceSet) S.source = dflt; // a team he has not chosen for follows the default when the projection setting moves
     if (!Array.isArray(S.depth_moves)) Object.assign(S, depthOf(TEAMS[code])); // a chart that arrived with these inputs (his own list stays: console.js refresh takes another page's)
+    if (!S.role_marks) Object.assign(S, rolesOf(TEAMS[code])); // his role marks, the same way
     moveTo(TEAMS[code], S, S.outs, model.TEAMS[code]?.tonightKey ?? TEAMS[code].tonightKey);
     pruneFlips(TEAMS[code], S);
   }

@@ -4,7 +4,7 @@
 // The chart is a SEED (the position sources' consensus, server/minutes/pos-consensus.js: { PG: [keys], ..., none: [keys with no position] }) with Adam's MOVES replayed on it in time order. A move
 // { key, pos, after, before, at } puts the man in column `pos` directly below `after` (null: at the top) or, when `after` is not in that column, directly above `before` (null: at the bottom). His
 // moves are standing (they carry to later nights) and win over every source; only his newest move per man is kept (addMove), so the list never grows past the team's men.
-// Bench order (Adam 2:14 PM): Bench+ men first, then every 2nd, then every 3rd and below, ties broken by minutes per game over the team's last 10 games; men with no position after them.
+// Bench order (Adam 2:14 PM): Bench+ men first, then every 2nd, then every 3rd and below, ties broken by a blend of last 10 and season minutes a game (Adam 11:40 AM 11-18, bench-blend.js); men with no position after them.
 import { ordinal } from "./team-fill.js";
 
 export const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
@@ -156,13 +156,13 @@ export function posMove(view, key, pos, at) {
 export const addMove = (moves, move) => [...(moves ?? []).filter((m) => m.key !== move.key), move];
 
 /**
- * The bench in Adam's order (2:14 PM 11-17): men = [{ key, bplus (Bench+ tonight), last10 (minutes a game over the team's last 10 games, or null) }] off the five; places: depthPlaces. Bench+ first, then rank 1
- * (the 2nds), rank 2 (the 3rds) and on, then the men with no position; inside a group the more last-10 minutes first (none last), then the chart's own order. Returns the men in that order, each with
- * `group` (0 Bench+, n the rank, 99 no position). Pure.
+ * The bench in Adam's order (2:14 PM 11-17): men = [{ key, bplus (Bench+ tonight), blend (his blend of last 10 and season minutes a game, bench-blend.js benchBlend; null with no game) }] off the five; places:
+ * depthPlaces. Bench+ first, then rank 1 (the 2nds), rank 2 (the 3rds) and on, then the men with no position; inside a group the higher blend first (Adam 11:40 AM 11-18; none last), then the chart's own
+ * order. Returns the men in that order, each with `group` (0 Bench+, n the rank, 99 no position). Pure.
  */
 export function benchOrder(men, places) {
   const groupOf = (m) => (m.bplus ? 0 : places.get(m.key)?.rank ?? 99);
-  const l10 = (m) => (typeof m.last10 === "number" && Number.isFinite(m.last10) ? m.last10 : -1);
+  const blend = (m) => (typeof m.blend === "number" && Number.isFinite(m.blend) ? m.blend : -1);
   // the last tie-break is the name (when given), never the list's order: the board's engine and the console list the men in different orders and must agree
-  return men.map((m, i) => ({ ...m, group: groupOf(m), i })).sort((a, b) => a.group - b.group || l10(b) - l10(a) || (places.get(a.key)?.idx ?? 99) - (places.get(b.key)?.idx ?? 99) || String(a.name ?? "").localeCompare(String(b.name ?? "")) || a.i - b.i);
+  return men.map((m, i) => ({ ...m, group: groupOf(m), i })).sort((a, b) => a.group - b.group || blend(b) - blend(a) || (places.get(a.key)?.idx ?? 99) - (places.get(b.key)?.idx ?? 99) || String(a.name ?? "").localeCompare(String(b.name ?? "")) || a.i - b.i);
 }

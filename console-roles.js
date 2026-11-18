@@ -5,14 +5,19 @@
 // server, as console-engine.js is. A man's role is Out when he is out in the scenario (its key); otherwise the role he flipped
 // him to (pins.r), else the rule below. Exactly five starters, always: the flipped starters count first, the rest are filled
 // from the men not flipped, TwoGun's starter flag first, then Tonight's minutes. A man not flipped and not starting is Bench+
-// when his last season on this team was 24+ minutes a game starting under 40% (bench_plus_ok, from the inputs), Bench when
+// by the engine's rule where the team has the engine's inputs (Adam 10:25 AM 11-18, bench-plus-rule.js: 20+ a game over 5+ games off
+// the bench this season); only a team without them falls back to last season's 24+ minutes a game starting under 40% (bench_plus_ok), Bench when
 // Tonight's minutes are above 0, else Out of rotation. Making a man Starter when five start sends the starter with the fewest
 // minutes now to Bench; moving a starter to Bench+, Bench or Out of rotation makes the man playing off the bench with the most minutes
 // now a Starter. A starter marked Out flips nobody: the rule fills the five. Each such
 // move is a flip of its own, named so the page can show it and Ctrl+Z takes it back.
 import { isNum } from "./figures.js";
 import { oursUse, rolesFromEngine, fiveIsSet, tierStarters, chartUse, chartStarters, unmatchedNote, playsDespiteInjured } from "./console-ours.js";
-import { tierScenario } from "./console-tier.js";
+import { tierScenario, withStanding } from "./console-tier.js";
+import { benchPlusBy } from "./bench-plus-rule.js";
+
+/** The engine's Bench+ rule on a man's rows from the inputs (tier-inputs.js [min, started 1 | 0 | null, date]): true or false, or null when the inputs hold no row list for him. */
+const ruleBenchPlus = (team, id) => { const rows = team.tier?.men?.[id]?.rows; return Array.isArray(rows) ? benchPlusBy(rows.map(([min, s]) => ({ min, started: s === 1 ? true : s === 0 ? false : null }))).ok : null; };
 
 export const STARTERS = 5;
 export const ROLES = ["starter", "bench_plus", "bench", "oor", "out"];
@@ -54,14 +59,17 @@ function resolveFromChart(team, outSet, flips) {
   const base = tier ? [...new Set([...Object.keys(flipped).filter((id) => flipped[id] === "starter"), ...tier.ids])] : null, short = base !== null && base.length < 5; // an S-marked man with no engine inputs is still in the five
   const ids = base ? (short ? [...new Set([...base, ...chart.ids])].slice(0, 5) : base) : chart.ids;
   const notes = base ? [...tier.notes, ...(short && ids.length < 5 ? chart.notes : [])] : chart.notes; // the chart's count notes (Only N / N marked) describe its own set, not the merged one: kept only while the merged five is still short
-  const five = new Set(ids), toRole = { bench_plus: "bench_plus", bench: "bench", oor: "oor", injured: "oor", starter: "bench" };
+  const five = new Set(ids), toRole = { bench_plus: "bench_plus", bench: "bench", oor: "oor", injured: "oor", starter: "bench" }, standing = tier ? withStanding(team, {}) : {}; // his standing marks (Adam 10:25 AM 11-18)
   for (const p of team.men) {
     if (outSet.has(p.id)) roles[p.id] = "out";
     else if (Object.hasOwn(flipped, p.id)) roles[p.id] = flipped[p.id];
     else if (five.has(p.id)) roles[p.id] = "starter";
+    else if (standing[p.id] === "bench_plus" || standing[p.id] === "bench") roles[p.id] = standing[p.id];
     else {
       const m = hasChart && p.depth_key ? team.depth.men[p.depth_key] : null;
-      roles[p.id] = m && !playsDespiteInjured(team, p, outSet) ? toRole[m.role] : p.bench_plus_ok ? "bench_plus" : isNum(p.min) && p.min > 0 ? "bench" : "oor";
+      const rule = tier ? ruleBenchPlus(team, p.id) : null, plusOk = rule ?? p.bench_plus_ok; // the engine's Bench+ rule where its rows are here (the review of 11-18), else last season's flag
+      const chartRole = m && !playsDespiteInjured(team, p, outSet) ? toRole[m.role] : null;
+      roles[p.id] = chartRole && (rule === null || (chartRole !== "bench" && chartRole !== "bench_plus")) ? chartRole : plusOk ? "bench_plus" : isNum(p.min) && p.min > 0 ? "bench" : chartRole ?? "oor";
     }
   }
   return { roles, flipped, note: [...notes, unmatchedNote(team)].filter(Boolean).join(" ") || null };

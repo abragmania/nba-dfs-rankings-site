@@ -60,7 +60,7 @@ export function chartHtml(code, cm, { sel = null, ro = false } = {}) {
   const head = (c) => `<h3>${c.pos}<small>${f1(c.sum)}</small></h3>`;
   const cols = cm.cols.map((c) => `<div class="dcol" data-dcol="${c.pos}" data-team="${esc(code)}">${head(c)}${c.men.map((m) => chip(code, m, sel, ro)).join("")}</div>`).join("");
   const none = cm.none.length ? `<div class="dc-none" data-dcol="none"><span class="dc-nl">No position</span>${cm.none.map((m) => chip(code, m, sel, ro)).join("")}</div>` : "";
-  const order = cm.bench.length ? `<div class="dc-ord"><b>Bench order from this chart:</b> ${cm.bench.map((m, i) => `${i + 1} ${esc(m.name)}`).join(", ")}<span>Bench+ first, then every 2nd, then every 3rd, ties by last-10 minutes</span></div>` : "";
+  const order = cm.bench.length ? `<div class="dc-ord"><b>Bench order from this chart:</b> ${cm.bench.map((m, i) => `${i + 1} ${esc(m.name)}`).join(", ")}<span>Bench+ first, then every 2nd, then every 3rd, ties by a blend of last 10 and season minutes a game</span></div>` : "";
   return `<section class="box dchart"><h2>Depth chart <small>${ro ? "our chart, as Adam set it" : "drag a man within or between columns; starter on top"}</small></h2><div class="dcols">${cols}</div>${none}${ro ? "" : selBar(code, cm, sel)}${order}</section>`;
 }
 

@@ -3,9 +3,10 @@
 // (console-auto.js), so there is no Apply step. This file holds the shared state, drawing, loading and the screen's clicks and keys;
 // console-moves.js acts on the state.
 import { esc, isoToEastern, tipWhen } from "./board-util.js";
-import { buildModel, buildTeam, canonRecord, recordOf, refreshTeams, savedBehind, typedText } from "./console-model.js";
+import { buildModel, buildTeam, canonRecord, recordOf, refreshTeams, rolesText, savedBehind, typedText } from "./console-model.js";
 import { depthHtml } from "./console-depth.js";
-import { dropMark, firstPlaying, jumpTeam, pushHist, redo, saveDirty, setPin, setSource, toggleOut, toggleStarter, undo } from "./console-moves.js";
+import { clearStanding, dropMark, firstPlaying, jumpTeam, pushHist, redo, saveDirty, setPin, setSource, toggleOut, toggleStarter, undo } from "./console-moves.js";
+import { roleMarksFootHtml } from "./console-role-foot.js";
 import { cardApi, lineupViewOf } from "./console-card.js";
 import { createAutoApply, createPullReads, mayAutoSend, requeueApplied, requeueNews, resendChanged, resultSigs } from "./console-auto.js";
 import { PIN_MAX } from "./override-limits.js";
@@ -18,6 +19,8 @@ import { chartClick, chartChange, wireChartDrag } from "./console-chart-ui.js";
 
 /** His depth-chart moves as the server holds them, per team (console-moves.js saveDepth compares against it). */
 const depthTexts = (model) => Object.fromEntries(Object.entries(model.TEAMS).map(([code, T]) => [code, JSON.stringify(T.tier?.depth?.moves ?? null)]));
+const roleStamps = (model) => Object.fromEntries(Object.entries(model.TEAMS).filter(([, T]) => T.tier?.role_marks_stamp).map(([code, T]) => [code, T.tier.role_marks_stamp]));
+const roleTexts = (model) => Object.fromEntries(Object.entries(model.TEAMS).filter(([, T]) => T.tier?.role_marks).map(([code, T]) => [code, rolesText(T.tier.role_marks)])); // his standing role marks as the chart holds them (Adam 10:25 AM 11-18)
 
 const USAGE_RETRY_MS = 20_000;
 const USAGE_RETRIES = 6;
@@ -101,7 +104,7 @@ function pageHtml(c, news) {
   const G = c.G;
   const team = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr: Object.values(c.saveErrs).join(" ") || null, news, help: G.help, chartSel: G.chartSel ?? null, readOnly: c.readOnly });
   const foot = readFootHtml(c.readFail, c.inputsAt); // a failed refresh: at the page's foot, under either view
-  if (G.view !== "all") return `${withAllChip(team, false)}${foot}`;
+  if (G.view !== "all") return `${withAllChip(team, false)}${roleMarksFootHtml(c.model.TEAMS[G.cur], c.model.ST[G.cur], G.cur, c.readOnly === true)}${foot}`; // his standing role marks, at the foot (G64)
   const words = !news ? "No lineup news is wired on this page." : news.state === "loading" ? "Reading the lineup news..." : news.state !== "ok" ? `Lineup news not read: ${news.why}` : null;
   const body = words ? `<section class="ca"><header class="ca-h"><h1>Tonight's lineup news</h1></header><div class="ca-empty">${esc(words)}</div></section>` : landingHtml(news.V, G.newsTeam ?? "", c.inputs.games.flatMap((g) => [g.away, g.home]));
   return `${withAllChip(teamBarOf(team), true)}${body}${foot}`;
@@ -151,6 +154,8 @@ async function load(c, name) {
     c.inputsAt = Date.now();
     c.model = buildModel(c.inputs, out.scenarios.teams, out.scenarios.applied?.keys);
     c.depthSaved = depthTexts(c.model); // his depth-chart moves as the standing chart holds them
+    c.rolesSaved = roleTexts(c.model); // and his role marks
+    c.rolesBase = roleStamps(c.model); // the marks as read, sent back as base with each save (the route refuses a save over marks that moved since)
     c.lastSaved = {};
     c.serverSeen = Object.fromEntries(Object.keys(c.model.ST).map((code) => [code, canonRecord(out.scenarios.teams[code])])); // what the server held for each team when this page last looked or wrote
     c.serverHisAt = Object.fromEntries(Object.keys(c.model.ST).map((code) => [code, out.scenarios.teams[code]?.his_at ?? null])); // each team's his_at as read: sent as `base` with every save, so a stale page cannot write over a brought-down record
@@ -197,6 +202,12 @@ async function refresh(c) {
       const S = c.model.ST[code], mine = c.depthSaved?.[code];
       if (S && text !== "null" && mine !== undefined && mine !== "unsaved" && text !== mine) { S.depth_moves = JSON.parse(text); c.depthSaved[code] = text; }
       else if (c.depthSaved && mine === undefined) c.depthSaved[code] = text;
+    }
+    for (const [code, text] of Object.entries(roleTexts(c.model))) { // his role marks, the same way: another page's or the other computer's saved list is taken
+      const S = c.model.ST[code], mine = c.rolesSaved?.[code];
+      if (S && mine !== undefined && mine !== "unsaved" && text !== mine) { S.role_marks = structuredClone(c.model.TEAMS[code].tier.role_marks); c.rolesSaved[code] = text; }
+      else if (c.rolesSaved && mine === undefined) c.rolesSaved[code] = text;
+      if (c.rolesSaved?.[code] !== "unsaved") (c.rolesBase ??= {})[code] = c.model.TEAMS[code].tier.role_marks_stamp ?? "[]"; // his own saves have landed (saveQueue above): what the server holds is the base
     }
     c.serverFileHisAt = out.scenarios.his_at ?? null; // his saves have landed (saveQueue above), so the file's stamp is the base for the next send
     const others = c.saveGen === gen ? takeOthersWork(c, out) : []; // a save of his own during the read makes the comparison unsafe, so it waits for the next one
@@ -279,6 +290,7 @@ function onClick(c, e) {
   else if (d.caDismiss) { writeStore(dismissKey(c.slate), JSON.stringify({ ...readDismissed(c.slate), [d.caDismiss]: d.caSig ?? "" })); render(c); }
   else if (d.help) { c.G.help = !c.G.help; render(c); }
   else if (d.undo) dropMark(c, d.team, d.id, d.undo);
+  else if (d.clearMark) clearStanding(c, d.team, d.clearMark); // a standing role mark off, back to the rule (Undo brings it back)
   else if (d.s) toggleStarter(c, d.team, d.s);
   else if (d.out) toggleOut(c, d.team, d.out);
   else if (d.source) setSource(c, d.team, d.source);

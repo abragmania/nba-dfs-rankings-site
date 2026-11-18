@@ -69,7 +69,7 @@ export function applyProposal(c, proposal, atIso = new Date().toISOString()) {
         }
       } else {
         const was = a.role === "out" ? cur().pins[keyOf(cur().outs)]?.r?.[a.id] : undefined; // the flip he had, so an undo or a reversal puts it back whichever scenario he lands on
-        if (M.setRole(c, a.team, a.id, a.role) === null && roleOf(a.id) !== a.role) throw new Error(`${a.id} is not on the console for ${a.team}`);
+        if (M.setRole(c, a.team, a.id, a.role, { perNight: true }) === null && roleOf(a.id) !== a.role) throw new Error(`${a.id} is not on the console for ${a.team}`);
         men.push({ id: a.id, kind: a.role === "out" ? "out" : "r", ...(was !== undefined ? { was } : {}) });
       }
     }

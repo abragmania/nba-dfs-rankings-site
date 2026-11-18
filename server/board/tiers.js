@@ -1,6 +1,7 @@
 // Our minutes engine's team plan (Adam 11-12 tiers; Adam 11-17 11:40-11:58 AM: role minutes, a 36-minute cap, every team to 240), pure; tests/minutes_tiers.test.mjs on frozen fixtures.
 //  1. Five: tonight's five (the lineup pages' confirmed or agreed five, else TwoGun's starter flags on the board, said "expected"; a short five is filled from tonight's order).
-//     Tiers stay as labels: Starter (the five); Bench+ (at least BENCH_PLUS_AVG minutes, overtime-scaled, in at least BENCH_PLUS_GAMES of the team's last RECENT_GAMES games, Adam 11-12); Bench (everyone else).
+//     Tiers: Starter (the five); Bench+ (Adam 10:25 AM 11-18: a mean of BENCH_PLUS_MEAN or more, overtime-scaled, over at least BENCH_PLUS_MIN_GAMES games off the bench this season, starts never counted,
+//     benchPlusBy; a starting point Adam may change with his marks, m.tier_force); Bench (everyone else).
 //  2. Starter: his own mean as a starter this season (overtime-scaled), any number of starts; no share of the Out men's minutes. A starter with NO starts (Adam 1:19 PM 11-17, option B): the starter figure, the
 //     mean of all his starts, of the Out starter at his DraftKings position he replaced (pairReplaced; Adam 1:20 PM: the man whose slot he took, m.replaced, only when they share a position; each Out starter
 //     taken once); no Out starter at his position, or that man with no starts either: the team's median starter figure;
@@ -14,25 +15,29 @@
 //     team's BENCH-SPOT figure N (team-fill.js benchSpots). Pure role: his own mean does not set it. Retired 11-17: a returning man's own bench figure and its cut of
 //     his position's bench (coverReturns); his returning words stay on his row. With no team game on file the bench keeps each man's own bench mean (a man with no game: his chart's usual where 2b allows it), else
 //     TwoGun's number (said).
+//  3b. Bench+ (Adam 9:50 AM 11-18): his own typical minutes, as a starter's: his mean over this season's games off the bench, only with 5 or more of them (Adam's "min 5 games"), his FLOOR;
+//     with fewer (a man he marked Bench+), his bench spot's figure, said, and that is his floor. No lowest-starter ceiling for him (R15 holds for the plain bench only); 36 caps him like everyone.
 //  4. Cap: nobody above MINUTES_CAP, except a starter whose own starter mean is above it (he keeps it). A standing usual override is his figure as set (his cap rises to it); a standing cap override is his cap and he
 //     is "limited" (no fill). Overrides apply only in the role they were set for (ovGate).
-//  5. Team total (team-fill.js fillTeam): under 240, spread in proportion over the men under the cap, then rounds of +1 to starters then bench (the last pro-rated); over 240, the bench trimmed in proportion,
-//     then starters above their floors. Every step is said in the man's why and the team's notes; what nobody can take or give is named (G62).
+//  5. Team total (team-fill.js fillTeam): under 240, spread in proportion over the men under the cap, then rounds of +1 to starters then bench (the last pro-rated); over 240, the plain bench trimmed in proportion,
+//     then Bench+ men above their floors, then starters above their floors. Every step is said in the man's why and the team's notes; what nobody can take or give is named (G62).
 //  TwoGun-far-lower flag (Adam 2:00 PM 11-17: never called a limit): TwoGun far below our figure (FAR_BELOW share and FAR_BELOW_MIN minutes) marks the row; both are shown, ours stands.
 // RECENT_GAMES, BENCH_PLUS_*, FAR_BELOW* are working values Adam may tune. Typed minutes and standing minutes overrides are applied after this (figures.js), never rescaled.
 import { isNum } from "./figures.js";
 import { MINUTES_CAP, GAME_MAX, benchSpots as spotsOf, shareOut, fillTeam, positionFill, ordinal } from "./team-fill.js";
 import { benchOrder } from "./depth-cols.js";
+import { benchPlusBy, benchMean, BENCH_PLUS_MEAN, BENCH_PLUS_MIN_GAMES } from "./bench-plus-rule.js";
+import { benchBlend } from "./bench-blend.js";
 
-export { shareOut, MINUTES_CAP };
+export { shareOut, MINUTES_CAP, benchPlusBy, benchMean, BENCH_PLUS_MEAN, BENCH_PLUS_MIN_GAMES };
 
 const GAME_MINUTES = 240; // no import from tools/: the console page runs this file in the browser (server/board is what the page can load)
 /** Whether the chart's usual stands in only for a man Out most of the team's games. true is the lead's pick, 11-13, because Adam deferred the scope; false: any matched man with no game this season. */
 export const CHART_NEEDS_OUT_MOST = true;
 export const RETURN_LAST_GAMES = 20; // a returning rotation man needs this many games last season (a working value)
 export const RECENT_GAMES = 10;
-export const BENCH_PLUS_GAMES = 6;
-export const BENCH_PLUS_AVG = 15; // minutes in a game for it to count toward Bench+ (and the returning man's mean)
+export const BENCH_PLUS_GAMES = 6; // retired from the tier (Adam 10:25 AM 11-18); kept for callers that still read it
+export const BENCH_PLUS_AVG = 15; // the returning man's words (last season's minutes a game, or his earlier games' mean)
 export const CEILING_QUANTILE = 0.75;
 export const CEILING_MIN_GAMES = 4;
 export const FAR_BELOW = 0.4;
@@ -117,8 +122,9 @@ const POS_EXPAND = { G: ["PG", "SG"], F: ["SF", "PF"] };
 const posSet = (m) => new Set((m.positions ?? []).flatMap((p) => POS_EXPAND[p] ?? [p]).filter((p) => p !== "UTIL"));
 const poss = (n) => (/s$/i.test(n) ? `${n}'` : `${n}'s`);
 
-/** A man's standing minutes override in force for his plan entry `e`: its value when he is not Bench and its role gate passed (ovGate), else null. One copy for figures.js, console-tier.js and typedTotalNote. */
-export const ovMinutesIn = (ov, e) => (isNum(ov) && e && e.tier !== "bench" && e.minutes_gate?.ok !== false ? ov : null);
+/** A man's standing minutes override in force for his plan entry `e`: its value in any tier, Bench included (the lead's answer for Adam, 11-18: his minutes changes are never undone), when its role gate passed
+ *  (ovGate), else null. One copy for figures.js, console-tier.js and typedTotalNote. */
+export const ovMinutesIn = (ov, e) => (isNum(ov) && e && e.minutes_gate?.ok !== false ? ov : null);
 
 /**
  * Adam 1:33 PM 11-17: minutes Adam types, and his standing minutes overrides, replace that man's figure and move nobody else (the plan is worked as if he typed nothing), so the team may come to more or less
@@ -163,8 +169,9 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
   if (boxNote) notes.push(boxNote);
   // Adam 11-13: the team's median starter figure tonight (the five's own starter-role means), the stand-in when an Out starter's own figure is unknown
   const fiveFigs = boxNote ? [] : men.filter((m) => m.in_five && m.lid && !(m.replaces ?? []).length).map((m) => roleFigure(rowsOf(m.lid) ?? [], "starter", null)).filter((r) => r.source === "role").map((r) => r.value);
-  const spots = boxNote ? null : spotsIn !== undefined ? spotsIn : spotsOf(games);
-  const c = { rowsOf, boxNote, since, teamGames, chartNeedsOutMost, outs: outs.map((o) => ({ ...o })), spots, medianStarter: quantile(fiveFigs, 0.5), unmatched: [], chartMen: [], noLast: [] };
+  // the review of 11-18 (money): bench spots with no usable game (every game left out for a missing start flag) are no spots: each bench man keeps his own mean, as with no game on file
+  const spots0 = boxNote ? null : spotsIn !== undefined ? spotsIn : spotsOf(games), spots = spots0 && spots0.games > 0 ? spots0 : null;
+  const c = { rowsOf, boxNote, since, teamGames, chartNeedsOutMost, outs: outs.map((o) => ({ ...o })), spots, unflagged: spots0?.unflagged ?? 0, medianStarter: quantile(fiveFigs, 0.5), unmatched: [], chartMen: [], noLast: [] };
   const xs = men.map((m) => manBase(m, c));
   placeBench(xs, spots, c);
   pairReplaced(xs, outs);
@@ -172,8 +179,8 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
   // Adam 1:33 PM 11-17: typed minutes and standing minutes overrides never enter the plan (no pin, no shift to his position's bench men): his figure is replaced after it (figures.js, console-tier.js)
   const all = [...by.values()], known = all.filter((x) => isNum(x.figure)), missing = all.filter((x) => !isNum(x.figure));
   const ps = positionStep(c, xs, by, known, missing, TEAM_MINUTES), pa = (id) => ps.added.get(id) ?? 0; // the lead's fix of 11-17: the Out men's minutes to their position first
-  const fill = fillTeam(known.map((x) => ({ id: x.m.id, pos: x.m.depth?.pos ?? null, starter: x.tier === "starter", figure: x.figure + pa(x.m.id), w: x.figure, ceiling: x.ceiling, floor: x.floor, limited: x.limited, max: x.max })), TEAM_MINUTES, missing.length > 0);
-  notes.push(...planNotes(c, xs, known), ...positionNotes(ps, known), ...fillNotes(fill, missing, outs, TEAM_MINUTES, typedIn), ...overNotes(fill, known, TEAM_MINUTES));
+  const fill = fillTeam(known.map((x) => ({ id: x.m.id, pos: x.m.depth?.pos ?? null, starter: x.tier === "starter", bplus: x.tier === "bench_plus", figure: x.figure + pa(x.m.id), w: x.figure, ceiling: x.ceiling, floor: x.floor, limited: x.limited, max: x.max })), TEAM_MINUTES, missing.length > 0);
+  notes.push(...planNotes(c, xs, known), ...positionNotes(ps, known), ...fillNotes(fill, missing, outs, TEAM_MINUTES, typedIn, new Map(known.map((x) => [x.m.id, x.m.name]))), ...overNotes(fill, known, TEAM_MINUTES));
   const out = new Map(), sumOf = (mp) => [...mp.values()].reduce((s, v) => s + v, 0);
   for (const x of known) out.set(x.m.id, entryOf(x, fill, TEAM_MINUTES, pa(x.m.id)));
   if (!missing.length) notes.push(...benchOverNotes(known, out, TEAM_MINUTES));
@@ -187,8 +194,8 @@ export function tierPlan({ men, rowsOf, games, outs = [], five, boxNote = null, 
 function entryOf(x, fill, T, pos = 0) {
   const id = x.m.id, e = fill.prop.get(id) ?? 0, p = fill.plus.get(id) ?? 0, cut = fill.cut.get(id) ?? 0, auto = x.figure + pos + e + p - cut;
   const shown = (v) => v >= 0.05; // under a tenth's rounding: in the figure, not worded as "+0" or "-0"
-  const fillWords = `${shown(pos) ? `; +${r1(pos)}: the Out men's minutes by position (each to his own position's starters, then the starters next to it, then his position's bench in role order, then the bench next to it, no bench man above the team's lowest starter; he is ${x.m.depth?.pos ?? "no position"})` : ""}${shown(e) ? `; +${r1(e)} to reach ${T} (in proportion to his figure, none above ${MINUTES_CAP})` : ""}${shown(p) ? `; +${r1(p)} in +1 rounds to reach ${T} (starters, then bench, the last round pro-rated)` : ""}`;
-  const trimWords = shown(cut) ? `; -${r1(cut)}: the team's figures are over ${T} (${fill.how.get(id) === "starter" ? "the bench could not absorb it all, so starters were trimmed above their floors" : "the bench trimmed in proportion to their figures"})` : "";
+  const fillWords = `${shown(pos) ? `; +${r1(pos)}: the Out men's minutes by position (each to his own position's starters, then the starters next to it, then all Bench+ men share in proportion to their typical minutes, then his position's plain bench in role order, then the plain bench next to it, no plain bench man above the team's lowest starter; he is ${x.m.depth?.pos ?? "no position"})` : ""}${shown(e) ? `; +${r1(e)} to reach ${T} (in proportion to his figure, none above ${MINUTES_CAP})` : ""}${shown(p) ? `; +${r1(p)} in +1 rounds to reach ${T} (starters, then bench, the last round pro-rated)` : ""}`;
+  const how = fill.how.get(id), trimWords = shown(cut) ? `; -${r1(cut)}: the team's figures are over ${T} (${how === "starter" ? "the bench could not absorb it all, so starters were trimmed above their floors" : how === "bench_plus" ? "the plain bench could not absorb it all, so Bench+ men were trimmed above their typical minutes" : "the plain bench trimmed in proportion to their figures"})` : "";
   return { auto, figure: x.figure, computed: x.computed, ceiling: p > 1e-6 ? Math.max(x.ceiling, auto) : x.ceiling, computed_ceiling: x.computed_ceiling, floor: x.floor, spot: x.spot, tier: x.tier, basis: x.basis, used: x.used,
     skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: x.n, label: { ...x.label, fill: shown(e + p + pos) ? r1(e + p + pos) : 0, trim: shown(cut) ? r1(cut) : 0 }, why: `${x.words}${fillWords}${trimWords} = ${r1(auto)}` };
 }
@@ -200,9 +207,11 @@ const meanOf = (rows) => (rows.length ? rows.reduce((s, r) => s + r.min, 0) / ro
 function manBase(m, c) {
   const { boxNote, teamGames } = c, rows = boxNote || !m.lid ? [] : c.rowsOf(m.lid) ?? [], recent = recentOf(rows, c.since);
   if (!boxNote && !m.lid) c.unmatched.push(m.name);
-  // a returning rotation man (Out for most of this season's games with a real last season, or back from an injury that kept him Out for most of the last 10) takes his tier from his own minutes then
+  // Adam 10:25 AM 11-18: Bench+ by default is benchPlusBy (20+ a game over 5+ games off the bench this season); a man under it is Bench unless Adam marks him. A returning rotation man (Out for most of this
+  // season with a real last season, or back from an injury that kept him Out for most of the last 10) no longer takes Bench+ from that: his words stay on his row, so Adam can mark him
+  const bp = benchPlusBy(rows, { read: !boxNote && Boolean(m.lid) }); // no box-score game read is said as such, never "0 games off the bench"
   let returning = null, noFile = false;
-  if (!m.in_five && recent.big < BENCH_PLUS_GAMES && !boxNote) {
+  if (!m.in_five && !bp.ok && !boxNote) {
     const allMean = meanOf(rows), window = Math.min(RECENT_GAMES, teamGames), outMost = !rows.length && teamGames > 0 && (m.out_season ?? 0) * 2 > teamGames;
     if (outMost && m.last_unknown) c.noLast.push(m.name);
     noFile = outMost && m.last_missing === true; // last season's minutes are not on file: said on his row, never read as Bench silently
@@ -211,7 +220,7 @@ function manBase(m, c) {
     else if (rows.length && window > 0 && (m.out_recent ?? 0) * 2 > window && allMean >= BENCH_PLUS_AVG)
       returning = `back from injury: ${r1(allMean)} a game over ${rows.length} earlier game${rows.length === 1 ? "" : "s"} this season, Out for ${m.out_recent} of the team's last ${window}`;
   }
-  const tier = m.tier_force ?? (m.in_five ? "starter" : recent.big >= BENCH_PLUS_GAMES || returning ? "bench_plus" : "bench");
+  const tier = m.tier_force ?? (m.in_five ? "starter" : bp.ok ? "bench_plus" : "bench"), marked = m.tier_force !== undefined && m.tier_force !== null;
   const role = tier === "starter" ? "starter" : "bench";
   let f = roleFigure(rows, role, m.tg);
   // no game at all this season (a known man, boxes read): his depth chart's usual, unless the box scores (m.seen_played) or the chart's own basis (m.chart_games) show a game, or the scope switch excludes him
@@ -225,19 +234,23 @@ function manBase(m, c) {
   const outText = isNum(m.out_season) ? `Out for only ${m.out_season} of the team's ${teamGames} games` : "his Out count is not on file";
   const tail = noGames && usable && mismatch ? mismatch : noGames && !usable ? NO_USUAL : noGames && usable && !inScope ? `no games this season but ${outText}, so his depth chart's usual (${r1(m.chart_usual)}) is not used: only an injured or inactive man takes it` : roleOff; // said on the TwoGun-number row
   if (chartOk) f = { value: m.chart_usual, ceiling: m.chart_usual, n: 0, source: "chart" };
-  return { m, rows, recent, returning, noFile, tier, role, f, noGames, tail, lastRole, chartOk, boxNote, teamGames };
+  return { m, rows, recent, returning, noFile, tier, role, f, noGames, tail, lastRole, chartOk, boxNote, teamGames, bp, marked };
 }
 const NO_USUAL = "No games this season and his depth chart has no usual above 0: TwoGun's number is used";
 
 /**
  * A bench man's place (step 3, Adam 12:45 PM 11-17: role is his place on tonight's depth chart): { group (0: on the chart, 1: off it with a game in the team's last RECENT_GAMES, 2: off it, games but none lately,
- * 3: off it, no game this season), key (minutes per game played in the last RECENT_GAMES, overtime-scaled; 0 otherwise) }. On the chart, tonight's order alone decides (key 0). Pure.
+ * 3: off it, no game this season), key (his blend of last 10 and season minutes a game, bench-blend.js benchBlend, Adam 11:40 AM 11-18; 0 with no game), words }. On the chart, tonight's order alone
+ * decides (key 0). Pure.
  */
 export function benchOrderKey(offChart, rows, recent) {
   if (!offChart) return { group: 0, key: 0 };
-  if (recent.n > 0) return { group: 1, key: recent.avg };
-  return rows.length ? { group: 2, key: 0 } : { group: 3, key: 0 };
+  const b = blendOf(rows, recent);
+  if (recent.n > 0) return { group: 1, key: b.key, words: b.words };
+  return rows.length ? { group: 2, key: b.key, words: b.words } : { group: 3, key: 0, words: b.words };
 }
+/** His bench-order blend (Adam 11:40 AM 11-18) from his rows and his last-10 read (recentOf): { key, words, ... }. */
+const blendOf = (rows, recent) => benchBlend(rows ?? [], recent?.n ? recent.avg : null);
 
 /**
  * Step 3: the bench men in tonight's depth-chart order: each charted man by his place on the standing chart (m.chart_rank: Adam's moves applied, Out men simply absent, so everyone below moves up; review round 1,
@@ -253,39 +266,41 @@ function placeBench(xs, spots, c) {
 }
 
 /**
- * Step 3 on our depth chart by position (Adam 2:14 PM 11-17): the bench men in depth-cols.js benchOrder: Bench+ first, then every 2nd, then every 3rd and below, ties by minutes per game over the team's last
- * RECENT_GAMES; men with no position last. m.depth: { pos (null: none), rank (1 the first man behind the five in his column), idx }. The Nth takes spot N.
+ * Step 3 on our depth chart by position (Adam 2:14 PM 11-17): the bench men in depth-cols.js benchOrder: Bench+ first, then every 2nd, then every 3rd and below, ties by a blend of last 10 and season minutes
+ * a game (Adam 11:40 AM 11-18, bench-blend.js); men with no position last. m.depth: { pos (null: none), rank (1 the first man behind the five in his column), idx }. The Nth takes spot N.
  */
 function placeByChart(xs, spots, c) {
   // The lead's fix of 11-17: the order is the HEALTHY chart's (m.healthy: the chart with tonight's Out men in their places), so a man keeps his own role's spot when men above him are Out (no slide down the
   // bench); an Out bench man and a man promoted into the five hold their healthy spots empty, and those minutes go to their position (positionDemand).
   // Review round 1, finding 1: the list is the healthy chart's bench (its non-starters, here tonight or Out), ordered by healthy places only (rank and place on the unfilled chart, never tonight's), so no
   // teammate's Out changes anyone's spot. pos: where he plays tonight (who receives); hpos: his healthy position (his order and an Out man's loss).
-  const recentOfOut = (o) => (o.lid && !c.boxNote ? recentOf(c.rowsOf(o.lid) ?? [], c.since) : null), l10 = (r) => (r.n ? r.avg : null);
+  const recentOfOut = (o) => (o.lid && !c.boxNote ? recentOf(c.rowsOf(o.lid) ?? [], c.since) : null);
   const list = [
-    ...xs.filter((x) => x.tier !== "starter" && !x.m.healthy?.starter).map((x) => ({ key: x.m.id, name: x.m.name, x, bplus: x.tier === "bench_plus", last10: l10(x.recent), rank: x.m.healthy?.rank ?? null, idx: x.m.healthy?.idx ?? null, hpos: x.m.healthy?.pos ?? null, pos: x.m.depth?.pos ?? null })),
-    ...xs.filter((x) => x.tier === "starter" && x.m.healthy && !x.m.healthy.starter).map((x) => ({ key: x.m.id, name: x.m.name, promoted: x, bplus: x.recent.big >= BENCH_PLUS_GAMES, last10: l10(x.recent), rank: x.m.healthy.rank, idx: x.m.healthy.idx ?? null, hpos: x.m.healthy.pos ?? null, at: x.m.depth?.pos ?? x.m.healthy.pos ?? null })), // at: where he starts tonight, where his gain is counted
-    ...c.outs.filter((o) => o.healthy && !o.healthy.starter).map((o, i) => { const r = recentOfOut(o); return { key: `out#${i}`, name: o.name, out: o, bplus: r ? r.big >= BENCH_PLUS_GAMES : o.bplus === true, last10: r ? l10(r) : o.last10 ?? null, rank: o.healthy.rank, idx: o.healthy.idx ?? null, hpos: o.healthy.pos ?? null }; }),
-  ];
+    ...xs.filter((x) => x.tier !== "starter" && !x.m.healthy?.starter).map((x) => ({ key: x.m.id, name: x.m.name, x, bplus: x.tier === "bench_plus", blend: blendOf(x.rows, x.recent).key, rank: x.m.healthy?.rank ?? null, idx: x.m.healthy?.idx ?? null, hpos: x.m.healthy?.pos ?? null, pos: x.m.depth?.pos ?? null })),
+    ...xs.filter((x) => x.tier === "starter" && x.m.healthy && !x.m.healthy.starter).map((x) => ({ key: x.m.id, name: x.m.name, promoted: x, bplus: x.bp.ok, blend: blendOf(x.rows, x.recent).key, rank: x.m.healthy.rank, idx: x.m.healthy.idx ?? null, hpos: x.m.healthy.pos ?? null, at: x.m.depth?.pos ?? x.m.healthy.pos ?? null })), // at: where he starts tonight, where his gain is counted
+    ...c.outs.filter((o) => o.healthy && (!o.healthy.starter || o.healthy.holds)).map((o, i) => { const r = recentOfOut(o); return { key: `out#${i}`, name: o.name, out: o, bplus: o.mark ? o.mark === "bench_plus" : r ? benchPlusBy(c.rowsOf(o.lid) ?? []).ok : o.bplus === true, blend: r ? blendOf(c.rowsOf(o.lid) ?? [], r).key : o.blend ?? null, rank: o.healthy.rank, idx: o.healthy.idx ?? null, hpos: o.healthy.pos ?? null }; }),
+  ]; // an Out man's Bench+: his standing mark first (role-marks.js markOut), else the rule
   const places = new Map(list.map((e) => [e.key, { rank: e.hpos ? e.rank : null, idx: e.idx }]));
   let k = 0;
-  const sorted = benchOrder(list, places);
+  const after = list.filter((e) => e.out?.healthy?.after), sorted = [...benchOrder(list.filter((e) => !e.out?.healthy?.after), places), ...after]; // his mark on an Out man moves no present man's spot (role-marks.js markOut)
   for (const e of sorted) {
     const fig = spots.figs[k] ?? 0;
     k++;
-    if (e.out) { e.out.hspot = k; e.out.hfig = fig; continue; }
-    if (e.promoted) { e.promoted.hspot = k; e.promoted.hfig = fig; continue; }
+    // htyp: a Bench+ man's typical minutes (Adam 9:50 AM 11-18), what his healthy place is worth: an Out man's loss, a promoted man's healthy minutes (null: none, his spot's figure stands)
+    if (e.out) { e.out.hspot = k; e.out.hfig = fig; e.out.htyp = e.bplus ? (e.out.lid && !c.boxNote ? benchMean(c.rowsOf(e.out.lid) ?? []) : isNum(e.out.bench_fig) ? e.out.bench_fig : null) : null; continue; }
+    if (e.promoted) { e.promoted.hspot = k; e.promoted.hfig = fig; e.promoted.htyp = e.bplus && !c.boxNote ? benchMean(e.promoted.rows) : null; continue; }
     setSpot(e.x, k, fig, e.group === 0, e.pos);
   }
   c.healthyOrder = sorted; // the role order positionStep hands minutes out in
   c.displaced = placeDisplaced(xs, sorted, spots, k);
 }
 
+
 /** A bench man's spot, its figure and the words of his label. */
 function setSpot(x, k, fig, bplus, pos, words = null) {
   x.spot = k; x.spotFig = fig;
   x.order = pos ? { group: 0, key: 0 } : benchOrderKey(true, x.rows, x.recent); // the label's words: on the chart, or how a man with no position was placed
-  x.chartWords = words ?? (pos ? `on our depth chart (${bplus ? "Bench+, " : ""}${pos} ${ordinal((x.m.depth?.rank ?? 0) + 1)}${x.recent.n ? `, ${r1(x.recent.avg)} a game over the last ${RECENT_GAMES}` : ""})` : null);
+  x.chartWords = words ?? (pos ? `on our depth chart (${bplus ? "Bench+, " : ""}${pos} ${ordinal((x.m.depth?.rank ?? 0) + 1)}, ${blendOf(x.rows, x.recent).words})` : null); // his tiebreak in his level, said (Adam 11:40 AM 11-18)
 }
 
 /**
@@ -313,10 +328,13 @@ function positionDemand(c, by) {
   const dem = new Map(), add = (pos, v, who) => { if (!pos) return; const d = dem.get(pos) ?? { pos, amount: 0, who: [] }; d.amount += v; if (who) d.who.push(who); dem.set(pos, d); };
   for (const o of c.outs) {
     if (!o.healthy) continue;
-    const w = o.healthy.starter ? (isNum(o.starter_fig) ? o.starter_fig : isNum(o.avg) ? o.avg : 0) : isNum(o.hfig) ? o.hfig : isNum(o.avg) ? o.avg : 0;
+    const w = o.healthy.starter ? (isNum(o.starter_fig) ? o.starter_fig : isNum(o.avg) ? o.avg : 0) : isNum(o.htyp) ? o.htyp : isNum(o.hfig) ? o.hfig : isNum(o.avg) ? o.avg : 0; // an Out Bench+ man loses his typical minutes
     add(o.healthy.pos, w, o.name);
   }
-  for (const d of c.displaced ?? []) { const s = roleFigure(d.x.rows, "starter", null).value; if (isNum(s)) add(d.pos, Math.max(0, s - d.spotFig), d.x.m.name); } // a healthy starter out of tonight's five loses his starter minutes at his position
+  for (const d of c.displaced ?? []) { // a healthy starter out of tonight's five loses his starter minutes at his position, less what he keeps tonight (his spot's figure; a Bench+ man's typical minutes)
+    const s = roleFigure(d.x.rows, "starter", null).value, now = by.get(d.x.m.id), keeps = now?.tier === "bench_plus" && now.source === "role" ? now.figure : d.spotFig;
+    if (isNum(s)) add(d.pos, Math.max(0, s - keeps), d.x.m.name);
+  }
   // Review round 1, finding 2: a man promoted into the five took his gain from the healthy starter missing from it whose place he filled, so his gain is netted at THAT man's position (his own position's
   // missing starter first, then PG..C); a teammate's Out then never moves another position's amount (the lead's invariant). A gain left unpaired comes off the team-wide fill, never off another position.
   const P = ["PG", "SG", "SF", "PF", "C"], byPos = (a, b) => P.indexOf(a.pos) - P.indexOf(b.pos) || String(a.name).localeCompare(String(b.name));
@@ -324,7 +342,7 @@ function positionDemand(c, by) {
   const promoted = (c.healthyOrder ?? []).filter((e) => e.promoted).map((e) => ({ e, pos: e.hpos, name: e.name })).sort(byPos);
   for (const { e } of promoted) {
     const f = by.get(e.promoted.m.id)?.figure, i = missing.findIndex((m) => m.pos === e.hpos), m = missing.splice(i >= 0 ? i : 0, missing.length ? 1 : 0)[0];
-    if (isNum(f) && m?.pos) add(m.pos, -Math.max(0, f - (e.promoted.hfig ?? 0)), null);
+    if (isNum(f) && m?.pos) add(m.pos, -Math.max(0, f - (e.promoted.htyp ?? e.promoted.hfig ?? 0)), null);
   }
   return [...dem.values()].filter((d) => d.amount > EPS).sort((a, b) => b.amount - a.amount || P.indexOf(a.pos) - P.indexOf(b.pos)); // one order on the board and the page
 }
@@ -337,8 +355,11 @@ function positionStep(c, xs, by, known, missing, T) {
   if (gap <= EPS || total <= EPS) return none;
   const ids = new Set(known.map((x) => x.m.id));
   const room = (b) => Math.max(0, Math.min(b.ceiling, b.max ?? MINUTES_CAP) - b.figure); // to 36 (a starter whose own mean is above it has none), or his cap override
-  // Adam 5:26 PM 11-17: by role and position only, never by what a man usually plays: every bench man takes to the 36 cap in role order
-  const bench = c.healthyOrder.filter((e) => e.x && ids.has(e.x.m.id) && e.pos && !by.get(e.x.m.id).limited).map((e) => ({ id: e.x.m.id, pos: e.pos, starter: false, room: room(by.get(e.x.m.id)) }));
+  // Adam 5:26 PM 11-17: by role and position only, never by what a man usually plays: every bench man takes to the 36 cap in role order; Adam 9:46 AM 11-18: every Bench+ man (one with no position too) before the plain bench
+  // a healthy starter out of tonight's five who is Bench+ tonight (c.displaced) is a Bench+ man too, at his bench spot's place in the order
+  const listed = [...c.healthyOrder.filter((e) => e.x).map((e) => ({ x: e.x, pos: e.pos ?? null, bplus: e.bplus === true })), ...(c.displaced ?? []).filter((d) => d.x.tier === "bench_plus").map((d) => ({ x: d.x, pos: d.x.m.depth?.pos ?? null, bplus: true }))];
+  listed.sort((a, b) => (a.x.spot ?? Infinity) - (b.x.spot ?? Infinity));
+  const bench = listed.filter((e) => ids.has(e.x.m.id) && (e.pos || e.bplus) && !by.get(e.x.m.id).limited).map((e) => ({ id: e.x.m.id, pos: e.pos, starter: false, bplus: e.bplus, room: room(by.get(e.x.m.id)) }));
   // R15: every starter sets the team's ceiling for the bench; a limited starter, or one with no position, takes nothing here (figure: each man's before this step)
   const starters = xs.filter((x) => x.tier === "starter" && ids.has(x.m.id)).map((x) => ({ id: x.m.id, pos: x.m.depth?.pos ?? null, starter: true, figure: by.get(x.m.id).figure, room: by.get(x.m.id).limited ? 0 : room(by.get(x.m.id)) }));
   for (const b of bench) b.figure = by.get(b.id).figure;
@@ -412,9 +433,16 @@ function starterFigure(x, c) {
 function spotFigure(x, c) {
   const { m, spot: k, spotFig: v } = x, games = c.spots.games;
   const o = x.order, last = `last ${Math.min(RECENT_GAMES, x.teamGames)}`, unmatched = !m.lid && !c.boxNote ? "; not matched to the box scores, so no games of his were read" : "";
-  const where = x.chartWords ? x.chartWords : o.group === 0 ? "on tonight's depth chart" : o.group === 1 ? `(not placed on tonight's depth chart: after the charted men, by minutes per game played, ${last}: ${r1(o.key)} over ${x.recent.n})`
-    : o.group === 2 ? `(not placed on tonight's depth chart: after the charted men; no game in the team's ${last})` : "(not placed on tonight's depth chart and no game this season: last)";
-  return { value: v, cap: MINUTES_CAP, source: "spot", basis: "bench_spot", n: games, label: { kind: o.group === 0 ? "spot" : "off_chart", spot: k, value: r1(v), n: games }, words: `${prefixOf(x)}Bench spot ${k} ${where}: the team's ${ordinal(k)} man off the bench averages ${r1(v)} (${plural(games, "game")})${unmatched}` };
+  const where = x.chartWords ? x.chartWords : o.group === 0 ? "on tonight's depth chart" : o.group === 1 ? `(not placed on tonight's depth chart: after the charted men, by ${o.words})`
+    : o.group === 2 ? `(not placed on tonight's depth chart: after the charted men with a game in the team's ${last}, by ${o.words})` : "(not placed on tonight's depth chart and no game this season: last)";
+  const plus = x.tier === "bench_plus" ? `Bench+${x.marked ? ", your mark" : ""}: ${x.bp.words}, so his bench spot's figure (his own mean needs ${BENCH_PLUS_MIN_GAMES} games off the bench): ` : "";
+  return { value: v, cap: MINUTES_CAP, source: "spot", basis: "bench_spot", n: games, label: { kind: o.group === 0 ? "spot" : "off_chart", spot: k, value: r1(v), n: games }, words: `${prefixOf(x)}${plus}Bench spot ${k} ${where}: the team's ${ordinal(k)} man off the bench averages ${r1(v)} (${plural(games, "game")})${unmatched}` };
+}
+
+/** Step 3b (Adam 9:50 AM 11-18): a Bench+ man's typical minutes, as a starter's: his mean over this season's games off the bench (x.f, role "bench"), only at BENCH_PLUS_MIN_GAMES or more such games (the lead, 11-18); his floor. */
+function benchPlusFigure(x) {
+  const { f } = x, spot = x.spot ? `; his bench spot ${x.spot} (${r1(x.spotFig)}) is not used for a Bench+ man` : "";
+  return { value: f.value, cap: MINUTES_CAP, source: "role", basis: "bench_plus", n: f.n, label: ownLabel(x), words: `${prefixOf(x)}Bench+${x.marked ? ", your mark" : ""}: ${r1(f.value)} a game in ${plural(f.n, "game")} off the bench this season, his typical minutes${spot}` };
 }
 
 const prefixOf = (x) => (x.returning ? `${x.returning}; ` : x.noFile ? "last season's minutes are not on file, so he cannot be recognized as a returning rotation man; " : "");
@@ -440,8 +468,9 @@ function ownLabel(x) {
 /** Pass 2 for one man: his figure (steps 2-3), his standing overrides in tonight's role, the cap (step 4) and his flag. */
 function manFinish(x, c) {
   const { m, tier, role, rows } = x, ov = m.ov ?? {};
-  const fig = (tier === "starter" ? starterFigure(x, c) : x.spot ? spotFigure(x, c) : null) ?? ownFigure(x);
+  const fig = (tier === "starter" ? starterFigure(x, c) : tier === "bench_plus" && x.f.source === "role" && x.bp.n >= BENCH_PLUS_MIN_GAMES ? benchPlusFigure(x) : x.spot ? spotFigure(x, c) : null) ?? ownFigure(x);
   let value = fig.value, cap = fig.cap, limited = false, words = fig.words, capped = 0;
+  if (tier === "bench") words += x.marked ? "; Bench: your mark" : `; Bench: ${x.bp.words}`; // Adam 10:25 AM 11-18: why he is not Bench+
   const used = [], meta = ov.meta ?? {}, skipped = [], ovNow = {};
   for (const k of ["usual", "cap"]) {
     if (!isNum(ov[k])) continue;
@@ -455,10 +484,10 @@ function manFinish(x, c) {
   if (used.length) words += `; your standing override sets his ${used.map((u) => (u === "usual" ? "figure" : "ceiling")).join(" and ")}`;
   if (skipped.length) words += `; ${skipped.map((s) => s.text).join("; ")}`;
   if (isNum(value) && value > cap + EPS) { capped = value - cap; value = cap; words += `; capped at ${r1(cap)} ${limited ? "by your cap override" : `(nobody above ${MINUTES_CAP} but a starter whose own starter mean is)`}: -${r1(capped)}`; }
-  const overridden = used.includes("usual");
+  const overridden = used.includes("usual"), floored = tier === "starter" || tier === "bench_plus"; // a Bench+ man's figure before the fill is his floor, whatever its source (Adam 9:50 AM 11-18; review: a spot-figure Bench+ man too)
   const label = { ...(overridden ? { kind: "override", value: r1(ovNow.usual) } : fig.label), capped: capped > EPS && !limited ? r1(capped) : 0, limit: limited ? r1(cap) : null };
   if (!overridden && fig.source === "chart") c.chartMen.push(`${m.name} (chart ${r1(fig.value)}, TwoGun ${isNum(m.tg) ? m.tg : "none"})`);
-  return { m, tier, recent: x.recent, skipped, minutes_gate: minutesGate, figure: value, computed: fig.value, ceiling: cap, computed_ceiling: fig.cap, floor: tier === "starter" && isNum(value) ? value : null, limited, max: isNum(ovNow.cap) ? ovNow.cap : GAME_MAX, capped: isNum(ovNow.cap) ? 0 : capped, spot: x.spot ?? null,
+  return { m, tier, recent: x.recent, skipped, minutes_gate: minutesGate, figure: value, computed: fig.value, ceiling: cap, computed_ceiling: fig.cap, floor: floored && isNum(value) ? value : null, limited, max: isNum(ovNow.cap) ? ovNow.cap : GAME_MAX, capped: isNum(ovNow.cap) ? 0 : capped, spot: x.spot ?? null,
     basis: overridden ? "override" : fig.basis, label, words, used, flag: flagOf(x, fig, value, overridden, used.includes("cap") ? cap : null), n: fig.n, source: fig.source, returning: Boolean(x.returning) || fig.source === "chart" };
 }
 
@@ -485,9 +514,14 @@ function planNotes(c, xs, known) {
   if (chartMen.length) notes.push(`${chartMen.length} ${many(chartMen.length)} with no game this season take${chartMen.length === 1 ? "s" : ""} their depth chart's usual instead of TwoGun's: ${chartMen.join(", ")}`);
   if (unmatched.length) notes.push(`${unmatched.length} ${many(unmatched.length)} not matched to the box scores, so no games were read (a bench man keeps his place on tonight's depth chart; a starter takes the Out starter's figure at his position, else the team's median): ${unmatched.join(", ")}`);
   const spotted = xs.filter((x) => x.spot).sort((a, b) => a.spot - b.spot), lost = spotted.filter((x) => x.order.group === 3);
-  if (spotted.length) notes.push(`Bench by role (Adam 11-17): the Nth man off the bench on tonight's depth chart takes the team's average for its Nth man off the bench this season (${plural(spots.games, "game")} before tonight, each scaled to 240): ${spotted.map((x) => `${x.spot}. ${x.m.name} ${r1(x.spotFig)}`).join(", ")}`);
+  const typical = new Map(known.filter((x) => x.tier === "bench_plus" && x.source === "role").map((x) => [x.m.id, x.figure])), tw = (x) => (typical.has(x.m.id) ? `Bench+ ${r1(typical.get(x.m.id))} (his own mean off the bench)` : r1(x.spotFig));
+  if (spotted.length) notes.push(`Bench by role (Adam 11-17; a Bench+ man takes his own mean off the bench, Adam 9:50 AM 11-18): the Nth man off the bench on tonight's depth chart takes the team's average for its Nth man off the bench this season (${plural(spots.games, "game")} before tonight, each scaled to 240): ${spotted.map((x) => `${x.spot}. ${x.m.name} ${tw(x)}`).join(", ")}`);
+  else if (!c.boxNote && !spots && c.unflagged > 0 && xs.some((x) => x.tier !== "starter")) notes.push(`Every box-score game of the team's (${c.unflagged}) has a man who played with no start flag, so all are left out and the bench has no spot figures: each bench man keeps his own bench mean, else TwoGun's number`);
   else if (!c.boxNote && !spots && xs.some((x) => x.tier !== "starter")) notes.push("No game of the team's this season is on file, so the bench has no role figures: each bench man keeps his own bench mean, else TwoGun's number");
   if (lost.length) notes.push(`Not on tonight's depth chart and no game this season: placed last, check his role: ${lost.map((x) => x.m.name).join(", ")}`);
+  if (spots && c.unflagged > 0) notes.push(`${plural(c.unflagged, "box-score game")} of the team's with a man who has no start flag ${c.unflagged === 1 ? "is" : "are"} left out of the bench-spot averages`);
+  const noFlag = xs.filter((x) => x.bp?.unknown > 0); // the review of 11-18: a box game with no start flag is never read as a bench game (G62: counted)
+  if (noFlag.length) notes.push(`Box-score games with no start flag, left out of the Bench+ rule: ${noFlag.map((x) => `${x.m.name} ${x.bp.unknown}`).join(", ")}`);
   const capped = known.filter((x) => x.capped > EPS);
   if (capped.length) notes.push(`Capped at ${MINUTES_CAP} (only a starter whose own starter mean is higher keeps it): ${capped.map((x) => `${x.m.name} -${r1(x.capped)}`).join(", ")}`);
   return notes;
@@ -497,33 +531,33 @@ function planNotes(c, xs, known) {
 function positionNotes(ps, known) {
   if (!ps.by.length) return [];
   const name = new Map(known.map((x) => [x.m.id, x.m.name])), got = [...ps.added].filter(([, v]) => v >= 0.05).map(([id, v]) => `${name.get(id)} +${r1(v)}`);
-  const parts = ps.by.map((b) => `${b.pos} ${r1(b.amount)}${b.spill >= 0.05 ? ` (${r1(b.own)} to ${b.pos}, ${r1(b.spill)} to the positions next to it)` : ""}`);
-  return [`The Out men's minutes by position (PG replaces PG, and so on): ${parts.join(", ")}: ${got.join(", ") || "nobody had room"}${ps.left > 0.05 ? `; ${r1(ps.left)} no bench man of those positions could take goes to the team-wide fill` : ""}`];
+  const parts = ps.by.map((b) => `${b.pos} ${r1(b.amount)}${b.spill >= 0.05 || b.elsewhere >= 0.05 ? ` (${[`${r1(b.own)} to ${b.pos}`, b.spill >= 0.05 ? `${r1(b.spill)} to the positions next to it` : null, b.elsewhere >= 0.05 ? `${r1(b.elsewhere)} to Bench+ men at other positions` : null].filter(Boolean).join(", ")})` : ""}`);
+  return [`The Out men's minutes by position (PG replaces PG, and so on; starters first, then all Bench+ men share in proportion to their typical minutes, then the plain bench, Adam 9:46 and 10:10 AM 11-18): ${parts.join(", ")}: ${got.join(", ") || "nobody had room"}${ps.left > 0.05 ? `; ${r1(ps.left)} no man of those positions or Bench+ man could take goes to the team-wide fill` : ""}`];
 }
 
 /** The team note when the fill had to pass 36 (the lead's call, 11-17: only when the team cannot reach 240 under it): each man over 36 and why. */
 function overNotes(fill, known, T) {
   const name = new Map(known.map((x) => [x.m.id, x.m.name])), n = known.filter((x) => !x.limited).length, notes = [];
   if (fill.over?.length) notes.push(`Only ${n} men can take minutes, so ${T} cannot be reached with nobody over ${MINUTES_CAP}: ${fill.over.map((m) => `${name.get(m.id)} ${r1(m.total)}`).join(", ")} go past ${MINUTES_CAP} to reach it`);
-  // R15: a bench man passes the team's lowest starter only when 240 cannot be reached any other way, and is named
-  if (fill.passed?.length) notes.push(`${T} cannot be reached with every bench man at or under the team's lowest starter: ${fill.passed.map((m) => `${name.get(m.id)} ${r1(m.total)}`).join(", ")} go${fill.passed.length === 1 ? "es" : ""} past him to reach it`);
+  // R15: a plain bench man passes the team's lowest starter only when 240 cannot be reached any other way, and is named (Bench+ men have no such ceiling, Adam 9:50 AM 11-18)
+  if (fill.passed?.length) notes.push(`${T} cannot be reached with every plain bench man at or under the team's lowest starter: ${fill.passed.map((m) => `${name.get(m.id)} ${r1(m.total)}`).join(", ")} go${fill.passed.length === 1 ? "es" : ""} past him to reach it`);
   return notes;
 }
 
-/** The check on the plan's output (R15, G62): each bench man above the team's lowest starter, and a team not at T, named in the team's note, never silent. out: Map id -> entry. */
+/** The check on the plan's output (R15, G62): each plain bench man above the team's lowest starter (Bench+ men may be, Adam 9:50 AM 11-18), and a team not at T, named in the team's note, never silent. out: Map id -> entry. */
 function benchOverNotes(known, out, T) {
   const notes = [];
   let low = null;
   for (const x of known) if (x.tier === "starter") { const a = out.get(x.m.id).auto; if (!low || a < low.auto) low = { auto: a, name: x.m.name }; }
-  const over = low ? known.filter((x) => x.tier !== "starter" && out.get(x.m.id).auto > low.auto + 0.05) : [];
-  if (over.length) notes.push(`Bench men above the team's lowest starter (${low.name} ${r1(low.auto)}): ${over.map((x) => `${x.m.name} ${r1(out.get(x.m.id).auto)}`).join(", ")}; ${T} could not be reached otherwise, or his own figure was already above`);
+  const over = low ? known.filter((x) => x.tier === "bench" && out.get(x.m.id).auto > low.auto + 0.05) : [];
+  if (over.length) notes.push(`Plain bench men above the team's lowest starter (${low.name} ${r1(low.auto)}): ${over.map((x) => `${x.m.name} ${r1(out.get(x.m.id).auto)}`).join(", ")}; ${T} could not be reached otherwise, or his own figure was already above`);
   const sum = known.reduce((s, x) => s + out.get(x.m.id).auto, 0);
   if (Math.abs(sum - T) > 0.05) notes.push(`The team's minutes add to ${r1(sum)}, not ${T}`);
   return notes;
 }
 
 /** The team's notes on step 5: the fill under 240 or the trim over it, and what nobody could take or give. */
-function fillNotes(fill, missing, outs, T, typed = new Map()) {
+function fillNotes(fill, missing, outs, T, typed = new Map(), names = new Map()) {
   const notes = [], outWords = outs.length ? ` (Out: ${outs.map((o) => o.name).join(", ")})` : "", sumOf = (mp) => [...mp.values()].reduce((s, v) => s + v, 0), prop = sumOf(fill.prop), plus = sumOf(fill.plus);
   if (fill.gap > EPS && missing.length) {
     // review round 2, finding 6: a typed man the plan has no figure for holds the fill as any man does (ruling 5); said without blaming the typing
@@ -535,8 +569,10 @@ function fillNotes(fill, missing, outs, T, typed = new Map()) {
     notes.push(`The team's figures add to ${r1(fill.sum)}, ${r1(fill.gap)} short of ${T}${outWords}: ${r1(prop)} spread in proportion to the figures of the men under ${MINUTES_CAP} (limited men left out)${plus > EPS ? `; ${r1(plus)} more in ${plural(fill.rounds, "round")} of +1, starters then bench, the last pro-rated` : ""}`);
     if (fill.unassigned > 0.005) notes.push(`${r1(fill.unassigned)} minutes are not given to anyone: every man is limited, at his cap override or at ${GAME_MAX}, so the team adds to ${r1(T - fill.unassigned)}`);
   } else if (fill.gap < -EPS) {
-    notes.push(`The team's figures add to ${r1(fill.sum)}, ${r1(-fill.gap)} over ${T}${outWords}: the bench trimmed by ${r1(fill.trimmed.bench)} in proportion to their figures${fill.trimmed.starter > EPS ? `; the bench could not absorb it all, so starters were trimmed by ${r1(fill.trimmed.starter)} above their floors` : ""}`);
-    if (fill.untrimmed > 0.005) notes.push(`${r1(fill.untrimmed)} minutes over ${T} could not be trimmed: the starters at their floors and the men no trim may touch add to ${r1(T + fill.untrimmed)}`);
+    // Adam 9:50 AM 11-18: the plain bench first, then Bench+ men down toward their typical minutes, then starters above their floors; each man trimmed is named
+    const who = (kind) => [...fill.cut].filter(([id, v]) => fill.how.get(id) === kind && v >= 0.05).map(([id, v]) => `${names.get(id)} -${r1(v)}`).join(", "), say = (kind) => (who(kind) ? ` (${who(kind)})` : "");
+    notes.push(`The team's figures add to ${r1(fill.sum)}, ${r1(-fill.gap)} over ${T}${outWords}: the plain bench trimmed by ${r1(fill.trimmed.bench)} in proportion to their figures${say("bench")}${fill.trimmed.bench_plus > EPS ? `; the plain bench could not absorb it all, so Bench+ men were trimmed by ${r1(fill.trimmed.bench_plus)} toward their typical minutes${say("bench_plus")}` : ""}${fill.trimmed.starter > EPS ? `; then starters were trimmed by ${r1(fill.trimmed.starter)} above their floors${say("starter")}` : ""}`);
+    if (fill.untrimmed > 0.005) notes.push(`${r1(fill.untrimmed)} minutes over ${T} could not be trimmed: the starters and Bench+ men at their floors and the men no trim may touch add to ${r1(T + fill.untrimmed)}`);
   }
   return notes;
 }
