@@ -9,6 +9,7 @@ import path from "../../site/shim/path.js";
 import { dataDir, warn } from "../../site/shim/log.js";
 import { writeFileAtomic } from "../../site/shim/atomic.js";
 import { buildInputs } from "../../site/shim/app-only.js";
+import { openTeams } from "./slate-times.js";
 import { readSlate } from "./store.js";
 import { readScenarios, writeScenarios, heldTeams } from "./scenarios.js";
 import { readOverrides } from "./overrides.js";
@@ -20,8 +21,24 @@ import { EMPTY_RECORD } from "../board/figures.js";
 import { withOurProjection } from "../../site/shim/app-only.js";
 import { basePlayers } from "./base-players.js";
 
-/** Whether numbers may be sent by themselves: never on a locked slate and never on one that is not the newest (the rule mayAutoSend states for the page). Pure. */
-export const mayResend = (inputs) => inputs?.locked !== true && inputs?.newest === true;
+/** After the slate's lock, the teams whose game has not tipped (inputs.open, slate-times.js openTeams): the only ones news, resend and reversal may still move (Adam 11-18). null before lock (every team). Pure. */
+export const openAfterLock = (inputs) => (inputs?.locked === true ? new Set(Array.isArray(inputs?.open) ? inputs.open : []) : null);
+
+/** The slate's teams still to tip at atMs from its slate.json (slate-times.js openTeams), or null when the file cannot be read (the inputs' own answer then stands). */
+function openAt(slate, atMs) {
+  let sd = null;
+  try { sd = readSlate(slate); } catch (e) { warn("resend: the slate file could not be read for the tip check at the write", { slate, error: e.message }); }
+  return sd ? new Set(openTeams(slate, sd, atMs)) : null;
+}
+
+/** A clock that starts at `nowMs` and runs with real time: the fresh tip check of a pass made at a given moment. */
+export const clockFrom = (nowMs) => { const t0 = Date.now(); return () => nowMs + (Date.now() - t0); };
+
+/**
+ * Whether numbers may be sent by themselves at all: only on the newest slate, and after its lock only while a game is still to tip (openAfterLock then limits the teams). The page's own
+ * mayAutoSend (console-auto.js) still stops at lock: after it only the server moves a team, by its own tip. Pure.
+ */
+export const mayResend = (inputs) => inputs?.newest === true && (openAfterLock(inputs)?.size ?? 1) > 0;
 
 export const resendFile = (slate) => path.join(dataDir(), "slates", slate, "resend.json");
 
@@ -43,19 +60,23 @@ export function writeResend(slate, rec) {
 /** Why a usage table that is not "ready" blocks a resend, in words. */
 export const usageWhy = (usage) => (usage?.state === "loading" ? "the usage table is still loading" : !usage ? "no usage table was given" : `the usage table is ${usage.state}${usage.message ? ` (${usage.message})` : ""}`);
 
-/** Why a locked slate sends nothing. It is never recorded: after lock the last record stands as the final word, and the board check stays quiet about it. */
+/** Why a slate whose every game has tipped sends nothing (the text predates Adam 11-18 and is matched by board-check.js). It is never recorded: the last record stands as the final word, and the board check stays quiet about it. */
 export const LOCKED_WHY = "the slate is locked";
 
 /**
  * The shared core: every held team's saved work rebased on this Tonight, then planApply + writeApply from it. `model`: buildModel(inputs, file.teams, file.applied?.keys), already changed by the caller's
  * news moves; `extra`: teams the caller moved this pass. `players`: the slate's players as the board has them (our engine's figures on), the base planApply compares with and restores to.
- * Returns { teams, sent, wrote, missing, stored: [{ team, why }] (held teams on the Console's numbers, not the engine's, with kind "choice" or "conflict"), failed }. Nothing is written when `failed` (a scenario key that no longer fits); a failed send puts the team records back and throws.
+ * After lock only teams whose game has not tipped are sent (openAfterLock); the held teams left as they stood are `tipped`.
+ * Returns { teams, tipped, sent, wrote, missing, stored: [{ team, why }] (held teams on the Console's numbers, not the engine's, with kind "choice" or "conflict"), failed }. Nothing is written when `failed` (a scenario key that no longer fits); a failed send puts the team records back and throws.
  */
-export function sendHeld({ slate, inputs, model, file, overrides, players, extra = [], usageReady = true, writeSend = writeApply, atIso }) {
+export function sendHeld({ slate, inputs, model, file, overrides, players, extra = [], usageReady = true, writeSend = writeApply, atIso, clock = () => Date.now() }) {
   const unknown = sourceRefusal(inputs);
   if (unknown) return { teams: [], blocked: [], sent: 0, wrote: false, missing: [], stored: [], failed: unknown }; // fails closed: the board is blank, so no held number is re-sent (recorded in resend.json by the caller)
   const held = new Set([...Object.keys(file.applied?.keys ?? {}), ...Object.entries(model.ST).filter(([, S]) => Object.values(S.news ?? {}).some((e) => e.state === "applied")).map(([t]) => t), ...extra]);
-  const all = [...held].filter((t) => model.ST[t]).sort();
+  // Adam 11-18: after lock a held team whose game has tipped keeps its numbers as they stood. The tip is judged again with a fresh clock here, at the start of the write: from here to writeSend nothing is awaited.
+  const open = openAfterLock(inputs), openNow = openAt(slate, clock()), every = [...held].filter((t) => model.ST[t]).sort();
+  const isOpen = (t) => (!open || open.has(t)) && (!openNow || openNow.has(t));
+  const all = every.filter(isOpen), tipped = every.filter((t) => !isOpen(t));
   // A usage table that is not ready blocks the RESEND of held teams (their scenario maths needs it; the earlier numbers stay): only teams the news moved this pass (`extra`) are still sent, so a news Out lands.
   const teams = usageReady ? all : all.filter((t) => extra.includes(t)), blocked = all.filter((t) => !teams.includes(t));
   let next = file, wrote = false;
@@ -90,7 +111,7 @@ export function sendHeld({ slate, inputs, model, file, overrides, players, extra
     if (wrote) { try { writeScenarios(slate, file); } catch (e2) { warn("resend: the team record could not be put back after a failed send", { slate, error: e2.message }); } }
     throw e;
   }
-  return { teams, blocked, sent, wrote, missing, stored, failed: null };
+  return { teams, blocked, tipped, sent, wrote, missing, stored, failed: null };
 }
 
 /** Records a pass that sent nothing, and why, for every team the board is held for; null when no team is held (nothing stored depends on a send). `missing` and `stored`: what the teams this pass
@@ -131,11 +152,11 @@ export function resendHeld(slate, { usage, nowMs = Date.now(), ourPlayers = with
   const overrides = readOverrides(slate);
   const { players, note } = basePlayers(slate, slateData, nowMs, ourPlayers);
   const model = buildModel(inputs, file.teams, file.applied?.keys);
-  const r = sendHeld({ slate, inputs, model, file, overrides, players, writeSend, atIso: new Date(nowMs).toISOString() });
+  const r = sendHeld({ slate, inputs, model, file, overrides, players, writeSend, atIso: new Date(nowMs).toISOString(), clock: clockFrom(nowMs) });
   if (r.failed) {
     recordBlocked(slate, r.failed, { nowMs, usage, pull: inputs.basis?.pull ?? null });
     return { status: "blocked", note: r.failed, sent: 0, teams: r.teams };
   }
-  writeResend(slate, { at: new Date(nowMs).toISOString(), pull: inputs.basis?.pull ?? null, status: "sent", why: null, teams: r.teams, sent: r.sent, usage_state: usage.state, usage_message: usage.message ?? null, missing: r.missing, stored: r.stored, base_note: note });
-  return { status: "ok", note: `${r.teams.length} held team${r.teams.length === 1 ? "" : "s"} re-sent, ${r.sent} number${r.sent === 1 ? "" : "s"} moved${r.missing.some((m) => !m.kind) ? `, ${r.missing.filter((m) => !m.kind).length} could not be refreshed` : ""}`, sent: r.sent, teams: r.teams };
+  writeResend(slate, { at: new Date(nowMs).toISOString(), pull: inputs.basis?.pull ?? null, status: "sent", why: null, teams: r.teams, tipped: r.tipped, sent: r.sent, usage_state: usage.state, usage_message: usage.message ?? null, missing: r.missing, stored: r.stored, base_note: note });
+  return { status: "ok", note: `${r.teams.length} held team${r.teams.length === 1 ? "" : "s"} re-sent, ${r.sent} number${r.sent === 1 ? "" : "s"} moved${r.missing.some((m) => !m.kind) ? `, ${r.missing.filter((m) => !m.kind).length} could not be refreshed` : ""}${r.tipped.length ? `; ${r.tipped.join(", ")} left as at their tip` : ""}`, sent: r.sent, teams: r.teams };
 }

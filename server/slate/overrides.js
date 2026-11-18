@@ -18,6 +18,7 @@ import fs from "../../site/shim/fs.js";
 import path from "../../site/shim/path.js";
 import { dataDir } from "../../site/shim/log.js";
 import { writeFileAtomic } from "../../site/shim/atomic.js";
+import { keepSlatePrelock } from "./prelock-copy.js";
 import { BUMP_STEP_PCT, BUMP_MAX_STEPS, PROJ_MAX, OWN_MAX } from "../board/override-limits.js";
 import { isNum, isPlain, round2 } from "../board/figures.js";
 
@@ -137,6 +138,7 @@ export function writeOverrides(slate, obj, { his = null } = {}) {
     slate, proj: { ...(obj.proj ?? {}) }, own: { ...(obj.own ?? {}) }, bump: { ...(obj.bump ?? {}) }, min: { ...(obj.min ?? {}) }, ...autoPart(obj.auto, obj),
     stars: [...(obj.stars ?? [])], notes: { ...(obj.notes ?? {}) }, ...(hisAt ? { his_at: hisAt } : {}), updated_at: new Date().toISOString(),
   };
+  keepSlatePrelock(slate, "overrides.json"); // the overrides as they stood at lock, for the back-tests (R5, Adam 11-18)
   writeFileAtomic(overridesFile(slate), JSON.stringify(record, null, 1) + "\n");
   return record;
 }

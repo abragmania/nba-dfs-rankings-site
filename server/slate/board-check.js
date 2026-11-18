@@ -112,8 +112,9 @@ const HELD_WHY = "a held team's send number comes from the console's scenario ma
 
 /** Check 3b: held teams' send numbers are only as current as the last resend. Names, by team, what was not refreshed and why (G62); `resend`: { record, problem, held, currentPull } from board-check-route.js. */
 function checkResend(players, c, resend) {
-  const { un, ex, auto, held } = c;
-  if (resend?.locked === true) return; // after lock nothing is re-sent; the last record is final and "locked" is not an unchecked state
+  const { un, ex, auto } = c;
+  if (resend?.locked === true) return; // every game has tipped: nothing is re-sent; the last record is final and "locked" is not an unchecked state
+  const held = Array.isArray(resend?.open) ? new Set([...c.held].filter((t) => resend.open.includes(t))) : c.held; // Adam 11-18: after lock only the teams still to tip are re-sent and judged
   if (resend?.problem && !held.size) { un.add("stored_override", `held teams, if any, cannot be told: ${resend.problem}`); return; }
   const last = resend?.record;
   // R4 (11-17; review round 2): what the last pass, sent or blocked, said about held teams (G62). His own choices (a pin, a flip, TwoGun's minutes, his figure over a Console pin) are left-out

@@ -42,22 +42,32 @@ export function cardContext(slate, local) {
   return ctx;
 }
 
+/** The copy of the lineup read kept before lock (news/lineups/prelock.json), marked prelock_copy, when it is from before `asOfMs`; null when there is none, it is later, or it cannot be read (logged). */
+function prelockAsOf(dir, asOfMs) {
+  let doc;
+  try { doc = JSON.parse(fs.readFileSync(path.join(dir, "prelock.json"), "utf8")); } catch (e) { if (e.code !== "ENOENT") warn("lineup read: the copy kept before lock could not be read", { dir, error: e.message }); return null; }
+  return doc && typeof doc === "object" && Date.parse(doc.generated_at ?? "") < asOfMs ? { ...doc, prelock_copy: true } : null;
+}
+
 /**
  * { state: "ok", latest } , { state: "missing" } when this slate has no read yet, or { state: "unreadable", why } for a damaged file (never an empty answer).
  * `cards` false: the read as saved, with no card-status step (the site bake publishes it untransformed; the browser runs the step on the baked read).
+ * `asOfMs` (a back-test's moment, R5): when latest.json was written at or after it, the copy kept before lock (prelock.json, tools/lineups_read.mjs keepPrelock) is read instead if it is from before that
+ * moment, marked `prelock_copy`; otherwise latest.json is answered and the caller judges its time.
  */
-export function readNewsLineups(slate, { look: withLook = true, cards = true, cardCtx = null } = {}) {
-  const file = path.join(dataRoot(), "slates", slate, "news", "lineups", "latest.json");
+export function readNewsLineups(slate, { look: withLook = true, cards = true, cardCtx = null, asOfMs = null } = {}) {
+  const dir = path.join(dataRoot(), "slates", slate, "news", "lineups"), file = path.join(dir, "latest.json");
   if (!fs.existsSync(file)) return { state: "missing" };
   try {
-    const latest = JSON.parse(fs.readFileSync(file, "utf8"));
+    let latest = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (Number.isFinite(asOfMs) && !(Date.parse(latest?.generated_at ?? "") < asOfMs)) latest = prelockAsOf(dir, asOfMs) ?? latest;
     if (latest === null || typeof latest !== "object" || latest.teams === null || typeof latest.teams !== "object" || Array.isArray(latest.teams)) return { state: "unreadable", why: "latest.json has no teams" };
     // The 5-minute lineup check's own finds file rides along as latest.found_by_check (server/pullnow/lineup-sync.js owns it), so a pull rewriting latest.json never loses them; a damaged file is said, not hidden (G62).
     try {
       const f = JSON.parse(fs.readFileSync(path.join(dataRoot(), "slates", slate, "lineup-finds.json"), "utf8"));
       if (Array.isArray(f?.finds)) { latest.found_by_check = f.finds; if (f.last_check) latest.last_check = f.last_check; } else latest.found_unreadable = "lineup-finds.json has no finds list";
     } catch (e) { if (e.code !== "ENOENT") latest.found_unreadable = `lineup-finds.json could not be read (${e.name})`; }
-    const look = withLook ? readLook(slate, dataRoot()) : {};
+    const look = withLook && !latest.prelock_copy ? readLook(slate, dataRoot()) : {}; // the copy kept before lock takes no later look
     if (Object.keys(look).length || latest.look === undefined) latest.look = look; // the site has no cache file: the look baked into the copy stands
     // the last look at each page (cache, git-ignored): a source is fresh by the later of its read and its look (lineup-proposals.js freshnessOf)
     if (!cards) return { state: "ok", latest };

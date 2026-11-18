@@ -5,6 +5,7 @@ import fs from "../../site/shim/fs.js";
 import path from "../../site/shim/path.js";
 import { dataDir } from "../../site/shim/log.js";
 import { writeFileAtomic } from "../../site/shim/atomic.js";
+import { keepSlatePrelock } from "./prelock-copy.js";
 import { PIN_MAX, SHARE_MAX, COMBO_MAX } from "../board/override-limits.js";
 import { EMPTY_RECORD, isNum, isPlain } from "../board/figures.js";
 import { FLIP_ROLES, STARTERS } from "../board/console-roles.js";
@@ -200,6 +201,7 @@ export function writeScenarios(slate, doc, { his = null, team = null } = {}) {
   const out = { schema: SCENARIOS_SCHEMA, slate, teams, applied: doc.applied ?? null, ...(hisAt ? { his_at: hisAt } : {}), updated_at: new Date().toISOString() };
   const why = badFile(out);
   if (why) throw new ScenariosError("SCENARIOS_INVALID", `The scenarios could not be saved: ${why}.`);
+  keepSlatePrelock(slate, "scenarios.json"); // the Apply record as it stood at lock, for the back-tests (R5, Adam 11-18)
   writeFileAtomic(scenariosFile(slate), JSON.stringify(out, null, 1) + "\n");
   return out;
 }
