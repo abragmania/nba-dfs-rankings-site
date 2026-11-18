@@ -15,7 +15,7 @@ import { defaultSourceOf } from "./depth-chart.js";
 import { teamNews, newsView } from "./console-news.js";
 import { landingHtml, teamBarOf, withAllChip } from "./console-all.js";
 import { statusLine } from "./lineup-bar.js";
-import { chartClick, chartChange, wireChartDrag } from "./console-chart-ui.js";
+import { chartClick, chartChange, wireChartDrag, showInjured } from "./console-chart-ui.js";
 
 /** His depth-chart moves as the server holds them, per team (console-moves.js saveDepth compares against it). */
 const depthTexts = (model) => Object.fromEntries(Object.entries(model.TEAMS).map(([code, T]) => [code, JSON.stringify(T.tier?.depth?.moves ?? null)]));
@@ -102,7 +102,7 @@ function newsOpt(c) {
 /** The page on show: one team's, or the All teams news list (the team bar is the console's own, with "All teams" first). */
 function pageHtml(c, news) {
   const G = c.G;
-  const team = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr: Object.values(c.saveErrs).join(" ") || null, news, help: G.help, chartSel: G.chartSel ?? null, readOnly: c.readOnly });
+  const team = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr: Object.values(c.saveErrs).join(" ") || null, news, help: G.help, chartSel: G.chartSel ?? null, showInj: showInjured(c), readOnly: c.readOnly });
   const foot = readFootHtml(c.readFail, c.inputsAt); // a failed refresh: at the page's foot, under either view
   if (G.view !== "all") return `${withAllChip(team, false)}${roleMarksFootHtml(c.model.TEAMS[G.cur], c.model.ST[G.cur], G.cur, c.readOnly === true)}${foot}`; // his standing role marks, at the foot (G64)
   const words = !news ? "No lineup news is wired on this page." : news.state === "loading" ? "Reading the lineup news..." : news.state !== "ok" ? `Lineup news not read: ${news.why}` : null;

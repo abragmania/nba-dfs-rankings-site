@@ -2,19 +2,21 @@
 // and what could not be checked or was left out is counted and named below. Pure strings (tested in node); board.js owns the element. The answer is slate.board_check (server/slate/board-check.js).
 import { esc, isoToEastern } from "./board-util.js";
 
-/** The foot's lines: [{ cls ("ok" | "head" | "bad" | "conflict" | "note"), text }]. Empty when the server gave no answer (the public site). */
+/** The foot's lines: [{ cls ("ok" | "head" | "info" | "bad" | "conflict" | "note"), text }]. Empty when the server gave no answer (the public site). */
 export function checkFootLines(bc) {
   if (!bc || typeof bc !== "object") return [];
-  if (bc.problem) return [{ cls: "bad", text: `Board self-check: ${bc.problem}` }];
+  // the minutes the board uses and the nightly scoreboard's average misses, one quiet line under the head (Adam 4:02 PM 11-18: "keep me in the loop on what we actually use")
+  const minutes = typeof bc.minutes_line === "string" && bc.minutes_line ? [{ cls: "info", text: bc.minutes_line }] : [];
+  if (bc.problem) return [{ cls: "bad", text: `Board self-check: ${bc.problem}` }, ...minutes];
   const time = isoToEastern(bc.checked_at ?? "") ?? "time unknown";
   const fails = bc.failure_lines ?? [], conflicts = bc.conflict_lines ?? [], notes = bc.unchecked_lines ?? [], exempt = bc.exempt_lines ?? [], depth = bc.depth_lines ?? [];
   const tail = [...fails.map((text) => ({ cls: "bad", text })), ...conflicts.map((text) => ({ cls: "conflict", text })), ...notes.map((text) => ({ cls: "note", text })), ...exempt.map((text) => ({ cls: "note", text })), ...depth.map((text) => ({ cls: "note", text }))]; // depth: the day's automatic depth-chart changes and notes (server/slate/depth-refresh.js)
-  if (!fails.length && !conflicts.length && !notes.length) return [{ cls: "ok", text: `Board self-check: all ${bc.men} men pass (${time})` }, ...tail];
+  if (!fails.length && !conflicts.length && !notes.length) return [{ cls: "ok", text: `Board self-check: all ${bc.men} men pass (${time})` }, ...minutes, ...tail];
   const head = fails.length ? `Board self-check: ${fails.length} ${fails.length === 1 ? "figure does" : "figures do"} not follow from its inputs` : `Board self-check: no failures in ${bc.men} men`;
-  return [{ cls: "head", text: `${head}${conflicts.length ? `; ${conflicts.length} for you to settle` : ""} (${time})` }, ...tail];
+  return [{ cls: "head", text: `${head}${conflicts.length ? `; ${conflicts.length} for you to settle` : ""} (${time})` }, ...minutes, ...tail];
 }
 
-/** The lines he must act on: the head or all-clear line, the failures and the conflicts (G65). The rest is checkNoteLines. */
+/** The open lines: the head or all-clear line, the minutes line, the failures and the conflicts (G65). The rest is checkNoteLines. */
 export const checkActionLines = (bc) => checkFootLines(bc).filter((l) => l.cls !== "note");
 /** The lines that only explain, in order: what was not checked, each exemption, the depth-chart notes. They go in the collapsed notes block at the foot. */
 export const checkNoteLines = (bc) => checkFootLines(bc).filter((l) => l.cls === "note");

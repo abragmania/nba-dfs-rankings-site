@@ -13,11 +13,25 @@ function chartNow(c, team) {
   const cm = chartModel(T, S, calc(T, S, S.outs).rows);
   return cm ? { cm, keyOf: (id) => T.tier.men[id]?.key ?? null, nameOf: (id) => T.byId[id]?.name ?? T.tier.men[id]?.name ?? id } : null;
 }
+const SHOW_INJ_KEY = "nbaboard.console.showinjured"; // the chart's "Show injured" switch, kept in this browser (Adam 3:35 PM 11-18); off by default; display only
+/** Whether the switch is on: the page's live state, read once from this browser. */
+export function showInjured(c) {
+  if (c.G.showInj === undefined) {
+    try { c.G.showInj = localStorage.getItem(SHOW_INJ_KEY) === "1"; } catch (e) { console.warn(`Console: the Show injured switch could not be read (${e.message})`); c.G.showInj = false; }
+  }
+  return c.G.showInj === true;
+}
 const at = () => new Date().toISOString();
 
 /** A click inside the chart: true when it was the chart's. */
 export function chartClick(c, e) {
   const chip = e.target.closest?.("[data-dchip]"), btn = e.target.closest?.("button");
+  if (btn?.dataset.dshowinj) {
+    c.G.showInj = !showInjured(c);
+    try { localStorage.setItem(SHOW_INJ_KEY, c.G.showInj ? "1" : "0"); } catch (err) { console.warn(`Console: the Show injured switch could not be saved (${err.message})`); }
+    c.render();
+    return true;
+  }
   if (btn?.dataset.dbp) { // the chart's B+ and the team table's B+ (console-depth.js manRow): one move, the card's role button's (console-moves.js setRole); no chart needed
     const { team, id } = btn.dataset, row = c.model?.TEAMS[team] ? calc(c.model.TEAMS[team], c.model.ST[team], c.model.ST[team].outs).rows.find((r) => r.id === id) : null;
     if (row && !c.readOnly && row.role !== "starter") setRole(c, team, id, row.role === "bench_plus" ? "bench" : "bench_plus");

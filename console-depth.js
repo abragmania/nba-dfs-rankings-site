@@ -223,7 +223,7 @@ function teamBody(model, code, news, view = {}) {
   const src = S.source ?? defaultSourceOf(T);
   const srcBox = oursUse(T).ok ? `<section class="box"><h2>Minutes for the optimizer</h2><div class="srcs">${MINUTE_SOURCES.map((k) => `<button class="sv${k === src ? " on" : ""}" type="button" data-source="${k}" data-team="${esc(code)}">${SOURCE_LABEL[k]}</button>`).join("")}<button class="sv all" type="button" data-source-all="${src}" data-team="${esc(code)}" title="Use ${esc(SOURCE_LABEL[src])} on every team with the minutes engine">All teams</button></div></section>` : "";
   const outBox = `<section class="box"><h2>Out / injured <small>${outs.length} ${outs.length === 1 ? "man" : "men"}</small></h2>${outs.map((r) => outRow(code, r, T, marks[r.id], N, cm ? cm.posOf(r.id) ?? "—" : null)).join("") || `<div class="none">Nobody is out.</div>`}</section>`;
-  const side = `${chartHtml(code, cm, { sel: view.sel ?? null, ro: view.ro === true })}${cm ? outBox : ""}<section class="box"><h2>Team total</h2><div class="tot">
+  const side = `${chartHtml(code, cm, { sel: view.sel ?? null, ro: view.ro === true, showInj: view.showInj === true })}${cm ? outBox : ""}<section class="box"><h2>Team total</h2><div class="tot">
 <div class="big"><span>Minutes tonight</span><b class="${Math.abs(typedAdd) >= 0.05 ? "warn" : ""}">${f1(res.totals.min) ?? "—"} min</b></div>
 <div><span>Without your marks</span><b>${f1(auto.min) ?? "—"} min</b></div>
 ${Math.abs(typedAdd) >= 0.05 ? `<div class="warn"><span>Your marks add</span><b>${typedAdd > 0 ? "+" : ""}${f1(typedAdd)}</b></div>` : ""}
@@ -253,7 +253,7 @@ const HELP = "Every change goes to the board and the optimizer at once. Type a m
  */
 export function depthHtml(model, code, opts) {
   const T = model.TEAMS[code], g = opts.games.find((x) => x.away === code || x.home === code), opp = T.opp;
-  const { main, side, starterIds, chipCols } = teamBody(model, code, opts.news, { sel: opts.chartSel ?? null, ro: opts.readOnly === true, when: opts.when });
+  const { main, side, starterIds, chipCols } = teamBody(model, code, opts.news, { sel: opts.chartSel ?? null, showInj: opts.showInj === true, ro: opts.readOnly === true, when: opts.when });
   const words = syncWords(opts.sync), syncText = `<span class="sync ${words.cls}" title="${esc([words.text, ...words.lines].join(" · "))}"><i></i>${esc(words.text)}</span>`;
   const held = words.lines.length ? `<ul class="heldline">${words.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : "";
   const head = `<header class="thead" style="--tc:${opts.colourOf(code)}">${logo(code, "xl")}<div class="tn"><h1>${esc(TEAM_NAMES[code] ?? code)}</h1><div class="vs">${T.home ? "vs" : "@"} ${logo(opp, "xs")}<b>${esc(TEAM_NAMES[opp] ?? opp)}</b>${g?.tip ? ` &middot; ${esc(opts.when(g.tip) ?? g.tip)}` : ""}</div></div>

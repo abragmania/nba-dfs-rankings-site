@@ -3,7 +3,7 @@
 // (console-tier.js pageChart: the payload's seed with his moves), so what it shows is what the minutes use. On the public site it is read-only (no handles, no bar). Pure strings, tested in node.
 import { esc } from "./board-util.js";
 import { pageChart, chartView } from "./console-tier.js";
-import { POSITIONS, depthPlaces, fillNote } from "./depth-cols.js";
+import { POSITIONS, depthPlaces, fillNote, tonightCols } from "./depth-cols.js";
 
 const FILL_NOTE = /Our chart had no healthy man at /;
 
@@ -31,15 +31,59 @@ export function chartModel(T, S, rows) {
   const spot = (r) => (isNum(r.min_label?.spot) ? r.min_label.spot : 1e3);
   const bench = playing.filter((r) => r.role !== "starter").sort((a, b) => spot(a) - spot(b) || (b.min ?? 0) - (a.min ?? 0)).map((r) => manOf(T.tier.men[r.id].key));
   const keyOf = (id) => T.tier.men[id]?.key ?? null;
+  const healthy = healthyView(T, team, rows, idOf, manOf, D, view, five);
   const fill = fillNote(ch.fills ?? [], (k) => D.names?.[k] ?? k), notes = [...(D.notes ?? []).filter((n) => !FILL_NOTE.test(n)), ...(fill ? [`${T.code ?? "This team"}: ${fill}`] : [])]; // the live scenario's fill, not the read's
-  return { cols, none: view.none.map(manOf), bench, view, posOf: (id) => (keyOf(id) ? ch.posOf.get(keyOf(id)) ?? null : null), sources: D.sources ?? [], notes, fills: ch.fills ?? [] };
+  return { cols, none: view.none.map(manOf), healthy, bench, view, posOf: (id) => (keyOf(id) ? ch.posOf.get(keyOf(id)) ?? null : null), sources: D.sources ?? [], notes, fills: ch.fills ?? [] };
+}
+
+/**
+ * The healthy chart (Adam 3:35 PM 11-18, "show injured"): the standing chart (the sources and his moves, no tonight's fill) over tonight's men AND every absent man, each in his normal place, so an Out starter tops his
+ * column with tonight's fill-in behind him. Absent = every man the chart holds who is not playing tonight: tonight's Outs and men not on the player list (out for the season, suspended), named from the chart's own list
+ * (D.names). A man marked out of rotation is neither. Returns { cols: [{ pos, men, sum }], none: [men], absent: count } or null. An absent man: { id: null, absent: true, tag: "OUT", min: null, words }. Display only. Pure.
+ */
+function healthyView(T, team, rows, idOf, manOf, D, view, five) {
+  const ch = pageChart(team);
+  if (!ch) return null;
+  const playingKeys = new Set(idOf.keys()), keyOfId = (id) => T.tier.men[id]?.key ?? null;
+  const oor = new Set(rows.filter((r) => r.role === "oor" && !r.out).map((r) => keyOfId(r.id)).filter(Boolean));
+  const outRow = new Map(rows.filter((r) => r.out).map((r) => [keyOfId(r.id), r]).filter(([k]) => k));
+  const nameOfKey = new Map(Object.entries(T.tier.men).map(([id, m]) => [m.key, m.name]));
+  const held = [...new Set([...POSITIONS.flatMap((p) => ch.cols[p]), ...ch.none, ...outRow.keys()])].filter((k) => !oor.has(k)); // an Out man the chart does not hold goes to "No position", never dropped (G62)
+  const hv = tonightCols(ch, new Set([...held, ...playingKeys]));
+  const man = (k) => {
+    if (playingKeys.has(k)) return manOf(k);
+    const r = outRow.get(k), full = r?.p?.name ?? nameOfKey.get(k) ?? D.names?.[k] ?? k;
+    return { id: null, key: k, name: lastName(full), full, min: null, tag: "OUT", starter: false, bplus: false, absent: true, words: r ? "Out tonight" : "Not on tonight's player list (out for the season, suspended or otherwise away)" };
+  };
+  // Adam 4:24 PM 11-18: every column tops with tonight's starter (green S), never an Out man above a present starter. A column with no starter tonight takes one from a column holding two (the man whose slot he took, else a
+  // man listed at that position, else the last of them), shown there only with "for <the Out man>"; the Out men then sit at their usual rank below the starter(s), the bench men in the healthy chart's order.
+  const starts = Object.fromEntries(POSITIONS.map((p) => [p, view[p].filter((k) => five.has(k))])), forOf = new Map();
+  const full = (k) => man(k).full, meta = (k) => T.tier.men[idOf.get(k)];
+  for (const p of POSITIONS) {
+    if (starts[p].length) continue;
+    const top = hv[p].find((k) => !playingKeys.has(k)), donors = POSITIONS.filter((q) => starts[q].length > 1).flatMap((q) => starts[q].map((k) => ({ k, q })));
+    const pick = donors.find((d) => top && meta(d.k)?.replaced?.name === full(top)) ?? donors.find((d) => meta(d.k)?.positions?.includes(p)) ?? donors.at(-1);
+    if (!pick) continue;
+    starts[pick.q] = starts[pick.q].filter((k) => k !== pick.k);
+    starts[p] = [pick.k];
+    if (top) forOf.set(pick.k, full(top));
+  }
+  const tops = new Set(POSITIONS.flatMap((p) => starts[p]));
+  const cols = POSITIONS.map((p) => {
+    const men = [...starts[p].map((k) => ({ ...manOf(k), forName: forOf.get(k) ?? null })), ...hv[p].filter((k) => !tops.has(k)).map(man)];
+    return { pos: p, men, sum: men.reduce((t, m) => t + (isNum(m.min) ? m.min : 0), 0) };
+  });
+  const bare = rows.filter((r) => r.out && !keyOfId(r.id)).map((r) => { const full = r.p?.name ?? r.id; return { id: null, key: `out:${r.id}`, name: lastName(full), full, min: null, tag: "OUT", starter: false, bplus: false, absent: true, words: "Out tonight; no position source or minutes inputs name him" }; }); // an Out man the chart and the engine hold nothing on (out for the season): kept, under No position (G62)
+  const none = [...hv.none.filter((k) => !tops.has(k)).map(man), ...bare];
+  return { cols, none, absent: [...cols.flatMap((c) => c.men), ...none].filter((m) => m.absent).length };
 }
 
 /** One chip. sel: the selected man's id; ro: read-only. */
 function chip(code, m, sel, ro) {
+  if (m.absent) return `<div class="dc dc-out dc-ro" data-dout="${esc(m.key)}" data-team="${esc(code)}" title="${esc(`${m.full}: ${m.words}. Shown on the healthy chart only; he is not in tonight's minutes`)}"><span class="dc-nn">${esc(m.name)}</span><span class="dc-tag">OUT</span><span class="dc-mm">out</span></div>`;
   const cls = `dc${m.starter ? " dc-st" : ""}${m.id === sel ? " dc-sel" : ""}${ro ? " dc-ro" : ""}`; // every class here is dc-: the board's own .st, .sel and .on must not reach the chart
   const handle = ro ? "" : `<span class="dc-gr" aria-hidden="true">&#10303;</span>`;
-  return `<div class="${cls}"${ro ? "" : ` draggable="true" tabindex="0"`} data-dchip="${esc(m.id)}" data-team="${esc(code)}" title="${esc(`${m.full}: ${m.words}${ro ? "" : ". Drag him, or click him and use the bar below"}`)}">${handle}<span class="dc-nn">${esc(m.name)}</span><span class="dc-tag">${esc(m.tag)}</span><span class="dc-mm">${f1(m.min)} min${m.bplus ? ` <i class="dc-bp dc-on">B+</i>` : ""}</span></div>`;
+  return `<div class="${cls}"${ro ? "" : ` draggable="true" tabindex="0"`} data-dchip="${esc(m.id)}" data-team="${esc(code)}" title="${esc(`${m.full}: ${m.words}${ro ? "" : ". Drag him, or click him and use the bar below"}`)}">${handle}<span class="dc-nn">${esc(m.name)}</span><span class="dc-tag">${esc(m.tag)}</span><span class="dc-mm">${f1(m.min)} min${m.bplus ? ` <i class="dc-bp dc-on">B+</i>` : ""}</span>${m.forName ? `<span class="dc-for">for ${esc(lastName(m.forName))}</span>` : ""}</div>`;
 }
 
 /** The selected man's bar: his name, up and down, his position and the Bench+ toggle (read-only: none). */
@@ -55,13 +99,15 @@ ${m.starter ? "" : `<button class="dc-bp${m.bplus ? " dc-on" : ""}" type="button
 }
 
 /** The whole box. sel: the selected man's id (or null); ro: read-only (the public site). */
-export function chartHtml(code, cm, { sel = null, ro = false } = {}) {
+export function chartHtml(code, cm, { sel = null, ro = false, showInj = false } = {}) {
   if (!cm) return "";
+  const inj = showInj && cm.healthy ? cm.healthy : null, shown = inj ?? cm; // display only: the healthy view adds the absent men; every present man is as in tonight's view
   const head = (c) => `<h3>${c.pos}<small>${f1(c.sum)}</small></h3>`;
-  const cols = cm.cols.map((c) => `<div class="dcol" data-dcol="${c.pos}" data-team="${esc(code)}">${head(c)}${c.men.map((m) => chip(code, m, sel, ro)).join("")}</div>`).join("");
-  const none = cm.none.length ? `<div class="dc-none" data-dcol="none"><span class="dc-nl">No position</span>${cm.none.map((m) => chip(code, m, sel, ro)).join("")}</div>` : "";
+  const toggle = cm.healthy ? `<button class="dc-si${inj ? " dc-on" : ""}" type="button" data-dshowinj="1" aria-pressed="${inj ? "true" : "false"}" title="${esc(`Show the team's healthy chart: ${cm.healthy.absent} absent ${cm.healthy.absent === 1 ? "man" : "men"} back in their normal places (display only; nothing changes)`)}">Show injured${inj ? ` <i>${cm.healthy.absent}</i>` : ""}</button>` : "";
+  const cols = shown.cols.map((c) => `<div class="dcol" data-dcol="${c.pos}" data-team="${esc(code)}">${head(c)}${c.men.map((m) => chip(code, m, sel, ro || inj !== null)).join("")}</div>`).join("");
+  const none = shown.none.length ? `<div class="dc-none" data-dcol="none"><span class="dc-nl">No position</span>${shown.none.map((m) => chip(code, m, sel, ro || inj !== null)).join("")}</div>` : "";
   const order = cm.bench.length ? `<div class="dc-ord"><b>Bench order from this chart:</b> ${cm.bench.map((m, i) => `${i + 1} ${esc(m.name)}`).join(", ")}<span>Bench+ first, then every 2nd, then every 3rd, ties by a blend of last 10 and season minutes a game</span></div>` : "";
-  return `<section class="box dchart"><h2>Depth chart <small>${ro ? "our chart, as Adam set it" : "drag a man within or between columns; starter on top"}</small></h2><div class="dcols">${cols}</div>${none}${ro ? "" : selBar(code, cm, sel)}${order}</section>`;
+  return `<section class="box dchart"><h2>Depth chart <span class="dc-hr"><small>${ro ? "our chart, as Adam set it" : inj ? "healthy chart: absent men greyed; switch off to drag" : "drag a man within or between columns; starter on top"}</small>${toggle}</span></h2><div class="dcols">${cols}</div>${none}${ro ? "" : selBar(code, cm, sel)}${order}</section>`;
 }
 
 /** The sources' line for the page's foot notes (G64: stamps at the foot): "Positions: ESPN depth chart 3:40 PM; Lineups.com depth chart not read (403 ...); ...". when: ISO -> short time. */
