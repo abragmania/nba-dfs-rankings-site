@@ -1,10 +1,10 @@
 {
-  "publishedAt": "2026-11-18T23:56:09.788Z",
-  "sourceCommit": "8d07a868713a94304ee14842362d729160669a54",
+  "publishedAt": "2026-11-18T23:59:38.946Z",
+  "sourceCommit": "c6e408630638463c13468063500d3babc7786154",
   "latest": {
     "slate": "2026-11-18-main",
     "players": 234,
-    "pulled_at": "2026-11-18T18:49:59-05:00"
+    "pulled_at": "2026-11-18T18:58:27-05:00"
   },
   "slates": [
     "2026-11-18-main",
@@ -34,14 +34,14 @@
   "console_missing": [],
   "files_missing": [],
   "cards": {
-    "log": 0,
-    "usage": 0,
-    "kept": 942,
+    "log": 1,
+    "usage": 1,
+    "kept": 940,
     "none": 120
   },
   "pull_facts": {
     "slate": "2026-11-18-main",
-    "bbm_checked_at": "2026-11-18T23:55:00.000Z",
+    "bbm_checked_at": "2026-11-18T23:58:27.000Z",
     "nba_edition": {
       "label": "2:15 PM",
       "published_at": "2026-11-18T19:15:05.000Z",
