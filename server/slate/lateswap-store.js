@@ -25,12 +25,24 @@ export function readSaved(slate) {
   const r = restoreState(w.stateText);
   if (!r.ok) return { ok: false, error: r.error };
   if (r.state.slate !== slate) return { ok: false, error: `The saved late swap state is for ${r.state.slate}, not ${slate}.` };
-  return { ok: true, saved: { state: r.state, uploadName: w.uploadName ?? null, uploadedAt: w.uploadedAt ?? null, exportedAt: w.exportedAt ?? null, spotSync: w.spotSync ?? {}, pendingSync: w.pendingSync ?? {}, syncNotes: Array.isArray(w.syncNotes) ? w.syncNotes : [] } };
+  const choices = screenChoices(w);
+  if (choices.error) return { ok: false, error: choices.error };
+  return { ok: true, saved: { state: r.state, uploadName: w.uploadName ?? null, uploadedAt: w.uploadedAt ?? null, exportedAt: w.exportedAt ?? null, spotSync: w.spotSync ?? {}, pendingSync: w.pendingSync ?? {}, syncNotes: Array.isArray(w.syncNotes) ? w.syncNotes : [], ...choices } };
+}
+
+/** Adam's choices on the Entries screen: the games he excluded and the men he locked into each spot; { excludedGames, keptMen } or
+ *  { error }. A part that cannot be read is an error, never quietly emptied: a lost lock could let a run take out a man he chose to keep. */
+function screenChoices(w) {
+  const strings = (a) => Array.isArray(a) && a.every((x) => typeof x === "string");
+  const games = w.excludedGames ?? [], kept = w.keptMen ?? {};
+  if (!strings(games)) return { error: "The saved late swap state's excluded games are not readable." };
+  if (typeof kept !== "object" || kept === null || Array.isArray(kept) || !Object.values(kept).every(strings)) return { error: "The saved late swap state's locked men are not readable." };
+  return { excludedGames: games, keptMen: kept };
 }
 
 /** Writes the screen state atomically. */
 export function writeSaved(slate, saved) {
-  const w = { version: VERSION, slate, savedAt: new Date().toISOString(), uploadName: saved.uploadName ?? null, uploadedAt: saved.uploadedAt ?? null, exportedAt: saved.exportedAt ?? null, spotSync: saved.spotSync ?? {}, pendingSync: saved.pendingSync ?? {}, syncNotes: saved.syncNotes ?? [], stateText: serializeState(saved.state) };
+  const w = { version: VERSION, slate, savedAt: new Date().toISOString(), uploadName: saved.uploadName ?? null, uploadedAt: saved.uploadedAt ?? null, exportedAt: saved.exportedAt ?? null, spotSync: saved.spotSync ?? {}, pendingSync: saved.pendingSync ?? {}, syncNotes: saved.syncNotes ?? [], excludedGames: saved.excludedGames ?? [], keptMen: saved.keptMen ?? {}, stateText: serializeState(saved.state) };
   writeFileAtomic(stateFile(slate), JSON.stringify(w) + "\n");
 }
 

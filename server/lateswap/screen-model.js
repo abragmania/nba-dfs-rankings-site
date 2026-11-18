@@ -86,6 +86,7 @@ export function buildModel(state, { slate, nowMs, spotsFile = {}, meta = {} }) {
     pool: ctx.players.map((p) => manView(ctx, p.dk_id)),
     departed: [...ctx.departedById.values()].map((p) => p.dk_id),
     syncNotes: meta.syncNotes ?? [], pendingSpots: meta.pendingSpots ?? [],
+    excludedGames: meta.excludedGames ?? [], keptMen: meta.keptMen ?? {}, // Adam's choices on this screen (screen-ops.js setExcludedGames, setKeptMen)
   };
   return { ...model, fp: fingerprint(model), mapFp: mapFp(state) };
 }

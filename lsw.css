@@ -36,6 +36,9 @@ body.lsw-on .vtabs button.on:not([data-lswtab]){background:none;color:var(--mu)}
 #lsw .gl{font:600 0.5625rem "JetBrains Mono";letter-spacing:.12em;color:var(--dim);margin-right:0.25rem}
 #lsw .gc{display:inline-flex;align-items:center;gap:0.1875rem;font:600 0.6563rem "JetBrains Mono";border:1px solid var(--ln);padding:0.125rem 0.375rem;color:var(--mu)}
 #lsw .gc.stl{opacity:.45}#lsw .gc i{font-style:normal;color:var(--dim)}#lsw .gc small{margin-left:0.1875rem}
+#lsw .gc.gcb{background:none;cursor:pointer;min-height:0}#lsw .gc.gcb:hover{border-color:var(--mu)}
+#lsw .gc.off{opacity:.4;border-style:dashed;text-decoration:line-through}#lsw .gc.off img{filter:grayscale(1)}
+#lsw .gc em{font:700 0.5625rem "JetBrains Mono";font-style:normal;color:var(--hl);margin-left:0.1875rem;text-decoration:none}
 #lsw .barx{display:flex;gap:0.625rem;padding:0.625rem 0.75rem;align-items:stretch;border-left:1px solid var(--ln)}
 #lsw .barx button{min-height:2.875rem;padding:0 1.25rem;font-size:0.875rem}
 #lsw .logo.xs,#lsw .chipx.xs{width:1rem;height:1rem}

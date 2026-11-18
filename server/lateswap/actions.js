@@ -190,15 +190,17 @@ export function fillArgs(state, spot, ctx, { out, lock: given = [], keep = [], k
 /**
  * One search with Adam's kept men: first each in his own slot, and when that finds nothing, again with them in any legal slot. run(args)
  * searches; lineupOf(result) is its first lineup or null. Returns fillArgs' fields, the result as fill, and keptNotes naming a kept man
- * who moved slot.
+ * who moved slot, and one who could not be held because his game started or his tip is unreadable and no entry holds him.
  */
 export function keptFill(state, spot, ctx, opts, run, lineupOf1) {
   let f = fillArgs(state, spot, ctx, opts), fill = run(f.args);
-  const slotted = (opts.keep ?? []).filter((id) => id in f.pinned && !(id in spotPins(state, spot, ctx)));
+  const frozen = spotPins(state, spot, ctx);
+  const slotted = (opts.keep ?? []).filter((id) => id in f.pinned && !(id in frozen));
   if (!lineupOf1(fill) && slotted.length) { f = fillArgs(state, spot, ctx, { ...opts, keepSlots: false }); fill = run(f.args); }
   const now = lineupOf(state, spot), got = lineupOf1(fill);
   const movedMen = got ? slotted.filter((id) => got.indexOf(id) !== now.indexOf(id)) : [];
   const keptNotes = movedMen.length ? [`Kept, in another slot so the lineup stays legal: ${movedMen.map((id) => `${nameOf(id, ctx)} (${SLOTS[now.indexOf(id)]} to ${SLOTS[got.indexOf(id)]})`).join(", ")}.`] : [];
+  for (const id of (opts.keep ?? []).filter((k) => !(k in frozen) && (ctx.started.has(k) || ctx.untimed.has(k)))) keptNotes.push(`Kept ${nameOf(id, ctx)} was not held: ${ctx.started.has(id) ? "his game started" : "his tip time is unreadable"}.`);
   return { ...f, fill, keptNotes };
 }
 
@@ -255,6 +257,25 @@ export function readGames(list, ctx) {
   return { games: new Set(list), notes: list.length ? [`Men from ${list.join(", ")} were not added: ${list.length === 1 ? "that game is" : "those games are"} excluded on this screen.`] : [] };
 }
 
+/** The men Adam locked into each spot, { spot: [dk_id] }, read for the spots in a run: { of(spot) -> ids, notes } or { error }. A man both
+ *  kept in a spot of the run and taken out by it is refused with a sentence. A kept man no longer on the newest pull is not held, and named;
+ *  locks saved for spots that no longer exist (allSpots) are named once. */
+export function readKeep(keep, names, removing, ctx, allSpots = null) {
+  if (keep == null) return { of: () => [], notes: [] };
+  if (typeof keep !== "object" || Array.isArray(keep) || !Object.values(keep).every((l) => Array.isArray(l) && l.every((id) => typeof id === "string"))) return { error: "Kept men must map each spot to a list of DraftKings ids." };
+  const raw = (spot) => (Object.hasOwn(keep, spot) ? keep[spot] : []);
+  const notes = [];
+  for (const spot of names) {
+    const both = raw(spot).filter((id) => removing.includes(id));
+    if (both.length) return { error: `${both.map((id) => nameOf(id, ctx)).join(", ")} ${both.length === 1 ? "is" : "are"} locked in ${spot} and also being taken out; unlock or keep, not both.` };
+    const off = raw(spot).filter((id) => !ctx.byId.has(id));
+    if (off.length) notes.push(`Kept ${off.map((id) => nameOf(id, ctx)).join(", ")} ${off.length === 1 ? "is" : "are"} no longer on the slate, so not held in ${spot}.`);
+  }
+  const gone = allSpots ? Object.keys(keep).filter((s) => !allSpots.includes(s) && keep[s].length) : [];
+  if (gone.length) notes.push(`Locked men were saved for ${gone.join(", ")}, which ${gone.length === 1 ? "is" : "are"} no longer a spot; those locks were not used.`);
+  return { of: (spot) => raw(spot).filter((id) => ctx.byId.has(id)), notes };
+}
+
 /** The shared path of actions a and b; y is the backup or null. { state, outcomes, overMax, error }. */
 function removeAction(state, { man: x, backup: y = null, scope, slate, nowMs, mode = null, settings: given = null, exposure = null, excluded: barred = null, excludedGames = null, keep = null, confirmOut = false, settingsByMode = null, notes: boardNotes = [] }) {
   if (typeof x !== "string" || !x) return refused(state, "Say which man comes out, by DraftKings id.");
@@ -273,15 +294,15 @@ function removeAction(state, { man: x, backup: y = null, scope, slate, nowMs, mo
   if (limits.error) return refused(state, limits.error);
   const gm = readGames(excludedGames, ctx);
   if (gm.error) return refused(state, gm.error);
-  const kept = readKeep(keep, sc.names, [x], ctx);
+  const kept = readKeep(keep, sc.names, [x], ctx, spotNames(state));
   if (kept.error) return refused(state, kept.error);
-  const extra = [...boardNotes, ...gm.notes];
+  const extra = [...boardNotes, ...gm.notes, ...kept.notes];
   const backup = { x, y, yWhy: y == null ? null : notAddableWhy(y, ctx), yAlert: y == null || confirmOut ? null : outAlert([y], ctx) };
   let s = state;
   const outcomes = [], taken = new Map(); // spots go in map order, so the same action repeats exactly
   for (const [k, spot] of sc.names.entries()) {
     const pending = sc.names.slice(k + 1).filter((later) => !removeRefusal(s, later, ctx, backup)); // a spot that will not re-fill keeps its lineup, and counts whole
-    const r = removeRefusal(s, spot, ctx, backup) ?? refill(s, spot, ctx, { out: new Set([...unusableIn(s, spot), ...excluded, x]), lock: y == null ? [] : [y], mode, settings, settingsByMode, extra, limit: limits, overLimit: isGpp(spot) ? atLimit(limits.maxOf, s, spot, pending, ctx, isGpp) : new Set(), taken, games: gm.games });
+    const r = removeRefusal(s, spot, ctx, backup) ?? refill(s, spot, ctx, { out: new Set([...unusableIn(s, spot), ...excluded, x]), lock: y == null ? [] : [y], keep: kept.of(spot), mode, settings, settingsByMode, extra, limit: limits, overLimit: isGpp(spot) ? atLimit(limits.maxOf, s, spot, pending, ctx, isGpp) : new Set(), taken, games: gm.games });
     outcomes.push(r.outcome);
     if (r.state) s = r.state;
     if (r.outcome.status === "changed") s = { ...s, unusable: { ...s.unusable, [spot]: [...new Set([...unusableIn(s, spot), x])] } }; // only the spots this action changed

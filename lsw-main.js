@@ -9,6 +9,7 @@ import { allHtml, backupLabels, scopeFor } from "./lsw-all.js";
 import { spotHtml } from "./lsw-spot.js";
 import { lineupName, entrySpotOptions, lineupOptions, entriesHtml, lineupsHtml, tabStatus, rangeBetween, numberInOrder, screenOrder, emptyRowIds, contestGroups } from "./lsw-maps.js";
 import { exportHtml } from "./lsw-export.js";
+import { gamesHtml, gameToggleBody } from "./lsw-games.js";
 import { logo, shortTime, slateRefMs, topStamps, centralToMs, keepFocus } from "./board-util.js";
 import { showActive } from "./lineups-panel.js";
 import { loadSavedNames } from "./saved-panel.js";
@@ -131,7 +132,7 @@ function barHtml() {
 <div class="bst"><small>TIPPED</small><b>${M.clock.tipped}</b> <span>games</span></div><div class="bst"><small>LEFT</small><b class="gr">${M.clock.left}</b> <span>games</span></div>
 <div class="bst"><small>ENTRIES</small><b>${M.entries.length}</b> <span>${nAssigned} in ${M.spots.length} spots</span></div>
 <div class="bst"><small>CHANGED</small><b class="${chg.changed.length ? "pk" : ""}">${nSpotsChanged ? `${nSpotsChanged} spot${nSpotsChanged === 1 ? "" : "s"}` : "0"}</b> <span>${chg.changed.length} ${chg.changed.length === 1 ? "entry" : "entries"}${nHeld ? `, ${nHeld} left out` : ""}</span></div></div>
-<div class="gms"><span class="gl">TIPS, ET</span>${M.games.map((g) => `<span class="gc${g.started ? " stl" : ""}" title="${esc(g.game)} ${esc(shortTime(g.tip, M.refMs) ?? "")}">${logo(g.away, "xs")}<i>@</i>${logo(g.home, "xs")}<small>${esc(chipTime(g.tip, M.refMs))}</small></span>`).join("")}</div></div>
+<div class="gms"><span class="gl">TIPS, ET</span>${gamesHtml(M)}</div></div>
 <div class="barx"><button class="ol" data-lsw="chooseFile" title="Drop a fresh DraftKings file anywhere on this screen, or choose one here">New DK file</button><button class="ol" data-lsw="go" data-s="upload" title="Recent uploads and the last file">Files</button><button class="go" data-lsw="exportChanged"${chg.written ? "" : " disabled"}>Export changed entries only (${chg.written})</button><button class="go ol2" data-lsw="exportAll"${M.exports.all.written ? "" : " disabled"}>Export all assigned entries (${M.exports.all.written})</button></div></div>`;
 }
 
@@ -473,6 +474,7 @@ async function onClick(e) {
       if (a === "removeBackup" && !lab) { L.msg = { kind: "warn", text: "Pick the backup from the list." }; return render(); }
       return void (await act({ op: "remove", man: L.blunt.man, ...(lab ? { backup: lab.id } : {}), scope, ...boardState() }, { label: lab ? `Remove ${manName(L.blunt.man)}, lock ${lab.label}` : `Remove ${manName(L.blunt.man)}` }));
     }
+    case "gameToggle": return void (await act(gameToggleBody(M, d.game)));
     case "undoAll": return void (await act({ op: "undoAll" }, { label: "Undo all" }));
     case "undoSpot": return void (await act({ op: "undoSpot", spot: d.spot }, { label: `Undo ${d.spot}` }));
     case "allow": return void (await act({ op: "allow", spot: d.spot, man: d.man }));

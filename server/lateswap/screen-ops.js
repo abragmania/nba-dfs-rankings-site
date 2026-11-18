@@ -6,7 +6,7 @@
 // a different lineup.
 import { startState, reuploadEntries, moveEntries, settleRows, dropRows, spotNames, lineupOf, sameLineup, restoreUsable, confirmOutMan, unusableIn } from "./maps.js";
 import { removeAndReoptimize, removeAndLockBackup, handSwap, resetSpots, assignLineup } from "./actions.js";
-import { spotOptions, pickOption } from "./reopt.js";
+import { spotOptions, pickOption, reoptimizeSpots } from "./reopt.js";
 import { contextFor, nameOf, outAlert } from "./entry-state.js";
 import { exportChanged, exportAll } from "./export.js";
 import { mapFp } from "./screen-model.js";
@@ -183,7 +183,7 @@ function applyPairs(saved, pairs, body, allowedNew) {
 
 /**
  * One action of the screen. body.op: assign, acceptProposals, setLineup, syncConfirm, confirmMan, remove, swap, reset, undoSpot, undoAll,
- * allow, dismissNotes. args: { slate, nowMs, lineups, spotsFile }. confirmOut with confirmMen goes ahead for men the engine asked about.
+ * allow, dismissNotes, options (nothing saved; the answer's options), pickOption, reoptimize, excludeGames, keepMen. args: { slate, nowMs, lineups, spotsFile }. confirmOut with confirmMen goes ahead for men the engine asked about.
  * Returns { saved, outcomes, error, confirms, overMax, spotWrite }: error is the engine's refusal in words (nothing changed); confirms lists
  * the spots waiting on a go-ahead, each with the alert.
  */
@@ -268,12 +268,31 @@ function setExcludedGames(saved, body, slate, nowMs) {
   return { saved: { ...saved, excludedGames: [...new Set(list)].sort() } };
 }
 
+/** The men Adam locked into one spot, set whole from body.keep: { saved } or { error }. Every later run on that spot keeps them. A man not
+ *  on the slate, one taken out of that spot earlier, or one newly locked whose game has started (he is frozen already) is refused by name. */
+function setKeptMen(saved, body, slate, nowMs) {
+  const s = saved.state, list = body.keep;
+  if (!spotNames(s).includes(body.spot)) return { error: `No such spot: ${JSON.stringify(body.spot ?? null)}.` };
+  if (!Array.isArray(list) || !list.every((id) => typeof id === "string" && id)) return { error: "Kept men must be a list of DraftKings ids." };
+  const { ctx, error } = contextFor(s, slate, nowMs);
+  if (error) return { error };
+  const had = saved.keptMen?.[body.spot] ?? [];
+  const off = list.filter((id) => !ctx.man(id));
+  if (off.length) return { error: `${off.join(", ")} ${off.length === 1 ? "is" : "are"} not on this slate, so nothing was locked.` };
+  const out = list.filter((id) => unusableIn(s, body.spot).includes(id));
+  if (out.length) return { error: `${out.map((id) => nameOf(id, ctx)).join(", ")} ${out.length === 1 ? "was" : "were"} taken out of ${body.spot} earlier; allow him back there first.` };
+  const fixed = list.filter((id) => !had.includes(id) && (ctx.started.has(id) || ctx.untimed.has(id)));
+  if (fixed.length) return { error: `${fixed.map((id) => nameOf(id, ctx)).join(", ")}: his game has started (or its tip cannot be read), so he is fixed already and needs no lock.` };
+  const { [body.spot]: _old, ...rest } = saved.keptMen ?? {};
+  return { saved: { ...saved, keptMen: list.length ? { ...rest, [body.spot]: [...new Set(list)] } : rest } };
+}
+
 function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {}, picks = null }) {
   const s = saved.state;
   const done = (r, extra = {}) => {
     if (r.error) return refused(saved, r.error);
     const confirms = (r.outcomes ?? []).filter((o) => o.status === "confirm").map((o) => ({ spot: o.spot, alert: o.alert }));
-    return { saved: { ...saved, state: r.state }, outcomes: r.outcomes ?? [], error: null, confirms, overMax: r.overMax ?? [], ...extra };
+    return { saved: { ...saved, state: r.state }, outcomes: r.outcomes ?? [], error: null, confirms, overMax: r.overMax ?? [], minResults: r.minResults ?? [], ...extra };
   };
   switch (body.op) {
     case "assign": {
@@ -333,8 +352,36 @@ function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {},
       return r.error ? refused(saved, r.error) : { saved: { ...saved, state: r.state }, outcomes: [], error: null };
     }
     case "remove": {
-      const base = { man: body.man, backup: body.backup ?? undefined, scope: spotsIn(s, body.scope), slate, nowMs, ...boardState(body, picks, s, slate, nowMs) };
+      const base = { man: body.man, backup: body.backup ?? undefined, scope: spotsIn(s, body.scope), slate, nowMs, keep: saved.keptMen ?? {}, ...boardState(body, picks, s, slate, nowMs, saved.excludedGames ?? []) };
+      if (body.atLeast != null) { // with a Min %: the removal re-fills only the spots holding him, the Min % plan may change other spots in scope (each says so), and a backup is a Min 100% held to his Max
+        const { man, backup, ...rest } = base;
+        const atLeast = typeof body.atLeast === "object" && !Array.isArray(body.atLeast) && backup ? { ...body.atLeast, [backup]: 100 } : body.atLeast;
+        return done(confirmable((ok) => reoptimizeSpots(s, { ...rest, remove: typeof man === "string" && man ? [man] : [], atLeast, onlyHolding: true, confirmOut: ok }), body));
+      }
       return done(confirmable((ok) => (body.backup ? removeAndLockBackup(s, { ...base, confirmOut: ok }) : removeAndReoptimize(s, base)), body));
+    }
+    case "reoptimize": {
+      const base = { scope: spotsIn(s, body.scope), remove: body.remove ?? [], atLeast: body.atLeast ?? null, keep: saved.keptMen ?? {}, slate, nowMs, ...boardState(body, picks, s, slate, nowMs, saved.excludedGames ?? []) };
+      return done(confirmable((ok) => reoptimizeSpots(s, { ...base, confirmOut: ok }), body));
+    }
+    case "options": {
+      const b = boardState(body, picks, s, slate, nowMs, saved.excludedGames ?? []);
+      const keep = Object.hasOwn(saved.keptMen ?? {}, body.spot) ? saved.keptMen[body.spot] : [];
+      const r = spotOptions(s, { spot: body.spot, count: body.count ?? 5, remove: body.remove ?? [], keep, excluded: b.excluded, excludedGames: b.excludedGames, settingsByMode: b.settingsByMode, slate, nowMs });
+      if (r.error) return refused(saved, r.error);
+      return { saved, outcomes: [], error: null, options: { ...r, notes: [...b.notes, ...r.notes] } };
+    }
+    case "pickOption": {
+      const b = boardState(body, picks, s, slate, nowMs, saved.excludedGames ?? []); // the pick is checked again against what Adam set, never trusted as sent
+      return done(confirmable((ok) => pickOption(s, { spot: body.spot, lineup: body.lineup, proven: body.proven ?? null, remove: body.remove ?? [], excluded: b.excluded, excludedGames: b.excludedGames, keep: saved.keptMen ?? {}, confirmOut: ok, slate, nowMs }), body));
+    }
+    case "excludeGames": {
+      const r = setExcludedGames(saved, body, slate, nowMs);
+      return r.error ? refused(saved, r.error) : { saved: r.saved, outcomes: [], error: null };
+    }
+    case "keepMen": {
+      const r = setKeptMen(saved, body, slate, nowMs);
+      return r.error ? refused(saved, r.error) : { saved: r.saved, outcomes: [], error: null };
     }
     case "swap": return done(confirmable((ok) => handSwap(s, { spot: body.spot, slot: body.slot, inId: body.inId, confirmOut: ok, slate, nowMs }), body));
     case "reset": return done(confirmable((ok) => resetSpots(s, { scope: spotsIn(s, body.scope), man: body.man ?? null, confirmOut: ok, slate, nowMs }), body));

@@ -3,7 +3,9 @@
 //   POST /api/slate/<slate>/lateswap   { op } one of: upload { text, fileName } | useUpload { file } | assign { entryIds, spot } |
 //        acceptProposals | setLineup { spot, lineupId, confirmOut?, confirmMen? } | syncConfirm { spot, confirmOut, confirmMen } |
 //        confirmMan { spot, man } | remove { man, backup?, scope, confirmOut?, confirmMen? } | swap { spot, slot, inId, confirmOut?, confirmMen? } |
-//        reset { scope, man? } | undoSpot { spot } | undoAll | allow { spot, man } | dismissNotes | export { kind, spots?, fp }
+//        reset { scope, man? } | undoSpot { spot } | undoAll | allow { spot, man } | dismissNotes | export { kind, spots?, fp } |
+//        options { spot, count?, remove? } | pickOption { spot, lineup, proven?, remove?, confirmOut?, confirmMen? } |
+//        reoptimize { scope, remove?, atLeast?, confirmOut?, confirmMen? } | excludeGames { games } | keepMen { spot, keep }
 // Answers: 200 with the model for everything the engine decided (refused: "words" when it would not, confirms when it asks about an Out or
 // gone man); an HTTP error only when something failed. An export carries the fingerprint of what the page drew; another one now means the
 // screen is behind (a pull or an action came in), so { stale: true, model } comes back and no file is made.
@@ -74,7 +76,7 @@ function modelFor(res, ctx, slate, slateData, saved, extra = {}) {
   if (!sl) return null;
   const model = buildModel(saved.state, { slate: sl, nowMs: ctx.now(), spotsFile: heldSpots(slate), meta: {
     uploadName: saved.uploadName, uploadedAt: saved.uploadedAt, exportedAt: saved.exportedAt, uploads: uploadsView(slate), syncNotes: saved.syncNotes ?? [],
-    pendingSpots: extra.pendingSpots ?? [], pull: slateData.as_of?.pull_started ?? null, boardStamp: topStamps(slateData).board ?? null,
+    pendingSpots: extra.pendingSpots ?? [], excludedGames: saved.excludedGames ?? [], keptMen: saved.keptMen ?? {}, pull: slateData.as_of?.pull_started ?? null, boardStamp: topStamps(slateData).board ?? null,
   } });
   if (!model.ok) { ctx.fail(res, 500, "LATESWAP_MODEL", model.error); return null; }
   if (model.file.uploads[0]) Object.assign(model.file.uploads[0], noteOf(model));
@@ -134,10 +136,11 @@ async function handle(req, res, slate, ctx) {
     const lineups = body.op === "setLineup" ? readLineups(slate, slateData).lineups : [];
     // The board's excluded men, saved on the server: read only for a re-optimize; a failed read passes null, which the outcome's notes name.
     let picks = null;
-    if (body.op === "remove") { try { picks = readPicks(slate, slateData); } catch (e) { error("late swap: the board's picks could not be read", { slate, message: e.message }); } }
+    if (["remove", "options", "reoptimize", "pickOption"].includes(body.op)) { try { picks = readPicks(slate, slateData); } catch (e) { error("late swap: the board's picks could not be read", { slate, message: e.message }); } }
     const out = applyOp(saved, body, { slate: sl, nowMs, lineups, spotsFile, picks });
     if (out.error) { if (dirty) writeSaved(slate, saved); return respond(res, ctx, slate, slateData, saved, { ...extra, refused: out.error, outcomes: out.outcomes }, t0); }
     if (out.confirms?.length && !out.spotWrite && out.saved === saved) { if (dirty) writeSaved(slate, saved); return respond(res, ctx, slate, slateData, saved, { ...extra, outcomes: out.outcomes, confirms: out.confirms }, t0); } // nothing is written until the go-ahead
+    if (body.op === "options") { if (dirty) writeSaved(slate, saved); return respond(res, ctx, slate, slateData, saved, { ...extra, options: out.options }, t0); } // nothing is saved by a look at the options
     let next = mergeNotes(out.saved, out.notes ?? []);
     // What this action did may change what waits on the Lineups tab's file (a go-ahead, a spot reset), so it is looked at again, but only
     // looked at: nothing from that file is applied in the same answer as an action, and no stamp is used up. The next read applies it.
@@ -156,7 +159,7 @@ async function handle(req, res, slate, ctx) {
       error("late swap write failed", { slate, message: e.message });
       return ctx.fail(res, 500, "LATESWAP_WRITE", `Nothing was changed: the spot's file could not be written (${e.message}).`);
     }
-    return respond(res, ctx, slate, slateData, next, { ...extra, outcomes: out.outcomes, confirms: out.confirms, overMax: out.overMax ?? [], mapResult: out.mapResult }, t0);
+    return respond(res, ctx, slate, slateData, next, { ...extra, outcomes: out.outcomes, confirms: out.confirms, overMax: out.overMax ?? [], minResults: out.minResults, mapResult: out.mapResult }, t0);
   } catch (e) {
     error("late swap failed", { slate, message: e.message });
     return ctx.fail(res, 500, "LATESWAP_FAILED", `The Entries screen could not finish: ${e.message}`);

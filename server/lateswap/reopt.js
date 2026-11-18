@@ -1,9 +1,11 @@
 // Re-optimizing by lineup (entries late swap, Adam 11-18): the best few fills for one spot's lineup around its started men, and the pick of
-// one of them, which replaces that lineup in every spot holding it. Pure: no DOM, no fs, no clock.
+// one of them, which replaces that lineup in every spot holding it; and re-optimizing chosen spots with no removal needed, with a Min % for
+// men who must now be in many entries. Pure: no DOM, no fs; the only clock is the Min % planning's time guard, passed in (clock).
 import { SLOTS } from "../board/slots.js";
-import { lineupOf, spotEntries, spotNames, sameLineup, unusableIn } from "./maps.js";
-import { contextFor, nameOf, spotBlocks, movesBetween, frozenWhy, frozenProblems, lineupProblems, holdsMen } from "./entry-state.js";
-import { refused, fillArgs, runFill, menKey, readGames, assignLineup } from "./actions.js";
+import { lineupOf, spotEntries, spotNames, sameLineup, unusableIn, modeFromName } from "./maps.js";
+import { contextFor, nameOf, spotBlocks, movesBetween, frozenWhy, frozenProblems, lineupProblems, holdsMen, notAddableWhy, outAlert, spotPins } from "./entry-state.js";
+import { refused, keptFill, runFill, menKey, readGames, readKeep, assignLineup, readScope, readLimits, atLimit, overMax, noteOverMax, refill, flagged, moved, confirmFirst, holds, fillScore } from "./actions.js";
+import { planMinimum, PLAN_MAX_MS } from "./min-pct.js";
 
 export const MAX_OPTIONS = 10;
 const isIds = (a) => Array.isArray(a) && a.every((id) => typeof id === "string");
@@ -30,7 +32,7 @@ export function sharingSpots(state, spot) {
  * sharedWith, notes, error }; current is true when an option holds the same men as the lineup now.
  */
 export function spotOptions(state, args) {
-  const { spot, count = 5, remove = [], excluded = [], excludedGames = null, mode = null, settings = null, settingsByMode = null, slate, nowMs } = args ?? {};
+  const { spot, count = 5, remove = [], keep = null, excluded = [], excludedGames = null, mode = null, settings = null, settingsByMode = null, slate, nowMs } = args ?? {};
   const fail = (error) => ({ spot: spot ?? null, current: null, options: [], sharedWith: [], notes: [], error });
   const { ctx, error } = contextFor(state, slate, nowMs);
   if (error) return fail(error);
@@ -41,12 +43,14 @@ export function spotOptions(state, args) {
   if (gm.error) return fail(gm.error);
   const blocks = spotBlocks(state, spot, ctx);
   if (blocks.length) return fail(blocks.join(" "));
+  const kept = readKeep(keep == null ? null : { [spot]: keep }, [spot], remove, ctx);
+  if (kept.error) return fail(kept.error);
   const before = lineupOf(state, spot), entries = spotEntries(state, spot);
-  const f = fillArgs(state, spot, ctx, { out: new Set([...unusableIn(state, spot), ...excluded, ...remove]), mode, settings, settingsByMode, games: gm.games });
-  const notes = [...gm.notes];
-  const stuck = remove.filter((id) => id in f.pinned);
-  if (stuck.length) notes.push(`${stuck.map((id) => `${nameOf(id, ctx, entries)} stays in ${spot}: ${frozenWhy(id, ctx, entries.find((e) => e.uploaded.includes(id)))}.`).join(" ")}`);
-  const r = runFill({ ...f.args, settings: { ...f.args.settings, count } });
+  const run = (a) => runFill({ ...a, settings: { ...a.settings, count } });
+  const f = keptFill(state, spot, ctx, { out: new Set([...unusableIn(state, spot), ...excluded, ...remove]), keep: kept.of(spot), mode, settings, settingsByMode, games: gm.games }, run, (x) => x.lineups?.[0]?.ids ?? null);
+  const r = f.fill, notes = [...gm.notes, ...kept.notes, ...f.keptNotes];
+  const stuck = remove.filter((id) => frozenWhy(id, ctx) && before.includes(id));
+  if (stuck.length) notes.push(`${stuck.map((id) => `${nameOf(id, ctx, entries)} stays in ${spot}: ${frozenWhy(id, ctx)}.`).join(" ")}`);
   if (!r.lineups) return { ...fail(`No legal lineup for ${spot}: ${r.why}`), notes };
   if (r.note) notes.push(r.note);
   const leftUntimed = [...ctx.untimed].filter((id) => !f.stays.has(id));
@@ -67,25 +71,33 @@ export function spotOptions(state, args) {
  * lineup (8 dk_ids in SLOTS order), proven?, remove?, confirmOut?, slate, nowMs }. Each spot goes through assignLineup's own checks (frozen
  * men exact, Out or gone asks first); a spot that refuses is flagged amber with its reason and the rest still change. When any spot asks
  * about an Out or gone man, nothing changes until the same call comes with confirmOut. remove: the men this pick took out, marked out of
- * each spot it changed that held them, as a removal is. { state, outcomes, error }.
+ * each spot it changed that held them, as a removal is. The sent lineup is checked again per spot against what Adam set (excluded,
+ * excludedGames, keep { spot: [dk_id] }): a man of an excluded game or excluded on the board who is not frozen or kept there, or a kept man
+ * left out, flags that spot amber with the reason. { state, outcomes, error }.
  */
 export function pickOption(state, args) {
-  const { spot, lineup, proven = null, remove = [], confirmOut = false, slate, nowMs } = args ?? {};
+  const { spot, lineup, proven = null, remove = [], excluded = [], excludedGames = null, keep = null, confirmOut = false, slate, nowMs } = args ?? {};
   const { ctx, error } = contextFor(state, slate, nowMs);
   if (error) return refused(state, error);
   if (!spotNames(state).includes(spot)) return refused(state, `No such spot: ${JSON.stringify(spot ?? null)}.`);
   if (!isIds(lineup) || lineup.length !== SLOTS.length || lineup.some((id) => !id)) return refused(state, `A lineup is ${SLOTS.length} DraftKings ids in slot order.`);
-  if (!isIds(remove)) return refused(state, "Men to remove must be a list of DraftKings ids.");
+  if (!isIds(remove) || !isIds(excluded)) return refused(state, "Men to remove or exclude must be lists of DraftKings ids.");
+  const gm = readGames(excludedGames, ctx);
+  if (gm.error) return refused(state, gm.error);
   const targets = [spot, ...sharingSpots(state, spot)];
+  const kept = readKeep(keep, targets, [], ctx);
+  if (kept.error) return refused(state, kept.error);
+  const problem = (t) => pickProblem(state, t, lineup, ctx, { excluded, games: gm.games, keep: kept.of(t) });
   const one = (st, t, ok) => assignLineup(st, { spot: t, lineup, proven, confirmOut: ok, slate, nowMs });
   if (!confirmOut) {
-    const asks = targets.map((t) => one(state, t, false).outcomes[0]).filter((o) => o?.status === "confirm");
+    const asks = targets.filter((t) => !problem(t)).map((t) => one(state, t, false).outcomes[0]).filter((o) => o?.status === "confirm");
     if (asks.length) return { state, outcomes: asks, error: null };
   }
   let s = state;
   const outcomes = [];
   for (const t of targets) {
-    const before = lineupOf(s, t);
+    const before = lineupOf(s, t), why = problem(t);
+    if (why) { outcomes.push(flagged(s, t, why, { amber: true })); continue; }
     const r = one(s, t, confirmOut);
     if (r.error) return refused(state, r.error);
     const o = r.outcomes[0];
@@ -96,4 +108,152 @@ export function pickOption(state, args) {
     outcomes.push(o);
   }
   return { state: s, outcomes, error: null };
+}
+
+/** Why a picked lineup cannot go on spot t as Adam has set things, as a sentence, or null. A man frozen in t, or kept there, may stay. */
+function pickProblem(state, t, lineup, ctx, { excluded, games, keep }) {
+  const pins = spotPins(state, t, ctx), live = keep.filter((id) => !ctx.started.has(id) && !ctx.untimed.has(id));
+  const free = lineup.filter((id) => !(id in pins) && !live.includes(id));
+  const names = (ids) => ids.map((id) => nameOf(id, ctx)).join(", ");
+  const why = [];
+  const offGame = free.filter((id) => games.has(ctx.man(id)?.game));
+  if (offGame.length) why.push(`${names(offGame)}: his game is excluded on this screen.`);
+  const barred = free.filter((id) => excluded.includes(id));
+  if (barred.length) why.push(`${names(barred)}: excluded on the board.`);
+  const missing = live.filter((id) => !lineup.includes(id));
+  if (missing.length) why.push(`${names(missing)} ${missing.length === 1 ? "is" : "are"} locked in ${t} but not in this lineup.`);
+  return why.length ? why.join(" ") : null;
+}
+
+/** The Min % asked for, read: { wants: [{ id, pct }] } or { error }. Refused in words: not a map of numbers 0 to 100, a man not on the slate,
+ *  one also being taken out. A Min above his Max % is not refused: the plan is held to his Max, and the shortfall says so. */
+function readAtLeast(atLeast, ctx, remove) {
+  if (atLeast == null) return { wants: [] };
+  if (typeof atLeast !== "object" || Array.isArray(atLeast)) return { error: "A Min % maps DraftKings ids to a percent, like { \"1234\": 40 }." };
+  const wants = [];
+  for (const [id, pct] of Object.entries(atLeast)) {
+    if (typeof pct !== "number" || !Number.isFinite(pct) || pct < 0 || pct > 100) return { error: `The Min % for ${id} must be a number from 0 to 100.` };
+    if (!ctx.man(id)) return { error: `A Min % is set on ${id}, not on this slate.` };
+    if (remove.includes(id)) return { error: `${nameOf(id, ctx)} is being taken out and given a Min % at once; pick one.` };
+    if (pct > 0) wants.push({ id, pct });
+  }
+  return { wants };
+}
+
+/** Each Min % man's line once the run is done: { dk_id, name, entries, target, total, short, why }. why says, in words, what kept him short. */
+function minLines(state, plan, names, ctx, outcomes) {
+  const weight = (s) => spotEntries(state, s).length, total = names.reduce((t, s) => t + weight(s), 0);
+  return plan.plans.map((p) => {
+    const entries = names.filter((s) => lineupOf(state, s).includes(p.id)).reduce((t, s) => t + weight(s), 0);
+    const short = Math.max(0, p.target - entries);
+    const failed = names.filter((s) => (plan.forced.get(s) ?? []).includes(p.id) && !lineupOf(state, s).includes(p.id));
+    const whys = [
+      ...(p.heldToMax != null ? [`held to his Max of ${p.heldToMax} entries`] : []),
+      ...[...p.skipped].map(([why, spots]) => `${spots.join(", ")}: ${why}`),
+      ...(failed.length ? [`${failed.join(", ")}: chosen for him, but ${outcomes.filter((o) => failed.includes(o.spot)).map((o) => o.reason).filter(Boolean)[0] ?? "the re-fill did not hold him"}`] : []),
+    ];
+    const late = p.unplanned.length ? `Min % not planned for ${p.unplanned.length} ${p.unplanned.length === 1 ? "spot" : "spots"}: too many to weigh in time (${p.unplanned.join(", ")}).` : null;
+    const said = short ? `${nameOf(p.id, ctx)} is in ${entries} of the ${p.target} entries asked for (${total} in scope), ${short} short. ${whys.join("; ")}.` : null;
+    return { dk_id: p.id, name: nameOf(p.id, ctx), entries, target: p.target, total, short, why: [said, late].filter(Boolean).join(" ") || null };
+  });
+}
+
+/**
+ * Re-optimize spots with no removal needed (Adam 11-18): every spot in scope keeps its frozen men and the men Adam locked (keep), and
+ * re-fills every open slot on the newest projections, any slot a man's positions allow. args: { scope, remove?, atLeast?, keep?, slate,
+ * nowMs, mode?, settings?, settingsByMode?, exposure?, excluded?, excludedGames?, confirmOut?, notes? }. scope as the remove action's;
+ * { type: "holding" } means every spot holding a man in remove. remove: men taken out in the same run (marked out of each spot it changed
+ * that held them). atLeast: { dk_id: percent } of the entries in scope, placed in the spots where holding him costs the least projection
+ * (min-pct.js), held to his Max % when one is set. A Min % man who is Out or gone asks first: every spot answers "confirm" and nothing
+ * changes. onlyHolding (the remove action with a Min %): a spot re-fills only when it holds a man in remove, or when the Min % plan puts a
+ * man there, and then says so. clock and planMs bound the Min % planning time (min-pct.js PLAN_MAX_MS). Returns { state, outcomes,
+ * overMax, minResults, error }, outcomes shaped as the remove action's.
+ */
+export function reoptimizeSpots(state, args) {
+  const { scope, remove = [], atLeast = null, keep = null, onlyHolding = false, slate, nowMs, mode = null, settings = null, settingsByMode = null, exposure = null, excluded = [], excludedGames = null, confirmOut = false, notes: boardNotes = [], clock = () => performance.now(), planMs = PLAN_MAX_MS } = args ?? {};
+  const no = (error) => ({ ...refused(state, error), overMax: [], minResults: [] });
+  if (settings != null && (typeof settings !== "object" || Array.isArray(settings))) return no("Settings must be an object.");
+  if (settings && "exposure" in settings) return no("A Max % across the set goes in exposure, not in the optimizer settings.");
+  if (!isIds(remove) || !isIds(excluded)) return no("Men to remove or exclude must be lists of DraftKings ids.");
+  const { ctx, error } = contextFor(state, slate, nowMs);
+  if (error) return no(error);
+  let names;
+  if (scope?.type === "holding") {
+    names = spotNames(state).filter((s) => remove.some((id) => holds(state, s, id)));
+    if (!names.length) return no(remove.length ? `No spot holds ${remove.map((id) => nameOf(id, ctx)).join(" or ")}, so nothing was done.` : "Choosing every spot holding a man needs the man.");
+  } else {
+    const sc = readScope(state, scope);
+    if (sc.error) return no(sc.error);
+    names = sc.names;
+  }
+  const spotMode = (spot) => mode ?? (Object.hasOwn(state.spots, spot) ? state.spots[spot].mode : modeFromName(spot));
+  const isGpp = (spot) => spotMode(spot) === "GPP";
+  const limits = readLimits(state, exposure, ctx, isGpp);
+  if (limits.error) return no(limits.error);
+  const gm = readGames(excludedGames, ctx);
+  if (gm.error) return no(gm.error);
+  const kept = readKeep(keep, names, remove, ctx, spotNames(state));
+  if (kept.error) return no(kept.error);
+  const min = readAtLeast(atLeast, ctx, remove);
+  if (min.error) return no(min.error);
+  const ask = confirmOut ? null : outAlert(min.wants.map((w) => w.id), ctx);
+  if (ask) return { state, outcomes: names.map((spot) => confirmFirst(state, spot, ask)), overMax: [], minResults: [], error: null };
+  const outOf = (spot) => new Set([...unusableIn(state, spot), ...excluded, ...remove]);
+  const fillOpts = (spot) => ({ out: outOf(spot), keep: kept.of(spot), mode, settings, settingsByMode, games: gm.games });
+  const t0 = clock();
+  const plan = planFor(state, ctx, { names, wants: min.wants, kept, gm, fillOpts, excluded, limits, isGpp, outOfTime: () => clock() - t0 > planMs });
+  let s = state;
+  const outcomes = [], taken = new Map();
+  for (const [k, spot] of names.entries()) {
+    const blocks = spotBlocks(s, spot, ctx);
+    if (blocks.length) { outcomes.push(flagged(s, spot, blocks.join(" "), { amber: true })); continue; }
+    const before = lineupOf(s, spot), entries = spotEntries(s, spot), forcedHere = plan.forced.get(spot) ?? [];
+    const holdsOne = remove.some((id) => holds(s, spot, id));
+    if (onlyHolding && !holdsOne && !forcedHere.length) { outcomes.push(moved(s, spot, before, before, ctx, { reason: `${spot} does not hold ${remove.map((id) => nameOf(id, ctx)).join(" or ")}.` })); continue; }
+    const stuck = remove.filter((id) => before.includes(id) && frozenWhy(id, ctx, entries.find((e) => e.uploaded.includes(id))));
+    const extra = [...boardNotes, ...gm.notes, ...kept.notes, ...stuck.map((id) => `${nameOf(id, ctx, entries)} stays in ${spot}: ${frozenWhy(id, ctx, entries.find((e) => e.uploaded.includes(id)))}.`)];
+    if (onlyHolding && !holdsOne) extra.push(...forcedHere.map((id) => `Changed to reach ${nameOf(id, ctx)}'s at-least ${min.wants.find((w) => w.id === id).pct}%.`));
+    const pending = names.slice(k + 1).filter((later) => !spotBlocks(s, later, ctx).length);
+    const r = refill(s, spot, ctx, { ...fillOpts(spot), out: new Set([...unusableIn(s, spot), ...excluded, ...remove]), lock: plan.forced.get(spot) ?? [], limit: limits, overLimit: isGpp(spot) ? atLimit(limits.maxOf, s, spot, pending, ctx, isGpp, plan.forced) : new Set(), taken, extra });
+    outcomes.push(r.outcome);
+    if (r.state) s = r.state;
+    const gone = r.outcome.status === "changed" ? remove.filter((id) => before.includes(id) && !lineupOf(s, spot).includes(id)) : [];
+    if (gone.length) s = { ...s, unusable: { ...s.unusable, [spot]: [...new Set([...unusableIn(s, spot), ...gone])] } }; // only the spots this run changed
+  }
+  const over = overMax(limits.maxOf, s, ctx, isGpp);
+  return { state: noteOverMax(s, outcomes, over), outcomes, overMax: over, minResults: minLines(s, plan, names, ctx, outcomes), error: null };
+}
+
+/** The Min % plan for a run (min-pct.js), with this engine's searches and reasons. A spot's best fill is searched once per set of men held.
+ *  A man with a Max % is planned within it, in entries: what his Max allows less the GPP entries outside the scope holding him now. */
+function planFor(state, ctx, { names, wants, kept, gm, fillOpts, excluded, limits, isGpp, outOfTime }) {
+  if (!wants.length) return { forced: new Map(), plans: [] };
+  const seen = new Map();
+  const best = (spot, lock) => {
+    const key = `${spot}|${[...lock].sort().join(",")}`;
+    if (!seen.has(key)) {
+      const f = keptFill(state, spot, ctx, { ...fillOpts(spot), lock }, (a) => runFill({ ...a, settings: { ...a.settings, count: 1 } }), (x) => x.lineups?.[0]?.ids ?? null);
+      seen.set(key, f.fill.lineups ? { ids: f.fill.lineups[0].ids, score: fillScore(f.fill.lineups[0].ids, ctx) } : { why: f.fill.why });
+    }
+    return seen.get(key);
+  };
+  const whyNot = (id, spot) => {
+    const cannot = notAddableWhy(id, ctx);
+    if (cannot) return cannot.replace(/^.*?cannot be added: /, "").replace(/\.$/, "");
+    if (gm.games.has(ctx.man(id).game)) return "his game is excluded on this screen";
+    if (excluded.includes(id)) return "excluded on the board";
+    if (unusableIn(state, spot).includes(id)) return "he was taken out of that spot earlier";
+    if (!Number.isFinite(ctx.man(id).projection)) return "he has no projection, so what holding him costs cannot be weighed";
+    const blocks = spotBlocks(state, spot, ctx);
+    return blocks.length ? `the spot cannot be changed: ${blocks.join(" ")}` : null;
+  };
+  // A kept man counts where he will surely stay: frozen there by an entry, or kept with his game not started (a started one is not held, keptFill).
+  const sure = (id, spot) => id in spotPins(state, spot, ctx) || (kept.of(spot).includes(id) && !ctx.started.has(id) && !ctx.untimed.has(id));
+  const weight = (s) => spotEntries(state, s).length;
+  const maxFor = (id) => {
+    if (!limits.maxOf.has(id)) return null;
+    const outside = spotNames(state).filter((s) => !names.includes(s) && isGpp(s) && lineupOf(state, s).includes(id)).reduce((t, s) => t + weight(s), 0);
+    return { most: limits.maxOf.get(id) - outside, allowed: limits.maxOf.get(id), counts: isGpp };
+  };
+  return planMinimum({ names, weight, wants, total: names.reduce((t, s) => t + weight(s), 0), sure, whyNot, best, maxFor, outOfTime });
 }
