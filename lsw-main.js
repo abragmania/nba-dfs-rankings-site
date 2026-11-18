@@ -10,6 +10,7 @@ import { spotHtml } from "./lsw-spot.js";
 import { lineupName, entrySpotOptions, lineupOptions, entriesHtml, lineupsHtml, tabStatus, rangeBetween, numberInOrder, screenOrder, emptyRowIds, contestGroups } from "./lsw-maps.js";
 import { exportHtml } from "./lsw-export.js";
 import { gamesHtml, gameToggleBody } from "./lsw-games.js";
+import { byLineupHtml, byLineupClick, byLineupChange } from "./lsw-lineups.js";
 import { logo, shortTime, slateRefMs, topStamps, centralToMs, keepFocus } from "./board-util.js";
 import { showActive } from "./lineups-panel.js";
 import { loadSavedNames } from "./saved-panel.js";
@@ -202,7 +203,7 @@ function render() {
       : L.screen === "entries" ? entriesHtml(L.M, L)
         : L.screen === "lineups" ? lineupsHtml(L.M, L)
         : L.screen === "spot" ? spotHtml(L.M, L)
-          : L.screen === "export" ? exportHtml(L.M, L) : allHtml(L.M, L);
+          : L.screen === "export" ? exportHtml(L.M, L) : L.screen === "allOld" ? allHtml(L.M, L) : byLineupHtml(L.M, L); // step 3 is by lineup (Adam 6:17 PM 11-18)
   const y = window.scrollY;
   const sub = L.has && ["all", "spot", "export"].includes(L.screen) ? `<div class="subtabs"><button class="${L.screen === "export" ? "" : "on"}" data-lsw="go" data-s="all">Swap</button><button class="${L.screen === "export" ? "on" : ""}" data-lsw="go" data-s="export">Export</button></div>` : "";
   const kept = drawnScreen === L.screen ? [...root.querySelectorAll(HELD_BOXES)].map((b) => b.scrollTop) : null;
@@ -491,13 +492,14 @@ async function onClick(e) {
     case "exportSpots": { const live = livePicks(L.exportPick, L.M.spots); L.exportPick = new Set(live); if (!live.length) { L.msg = { kind: "warn", text: "Pick a spot that is still on the screen." }; return render(); } return doExport("changed", live); } // a spot removed since it was picked is not sent
     case "exportGo": { const x = L.exportAsk; if (x && Date.now() - x.armedAt >= 500) return doExport(x.kind, x.spots, { confirmed: true }); return; } // armed half a second, like the other go-aheads
     case "exportCancel": L.exportAsk = null; return render();
-    default:
+    default: await byLineupClick(a, d, { L, M, act, render, boardState });
   }
 }
 
 async function onChange(e) {
   const t = e.target;
   if (t.tagName === "SELECT") t.blur(); // a menu is let go of when it has been used, so polls and redraws are not held back by it
+  if (t.dataset.lswIn) return void (await byLineupChange(t, { L, M: L.M, act }));
   if (t.dataset.lswSel === "entrySpot") {
     let spot = t.value;
     if (spot === "__new" && !(spot = askSpot())) return render();
@@ -515,6 +517,7 @@ async function onChange(e) {
 }
 
 function onInput(e) {
+  if (e.target.dataset?.lswIn) return void byLineupChange(e.target, { L, M: L.M, act });
   if (e.target.id !== "lswBackup") return;
   L.backupText = e.target.value;
   const lab = backupLabels(L.M).find((x) => x.label === L.backupText);

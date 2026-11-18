@@ -214,7 +214,8 @@ function minutesFor(team, outSet, tonightSet, pins, flips, implicit = {}) {
   const flipFig = src === "twogun" ? null : src === "ours_edits" ? ours : oursFor(team, outSet, flips, {}, true); // a flipped man's chart figure is the rule's figure for him in his new role
   for (const p of team.men) {
     if (outSet.has(p.id)) { minutes[p.id] = 0; continue; }
-    if (own(typed, p.id)) { minutes[p.id] = typed[p.id]; basis[p.id] = "typed"; continue; }
+    // typed minutes never move a man in the bench order (Adam 6:28 PM 11-18): his label carries the engine's bench spot, worked as if nothing were typed (console-chart.js sorts the bench by it)
+    if (own(typed, p.id)) { minutes[p.id] = typed[p.id]; basis[p.id] = "typed"; const sp = (ours ?? flipFig)?.[p.id]?.label?.spot; label[p.id] = { kind: "typed", value: typed[p.id], spot: isNum(sp) ? sp : null }; continue; }
     const chartOwn = src === "ours_edits" && own(implicit, p.id) && !own(flips, p.id) ? ours?.[p.id] : null; // on Ours + my edits a man a flip moved has the chart's own figure
     if (chartOwn && isNum(chartOwn.min)) { minutes[p.id] = chartOwn.min; basis[p.id] = chartOwn.basis; flag[p.id] = chartOwn.flag ?? null; label[p.id] = chartOwn.label ?? null; fromOurs.add(p.id); if (chartOwn.median) median.add(p.id); continue; }
     if (own(moved, p.id)) {

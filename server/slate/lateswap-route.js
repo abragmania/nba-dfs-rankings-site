@@ -76,7 +76,7 @@ function modelFor(res, ctx, slate, slateData, saved, extra = {}) {
   if (!sl) return null;
   const model = buildModel(saved.state, { slate: sl, nowMs: ctx.now(), spotsFile: heldSpots(slate), meta: {
     uploadName: saved.uploadName, uploadedAt: saved.uploadedAt, exportedAt: saved.exportedAt, uploads: uploadsView(slate), syncNotes: saved.syncNotes ?? [],
-    pendingSpots: extra.pendingSpots ?? [], excludedGames: saved.excludedGames ?? [], keptMen: saved.keptMen ?? {}, pull: slateData.as_of?.pull_started ?? null, boardStamp: topStamps(slateData).board ?? null,
+    pendingSpots: extra.pendingSpots ?? [], excludedGames: saved.excludedGames ?? [], keptMen: saved.keptMen ?? {}, takeOut: saved.takeOut ?? [], atLeast: saved.atLeast ?? {}, pull: slateData.as_of?.pull_started ?? null, boardStamp: topStamps(slateData).board ?? null,
   } });
   if (!model.ok) { ctx.fail(res, 500, "LATESWAP_MODEL", model.error); return null; }
   if (model.file.uploads[0]) Object.assign(model.file.uploads[0], noteOf(model));

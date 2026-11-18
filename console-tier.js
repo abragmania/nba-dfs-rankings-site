@@ -7,18 +7,21 @@
 import { roleFigure, tierPlan, ovMinutesIn, typedTotalNote, ROLE_OF_TIER } from "./tiers.js";
 import { fiveWithMarks, marksNote, markOut } from "./role-marks.js";
 import { isNum } from "./figures.js";
-import { chartCols, tonightCols, columnTops, depthPlaces, healthyPlaces, fillEmpty, shortFiveFill } from "./depth-cols.js";
+import { chartCols, tonightCols, columnTops, depthPlaces, healthyPlaces, fillEmpty, balanceFive, shortFiveFill } from "./depth-cols.js";
 
-/** The team's depth chart on the page (Adam 11-17): the payload's seed with his moves (the page's own live list, team.depth_moves, else the saved one), as the engine builds it (depth-cols.js); null without one. */
-export function pageChart(team, ids = null) {
+/** The team's depth chart on the page (Adam 11-17): the payload's seed with his moves (the page's own live list, team.depth_moves, else the saved one), as the engine builds it (depth-cols.js); null without one. five (ids): balanced for display (balanceFive). */
+export function pageChart(team, ids = null, five = null) {
   const D = team.tier?.depth;
   if (!D) return null;
   const ch = chartCols(D.seed, Array.isArray(team.depth_moves) ? team.depth_moves : D.moves);
   if (!ids) return ch;
   // no empty column tonight (the lead, 11-17), as the engine fills it (depth-view.js): over tonight's playing men, guided by the pages' five the engine read
-  const present = new Set(ids.map((id) => keyOfId(team.tier, id)).filter(Boolean)), alts = Object.fromEntries(Object.entries(D.votes ?? {}).map(([k, v]) => [k, v.alts]));
-  const f = fillEmpty(ch, present, alts, new Set(D.likely ?? []), (k) => D.names?.[k] ?? k);
-  return Object.assign(f.chart, { fills: f.fills });
+  const present = new Set(ids.map((id) => keyOfId(team.tier, id)).filter(Boolean)), alts = Object.fromEntries(Object.entries(D.votes ?? {}).map(([k, v]) => [k, v.alts])), nameOf = (k) => D.names?.[k] ?? k;
+  const f = fillEmpty(ch, present, alts, new Set(D.likely ?? []), nameOf);
+  if (!five) return Object.assign(f.chart, { fills: f.fills });
+  // one starter at every position (Adam 6:26 PM 11-18), for the chart's display only (review of 11-18, finding 1): the five, every role and every minute come from the chart above, never from this
+  const b = balanceFive(f.chart, present, new Set([...five].map((id) => keyOfId(team.tier, id)).filter(Boolean)), alts, nameOf);
+  return Object.assign(b.chart, { fills: f.fills, shifts: b.shifts, blocked: b.blocked });
 }
 const keyOfId = (T, id) => T.men[id]?.key ?? null;
 /** Tonight's view of the chart over the men `ids` (console ids): { view, idOf: key -> id }. */

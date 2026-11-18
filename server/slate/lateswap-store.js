@@ -37,12 +37,15 @@ function screenChoices(w) {
   const games = w.excludedGames ?? [], kept = w.keptMen ?? {};
   if (!strings(games)) return { error: "The saved late swap state's excluded games are not readable." };
   if (typeof kept !== "object" || kept === null || Array.isArray(kept) || !Object.values(kept).every(strings)) return { error: "The saved late swap state's locked men are not readable." };
-  return { excludedGames: games, keptMen: kept };
+  const takeOut = w.takeOut ?? [], atLeast = w.atLeast ?? {};
+  if (!strings(takeOut)) return { error: "The saved late swap state's take-out list is not readable." };
+  if (typeof atLeast !== "object" || atLeast === null || Array.isArray(atLeast) || !Object.values(atLeast).every((p) => Number.isFinite(p))) return { error: "The saved late swap state's at-least list is not readable." };
+  return { excludedGames: games, keptMen: kept, takeOut, atLeast };
 }
 
 /** Writes the screen state atomically. */
 export function writeSaved(slate, saved) {
-  const w = { version: VERSION, slate, savedAt: new Date().toISOString(), uploadName: saved.uploadName ?? null, uploadedAt: saved.uploadedAt ?? null, exportedAt: saved.exportedAt ?? null, spotSync: saved.spotSync ?? {}, pendingSync: saved.pendingSync ?? {}, syncNotes: saved.syncNotes ?? [], excludedGames: saved.excludedGames ?? [], keptMen: saved.keptMen ?? {}, stateText: serializeState(saved.state) };
+  const w = { version: VERSION, slate, savedAt: new Date().toISOString(), uploadName: saved.uploadName ?? null, uploadedAt: saved.uploadedAt ?? null, exportedAt: saved.exportedAt ?? null, spotSync: saved.spotSync ?? {}, pendingSync: saved.pendingSync ?? {}, syncNotes: saved.syncNotes ?? [], excludedGames: saved.excludedGames ?? [], keptMen: saved.keptMen ?? {}, takeOut: saved.takeOut ?? [], atLeast: saved.atLeast ?? {}, stateText: serializeState(saved.state) };
   writeFileAtomic(stateFile(slate), JSON.stringify(w) + "\n");
 }
 

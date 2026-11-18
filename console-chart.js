@@ -1,9 +1,9 @@
 // Our depth chart on the console's team page (Adam 11-17, layout B, his third sketch, "yes" at 2:32 PM): five columns PG, SG, SF, PF and C, the starter on top, each man a chip with a drag handle, his name,
 // his minutes, his depth tag (S, 2nd, 3rd) and a B+ mark for a Bench+ man; under it the selected man's bar (up, down, position, Bench+) and the bench order the chart gives. The chart is the engine's own
-// (console-tier.js pageChart: the payload's seed with his moves), so what it shows is what the minutes use. On the public site it is read-only (no handles, no bar). Pure strings, tested in node.
+// (console-tier.js pageChart: the payload's seed with his moves), so what it shows is what the minutes use, save the display-only move of a starter into a column with none (balanceFive). On the public site it is read-only (no handles, no bar). Pure strings, tested in node.
 import { esc } from "./board-util.js";
 import { pageChart, chartView } from "./console-tier.js";
-import { POSITIONS, depthPlaces, fillNote, tonightCols } from "./depth-cols.js";
+import { POSITIONS, depthPlaces, fillNote, shiftNote, tonightCols } from "./depth-cols.js";
 
 const FILL_NOTE = /Our chart had no healthy man at /;
 
@@ -18,7 +18,7 @@ const lastName = (n) => { const w = String(n ?? "").trim().split(/\s+/); while (
  */
 export function chartModel(T, S, rows) {
   const team = { tier: T.tier, depth_moves: S.depth_moves }, playing = rows.filter((r) => !r.out && r.role !== "oor" && T.tier?.men?.[r.id]);
-  const ch = T.tier?.depth ? pageChart(team, playing.map((r) => r.id)) : null; // with tonight's fill of an empty column (the engine's own, console-tier.js)
+  const ch = T.tier?.depth ? pageChart(team, playing.map((r) => r.id), playing.filter((r) => r.role === "starter").map((r) => r.id)) : null; // with tonight's fill of an empty column and one starter at every position (console-tier.js; the balance is display only)
   if (!ch) return null;
   const { view, idOf } = chartView(team, ch, playing.map((r) => r.id));
   const byId = new Map(rows.map((r) => [r.id, r])), five = new Set(playing.filter((r) => r.role === "starter").map((r) => T.tier.men[r.id].key)), places = depthPlaces(view, five);
@@ -28,11 +28,14 @@ export function chartModel(T, S, rows) {
     return { id, key: k, name: short(name), full: name, min: r?.min ?? null, tag: places.get(k)?.tag ?? "", starter: five.has(k), bplus: r?.role === "bench_plus", words: D.votes?.[k]?.words ?? "no position source names him" };
   };
   const cols = POSITIONS.map((p) => { const men = view[p].map(manOf); return { pos: p, men, sum: men.reduce((s, m) => s + (isNum(m.min) ? m.min : 0), 0) }; });
-  const spot = (r) => (isNum(r.min_label?.spot) ? r.min_label.spot : 1e3);
-  const bench = playing.filter((r) => r.role !== "starter").sort((a, b) => spot(a) - spot(b) || (b.min ?? 0) - (a.min ?? 0)).map((r) => manOf(T.tier.men[r.id].key));
+  // the engine's bench spot, then the chart's own place (Bench+ first, then the 2nds, the 3rds; his place in the column), then name: never his minutes, so a typed number moves nobody (Adam 6:28 PM 11-18;
+  // review of 11-18, finding 5: the row carries no blend of its own)
+  const spot = (r) => (isNum(r.min_label?.spot) ? r.min_label.spot : 1e3), keyR = (r) => T.tier.men[r.id].key, group = (r) => (r.role === "bench_plus" ? 0 : places.get(keyR(r))?.rank ?? 99), idx = (r) => places.get(keyR(r))?.idx ?? 99;
+  const bench = playing.filter((r) => r.role !== "starter").sort((a, b) => spot(a) - spot(b) || group(a) - group(b) || idx(a) - idx(b) || String(a.p?.name ?? a.id).localeCompare(String(b.p?.name ?? b.id))).map((r) => manOf(keyR(r)));
   const keyOf = (id) => T.tier.men[id]?.key ?? null;
   const healthy = healthyView(T, team, rows, idOf, manOf, D, view, five);
-  const fill = fillNote(ch.fills ?? [], (k) => D.names?.[k] ?? k), notes = [...(D.notes ?? []).filter((n) => !FILL_NOTE.test(n)), ...(fill ? [`${T.code ?? "This team"}: ${fill}`] : [])]; // the live scenario's fill, not the read's
+  const fill = fillNote(ch.fills ?? [], (k) => D.names?.[k] ?? k), shift = shiftNote(ch.shifts ?? [], (k) => D.names?.[k] ?? k, ch.blocked ?? []);
+  const notes = [...(D.notes ?? []).filter((n) => !FILL_NOTE.test(n)), ...[fill, shift].filter(Boolean).map((n) => `${T.code ?? "This team"}: ${n}`)]; // the live scenario's fill and shift, not the read's
   return { cols, none: view.none.map(manOf), healthy, bench, view, posOf: (id) => (keyOf(id) ? ch.posOf.get(keyOf(id)) ?? null : null), sources: D.sources ?? [], notes, fills: ch.fills ?? [] };
 }
 
@@ -55,22 +58,16 @@ function healthyView(T, team, rows, idOf, manOf, D, view, five) {
     const r = outRow.get(k), full = r?.p?.name ?? nameOfKey.get(k) ?? D.names?.[k] ?? k;
     return { id: null, key: k, name: lastName(full), full, min: null, tag: "OUT", starter: false, bplus: false, absent: true, words: r ? "Out tonight" : "Not on tonight's player list (out for the season, suspended or otherwise away)" };
   };
-  // Adam 4:24 PM 11-18: every column tops with tonight's starter (green S), never an Out man above a present starter. A column with no starter tonight takes one from a column holding two (the man whose slot he took, else a
-  // man listed at that position, else the last of them), shown there only with "for <the Out man>"; the Out men then sit at their usual rank below the starter(s), the bench men in the healthy chart's order.
-  const starts = Object.fromEntries(POSITIONS.map((p) => [p, view[p].filter((k) => five.has(k))])), forOf = new Map();
-  const full = (k) => man(k).full, meta = (k) => T.tier.men[idOf.get(k)];
-  for (const p of POSITIONS) {
-    if (starts[p].length) continue;
-    const top = hv[p].find((k) => !playingKeys.has(k)), donors = POSITIONS.filter((q) => starts[q].length > 1).flatMap((q) => starts[q].map((k) => ({ k, q })));
-    const pick = donors.find((d) => top && meta(d.k)?.replaced?.name === full(top)) ?? donors.find((d) => meta(d.k)?.positions?.includes(p)) ?? donors.at(-1);
-    if (!pick) continue;
-    starts[pick.q] = starts[pick.q].filter((k) => k !== pick.k);
-    starts[p] = [pick.k];
-    if (top) forOf.set(pick.k, full(top));
-  }
+  // tonight's starter(s) of each column, straight from tonight's balanced view (balanceFive, the one copy of the rule: review of 11-18, finding 3), so both views always agree
+  const starts = Object.fromEntries(POSITIONS.map((p) => [p, view[p].filter((k) => five.has(k))])), forOf = new Map(), full = (k) => man(k).full;
   const tops = new Set(POSITIONS.flatMap((p) => starts[p]));
+  // Adam 6:38 PM 11-18 (Show injured is where everyone normally slots): each column tops with its NORMAL starter, the healthy chart's first man there (unless he starts tonight in another column), even when he is
+  // Out (greyed, OUT, marked "starter"); tonight's starter of the column sits right under him with the green S and "for <him>" (Adam 4:24 PM: someone has to be starting); then the rest in the healthy chart's order.
   const cols = POSITIONS.map((p) => {
-    const men = [...starts[p].map((k) => ({ ...manOf(k), forName: forOf.get(k) ?? null })), ...hv[p].filter((k) => !tops.has(k)).map(man)];
+    const norm = hv[p].find((k) => !tops.has(k) || starts[p].includes(k)) ?? null, lead = norm && !starts[p].includes(norm) ? norm : null;
+    if (lead) for (const k of starts[p]) forOf.set(k, full(lead));
+    const head = lead ? [{ ...man(lead), normal: true }] : [];
+    const men = [...head, ...starts[p].map((k) => ({ ...manOf(k), forName: forOf.get(k) ?? null })), ...hv[p].filter((k) => !tops.has(k) && k !== lead).map(man)];
     return { pos: p, men, sum: men.reduce((t, m) => t + (isNum(m.min) ? m.min : 0), 0) };
   });
   const bare = rows.filter((r) => r.out && !keyOfId(r.id)).map((r) => { const full = r.p?.name ?? r.id; return { id: null, key: `out:${r.id}`, name: lastName(full), full, min: null, tag: "OUT", starter: false, bplus: false, absent: true, words: "Out tonight; no position source or minutes inputs name him" }; }); // an Out man the chart and the engine hold nothing on (out for the season): kept, under No position (G62)
@@ -80,7 +77,7 @@ function healthyView(T, team, rows, idOf, manOf, D, view, five) {
 
 /** One chip. sel: the selected man's id; ro: read-only. */
 function chip(code, m, sel, ro) {
-  if (m.absent) return `<div class="dc dc-out dc-ro" data-dout="${esc(m.key)}" data-team="${esc(code)}" title="${esc(`${m.full}: ${m.words}. Shown on the healthy chart only; he is not in tonight's minutes`)}"><span class="dc-nn">${esc(m.name)}</span><span class="dc-tag">OUT</span><span class="dc-mm">out</span></div>`;
+  if (m.absent) return `<div class="dc dc-out dc-ro" data-dout="${esc(m.key)}" data-team="${esc(code)}" title="${esc(`${m.full}: ${m.words}. Shown on the healthy chart only; he is not in tonight's minutes`)}"><span class="dc-nn">${esc(m.name)}</span><span class="dc-tag">OUT</span><span class="dc-mm">out${m.normal ? ` <i class="dc-ns">starter</i>` : ""}</span></div>`;
   const cls = `dc${m.starter ? " dc-st" : ""}${m.id === sel ? " dc-sel" : ""}${ro ? " dc-ro" : ""}`; // every class here is dc-: the board's own .st, .sel and .on must not reach the chart
   const handle = ro ? "" : `<span class="dc-gr" aria-hidden="true">&#10303;</span>`;
   return `<div class="${cls}"${ro ? "" : ` draggable="true" tabindex="0"`} data-dchip="${esc(m.id)}" data-team="${esc(code)}" title="${esc(`${m.full}: ${m.words}${ro ? "" : ". Drag him, or click him and use the bar below"}`)}">${handle}<span class="dc-nn">${esc(m.name)}</span><span class="dc-tag">${esc(m.tag)}</span><span class="dc-mm">${f1(m.min)} min${m.bplus ? ` <i class="dc-bp dc-on">B+</i>` : ""}</span>${m.forName ? `<span class="dc-for">for ${esc(lastName(m.forName))}</span>` : ""}</div>`;

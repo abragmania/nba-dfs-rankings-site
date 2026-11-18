@@ -287,6 +287,24 @@ function setKeptMen(saved, body, slate, nowMs) {
   return { saved: { ...saved, keptMen: list.length ? { ...rest, [body.spot]: [...new Set(list)] } : rest } };
 }
 
+/** The screen's two lists, set whole: takeOut [dk_id] (left out of every option and re-optimize) and atLeast { dk_id: percent }. A man
+ *  dropped from takeOut is usable again in every spot he was taken out of. { saved } or { error }. */
+function setLists(saved, body, slate, nowMs) {
+  const s = saved.state, { takeOut, atLeast } = body;
+  if (!Array.isArray(takeOut) || !takeOut.every((id) => typeof id === "string" && id)) return { error: "The take-out list must be DraftKings ids." };
+  if (!atLeast || typeof atLeast !== "object" || Array.isArray(atLeast) || !Object.values(atLeast).every((p) => Number.isFinite(p) && p > 0 && p <= 100)) return { error: "Put in at least takes a percent from 1 to 100 for each man." };
+  const { ctx, error } = contextFor(s, slate, nowMs);
+  if (error) return { error };
+  const off = [...takeOut, ...Object.keys(atLeast)].filter((id) => !ctx.man(id));
+  if (off.length) return { error: `${off.join(", ")} ${off.length === 1 ? "is" : "are"} not on this slate.` };
+  const both = takeOut.filter((id) => Object.hasOwn(atLeast, id));
+  if (both.length) return { error: `${both.map((id) => nameOf(id, ctx)).join(", ")} cannot be taken out and put in at once.` };
+  const back = (saved.takeOut ?? []).filter((id) => !takeOut.includes(id));
+  let st = s;
+  for (const spot of spotNames(st)) for (const id of back) if (unusableIn(st, spot).includes(id)) st = restoreUsable(st, { spot, man: id }).state;
+  return { saved: { ...saved, state: st, takeOut: [...new Set(takeOut)], atLeast: { ...atLeast } } };
+}
+
 function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {}, picks = null }) {
   const s = saved.state;
   const done = (r, extra = {}) => {
@@ -379,8 +397,17 @@ function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {},
       const r = setExcludedGames(saved, body, slate, nowMs);
       return r.error ? refused(saved, r.error) : { saved: r.saved, outcomes: [], error: null };
     }
-    case "keepMen": {
-      const r = setKeptMen(saved, body, slate, nowMs);
+    case "keepMen": { // spots: the same lock for every spot holding one lineup (the screen's card stands for all of them)
+      let cur = saved;
+      for (const spot of Array.isArray(body.spots) ? body.spots : [body.spot]) {
+        const r = setKeptMen(cur, { ...body, spot }, slate, nowMs);
+        if (r.error) return refused(saved, r.error);
+        cur = r.saved;
+      }
+      return { saved: cur, outcomes: [], error: null };
+    }
+    case "lists": {
+      const r = setLists(saved, body, slate, nowMs);
       return r.error ? refused(saved, r.error) : { saved: r.saved, outcomes: [], error: null };
     }
     case "swap": return done(confirmable((ok) => handSwap(s, { spot: body.spot, slot: body.slot, inId: body.inId, confirmOut: ok, slate, nowMs }), body));

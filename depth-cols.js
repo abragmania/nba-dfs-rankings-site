@@ -85,7 +85,48 @@ export function fillEmpty(chart, present, alts, likely = new Set(), nameOf = (k)
   return { chart: { cols, none, posOf, moved: chart.moved, bad: chart.bad ?? [] }, fills };
 }
 
-/** The team note on each fill (fillEmpty): "Our chart had no healthy SF tonight: Kevin Huerter moved there from SG (his next-best vote); move him back on the chart to undo it". */
+/**
+ * One starter at every position (Adam 6:26 PM 11-18: "There's supposed to be a starter at every position on the DC"; 3:02 PM: an Out starter's spot is taken by the next man up). For the chart's DISPLAY only (the
+ * five, roles and minutes come from the chart before it: review of 11-18, finding 1). After fillEmpty, a column holding none of tonight's `five` (Set of keys) takes one of the five who sits in a column holding
+ * two or more of them, or in no column; a man starting tonight never leaves a column where he is the only starter, and a man Adam moved never moves (his moves stand, as in fillEmpty).
+ * Best fit first, over every such column and man: the higher vote or listing for that column (alts), then ESPN's place there, then the lower man in his column (that column keeps its top starter), then PG..C
+ * order, then name. With fewer of the five here than columns (a short five), only a man with a vote or listing there moves (the short-five fill covers the rest). He goes directly above the column's first present
+ * man, so he tops tonight's view and the Out men keep their healthy places. Returns { chart, shifts: [{ key, from (null: no position), to, over (the man Adam moved who topped that column, or null) }],
+ * blocked: [{ pos, keys (the spare starters left where Adam moved them) }] (a column still with no starter only because of his moves) }. Pure.
+ */
+export function balanceFive(chart, present, five, alts = {}, nameOf = (k) => k) {
+  const cols = Object.fromEntries(POSITIONS.map((p) => [p, [...chart.cols[p]]])), posOf = new Map(chart.posOf);
+  let none = [...chart.none];
+  const shifts = [], starts = (p) => cols[p].filter((k) => present.has(k) && five.has(k)), moved = chart.moved ?? new Set();
+  const short = [...five].filter((k) => present.has(k)).length < POSITIONS.length;
+  const spare = () => [...none.filter((k) => present.has(k) && five.has(k)), ...POSITIONS.filter((q) => starts(q).length > 1).flatMap((q) => starts(q))];
+  for (;;) {
+    const empty = POSITIONS.filter((p) => !starts(p).length), donors = spare().filter((k) => !moved.has(k));
+    const pairs = empty.flatMap((p) => donors.map((k) => {
+      const from = posOf.get(k) ?? null, a = alts?.[k]?.[p];
+      return { k, p, from, score: a?.score ?? 0, espn: Number.isInteger(a?.espn) ? a.espn : 99, idx: from ? cols[from].indexOf(k) : -1 };
+    })).filter((x) => !short || x.score > 0)
+      .sort((x, y) => y.score - x.score || x.espn - y.espn || y.idx - x.idx || POSITIONS.indexOf(x.p) - POSITIONS.indexOf(y.p) || String(nameOf(x.k)).localeCompare(String(nameOf(y.k))));
+    const d = pairs[0];
+    if (!d) break; // the five cannot spread further: each column left keeps its order (a short five's fill covers it)
+    if (d.from) cols[d.from] = cols[d.from].filter((k) => k !== d.k); else none = none.filter((k) => k !== d.k);
+    const at = cols[d.p].findIndex((k) => present.has(k)), top = at < 0 ? null : cols[d.p][at];
+    cols[d.p].splice(at < 0 ? cols[d.p].length : at, 0, d.k);
+    posOf.set(d.k, d.p);
+    shifts.push({ key: d.k, from: d.from, to: d.p, over: top && moved.has(top) ? top : null });
+  }
+  const held = spare().filter((k) => moved.has(k)), blocked = held.length ? POSITIONS.filter((p) => !starts(p).length).map((pos) => ({ pos, keys: held })) : [];
+  return { chart: { cols, none, posOf, moved: chart.moved, bad: chart.bad ?? [] }, shifts, blocked };
+}
+
+/** The team note on the shifts and blocked columns (balanceFive): "One starter at every position tonight: Quenton Jackson moved to PG from SG (SG holds two of tonight's five and PG none)". */
+export function shiftNote(shifts, nameOf, blocked = []) {
+  const said = shifts.map((s) => `${nameOf(s.key)} moved to ${s.to} from ${s.from ?? "no position"} (${s.from ? `${s.from} holds two of tonight's five and ${s.to} none` : `he has no position and ${s.to} has no starter`})${s.over ? `; he starts at ${s.to} above your move of ${nameOf(s.over)}` : ""}`);
+  const held = blocked.map((b) => `${b.pos} has no starter tonight: the spare starter${b.keys.length === 1 ? ", " : "s, "}${b.keys.map(nameOf).join(" and ")}, ${b.keys.length === 1 ? "is" : "are"} where you moved ${b.keys.length === 1 ? "him" : "them"}, and your moves stand`);
+  return said.length || held.length ? [said.length ? `One starter at every position tonight: ${said.join("; ")}` : null, ...held].filter(Boolean).join(". ") : null;
+}
+
+/** The team note on each fill (fillEmpty):"Our chart had no healthy SF tonight: Kevin Huerter moved there from SG (his next-best vote); move him back on the chart to undo it". */
 export const fillNote = (fills, nameOf) => (fills.length ? `Our chart had no healthy man at ${fills.map((f) => f.to).join(" and ")} tonight: ${fills.map((f) => `${nameOf(f.key)} moved to ${f.to} from ${f.from ?? "no position"}`).join("; ")} (his next-best vote there; your own move overrides it)` : null);
 
 /** Tonight's view: the chart cut to the men in `present` (a Set of keys), in chart order; a present man the chart does not hold goes to `none`. { PG: [keys], ..., none: [keys] }. Pure. */
