@@ -306,13 +306,17 @@ function renderGames() {
   fitGames();
 }
 
-/** The game tiles in as few rows as fit, split evenly (11 games on one row where the page is wide; 6 and 5 where it holds only 8). */
-const GAME_MIN = 212; // a tile's content at its narrowest (logo, code, spread, implied points); a column never goes below it, so the text stays inside the box
+/** The game boxes fill the strip's full width: one row when every game fits at the box floor, else two rows with row 1 filled first (Adam 7:21 PM 11-18).
+ *  Never a third row. GAME_MIN_REM is a box's content at its narrowest (tip, O/U, logo, code, spread, implied points), measured in the browser
+ *  with the game CSS (board.css .game, .side): nothing cut at that width. GAP_REM is the strip's gap (board.css .games). */
+const GAME_MIN_REM = 12.27, GAP_REM = 0.5;
 function fitGames() {
   const el = $("games"), n = el.children.length;
   if (!n || !el.clientWidth) return;
-  const s = remScale(), fit = Math.max(1, Math.floor((el.clientWidth + 8 * s) / ((GAME_MIN + 8) * s))), cols = Math.ceil(n / Math.ceil(n / fit));
-  el.style.gridTemplateColumns = `repeat(${cols}, minmax(${GAME_MIN / 16}rem, 14.75rem))`;
+  const px = remScale() * 16; // one rem in px at this root size
+  const cap = Math.max(1, Math.floor((el.clientWidth + GAP_REM * px) / (GAME_MIN_REM * px + GAP_REM * px))); // most boxes one row holds at the floor
+  const cols = n <= cap ? n : n <= 2 * cap ? cap : Math.ceil(n / 2); // row 1 filled first; past 2 rows the boxes would need to be narrower
+  el.style.gridTemplateColumns = `repeat(${cols}, minmax(${GAME_MIN_REM}rem, 1fr))`;
 }
 
 // ---------- table ----------

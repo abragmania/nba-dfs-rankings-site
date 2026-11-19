@@ -104,12 +104,28 @@ function wkRowHtml({ slot, p, dash, colourOf, cls, attrs, ctl, note, emptyLabel,
 }
 
 /**
+ * The Lineups tab's game stamp on a card row (Adam 11-18, form 7:07 PM): the man's opponent ("@CLE" when his team is away, "vs CLE"
+ * when home, derived from the game "MEM@CLE": the team before the @ is away) and his tip time from when(tip) ("7:00pm"). A game that
+ * has started (`started`, a Set of dk_ids) shows its time dimmed. A missing game, tip or a team not in its game is the board's dash
+ * with its reason (RULES R1). Pure.
+ */
+export function gameStampHtml(p, { when = null, started = null, dash }) {
+  const [away, home] = String(p.game ?? "").split("@");
+  const opp = !p.game ? null : p.team === away && home ? `@${home}` : p.team === home && away ? `vs ${away}` : null;
+  const matchup = !p.game ? dash("no game in this slate file") : opp ? esc(opp) : dash("his team is not in this game");
+  const t = p.tip ? (when ? when(p.tip) : p.tip) : null;
+  const time = t ? `<span class="gtm${started?.has(p.dk_id) ? " gst" : ""}">${esc(t)}</span>` : dash("no tip time in this slate file");
+  return `<span class="gmx" title="${esc(p.game ?? "")}">${matchup} ${time}</span>`;
+}
+
+/**
  * One row. p: a slate player, undefined (an open slot) or null / { dk_id, stale } (no longer on the slate). `ctl` is the
  * control cell's markup ("" for an empty one); null draws no control column (the result cards). `cls` and `attrs` add the
  * caller's classes and attributes; `note` follows the matchup on the second line. colourOf(team) gives the team treatment.
- * `emptyLabel` is what an open slot reads (`Empty` unless the lineup's own state is not known yet).
+ * `emptyLabel` is what an open slot reads (`Empty` unless the lineup's own state is not known yet). `stamp` is the game stamp
+ * (gameStampHtml) a lead-logo row carries after its name; "" draws none.
  */
-export function cardRowHtml({ slot, p, dash, colourOf = null, cls = "", attrs = "", ctl = null, note = "", emptyLabel = "Empty", lead = "slot", corr = null, wk = false, when = null }) {
+export function cardRowHtml({ slot, p, dash, colourOf = null, cls = "", attrs = "", ctl = null, note = "", emptyLabel = "Empty", lead = "slot", corr = null, wk = false, when = null, stamp = "" }) {
   if (wk) return wkRowHtml({ slot, p, dash, colourOf, cls, attrs, ctl, note, emptyLabel, when });
   // lead "logo" (the Lineups tab's cards): the same boxed slot first, then the logo; the compact grid and hidden position/matchup are lineups.css.
   const logoLead = lead === "logo";
@@ -123,7 +139,7 @@ export function cardRowHtml({ slot, p, dash, colourOf = null, cls = "", attrs = 
     return row(" stale", "", `<span></span><div class="sn"><b>${p?.name ? `${esc(p.name)} · ${esc(note || "off the slate")}` : "Not on this slate"}</b>${id}</div>${ctlCell}${fig("ss", "Sal", gone)}${fig("sp", "Proj", gone)}${fig("so", "Own", gone)}`);
   }
   const matchup = p.oppText ? esc(p.oppText) : dash("no opponent in this slate file");
-  return row(colourOf ? " tm" : "", teamAttr(p.team, colourOf), `${logo(p.team, "sm")}<div class="sn"><div class="sn1">${nameLink(p, "", shortName(p.name))}${restDot(p)}${p.positions?.length ? `<span class="pos">${esc(p.positions.join("/"))}</span>` : ""}${statusBadge(p)}${chip}</div><small>${esc(p.team)} ${matchup}${note ? ` · ${esc(note)}` : ""}</small></div>${ctlCell}`
+  return row(colourOf ? " tm" : "", teamAttr(p.team, colourOf), `${logo(p.team, "sm")}<div class="sn"><div class="sn1">${nameLink(p, "", shortName(p.name))}${restDot(p)}${p.positions?.length ? `<span class="pos">${esc(p.positions.join("/"))}</span>` : ""}${statusBadge(p)}${chip}${stamp}</div><small>${esc(p.team)} ${matchup}${note ? ` · ${esc(note)}` : ""}</small></div>${ctlCell}`
     + fig("ss", "Sal", p.salary == null ? dash("no salary in this slate file") : money(p.salary))
     + fig("sp", "Proj", p.projection == null ? dash("no projection in this pull") : p.projection.toFixed(1))
     + fig("so", "Own", p.proj_own == null ? dash("no projected ownership in this pull") : p.proj_own.toFixed(1) + "%"));

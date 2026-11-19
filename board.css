@@ -34,7 +34,7 @@ button{cursor:pointer}
 .slate{background:var(--p2);border:1px solid var(--ln);padding:0.25rem 0.625rem;font-weight:700}
 .games{display:grid;grid-template-columns:repeat(auto-fill,14.75rem);justify-content:start;gap:0.5rem;margin:0.5rem 0 0.5rem}
 .games:empty{display:none}
-.game{padding:0.3125rem 0.625rem 0.3125rem;border:1px solid var(--ln);background:var(--p);cursor:pointer;min-width:0}
+.game{padding:0.3125rem 0.4375rem 0.3125rem;border:1px solid var(--ln);background:var(--p);cursor:pointer;min-width:0}
 .game:hover{background:var(--p2)}
 .game.sel{background:linear-gradient(180deg,#1a1405,var(--p));box-shadow:inset 0 0.125rem 0 var(--am)}
 /* Lineup-confirmed border (Adam 11-13): 1px, the away half left and the home half right; green = five confirmed, amber = not. The card colour is the padding-box layer. */
@@ -44,7 +44,7 @@ button{cursor:pointer}
 .gh{display:flex;justify-content:flex-start;gap:1rem;align-items:center;font-size:0.7188rem;color:var(--mu);margin-bottom:0.125rem;white-space:nowrap}
 .side{white-space:nowrap}
 .gh .tip{color:var(--am);font-weight:700}
-.side{display:grid;grid-template-columns:1.625rem 2.375rem 2.875rem auto;justify-content:start;align-items:center;gap:0.5rem;padding:0.0625rem 0.625rem 0.0625rem 0.5rem;margin-top:0.125rem;box-shadow:inset 0.1875rem 0 var(--t1);background:linear-gradient(90deg,color-mix(in srgb,var(--t1) 11%,transparent),color-mix(in srgb,var(--t1) 3%,transparent))}
+.side{display:grid;grid-template-columns:1.625rem 2.25rem 2.5rem auto;justify-content:start;align-items:center;gap:0.25rem;padding:0.0625rem 0.375rem 0.0625rem 0.375rem;margin-top:0.125rem;box-shadow:inset 0.1875rem 0 var(--t1);background:linear-gradient(90deg,color-mix(in srgb,var(--t1) 11%,transparent),color-mix(in srgb,var(--t1) 3%,transparent))}
 .code{font-weight:800;font-size:0.875rem}
 .code.b2b2{color:var(--or)} /* second night of a back-to-back (Adam 11-14: a colour on the team code, a dot beside each man, no chip) */
 .code.b2b1{color:var(--bl)} /* plays again tomorrow */

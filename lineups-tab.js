@@ -4,9 +4,9 @@
 // field, Filter, sort, swap buttons and download, plus the mode filter. Everything here is pure (markup strings and lists);
 // panel.js draws it and handles its clicks. A card row is the shared one (card-row.js) with the team logo leading, the team's
 // tint, the slot as small muted text and a CORR chip on a game stack (corr.js).
-import { esc, money, isoToEastern, nameOpen, outNameOpen } from "./board-util.js";
+import { esc, money, isoToEastern, nameOpen, outNameOpen, slateRefMs, shortTime } from "./board-util.js";
 import { SLOTS } from "./slots.js";
-import { cardRowHtml, capLine, totals, lineupTag, isOutNow } from "./card-row.js";
+import { cardRowHtml, capLine, totals, lineupTag, isOutNow, gameStampHtml } from "./card-row.js";
 import { outFor } from "./figures.js";
 import { gameStacks } from "./corr.js";
 import { exposureRows, exposureHtml, starredCounts, starStripHtml, setKey, savedKey, savedKeys, builtFigures } from "./lineups-list.js";
@@ -188,7 +188,7 @@ export function summaryCells(list, { view }) {
 
 const summaryHtml = (cells, dash) => `<div class="lt-sum">${cells.map(([l, v]) => `<div><small>${esc(l)}</small><b>${v == null ? dash(`no ${l.toLowerCase()} to show`) : esc(v)}</b></div>`).join("")}</div>`;
 
-function cardHtml(e, { byId, dash, colourOf, swap, locked, savedSet, names, edit, spots, spotMenu, saved, spotWarn, spotsReady, spotText, tagOf, live, held = null }) {
+function cardHtml(e, { byId, dash, colourOf, chipWhen, swap, locked, savedSet, names, edit, spots, spotMenu, saved, spotWarn, spotsReady, spotText, tagOf, live, held = null }) {
   const spotCtx = { spots, spotMenu, saved, names, warn: spotWarn, ready: spotsReady, text: spotText };
   // The red banner reads the board now: a built card holds its men as built, so a man who went Out since is found by his live row.
   const bannerMen = e.kind === "build" && live ? e.men.map((p) => (p && !p.stale ? (live.get(p.dk_id) ?? { dk_id: p.dk_id, stale: true, name: p.name }) : p)) : e.men;
@@ -197,7 +197,7 @@ function cardHtml(e, { byId, dash, colourOf, swap, locked, savedSet, names, edit
   const rows = SLOTS.map((s, k) => {
     const p = e.men[k], lk = e.kind === "build" && locked.has(p?.dk_id), tag = tagOf(e.kind, p);
     const star = p?.dk_id != null && live?.get(p.dk_id)?.starred === true; // the star on the board now, not the one a frozen build row carried
-    return cardRowHtml({ slot: s, p, dash, colourOf, lead: "logo", cls: `lr${lk ? " locked" : ""}${tag ? " gonetag" : ""}${heldRow(p, held) ? " held" : ""}${star ? " starred" : ""}`, note: [lk ? "locked" : "", tag ?? ""].filter(Boolean).join(" · "), corr: stacks.get(p?.dk_id) ?? null, ctl: swapButtonHtml(p, e.key, swap.ctx, open, lineupStarted(e.men, swap.ctx)) })
+    return cardRowHtml({ slot: s, p, dash, colourOf, lead: "logo", stamp: p && !p.stale ? gameStampHtml(p, { when: chipWhen, started: swap.ctx?.started ?? null, dash }) : "", cls: `lr${lk ? " locked" : ""}${tag ? " gonetag" : ""}${heldRow(p, held) ? " held" : ""}${star ? " starred" : ""}`, note: [lk ? "locked" : "", tag ?? ""].filter(Boolean).join(" · "), corr: stacks.get(p?.dk_id) ?? null, ctl: swapButtonHtml(p, e.key, swap.ctx, open, lineupStarted(e.men, swap.ctx)) })
       + (open && p?.dk_id === open ? swapPanelHtml(swapOptions(e.ids, open, swap.ctx), e.key, dash) : "");
   }).join("");
   const foot = capLine(e.men.map((p) => (p?.stale ? null : p)), { dash, short: true });
@@ -300,6 +300,8 @@ function otherSavedHtml(groups, ctx, open) {
  */
 export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
   const { lists, view, all, inMode, shown, others } = viewModel(P, c, seat);
+  const chipRef = slateRefMs(c.name) ?? Date.now(); // a card's tip is Eastern, read against the slate's own date
+  const chipWhen = (s) => (shortTime(s, chipRef) ?? "").replace(/ ([AP]M) ET$/, (_, ap) => ap.toLowerCase()); // "7:00 PM ET" -> "7:00pm"
   const run = P.running ? (() => { const m = buildMessage(P.build); return `<div class="lt-run lt-build"><span class="gomsg${m.err ? " err" : ""}">${esc(m.text)}</span>${P.build?.shown ? `<button class="ol stop" data-op="stop"${P.build.stopping ? " disabled" : ""}>Stop</button>` : ""}</div>`; })() : "";
   if (P.ls) return `${run}<div class="lt-empty">Late swap mode is on; its lineups are on the Player list tab. <button class="ol sm" data-op="lsoff" title="Leave late swap mode (the same as the Pin slots button in the header)">Turn late swap mode off</button><button class="ol sm" data-view="list">Back to the player list</button></div>`;
   const savedSet = savedKeys((P.saved ?? []).filter((l) => !l.swapped));
@@ -341,7 +343,7 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
     const sort = shown.length === 1 && P.expSort.key === "diff" ? { key: "pct", dir: -1 } : P.expSort;
     // You vs field and Diff are GPP figures: a list of Cash lineups alone does not show them.
     const ex = shown.length ? exposureHtml(rows, sort, dash, men, P.expPos, shown.length > 1 && shown.some((e) => e.mode === "GPP"), grayOn) : "";
-    const ctx = { byId: figures, live: c.byId, tagOf, spotText: P.spotText ?? null, dash, colourOf: c.colourOf, swap: { ctx: swapCtx, open: P.swap ?? null }, locked: new Set(c.picks.locked), savedSet, names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true, held: grayOn ? new Set(men) : null };
+    const ctx = { byId: figures, live: c.byId, tagOf, spotText: P.spotText ?? null, dash, colourOf: c.colourOf, chipWhen, swap: { ctx: swapCtx, open: P.swap ?? null }, locked: new Set(c.picks.locked), savedSet, names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true, held: grayOn ? new Set(men) : null };
     const counted = men.length ? `${shown.length} of ${inMode.length} lineup${inMode.length === 1 ? "" : "s"} holding all ${men.length === 1 ? "of him" : `${men.length} men`}` : `${inMode.length} lineup${inMode.length === 1 ? "" : "s"}`;
     const none = men.length
       ? `<div class="lt-empty">No lineup holds all of ${men.map((id) => esc(figures.get(id)?.name ?? id)).join(", ")}. <button class="ol sm lt-clear" data-op="menclear">Clear all</button></div>`
@@ -374,7 +376,7 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
   const undo = view === "saved" && P.spotUndo ? `<div class="lt-run"><span>${esc(P.spotUndo.text)}</span><button class="ol sm" data-op="orderundo">Undo</button><button class="ol sm" data-op="orderokay">Keep</button></div>` : "";
   // The panel's notes and stale warnings sit at the foot of the tab; they belong to the last build made on this page in the panel's mode, not to every build below.
   const noted = notes ? `<div class="lt-notes"><em>The last ${esc(P.mode)} build made on this page:</em>${notes}</div>` : "";
-  const otherHtml = others.length && !readErr ? otherSavedHtml(others, { byId: c.byId, live: c.byId, tagOf: (kind, p) => (isOutNow(p) ? "now Out" : lineupTag(p, c.byId, c.outNames)), spotText: P.spotText ?? null, dash, colourOf: c.colourOf, swap: { ctx: swapCtx, open: P.swap ?? null }, locked: new Set(c.picks.locked), savedSet, names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true, held: null }, P.lt.openOther ?? []) : "";
+  const otherHtml = others.length && !readErr ? otherSavedHtml(others, { byId: c.byId, live: c.byId, tagOf: (kind, p) => (isOutNow(p) ? "now Out" : lineupTag(p, c.byId, c.outNames)), spotText: P.spotText ?? null, dash, colourOf: c.colourOf, chipWhen, swap: { ctx: swapCtx, open: P.swap ?? null }, locked: new Set(c.picks.locked), savedSet, names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true, held: null }, P.lt.openOther ?? []) : "";
   const away = lists.buildOther ? `<div class="lt-away">The last build is ${esc(lists.buildOther.mode)} (${lists.buildOther.n} lineup${lists.buildOther.n === 1 ? "" : "s"}); switch the board to ${esc(lists.buildOther.mode)} to see it.</div>` : "";
   const stars = starStripHtml(starredCounts(inMode.map((e) => e.ids), c.byId)); // every starred man and how many of these lineups hold him
   return `${run}${view === "build" ? readNote : ow + undo + mv}<div class="lt-top">${strip}<span class="lt-acts">${saveAll}${dl}</span></div>${top}${stars}${body}${otherHtml}${away}${view === "build" ? noted : ""}`;
