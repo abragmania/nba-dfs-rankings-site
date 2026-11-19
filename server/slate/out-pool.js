@@ -87,9 +87,30 @@ function poolRow(p, data, out) {
   return { row: {
     dk_id: String(p.id), name: p.name, team: p.team, opponent: p.opp ?? null, game: p.game, positions: p.pos.split("/"), roster_positions: p.slots, tip,
     salary: p.sal, minutes: null, projection: null, ceiling: null, value: null, proj_own: null, own_note: "TwoGun's ownership for him was made while he was Out, so it is not used; type one to have it counted",
-    injury_status: out?.status ?? "Out", starter: false,
+    injury_status: null, tg_status: out?.status ?? "OUT", starter: false, // TwoGun's Out word for reference only: our own injury feeds decide (Adam 11-19, 3:18 PM ET)
     dd_pct: null, td_pct: null, no_history: null, out_pool: true, out_reason: out?.reason ?? null, usual_minutes: isNum(out?.usual_minutes) ? out.usual_minutes : null,
   } };
+}
+
+/**
+ * TwoGun's Out list joined into the pool (Adam 11-19, 3:18 PM ET: "DO NOT TRUST TWOGUN. DO NOT TRUST MOTHERFUCKING DRAFTKINGS"). TwoGun drops from its board the men it, or DraftKings, calls Out, so
+ * every Out-list man the board row can give (DraftKings id, salary, positions, roster slots) is added to players as an out_pool row with no status of TwoGun's, and our minutes engine decides from
+ * our own injury feeds whether he plays (minutes/inputs.js newsOutsOf). A man the row cannot give stays on data.out with pool_note and is named in data.out_pool.unbuildable with the reason (G62:
+ * said, never dropped). data.tg_out keeps TwoGun's whole Out list as read, for reference only. A read already joined, or a man already on players, is not added twice. Never throws.
+ */
+export function joinOutList(data) {
+  if (!data || !Array.isArray(data.players) || !Array.isArray(data.out) || !data.out.length || data.out_pool) return data;
+  const men = outRowMen(data), onSlate = new Set(data.players.map((p) => String(p.dk_id))), players = [...data.players], keep = [], joined = [], unbuildable = [];
+  for (const o of data.out) {
+    const hits = men.why ? [] : [...men.values()].filter((q) => q.team === o.team && nameKey(q.name) === nameKey(o.name)), p = hits.length === 1 ? hits[0] : null;
+    if (p && onSlate.has(String(p.id))) continue; // in the pool already (on the board, or the Out list names him twice): nobody is lost
+    const made = hits.length > 1 ? { why: `TwoGun's board row holds ${hits.length} Out men named ${o.name} on ${o.team} (ids ${hits.map((q) => q.id).join(", ")}), so which one he is cannot be told` } // G62: named, never the first picked
+      : p ? poolRow(p, data, o) : { why: men.why ?? "TwoGun's board row holds no Out man of that name and team, so his DraftKings id and salary are unknown" };
+    if (made.row) { players.push(made.row); onSlate.add(made.row.dk_id); joined.push({ dk_id: made.row.dk_id, name: made.row.name, team: made.row.team }); continue; }
+    keep.push({ ...o, pool_note: `Not in the player pool: ${made.why}` });
+    unbuildable.push({ name: o.name ?? null, team: o.team ?? null, why: made.why });
+  }
+  return { ...data, players, out: keep, tg_out: data.out, out_pool: { joined, unbuildable } };
 }
 
 /**
@@ -100,6 +121,8 @@ function poolRow(p, data, out) {
 export function applyHis(slate, data) {
   if (!data || !Array.isArray(data.players)) return data;
   const calls = hisCalls(slate), onSlate = new Set(data.players.map((p) => String(p.dk_id))), problems = [...calls.problems];
+  const joinedIds = new Map(data.players.filter((p) => p.out_pool).map((p) => [xId(p.name), String(p.dk_id)])); // a console mark made on an Out-list man before he joined the pool carries his "x-name" id
+  if (joinedIds.size) { for (const k of ["ins", "outs"]) calls[k] = new Set([...calls[k]].map((id) => joinedIds.get(id) ?? id)); for (const id of calls.outs) calls.ins.delete(id); }
   let typed = [];
   try { const his = hisNumbers(readOverrides(slate)); typed = [...new Set([...his.proj, ...his.own])]; } catch (e) { warn("his-marks: overrides unreadable", { slate, message: e.message }); }
   const wantIn = [...calls.ins].filter((id) => !onSlate.has(id)), wantTyped = typed.filter((id) => !onSlate.has(id) && !calls.ins.has(id));

@@ -2,7 +2,8 @@
 // data root. On the public site the shim's fs serves the copy baked at publish (site-src/bake.mjs, slates/<slate>/lineups-latest.json).
 import fs from "../../site/shim/fs.js";
 import path from "../../site/shim/path.js";
-import { dataRoot } from "./store.js";
+import { dataRoot, readSlateAsBuilt } from "./store.js";
+import { nameKey, soleNear } from "../lib/names.js";
 import { readLook } from "./lineup-look.js";
 import { warn } from "../../site/shim/log.js";
 import { withCardStatus } from "../board/news-claims.js";
@@ -42,6 +43,37 @@ export function cardContext(slate, local) {
   return ctx;
 }
 
+/**
+ * The lineup read with DraftKings ids on the men of TwoGun's Out list who joined the pool (out-pool.js joinOutList, Adam 11-19): the read tied names to the board when it was made, and TwoGun's
+ * board did not hold these men, so their rows carry no id and no claim of a source could reach them. A row with no id is tied to a pool man of its team by his exact name, then one near name
+ * that is not another board man's (names.js soleNear; two near men: none). Rows that already carry an id are never changed. players: the slate's men (out_pool marks the joined ones). Returns a
+ * new read, or the argument itself when there is no joined man. Pure.
+ */
+export function withPoolIds(latest, players) {
+  const pool = (players ?? []).filter((p) => p?.out_pool && p.dk_id != null && typeof p.name === "string");
+  if (!pool.length || !latest || typeof latest !== "object") return latest;
+  const read = structuredClone(latest), byTeam = new Map();
+  for (const p of pool) byTeam.set(p.team, [...(byTeam.get(p.team) ?? []), p]);
+  const mates = (team) => (players ?? []).filter((p) => p?.team === team && !p.out_pool).map((p) => p.name);
+  const tie = (m, team, idKey = "id") => {
+    if (!m || m[idKey] != null || typeof m.name !== "string" || !byTeam.has(team)) return;
+    const cands = byTeam.get(team), exact = cands.filter((p) => nameKey(p.name) === nameKey(m.name));
+    const hit = exact.length === 1 ? exact[0] : exact.length ? null : soleNear(cands, m.name, { teammates: mates(team) })?.hit ?? null;
+    if (hit) { m[idKey] = String(hit.dk_id); m.match = exact.length ? "exact" : "near"; }
+  };
+  for (const [team, block] of Object.entries(read.teams ?? {})) {
+    if (!block || typeof block !== "object") continue;
+    for (const b of Object.values(block)) {
+      if (!b || typeof b !== "object") continue;
+      for (const m of Array.isArray(b.men) ? b.men : []) tie(m, team);
+      for (const m of Array.isArray(b.may_not_play) ? b.may_not_play : []) tie(m, team);
+    }
+  }
+  for (const m of Array.isArray(read.monster_news?.out) ? read.monster_news.out : []) tie(m, m?.team);
+  for (const c of Array.isArray(read.monster_news?.cards) ? read.monster_news.cards : []) tie(c, c?.team, "dk_id");
+  return read;
+}
+
 /** The copy of the lineup read kept before lock (news/lineups/prelock.json), marked prelock_copy, when it is from before `asOfMs`; null when there is none, it is later, or it cannot be read (logged). */
 function prelockAsOf(dir, asOfMs) {
   let doc;
@@ -67,12 +99,15 @@ export function readNewsLineups(slate, { look: withLook = true, cards = true, ca
       const f = JSON.parse(fs.readFileSync(path.join(dataRoot(), "slates", slate, "lineup-finds.json"), "utf8"));
       if (Array.isArray(f?.finds)) { latest.found_by_check = f.finds; if (f.last_check) latest.last_check = f.last_check; } else latest.found_unreadable = "lineup-finds.json has no finds list";
     } catch (e) { if (e.code !== "ENOENT") latest.found_unreadable = `lineup-finds.json could not be read (${e.name})`; }
+    let built = null, poolProblem = null;
+    try { built = readSlateAsBuilt(slate); } catch (e) { poolProblem = `the slate file could not be read (${e.name}), so the Out-list men who joined the pool are not tied to the lineup read`; warn(`lineup read: ${poolProblem}`, { slate }); } // G62: said at the foot of the News tab
+    latest = withPoolIds(latest, built?.players);
     const look = withLook && !latest.prelock_copy ? readLook(slate, dataRoot()) : {}; // the copy kept before lock takes no later look
     if (Object.keys(look).length || latest.look === undefined) latest.look = look; // the site has no cache file: the look baked into the copy stands
     // the last look at each page (cache, git-ignored): a source is fresh by the later of its read and its look (lineup-proposals.js freshnessOf)
     if (!cards) return { state: "ok", latest };
     const ctx = cardCtx ?? cardContext(slate, withLook), out = withCardStatus(latest, ctx); // Doubtful card = Out claim, newer IN card drops an older Out claim (news-claims.js)
-    if (ctx.problems.length) out.card_status_problems = ctx.problems;
+    if (ctx.problems.length || poolProblem) out.card_status_problems = [...ctx.problems, ...(poolProblem ? [poolProblem] : [])];
     return { state: "ok", latest: out };
   } catch (e) {
     return { state: "unreadable", why: `latest.json could not be read (${e.name})` };

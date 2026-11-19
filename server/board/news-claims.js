@@ -5,7 +5,7 @@
 // a lineup page that was read before that card and lists him in its five has him flagged Out in that page ("Doubtful (card)") so the older five does not dispute the newer word; the news page's Out claim and
 // the lineup pages' Out flags dropping a man whose newest card is an IN word and is newer than that page's last read (a page read after the card is the later word and stands); news_upgrades { id: { word, at, from } }
 // (always present, {} when empty) naming every man whose newest card is an IN word over an older Doubtful or Out card, for the reversal (news-reverse.js); and card_status_skipped [{ id, name, why }] for every
-// card set aside (G62). A man whose TwoGun status last changed after the card, or whom TwoGun has Out, is left to TwoGun (news-status.js rule); a man in `typed` (his own typed number, minutes or S) is never made
+// card set aside (G62). TwoGun's status never decides here (Adam 11-19, 3:18 PM ET: our own feeds only); a man in `typed` (his own typed number, minutes or S) is never made
 // Doubtful. Adam's own Out mark is not in the read and is never touched. A card with no DraftKings id is not acted on (as for any Out).
 import { cardWord, newestStatusCards, cleanBody } from "./news-status.js";
 import { isOut } from "./figures.js";
@@ -28,7 +28,7 @@ export function withCardStatus(latest, { players = [], typed = new Set() } = {})
   if (!Array.isArray(cards) || !cards.length) return plain();
   const news = latest.monster_news, newsUsable = news.status === "ok" || (news.last_good_at && Array.isArray(news.out));
   if (!newsUsable) return plain(); // a news read that failed and kept nothing gives no claim to add or drop
-  const by = new Map(players.map((p) => [String(p.dk_id), p]));
+  void players; // kept in the signature for its callers; TwoGun's status on them is not read (Adam 11-19)
   const read = structuredClone(latest), upgrades = {}, skipped = [], fl = withFreshness(latest, Number.MAX_SAFE_INTEGER); // each page's last good read, whatever its age
   if (!Array.isArray(read.monster_news.out)) read.monster_news.out = [];
   const tableAt = Date.parse(news.fetched_at ?? news.last_good_at ?? ""); // when the news page's own status table was read
@@ -37,9 +37,7 @@ export function withCardStatus(latest, { players = [], typed = new Set() } = {})
   for (const [id, card] of newestStatusCards(cards)) {
     const word = cardWord(card), at = atOf(card);
     if (!word || !Number.isFinite(at)) continue; // an Out card gives no word: it blocks an older IN (newestStatusCards) and adds nothing
-    const p = by.get(id);
-    if (p && isOut(p.injury_status)) continue; // TwoGun's Out stands
-    if (p && Number.isFinite(p.status_since) && p.status_since > at) { if (word === "Doubtful") skip(card, "TwoGun changed his status after the card"); continue; }
+    // TwoGun's status, and DraftKings' that reaches us through it, neither stands over a card nor sets one aside (Adam 11-19, 3:18 PM ET): a card is judged against our own feeds only
     if (word === "Doubtful") {
       if (typed.has(id)) { skip(card, "you typed minutes, a number or an S mark on him"); continue; }
       if (!read.monster_news.out.some((m) => String(m.id) === id)) read.monster_news.out.push({ name: card.name, team: card.team, id, match: card.match ?? "exact", status: "Out", detail: doubtfulDetail(card), doubtful: true });

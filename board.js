@@ -3,7 +3,7 @@
 import { paletteOf, teamColors } from "./teams.js";
 import { assignColours } from "./colours.js";
 import { sourceRows, sourcesHtml } from "./sources-panel.js";
-import { checkFootHtml, hisPoolHtml } from "./board-check-foot.js";
+import { checkFootHtml, hisPoolHtml, outPoolHtml } from "./board-check-foot.js";
 import { esc, logo, tipWhen, tipMs, slateRefMs, shortTime, topStamps, keepFocus, remScale } from "./board-util.js";
 import { createPanel } from "./panel.js";
 import { initCard, figureSource } from "./card.js";
@@ -178,7 +178,7 @@ const numbersLine = () => (S.upd.updatedMs == null || !S.slate ? "" : statusLine
 /** The collapsed "Sources and pull times" list at the foot of the page: the stamps, projection source, numbers line and box score line. */
 function renderSources() {
   const el = $("sources"), s = S.slate, bc = $("bcheck");
-  const foot = checkFootHtml(s?.board_check) + hisPoolHtml(s?.his_in_pool); // the board's self-check (G65): only what he must act on, at the foot of the Player list only (board.css hides it on the other tabs)
+  const foot = checkFootHtml(s?.board_check) + hisPoolHtml(s?.his_in_pool) + outPoolHtml(s?.out_pool); // the board's self-check (G65): only what he must act on, at the foot of the Player list only (board.css hides it on the other tabs)
   bc.innerHTML = foot; bc.hidden = !foot; // the explaining note lines are never on the page (Adam 11-19); they stay in the API answer
   if (!s) { el.hidden = true; return; }
   const t = (raw) => when(raw) ?? null;

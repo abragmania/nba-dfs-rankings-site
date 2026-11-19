@@ -41,3 +41,8 @@ export function hisPoolLines(pool) {
 export function hisPoolHtml(pool) {
   return linesHtml(hisPoolLines(pool).filter((l) => l.cls !== "note"));
 }
+
+/** The foot's lines for TwoGun's Out-list men who could not join the player pool (slate.out_pool.unbuildable, out-pool.js joinOutList; Adam 11-19): one each with why (G62). Empty with none. */
+export const outPoolLines = (pool) => (Array.isArray(pool?.unbuildable) ? pool.unbuildable.map((m) => ({ cls: "bad", text: `${m.name ?? "A man"}${m.team ? ` (${m.team})` : ""} is on TwoGun's Out list but not in the player pool: ${m.why}` })) : []);
+/** Their html; "" when there are none. */
+export const outPoolHtml = (pool) => linesHtml(outPoolLines(pool));

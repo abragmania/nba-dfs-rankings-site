@@ -6,7 +6,7 @@ import { dataDir } from "../../site/shim/log.js";
 import { writeFileAtomic } from "../../site/shim/atomic.js";
 import { SLOTS, checkLineup, setKey, arrangeForLateSwap } from "../board/slots.js";
 import { slateRefMs } from "../board/board-util.js";
-import { applyHis } from "./out-pool.js";
+import { applyHis, joinOutList } from "./out-pool.js";
 
 export const SLATE_NAME = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+$/;
 export const MAX_LOCKED = 8; // DraftKings classic has eight roster slots
@@ -35,11 +35,11 @@ export function readSlate(slate) {
   return built ? applyHis(slate, built) : null;
 }
 
-/** slate.json exactly as built, with none of his calls on it (the site bake reads this, so its figures are the same on every machine), or null. */
+/** slate.json as built, with none of his calls on it (the site bake reads this, so its figures are the same on every machine), or null. TwoGun's Out list is joined into the pool (out-pool.js joinOutList: our own injury feeds decide who is Out, never TwoGun's list; Adam 11-19). */
 export function readSlateAsBuilt(slate) {
   const file = slateFile(slate);
   if (!fs.existsSync(file)) return null;
-  return readJson(file);
+  return joinOutList(readJson(file));
 }
 
 /** The saved picks, or empty lists when none were saved. Ids no longer in the slate's players (slate rebuilt, man gone)

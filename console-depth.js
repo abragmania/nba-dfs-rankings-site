@@ -159,8 +159,9 @@ ${salCell(p)}${numBox(team, r, "m", mk?.m)}${numBox(team, r, "d", mk?.d)}
 /** One man in the Out list: his status and where it comes from; the Out toggle brings him back. */
 function outRow(team, r, T, mk, N, pos = null) {
   const p = r.p, theirs = T.tonight.includes(r.id), st = STATUS(p.status);
-  const page = theirs && !p.out && (T.tier?.minutes_page?.out ?? []).includes(r.id); // his Minutes-page Out (console-inputs.js withMinutesPage), not TwoGun's
-  const src = page ? `<span class="stag k-you">Yours</span>you marked him Out on the Minutes page` : theirs ? `<span class="stag k-tg">TwoGun</span>${esc(st ? `${st.toLowerCase()} on TwoGun's board` : "out on TwoGun's board")}` : mk?.out?.news ? `<span class="stag k-ch">News</span>${esc(mk.out.news)}` : `<span class="stag k-you">Yours</span>you marked him Out`; // an Out the lineup news made is the news's, not his
+  const page = theirs && (T.tier?.minutes_page?.out ?? []).includes(r.id); // his Minutes-page Out (console-inputs.js withMinutesPage), not a feed's
+  void st; // TwoGun's status word is not a source of Tonight's Outs (Adam 11-19)
+  const src = page ? `<span class="stag k-you">Yours</span>you marked him Out on the Minutes page` : theirs ? `<span class="stag k-ch">News</span>out on our own injury feeds (TwoGun's board has him Out too)` : mk?.out?.news ? `<span class="stag k-ch">News</span>${esc(mk.out.news)}` : `<span class="stag k-you">Yours</span>you marked him Out`; // an Out the lineup news made is the news's, not his
   const omark = mk?.out ? chip(team, r.id, "out", mk.out, "in") : "";
   return `<div class="oline" data-row="${esc(r.id)}"><span class="ps">${esc(pos ?? (pos0(p) || "—"))}</span>${consoleNameOpen(p, p.name, "span", "onm")}
 <span class="tgl"><button class="tg o on" type="button" data-out="${esc(r.id)}" data-team="${esc(team)}" title="Out. Click to bring him back in">Out</button><span class="cs">${omark}</span></span>

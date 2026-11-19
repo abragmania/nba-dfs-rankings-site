@@ -10,9 +10,10 @@ export const isOut = (status) => /^(out|o)$/i.test(String(status ?? "").trim());
 export const isSitting = (status) => isOut(status) || /^(d|doubtful)$/i.test(String(status ?? "").trim());
 /**
  * Whether a man is Out for a lineup: his own call first (p.his, stamped by server/slate/out-pool.js from his console and Minutes-page marks: "in" beats every outside Out, "out" beats every outside In),
- * else TwoGun's injury status; with `engine`, our minutes engine's playing === false counts too. Pure. One copy for the optimizer, the lineup cards, late swap and the board.
+ * else, with `engine`, our minutes engine's playing === false (its Outs come from our own injury feeds only). TwoGun's injury status never counts (Adam 11-19, 3:18 PM ET: "DO NOT TRUST TWOGUN").
+ * Pure. One copy for the optimizer, the lineup cards, late swap and the board.
  */
-export const outFor = (p, { engine = false } = {}) => (p?.his === "in" ? false : p?.his === "out" ? true : isOut(p?.injury_status) || (engine && p?.ours?.playing === false));
+export const outFor = (p, { engine = false } = {}) => (p?.his === "in" ? false : p?.his === "out" ? true : engine && p?.ours?.playing === false);
 /** A team's console work with nothing in it, as stored. */
 export const EMPTY_RECORD = () => ({ saved: [], pins: {}, handouts: {}, combos: {} });
 /** "a" or "an" before a team code, as it is said. */
