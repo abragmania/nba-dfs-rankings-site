@@ -27,8 +27,10 @@ export const TEAM_USAGE = 100;
 export const TOTAL_ROUNDING = 0.1;
 /** The most minutes the model hands a man with no cap of his own, unless his usual or Tonight's figure is above it. A pin may go past it. */
 export const DEFAULT_CAP = 40;
-/** How far a man's points per minute follow his per-minute usage: this share of the proportional change. Meant to be tuned. */
+/** How far a man's points per minute follow his per-minute usage when he has no scoring share (Adam 11-19: his scoring share, man.scoring_share, else this, named on his detail by scoring_why). */
 export const RATE_USAGE_SHARE = 0.15;
+/** The share of the proportional usage change his rate follows: his scoring share, else RATE_USAGE_SHARE. */
+export const usageShareOf = (man) => (isNum(man.scoring_share) ? man.scoring_share : RATE_USAGE_SHARE);
 /** The rate's multiplier stays inside this range; a man who reaches an end has it named. */
 export const RATE_MULTIPLIER = { min: 0.7, max: 1.3 };
 /** A man under this many minutes, Tonight or in the scenario, keeps his rate: his per-minute usage is too thin to read. */
@@ -292,14 +294,17 @@ function usageFor(team, outSet, tonightSet, m, pins, flips) {
   return { shown: fitted, rate: fitted, keep: !moved || hole };
 }
 
-/** The rate at usage u and minutes m, and whether the multiplier hit an end of its range. Per-minute usage against Tonight's. */
+/**
+ * The rate at usage u and minutes m, and whether the multiplier hit an end of its range. Per-minute usage against Tonight's, followed by his scoring share (usageShareOf).
+ * Where the usage step applies: usage_x (his per-minute usage over Tonight's) and rate_x (the multiplier held to its range).
+ */
 export function rateAt(man, u, m, outTonight = false) {
   if (!isNum(man.rate)) return { rate: null, clamped: false };
   const m0 = outTonight ? man.healthy : man.min;
   if (!isNum(u) || !isNum(m) || !isNum(man.usg) || !isNum(m0) || man.usg <= 0 || m < LOW_MINUTES || m0 < LOW_MINUTES) return { rate: man.rate, clamped: false };
-  const raw = 1 + RATE_USAGE_SHARE * ((u / m) / (man.usg / m0) - 1);
+  const usageX = (u / m) / (man.usg / m0), raw = 1 + usageShareOf(man) * (usageX - 1);
   const held = Math.min(RATE_MULTIPLIER.max, Math.max(RATE_MULTIPLIER.min, raw));
-  return { rate: man.rate * held, clamped: held !== raw };
+  return { rate: man.rate * held, clamped: held !== raw, usage_x: usageX, rate_x: held };
 }
 
 const sum = (rows, k) => {
@@ -352,7 +357,7 @@ export function scenario(team, outs = [], pins = emptyPins()) {
     if (proj === null) missing.push("proj");
     if (held.clamped) missing.push("rate clamped");
     if (backOnZero) missing.push("back on 0 minutes; pin his minutes");
-    return { id: p.id, out: false, role: roles[p.id], ...oursFields, min_from_ours: fromOurs.has(p.id), min_flag: flag[p.id] ?? null, min_label: label[p.id] ?? null, min: m[p.id], min_basis: basis[p.id] ?? null, min_median: median.has(p.id), usg: u.shown[p.id], rate: held.rate, formula, proj, pinned, clamped: held.clamped, back_on_zero: backOnZero, missing };
+    return { id: p.id, out: false, role: roles[p.id], ...oursFields, min_from_ours: fromOurs.has(p.id), min_flag: flag[p.id] ?? null, min_label: label[p.id] ?? null, min: m[p.id], min_basis: basis[p.id] ?? null, min_median: median.has(p.id), usg: u.shown[p.id], rate: held.rate, formula, proj, pinned, clamped: held.clamped, usage_x: held.usage_x ?? null, rate_x: held.rate_x ?? null, back_on_zero: backOnZero, missing };
   });
   const playing = rows.filter((r) => !r.out); // a man out is on 0 by the scenario, which says nothing about whether the figure is known
   const min = sum(playing, "min"), usg = sum(playing, "usg");

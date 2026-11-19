@@ -3,7 +3,7 @@
 import { paletteOf, teamColors } from "./teams.js";
 import { assignColours } from "./colours.js";
 import { sourceRows, sourcesHtml } from "./sources-panel.js";
-import { checkFootHtml, checkNotesHtml, checkNoteCount, hisPoolHtml } from "./board-check-foot.js";
+import { checkFootHtml, hisPoolHtml } from "./board-check-foot.js";
 import { esc, logo, tipWhen, tipMs, slateRefMs, shortTime, topStamps, keepFocus, remScale } from "./board-util.js";
 import { createPanel } from "./panel.js";
 import { initCard, figureSource } from "./card.js";
@@ -179,11 +179,7 @@ const numbersLine = () => (S.upd.updatedMs == null || !S.slate ? "" : statusLine
 function renderSources() {
   const el = $("sources"), s = S.slate, bc = $("bcheck");
   const foot = checkFootHtml(s?.board_check) + hisPoolHtml(s?.his_in_pool); // the board's self-check (G65): only what he must act on, at the foot of the Player list only (board.css hides it on the other tabs)
-  bc.innerHTML = foot; bc.hidden = !foot;
-  const nb = $("bcnotes"), nn = checkNoteCount(s?.board_check, s?.his_in_pool); // the explaining lines, collapsed, never remembered open
-  nb.hidden = !nn;
-  nb.open = false;
-  nb.innerHTML = nn ? `<summary>Self-check notes · ${nn} line${nn === 1 ? "" : "s"}</summary><div class="bc-lines">${checkNotesHtml(s?.board_check, s?.his_in_pool)}</div>` : "";
+  bc.innerHTML = foot; bc.hidden = !foot; // the explaining note lines are never on the page (Adam 11-19); they stay in the API answer
   if (!s) { el.hidden = true; return; }
   const t = (raw) => when(raw) ?? null;
   const { board, injuries } = topStamps(s);

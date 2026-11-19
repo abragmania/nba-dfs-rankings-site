@@ -7,7 +7,7 @@ import { valuePer1k } from "./figures.js";
 import { recentOf, RECENT_GAMES } from "./tiers.js";
 import { esc, logo, nameOpen, consoleNameOpen } from "./board-util.js";
 import { calc } from "./console-model.js";
-import { keyOf, outsOf } from "./console-engine.js";
+import { keyOf, outsOf, RATE_USAGE_SHARE } from "./console-engine.js";
 import { marksOf, liveText } from "./console-marks.js";
 import { MINUTE_SOURCES, SOURCE_LABEL, defaultSourceOf } from "./depth-chart.js";
 import { syncWords } from "./console-auto.js";
@@ -89,11 +89,21 @@ function basisOf(r, T, S) {
 /** TwoGun's own figure for the TG Min and TG Proj columns: plain read-only text, a muted dash with the reason when missing. */
 const tgCell = (v, what, cls) => `<span class="tgv ${cls}">${isNum(v) ? f1(v) : `<span class="tgmiss" title="${esc(`TwoGun's board row has no ${what} for him`)}">—</span>`}</span>`;
 
+/**
+ * The DK/min box's usage line (Adam 11-19), on hover only (G64): the share of his DK/min that follows usage (his scoring share, else the flat RATE_USAGE_SHARE with the reason) and, where this scenario moves
+ * his usage per minute, by how much and what it does to his DK/min. r: a calc row (rateAt's usage_x and rate_x), r.p his inputs man (scoring_share, scoring_why).
+ */
+export function usageText(r) {
+  const p = r.p ?? {}, share = isNum(p.scoring_share) ? `${Math.round(p.scoring_share * 100)}% of his DK/min is scoring, so it follows his usage by that share` : `no scoring share (${p.scoring_why ?? "not known"}), so his DK/min follows his usage at the flat ${Math.round(RATE_USAGE_SHARE * 100)}%`;
+  const moved = isNum(r.usage_x) && Math.abs(r.usage_x - 1) >= 0.005 ? `; this scenario: usage per minute x${r.usage_x.toFixed(2)}, DK/min x${r.rate_x.toFixed(2)}` : "";
+  return `Usage: ${share}${moved}`;
+}
+
 /** A typed number box (minutes or DK/min) with its undo chip slot. */
 function numBox(team, r, k, mark) {
   const v = k === "m" ? r.min : r.rate, shown = k === "m" ? f1(v) : f2(v);
-  const label = k === "m" ? "minutes" : "DK points per minute";
-  const box = `<input class="fin${mark ? " pin" : ""}" data-k="${k}" data-id="${esc(r.id)}" data-team="${esc(team)}" value="${shown ?? ""}" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="${esc(r.p.name)} ${label}" title="${mark ? "Your number. " : ""}Type his ${label}; Enter keeps it. Projection = minutes x DK/min"${shown === null ? ` placeholder="—"` : ""}>`;
+  const label = k === "m" ? "minutes" : "DK points per minute", usage = k === "d" ? `\n${usageText(r)}` : "";
+  const box = `<input class="fin${mark ? " pin" : ""}" data-k="${k}" data-id="${esc(r.id)}" data-team="${esc(team)}" value="${shown ?? ""}" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="${esc(r.p.name)} ${label}" title="${esc(`${mark ? "Your number. " : ""}Type his ${label}; Enter keeps it. Projection = minutes x DK/min${usage}`)}"${shown === null ? ` placeholder="—"` : ""}>`;
   return `<span class="nb nb-${k}">${box}<span class="cs">${mark ? chip(team, r.id, k, mark, k === "m" ? f1(mark.live) ?? "—" : f2(mark.live) ?? "—") : ""}</span></span>`;
 }
 

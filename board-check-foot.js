@@ -1,5 +1,5 @@
-// The board self-check at the foot of the Player list page (G65, G64): never in the main view. All clear is one quiet line; a failure is one plain line each, a conflict between sources its own named line,
-// and what could not be checked or was left out is counted and named below. Pure strings (tested in node); board.js owns the element. The answer is slate.board_check (server/slate/board-check.js).
+// The board self-check at the foot of the Player list page (G65, G64): never in the main view. All clear is one quiet line; a failure is one plain line each, a conflict between sources its own named line.
+// What could not be checked or was left out (the note lines) stays in the API answer, never on the page (Adam 11-19). Pure strings (tested in node); board.js owns the element. The answer is slate.board_check (server/slate/board-check.js).
 import { esc, isoToEastern } from "./board-util.js";
 
 /** The foot's lines: [{ cls ("ok" | "head" | "info" | "bad" | "conflict" | "note"), text }]. Empty when the server gave no answer (the public site). */
@@ -16,24 +16,16 @@ export function checkFootLines(bc) {
   return [{ cls: "head", text: `${head}${conflicts.length ? `; ${conflicts.length} for you to settle` : ""} (${time})` }, ...minutes, ...tail];
 }
 
-/** The open lines: the head or all-clear line, the minutes line, the failures and the conflicts (G65). The rest is checkNoteLines. */
+/** The lines on the page: the head or all-clear line, the minutes line, the failures and the conflicts (G65). */
 export const checkActionLines = (bc) => checkFootLines(bc).filter((l) => l.cls !== "note");
-/** The lines that only explain, in order: what was not checked, each exemption, the depth-chart notes. They go in the collapsed notes block at the foot. */
+/** The lines that only explain, in order: what was not checked, each exemption, the depth-chart notes. Never on the page (Adam 11-19, 12:45 PM: "none of this is helpful"); they stay in the API answer. */
 export const checkNoteLines = (bc) => checkFootLines(bc).filter((l) => l.cls === "note");
 const linesHtml = (lines) => lines.map((l) => `<div class="bc-${l.cls}">${esc(l.text)}</div>`).join("");
 
-/** The foot's open html: the action lines, one each; "" when there is nothing to say. */
+/** The foot's html: the action lines, one each; "" when there is nothing to say. */
 export function checkFootHtml(bc) {
   return linesHtml(checkActionLines(bc));
 }
-
-/** The notes block's inner html for those note lines; "" when there are none. */
-export function checkNotesHtml(bc, pool) {
-  return linesHtml([...checkNoteLines(bc), ...hisPoolNoteLines(pool)]);
-}
-
-/** How many note lines the notes block holds (the count on its summary). */
-export const checkNoteCount = (bc, pool) => checkNoteLines(bc).length + hisPoolNoteLines(pool).length;
 
 /** The foot's lines for the Out men he put In (slate.his_in_pool, server/slate/out-pool.js): who was brought into the pool, and who could not be and why (G62: said, never a silent hide). Empty with nothing to say. */
 export function hisPoolLines(pool) {
@@ -45,10 +37,7 @@ export function hisPoolLines(pool) {
   return lines;
 }
 
-/** Its note lines (who was brought into the pool): they join the collapsed notes block. */
-export const hisPoolNoteLines = (pool) => hisPoolLines(pool).filter((l) => l.cls === "note");
-
-/** The foot's open html for its failure lines; "" when there are none. */
+/** The foot's html for its failure lines; "" when there are none. Its note line (who was brought into the pool) is not on the page. */
 export function hisPoolHtml(pool) {
   return linesHtml(hisPoolLines(pool).filter((l) => l.cls !== "note"));
 }
