@@ -30,7 +30,7 @@
 .nwr.out .nwn{color:var(--mu);text-decoration:line-through;text-decoration-color:var(--mu)}
 .nwr.none{padding-left:0.625rem}
 .nwc{font-size:0.5938rem;font-weight:800;letter-spacing:0;text-align:center;padding:0.0625rem 0;border:1px solid currentColor;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis}
-.nwc.ok{color:var(--gr)}.nwc.pr{color:#7fd6a8}.nwc.qu{color:var(--am)}.nwc.db{color:var(--or)}.nwc.ou{color:var(--rd)}.nwc.rt{color:var(--bl)}.nwc.xx{color:var(--mu)}
+.nwc.ok{color:var(--gr)}.nwc.pr{color:#7fd6a8}.nwc.qu{color:var(--am)}.nwc.db{color:var(--or)}.nwc.ou{color:var(--rd)}.nwc.rt{color:var(--bl)}.nwc.mrc{color:var(--mrc)}.nwc.xx{color:var(--mu)}
 .nwsec{display:flex;align-items:center;gap:0.625rem;padding:0 0.625rem;height:1.3125rem;background:color-mix(in srgb,var(--tx) 5%,transparent);color:var(--mu);font-size:0.6563rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
 .nwsec em{font-style:normal;font-size:0.6563rem;border:1px solid currentColor;padding:0 0.375rem;letter-spacing:.03em}
 .nwsec em.confirmed{color:var(--gr)}.nwsec em.expected,.nwsec em.twogun{color:var(--am)}.nwsec em.n{border:0;color:var(--mu);text-transform:none;letter-spacing:0}

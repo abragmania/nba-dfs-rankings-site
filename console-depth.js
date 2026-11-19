@@ -5,7 +5,7 @@
 import { oursUse } from "./console-ours.js";
 import { valuePer1k } from "./figures.js";
 import { recentOf, RECENT_GAMES } from "./tiers.js";
-import { esc, logo, nameOpen, consoleNameOpen } from "./board-util.js";
+import { esc, logo, nameOpen, consoleNameOpen, mrChip } from "./board-util.js";
 import { calc } from "./console-model.js";
 import { keyOf, outsOf, RATE_USAGE_SHARE } from "./console-engine.js";
 import { marksOf, liveText } from "./console-marks.js";
@@ -146,7 +146,7 @@ function manRow(team, r, T, S, mk, rank, N, vr) {
   const proj = isNum(r.proj) ? `<b class="pj${r.pinned.m || r.pinned.d ? " pin" : ""}">${f1(r.proj)}</b>` : miss(r.missing.join(", ") || "no projection");
   return `<div class="row${mk ? " marked" : ""}" data-row="${esc(r.id)}">
 <span class="ps">${esc(starter ? rank || pos0(p) || "—" : rank)}</span>
-<span class="who">${consoleNameOpen(p, p.name, "span", "nm")}<span class="pp">${esc(p.pos ?? "")}</span>${nameChip(N, p)}</span>
+<span class="who">${consoleNameOpen(p, p.name, "span", "nm")}<span class="pp">${esc(p.pos ?? "")}</span>${nameChip(N, p)}${mrChip(T.tier?.men?.[r.id]?.mr, "nwc nchip mrc")}</span>
 ${salCell(p)}${numBox(team, r, "m", mk?.m)}${numBox(team, r, "d", mk?.d)}
 <span class="r">${proj}</span>${tgCell(p.tg_proj, "projection", "tgp")}${valCell(r, vr)}${tgCell(p.tg_min, "minutes", "tgm")}${avgCell(av.season, av.whySeason, av.nSeason, "avs")}${avgCell(av.last10, av.whyLast, av.nLast, "avl")}
 <span class="why" title="${esc(b.title)}"><span class="bw k-${b.tag}">${esc(b.text)}</span>${b.delta ? `<span class="bd">${esc(b.delta)}</span>` : ""}${b.chips.map((c) => `<span class="fc ${c.cls}" title="${esc(c.title)}">${esc(c.word)}</span>`).join("")}</span>

@@ -19,6 +19,8 @@
 //     with fewer (a man he marked Bench+), his bench spot's figure, said, and that is his floor. No lowest-starter ceiling for him (R15 holds for the plain bench only); 36 caps him like everyone.
 //  4. Cap: nobody above MINUTES_CAP, except a starter whose own starter mean is above it (he keeps it). A standing usual override is his figure as set (his cap rises to it); a standing cap override is his cap and he
 //     is "limited" (no fill). Overrides apply only in the role they were set for (ovGate).
+//  4b. Minutes restriction (Adam 1:34-1:35 PM 11-19): a man the news puts on one (m.mr, minutes-restriction.js) gets the lower of his figure and its cap (the note's number, else MR_DEFAULT_CAP); every
+//     ceiling of his is lowered to it, so the fill never takes him past it and never raises him to it. Cut to it, he is limited. Typed minutes still replace his figure after the plan.
 //  Adam 3:02 PM 11-18: an Out man's minutes are not handed to the starters: a starter gets his starter figure only; an Out bench man's spot goes to the next man here and everyone below moves up; a man promoted into the five
 //     leaves his spot; a healthy starter left out of the five is a bench man at his place (placeByChart).
 //  5. Team total (team-fill.js fillTeam): under 240, the Bench+ men first, then the plain bench, then the starters, in proportion to their figures, none above his own ceiling (ownCeiling: the mean of his top quarter
@@ -31,6 +33,7 @@ import { MINUTES_CAP, GAME_MAX, benchSpots as spotsOf, shareOut, fillTeam, ownCe
 import { benchOrder } from "./depth-cols.js";
 import { benchPlusBy, benchMean, BENCH_PLUS_MEAN, BENCH_PLUS_MIN_GAMES } from "./bench-plus-rule.js";
 import { benchBlend } from "./bench-blend.js";
+import { restrictionStep } from "./minutes-restriction.js";
 
 export { shareOut, MINUTES_CAP, benchPlusBy, benchMean, BENCH_PLUS_MEAN, BENCH_PLUS_MIN_GAMES };
 
@@ -187,13 +190,15 @@ function planOnce({ flagged = false, men, rowsOf, games, outs = [], five, boxNot
   const out = new Map(), sumOf = (mp) => [...mp.values()].reduce((s, v) => s + v, 0);
   for (const x of known) out.set(x.m.id, entryOf(x, fill, TEAM_MINUTES));
   if (!missing.length) notes.push(...benchOverNotes(known, out, TEAM_MINUTES));
-  for (const x of missing) out.set(x.m.id, { auto: null, figure: null, computed: null, ceiling: null, computed_ceiling: null, floor: null, spot: x.spot, tier: x.tier, basis: x.basis, used: x.used, skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: 0, label: { ...x.label, ...spotOf(x), fill: 0, trim: 0 }, why: x.words });
+  for (const x of missing) out.set(x.m.id, { auto: null, figure: null, computed: null, ceiling: null, computed_ceiling: null, floor: null, spot: x.spot, tier: x.tier, basis: x.basis, used: x.used, skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: 0, restriction: restrictionOf(x), label: { ...x.label, ...spotOf(x), fill: 0, trim: 0 }, why: x.words });
   const pot = { sum: r1(fill.sum), gap: r1(fill.gap), out: outs.map((o) => o.name),
     capped: known.filter((x) => x.capped > EPS).map((x) => ({ name: x.m.name, minutes: r1(x.capped) })), proportional: sumOf(fill.prop), rounds: fill.rounds, round_minutes: sumOf(fill.plus), trimmed: fill.trimmed, unassigned: fill.unassigned, untrimmed: fill.untrimmed };
   return { byId: out, notes, total: missing.length ? null : fill.sum + pot.proportional + pot.round_minutes - sumOf(fill.cut), pot };
 }
 
 // Every bench man's label carries his bench spot (a Bench+ man's own-mean label has none of its own), so the Console's bench list sorts by the engine's spot, Bench+ first (Adam 2:14 PM 11-17).
+/** His minutes restriction on the plan entry (minutes-restriction.js), with the minutes its cap took (0 when he was under it); null with none. */
+const restrictionOf = (x) => (x.mr ? { ...x.mr, cut: r1(x.mr_cut ?? 0) } : null);
 const spotOf = (x) => (isNum(x.spot) && !isNum(x.label?.spot) ? { spot: x.spot } : {});
 
 /** One man's plan entry: his figure through the fill and trim, with a why naming each step (Adam 11-17). */
@@ -203,7 +208,7 @@ function entryOf(x, fill, T) {
   const fillWords = `${shown(e) ? `; +${r1(e)} to reach ${T} (in proportion to his figure, none above ${r1(x.fillCeiling)})` : ""}${shown(p) ? `; +${r1(p)} in +1 rounds to reach ${T} (starters, then bench, the last round pro-rated)` : ""}`;
   const how = fill.how.get(id), trimWords = shown(cut) ? `; -${r1(cut)}: the team's figures are over ${T} (${how === "starter" ? "the bench could not absorb it all, so starters were trimmed above their floors" : how === "bench_plus" ? "the plain bench could not absorb it all, so Bench+ men were trimmed above their typical minutes" : "the plain bench trimmed in proportion to their figures"})` : "";
   return { auto, figure: x.figure, computed: x.computed, ceiling: p > 1e-6 ? Math.max(x.ceiling, auto) : x.ceiling, computed_ceiling: x.computed_ceiling, floor: x.floor, top_ceiling: x.fillCeiling, spot: x.spot, tier: x.tier, basis: x.basis, used: x.used,
-    skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: x.n, label: { ...x.label, ...spotOf(x), fill: shown(e + p) ? r1(e + p) : 0, trim: shown(cut) ? r1(cut) : 0 }, why: `${x.words}${fillWords}${trimWords} = ${r1(auto)}` };
+    skipped: x.skipped, minutes_gate: x.minutes_gate, flag: x.flag, n: x.n, restriction: restrictionOf(x), label: { ...x.label, ...spotOf(x), fill: shown(e + p) ? r1(e + p) : 0, trim: shown(cut) ? r1(cut) : 0 }, why: `${x.words}${fillWords}${trimWords} = ${r1(auto)}` };
 }
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
@@ -447,10 +452,14 @@ function manFinish(x, c) {
   const thisSeason = oc.top ? `mean of his top ${oc.top} of ${oc.of} games this season` : `fewer than 4 games this season, so his figure ${r1(base)}`;
   const ceilWords = `ceiling ${r1(fillCeiling)}: ${isNum(ovNow.cap) ? "your cap override" : !personal ? "plain bench, set by the team's needs, not his own minutes" : lastSet ? `last season's minutes a game (${m.last_games} games), above his ${oc.top ? `top-quarter mean ${r1(oc.value)}` : `figure ${r1(base)} (fewer than 4 games this season)`}` : `${thisSeason}${lastOk ? `; last season's ${r1(m.last_mpg)} a game is not higher` : "; no last-season minutes (10 or more games) on file, this season alone"}`}`; // on the Console row, in the tooltip
   if (isNum(value) && value > cap + EPS) { capped = value - cap; value = cap; words += `; capped at ${r1(cap)} ${limited ? "by your cap override" : `(nobody above ${MINUTES_CAP} but a starter whose own starter mean is)`}: -${r1(capped)}`; }
+  // Adam 1:34-1:35 PM 11-19: a minutes restriction in the news is a ceiling only, never a figure: the lower of his figure and its cap, every limit lowered to it (minutes-restriction.js restrictionStep)
+  const limOv = limited, R = restrictionStep(m.mr, { value, cap, fillCeiling, max: isNum(ovNow.cap) ? ovNow.cap : GAME_MAX, limited, standing: used.includes("usual") });
+  value = R.value; cap = R.cap; limited = R.limited; words += R.words;
+  const ceilSaid = R.fillCeiling < fillCeiling - EPS ? `ceiling ${r1(R.fillCeiling)}: his minutes restriction (${ceilWords})` : ceilWords;
   const overridden = used.includes("usual"), floored = tier === "starter" || tier === "bench_plus"; // a Bench+ man's figure before the fill is his floor, whatever its source (Adam 9:50 AM 11-18; review: a spot-figure Bench+ man too)
-  const label = { ...(overridden ? { kind: "override", value: r1(ovNow.usual) } : fig.label), ceil: r1(fillCeiling), ceil_words: ceilWords, ceil_top: isNum(ovNow.cap) ? 0 : oc.top, ceil_of: oc.of, capped: capped > EPS && !limited ? r1(capped) : 0, limit: limited ? r1(cap) : null };
+  const label = { ...(overridden ? { kind: "override", value: r1(ovNow.usual) } : fig.label), ceil: r1(R.fillCeiling), ceil_words: ceilSaid, ceil_top: isNum(ovNow.cap) ? 0 : oc.top, ceil_of: oc.of, capped: capped > EPS && !limOv ? r1(capped) : 0, limit: limOv ? r1(cap) : null, ...(m.mr ? { mr: { cap: m.mr.cap, cut: r1(R.cut) } } : {}) };
   if (!overridden && fig.source === "chart") c.chartMen.push(`${m.name} (chart ${r1(fig.value)}, TwoGun ${isNum(m.tg) ? m.tg : "none"})`);
-  return { m, tier, recent: x.recent, skipped, minutes_gate: minutesGate, figure: value, computed: fig.value, ceiling: cap, fillCeiling, computed_ceiling: fig.cap, floor: floored && isNum(value) ? (isNum(fig.floorAt) ? Math.min(value, fig.floorAt) : value) : null, limited, max: isNum(ovNow.cap) ? ovNow.cap : GAME_MAX, capped: isNum(ovNow.cap) ? 0 : capped, spot: x.spot ?? null,
+  return { m, tier, recent: x.recent, skipped, minutes_gate: minutesGate, figure: value, computed: fig.value, ceiling: cap, fillCeiling: R.fillCeiling, computed_ceiling: fig.cap, floor: floored && isNum(value) ? (isNum(fig.floorAt) ? Math.min(value, fig.floorAt) : value) : null, limited, max: R.max, mr: m.mr ?? null, mr_cut: R.cut, capped: isNum(ovNow.cap) ? 0 : capped, spot: x.spot ?? null,
     basis: overridden ? "override" : fig.basis, label, words, used, flag: flagOf(x, fig, value, overridden, used.includes("cap") ? cap : null), n: fig.n, source: fig.source, returning: Boolean(x.returning) || fig.source === "chart" };
 }
 

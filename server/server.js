@@ -415,5 +415,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     info(`NBA board on http://127.0.0.1:${port}`);
     startSnapshotRefresh({ now: () => now.ms ?? Date.now() }); // keeps each team's figures saved for its tip (minutes/refresh.js)
     routeModule("pullnow").then(({ startLightCheckIfAllowed }) => startLightCheckIfAllowed({ state: pullNowState, port })).catch((e) => error("the light check could not start", { error: e.message })); // only in the real app: port 8693, on the default data folder or the live copy's NBADFS_DATA_DIR (route.js startLightCheckIfAllowed decides)
+    routeModule("pullnow").then(({ startAutoPullIfAllowed }) => startAutoPullIfAllowed({ state: pullNowState, port })).catch((e) => error("the automatic pulls could not start", { error: e.message })); // the same gate, plus a repo Pull now may write (route.js startAutoPullIfAllowed)
   });
 }

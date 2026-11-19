@@ -133,6 +133,8 @@ export function newestTime(text, field) {
 
 const GOOD_RESULT = new Set(["pulled", "unchanged", "older", "no_board"]);
 export const resultWords = (r) => ({ pulled: "new board", unchanged: "no new board", older: "no new board", no_board: "no new board", failed: "failed", missing: "failed", finished: "finished, board unknown", busy: "unknown", unknown: "unknown" })[r] ?? "unknown";
+/** " · automatic" for a pull the app ran by itself (server/pullnow/auto-pull.js), else "". Pure. */
+export const autoWords = (last) => (last?.auto ? " · automatic" : "");
 export const whereWords = (w) => (["desktop", "laptop", "cloud", "this computer"].includes(w) ? w : "where unknown");
 
 export const STALE_RUN_MS = 60 * 60_000; // a run still open after an hour is not counted: the job's own cap is far shorter
@@ -212,7 +214,7 @@ export function buildSources({ slateName = null, slate = null, entry = null, bbm
 export function busyOf(s) {
   const why = [], st = s.status;
   if (s.running) why.push("a pull you started is running");
-  if (st?.running?.local && !s.running) why.push(`a pull is running on this computer since ${etClock(st.running.local.startedMs) ?? "an unknown time"}`);
+  if (st?.running?.local && !s.running) why.push(`${st.running.local.auto ? `the automatic ${st.running.local.auto.label}` : "a pull"} is running on this computer since ${etClock(st.running.local.startedMs) ?? "an unknown time"}`);
   if (st?.running?.cloud === "running") why.push(`the cloud job is ${st.running.cloudDetail ?? "running"}${st.running.cloudStartedMs ? ` since ${etClock(st.running.cloudStartedMs)}` : ""}`);
   return { busy: why.length > 0, why: why.join("; ") };
 }
@@ -226,7 +228,7 @@ export function statusView(s) {
   if (b.busy) return { summary: `Pulling… don't press (${b.why})`, title, cls: "busy" };
   if (!st) return s.statusErr ? { summary: `Pull status unknown (${s.statusErr})`, title: s.statusErr, cls: "unk" } : { summary: "Checking pull status…", title: "", cls: "" };
   if (!st.last) return { summary: `Last pull unknown${tail}`, title: title || "No pull time is saved on this computer", cls: "unk" };
-  return { summary: `Last pull ${etStamp(st.last.atMs) ?? "at an unknown time"} · ${whereWords(st.last.where)} · ${resultWords(st.last.result)}${tail}`, title, cls: s.statusErr || !GOOD_RESULT.has(st.last.result) ? "unk" : "" }; // the dim dot: the read failed, or the last pull failed or its outcome is unknown
+  return { summary: `Last pull ${etStamp(st.last.atMs) ?? "at an unknown time"} · ${whereWords(st.last.where)}${autoWords(st.last)} · ${resultWords(st.last.result)}${tail}`, title, cls: s.statusErr || !GOOD_RESULT.has(st.last.result) ? "unk" : "" }; // the dim dot: the read failed, or the last pull failed or its outcome is unknown
 }
 
 // ---------- the freshness tag: one coloured word for "am I current?" (green / amber / red), beside the Pull now button ----------
@@ -264,7 +266,7 @@ export function freshnessOf(s) {
   const nowMs = Number.isFinite(s.nowMs) && s.nowMs > 0 ? s.nowMs : Date.now(), last = st.last, age = Math.max(0, nowMs - last.atMs);
   const when = (age >= 24 * 3_600_000 ? etStamp(last.atMs) : etClock(last.atMs))?.replace(/ ET$/, "") ?? "an unknown time", ageW = ageWords(age);
   const tip = Number.isFinite(s.firstTipMs) ? s.firstTipMs : null, inWindow = tip !== null && nowMs >= tip - FRESH_WINDOW_MS;
-  const detail = `Last pull ${etStamp(last.atMs) ?? "at an unknown time"} (${ageW}) · ${whereWords(last.where)} · ${resultWords(last.result)}`;
+  const detail = `Last pull ${etStamp(last.atMs) ?? "at an unknown time"} (${ageW}) · ${whereWords(last.where)}${autoWords(last)} · ${resultWords(last.result)}`;
   const mk = (level, text, extra) => ({ level, text, title: [extra, detail, base.title].filter(Boolean).join(". "), cls: `f${level}` });
   const noteWhy = last.why && !/^not put back in/i.test(last.why) ? last.why : null; // men held back is information, not a failure
   const pressWhy = s.lineCls === "bad" && s.line ? String(s.line).replace(/^Pull failed(?: at .*? ET)?: /, "") : null;
@@ -281,6 +283,20 @@ export function freshnessOf(s) {
 /** Escaped text with a leading weekday ("Fri, Nov 6, ...") wrapped so a phone can hide it. Pure. */
 const dayHtml = (text) => esc(text).replace(/\b((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), )(?=[A-Z][a-z]{2} \d)/g, '<span class="pnwd">$1</span>');
 
+const AUTO_NOT_RUN = { skipped: "skipped", missed: "missed", interrupted: "interrupted", started: "running" };
+/** The status panel's Automatic pulls rows (server/pullnow/auto-pull.js state.autoPull): the next one or why none, one waiting on a press, the last one run, and every one tonight that did not run (G62). Pure. */
+export function autoPullRows(a, kv) {
+  const out = ["<h5>Automatic pulls</h5>"];
+  out.push(a.next ? kv("Next", esc(`${a.next.label}, ${etClock(a.next.atMs) ?? "time unknown"}`)) : kv("Next", esc(a.why ?? "none tonight"), a.problem ? "pnmiss" : ""));
+  if (a.next && a.problem && a.why) out.push(kv("Note", esc(a.why), "pnmiss"));
+  const said = (e) => `${e.label}: ${AUTO_NOT_RUN[e.result] ?? resultWords(e.result)}${e.why ? ` (${e.why})` : ""}`;
+  if (a.waiting) out.push(kv("Waiting", esc(`${a.waiting}: Pull now is running; it runs when that ends, inside its window`)));
+  if (a.last) out.push(kv("Last", esc(said(a.last)), GOOD_RESULT.has(a.last.result) ? "" : "pnmiss"));
+  const notRun = (a.notRun ?? []).filter((e) => e !== a.last && e?.label !== a.last?.label); // G62: every automatic pull tonight that did not run, with why
+  if (notRun.length) out.push(kv(`Not run (${(a.notRun ?? []).length})`, notRun.map((e) => esc(said(e))).join("<br>"), "pnmiss"));
+  return out;
+}
+
 function panelHtml(s) {
   const st = s.status;
   const kv = (k, v, cls = "") => `<div class="pnrow"><span>${esc(k)}</span><b${cls ? ` class="${cls}"` : ""}>${v}</b></div>`;
@@ -288,7 +304,7 @@ function panelHtml(s) {
   if (!st) return `<div class="pnpanel" role="region" aria-label="Pull status">${kv("Status", esc(s.statusErr ? `unknown (${s.statusErr})` : "checking…"), s.statusErr ? "pnmiss" : "")}</div>`;
   const run = st.running ?? {};
   out.push("<h5>Most recent pull</h5>");
-  out.push(st.last ? kv("When", dayHtml(etStamp(st.last.atMs) ?? "unknown")) + kv("Where", esc(whereWords(st.last.where))) + kv("Result", esc(resultWords(st.last.result))) + (st.last.why ? kv("Note", esc(st.last.why), "pnmiss") : "") : kv("When", "unknown", "pnmiss"));
+  out.push(st.last ? kv("When", dayHtml(etStamp(st.last.atMs) ?? "unknown")) + kv("Where", esc(whereWords(st.last.where))) + kv("Result", esc(resultWords(st.last.result))) + (st.last.auto ? kv("Started by", esc(`the app itself: ${st.last.auto.label ?? "automatic pull"}`)) : "") + (st.last.why ? kv("Note", esc(st.last.why), "pnmiss") : "") : kv("When", "unknown", "pnmiss"));
   if (st.syncNotes?.length) { // files both computers changed, resolved when GitHub's data came down (Pull now's, the lineup check's and sync_down's): whose copy stayed and where the other is kept; newest first
     out.push("<h5>Last sync</h5>");
     for (const e of st.syncNotes) { out.push(kv("When", dayHtml(etStamp(e.atMs) ?? "unknown"))); for (const l of e.lines) out.push(`<div class="pnread">${esc(l)}</div>`); }
@@ -307,6 +323,7 @@ function panelHtml(s) {
     for (const n of st.light.notes ?? []) out.push(kv(n.source, esc(n.text))); // read but left off the badge, counted with why (G62)
     if (st.light.note) out.push(`<div class="pnread">${esc(st.light.note)}</div>`);
   }
+  if (st.autoPull) out.push(...autoPullRows(st.autoPull, kv));
   if (s.line) out.push(`<h5>This page's last press</h5><div class="pnlast">${esc(s.line)}</div>`);
   out.push(`<div class="pnread">Status read ${esc(etClock(st.readAtMs) ?? "at an unknown time")}${s.statusErr ? esc(`; the latest read failed (${s.statusErr}), so this is the earlier one`) : ""}</div>`);
   return `<div class="pnpanel" role="region" aria-label="Pull status">${out.join("")}</div>`;

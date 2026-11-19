@@ -184,8 +184,17 @@ export function injBadge(status, source = "injury report") {
 /** The back-to-back dot beside a man's name (Adam 11-14: a colour, no chip): orange on the second night, blue when his team plays again tomorrow; the flags come from server/slate/back-to-back.js. */
 export const restDot = (p) => (p?.rest_b2b2nd ? `<i class="b2bdot b2b2" title="${esc(p.team ?? "")} played last night: second night of a back-to-back"></i>` : p?.rest_plays_tomorrow ? `<i class="b2bdot b2b1" title="${esc(p.team ?? "")} plays again tomorrow: first night of a back-to-back"></i>` : "");
 
-/** A man's status badge as the board shows it: the news-aware word when the console's mark carries one (inj: { word, note }), else TwoGun's injury status. The Player list row and the card share it. */
-export const statusBadge = (p, inj = null) => (p?.his === "in" ? injBadge("In", `you put him In; ${p.injury_status ? `the injury report says ${p.injury_status}` : "no outside Out stands"}`) : p?.his === "out" ? injBadge("Out", "you put him Out") : inj ? injBadge(inj.word, `Monster news${inj.note ? `: ${inj.note}` : ""}; TwoGun says ${p.injury_status || "nothing"}`) : injBadge(p.injury_status));
+/** A man's status badge as the board shows it: the news-aware word when the console's mark carries one (inj: { word, note }), else TwoGun's injury status, then his MR chip (mrChip). The Player list row, the
+ *  lineup rows and the card share it. */
+export const statusBadge = (p, inj = null) => (p?.his === "in" ? injBadge("In", `you put him In; ${p.injury_status ? `the injury report says ${p.injury_status}` : "no outside Out stands"}`) : p?.his === "out" ? injBadge("Out", "you put him Out") : inj ? injBadge(inj.word, `Monster news${inj.note ? `: ${inj.note}` : ""}; TwoGun says ${p.injury_status || "nothing"}`) : injBadge(p.injury_status)) + mrChip(p?.ours?.mr);
+
+/** The minutes-restriction chip (Adam 1:34 PM 11-19): "MR" styled like the status letter in its own colour (--mrc, every theme), the cap and its source note in the title; "" with none. mr: the engine's
+ *  restriction (minutes/board.js applyOurs: p.ours.mr; the Console: its tier inputs). cls: the board's letter badge, or the Console's outlined chip ("nwc nchip mrc"). */
+export function mrChip(mr, cls = "st mrc") {
+  if (!mr || typeof mr !== "object" || typeof mr.words !== "string") return "";
+  const title = `${mr.words}${mr.typed ? "; your typed minutes stand over it" : ""}${mr.text ? `. Note: ${mr.text}` : ""}`;
+  return `<span class="${esc(cls)}" title="${esc(title)}">MR</span>`;
+}
 
 /**
  * The header's Board and Injuries stamps from a slate file's as_of_by_source. A connector-built slate keeps them under

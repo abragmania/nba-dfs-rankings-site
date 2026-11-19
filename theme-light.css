@@ -1,5 +1,5 @@
 /* The light look (optimizer standard D11, theme.js). board.css is written for dark: the shared colours change here, and the colours it spells out as dark-only tints are overridden below. */
-body.light{--bg:#f4f4f1;--p:#ffffff;--p2:#ecece8;--ln:#c9c9c2;--tx:#17171a;--mu:#55555c;--dim:#66666d;--am:#9a5b00;--gr:#0d7a44;--rd:#c21f30;--bl:#1f5fbf;--or:#b85c00;background-color:var(--bg);background-image:none;color:var(--tx)}
+body.light{--bg:#f4f4f1;--p:#ffffff;--p2:#ecece8;--ln:#c9c9c2;--tx:#17171a;--mu:#55555c;--dim:#66666d;--am:#9a5b00;--gr:#0d7a44;--rd:#c21f30;--bl:#1f5fbf;--or:#b85c00;--mrc:#a21caf;background-color:var(--bg);background-image:none;color:var(--tx)}
 html:has(body.light){scrollbar-color:#a8a8a0 transparent}
 body.light .opt .slot.pick:hover{background-color:#0000000a}
 body.light td{border-bottom-color:#e3e3dd}
