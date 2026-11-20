@@ -3,6 +3,7 @@
 // to what the app has live; `live` is that figure, for the chip's hover. Pure, no page: the console and the board both read it.
 import { keyOf, outsOf } from "./console-engine.js";
 import { calc } from "./console-model.js";
+import { newsFlips } from "./role-marks.js";
 
 /** The work with one pin taken off the scenario on show. */
 function without(S, k, id) {
@@ -14,12 +15,13 @@ const rowOf = (T, S, id) => calc(T, S, S.outs).rows.find((r) => r.id === id) ?? 
 
 /**
  * { id: { m?: { v, live }, d?: { v, live }, r?: { v: role, live: role }, out?: { v: "out" | "in", live: "playing" | "out" } } } for every man
- * with a mark on the scenario on show. live is null when the app has no figure for him without the mark; news is the lineup news's words when the news made it; by is "news" then, else "you".
+ * with a mark on the scenario on show (m.aside: his typed number set aside by a later role change, typed-aside.js). live is null when the app has no figure for him without the mark; news is the lineup news's words when the news made it; by is "news" then, else "you".
  */
 export function marksOf(T, S) {
   const key = keyOf(S.outs), pins = S.pins[key] ?? {}, out = {}, outs = new Set(S.outs), tonight = new Set(T.tonight ?? []);
   const at = (id) => (out[id] ??= {});
-  for (const id of Object.keys(pins.m ?? {})) if (T.byId[id] && !outs.has(id)) at(id).m = { v: pins.m[id], live: rowOf(T, without(S, "m", id), id)?.min ?? null };
+  const asideOf = Object.keys(pins.m ?? {}).length ? new Map(calc(T, S, S.outs).rows.filter((r) => r.min_aside).map((r) => [r.id, { ...r.min_aside, fig: r.min }])) : new Map(); // typed numbers a later role change set aside (typed-aside.js), with the figure that replaces each (the board shows him set aside only once it holds it)
+  for (const id of Object.keys(pins.m ?? {})) if (T.byId[id] && !outs.has(id)) at(id).m = { v: pins.m[id], live: rowOf(T, without(S, "m", id), id)?.min ?? null, ...(asideOf.has(id) ? { aside: asideOf.get(id) } : {}) };
   for (const id of Object.keys(pins.d ?? {})) if (T.byId[id] && !outs.has(id)) at(id).d = { v: pins.d[id], live: rowOf(T, without(S, "d", id), id)?.rate ?? null };
   for (const id of Object.keys(pins.r ?? {})) if (T.byId[id] && !outs.has(id)) at(id).r = { v: pins.r[id], live: rowOf(T, without(S, "r", id), id)?.role ?? null };
   for (const id of outs) if (T.byId[id] && !tonight.has(id)) at(id).out = { v: "out", live: "playing" };
@@ -52,8 +54,8 @@ const onShow = (S) => ({ flips: S.pins[keyOf(S.outs)]?.r ?? {}, outs: new Set(S.
  * him; once he is anything else, what he is now is Adam's own mark (Adam, 11-07: marks win). Pure.
  */
 export function newsOwned(S) {
-  const { flips, outs } = onShow(S), own = { out: new Set(), r: new Set() };
-  for (const e of Object.values(S.news ?? {})) if (e.state === "applied") for (const m of e.men) if (asLeft(m, flips, outs)) own[m.kind].add(m.id);
+  const { flips, outs } = onShow(S), own = { out: new Set(), r: new Set(Object.keys(newsFlips(S.news, flips))) }; // a flip: role-marks.js newsFlips, the one definition the board's engine reads too
+  for (const e of Object.values(S.news ?? {})) if (e.state === "applied") for (const m of e.men) if (m.kind === "out" && asLeft(m, flips, outs)) own.out.add(m.id);
   return own;
 }
 

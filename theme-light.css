@@ -46,7 +46,7 @@ body.light .opt .lc.savedc{border-color:#0d7a4499}
 body.light .opt .lch button.sm.x{border-color:#c21f3066}
 /* Text on a filled amber or tinted control stays readable. */
 body.light .tabs button.on,body.light .themes .on,body.light .seg .on,body.light .ue-seg button.on,body.light .tchip.on,body.light .chip.starred.on,body.light .opt .sw button.on,body.light .opt .xf.on,body.light .go{color:#fff}
-body.light .chip.locked.on,body.light .chip.excluded.on,body.light .chip.on b,body.light .toast.err{color:#fff}
+body.light .chip.locked.on,body.light .pview .pv.on,body.light .pview .pv.on b,body.light .chip.on b,body.light .toast.err{color:#fff}
 body.light .st,body.light .crow.locked .sl,body.light .lsw.on,body.light .lslot.frz .sl,body.light .lslot.pnd .sl{color:#fff}
 body.light .go:disabled{background:#00000014;color:var(--dim)}
 body.light .opt .act .gorun .go:disabled{color:var(--tx)}

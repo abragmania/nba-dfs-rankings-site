@@ -12,9 +12,10 @@
 // now a Starter. A starter marked Out flips nobody: the rule fills the five. Each such
 // move is a flip of its own, named so the page can show it and Ctrl+Z takes it back.
 import { isNum } from "./figures.js";
-import { oursUse, rolesFromEngine, fiveIsSet, tierStarters, chartUse, chartStarters, unmatchedNote, playsDespiteInjured } from "./console-ours.js";
+import { oursUse, rolesFromEngine, fiveIsSet, tierStarters, chartUse, chartStarters, unmatchedNote, playsDespiteInjured, callLook } from "./console-ours.js";
 import { tierScenario, withStanding } from "./console-tier.js";
 import { benchPlusBy } from "./bench-plus-rule.js";
+import { trimToFive } from "./role-marks.js";
 
 /** The engine's Bench+ rule on a man's rows from the inputs (tier-inputs.js [min, started 1 | 0 | null, date]): true or false, or null when the inputs hold no row list for him. */
 const ruleBenchPlus = (team, id) => { const rows = team.tier?.men?.[id]?.rows; return Array.isArray(rows) ? benchPlusBy(rows.map(([min, s]) => ({ min, started: s === 1 ? true : s === 0 ? false : null }))).ok : null; };
@@ -54,36 +55,77 @@ export function resolveRoles(team, outSet, flips) {
 /** Roles for a team on the TwoGun source (or with no engine inputs): the five is the engine's (the lineup pages' agreed five, else TwoGun's starter flags, his S marks first; tierStarters) when the team has the inputs, else the saved depth chart's (console-ours.js chartStarters). With the engine's five the chart fills only places it leaves open, so a chart-injured man the pages start starts. A man outside the five keeps his chart role; a man not on the chart gets the rule's bench role. */
 function resolveFromChart(team, outSet, flips) {
   const flipped = liveFlips(team, outSet, flips), roles = {};
-  const hasChart = chartUse(team).ok, chart = hasChart ? chartStarters(team, outSet, flipped) : { ids: [], notes: [] };
+  const hasChart = chartUse(team).ok, chartOf = (f) => (hasChart ? chartStarters(team, outSet, f) : { ids: [], notes: [] });
   const tier = oursUse(team).ok ? tierStarters(team, outSet, flipped) : null;
-  const base = tier ? [...new Set([...Object.keys(flipped).filter((id) => flipped[id] === "starter"), ...tier.ids])] : null, short = base !== null && base.length < 5; // an S-marked man with no engine inputs is still in the five
-  const ids = base ? (short ? [...new Set([...base, ...chart.ids])].slice(0, 5) : base) : chart.ids;
-  const notes = base ? [...tier.notes, ...(short && ids.length < 5 ? chart.notes : [])] : chart.notes; // the chart's count notes (Only N / N marked) describe its own set, not the merged one: kept only while the merged five is still short
+  const won = tier ? withStanding(team, flipped) : flipped; // the flips his newer standing marks do not beat (console-tier.js flipWins)
+  const { ids, notes } = tier ? engineChartFive(team, outSet, flipped, won, tier, chartOf) : chartOf(flipped);
   const five = new Set(ids), toRole = { bench_plus: "bench_plus", bench: "bench", oor: "oor", injured: "oor", starter: "bench" }, standing = tier ? withStanding(team, {}) : {}; // his standing marks (Adam 10:25 AM 11-18)
   for (const p of team.men) {
     if (outSet.has(p.id)) roles[p.id] = "out";
-    else if (Object.hasOwn(flipped, p.id)) roles[p.id] = flipped[p.id];
+    else if (Object.hasOwn(flipped, p.id) && won[p.id] === flipped[p.id] && (flipped[p.id] !== "starter" || five.has(p.id))) roles[p.id] = flipped[p.id]; // a flip his newer standing mark beats is not his role; an S call the five-starter rule benched takes his bench role below
     else if (five.has(p.id)) roles[p.id] = "starter";
     else if (standing[p.id] === "bench_plus" || standing[p.id] === "bench") roles[p.id] = standing[p.id];
     else {
       const m = hasChart && p.depth_key ? team.depth.men[p.depth_key] : null;
       const rule = tier ? ruleBenchPlus(team, p.id) : null, plusOk = rule ?? p.bench_plus_ok; // the engine's Bench+ rule where its rows are here (the review of 11-18), else last season's flag
       const chartRole = m && !playsDespiteInjured(team, p, outSet) ? toRole[m.role] : null;
-      roles[p.id] = chartRole && (rule === null || (chartRole !== "bench" && chartRole !== "bench_plus")) ? chartRole : plusOk ? "bench_plus" : isNum(p.min) && p.min > 0 ? "bench" : chartRole ?? "oor";
+      const role = chartRole && (rule === null || (chartRole !== "bench" && chartRole !== "bench_plus")) ? chartRole : plusOk ? "bench_plus" : isNum(p.min) && p.min > 0 ? "bench" : chartRole ?? "oor";
+      roles[p.id] = won[p.id] === "starter" ? benchedCall(role) : role;
     }
   }
   return { roles, flipped, note: [...notes, unmatchedNote(team)].filter(Boolean).join(" ") || null };
 }
 
+/** A Starter call the five-starter rule benched says the man plays (the review of 11-20, round 2): his bench role, never Out of rotation (0 minutes), which becomes Bench. */
+const benchedCall = (role) => (role === "oor" ? "bench" : role);
+
+/**
+ * The TwoGun source's five for a team with the engine's inputs: { ids, notes }. The engine's five (tier: tierStarters; never more than five, Q13), with the S calls it cannot place in the places it leaves open
+ * (withUnplaced), and the saved chart's five (chartOf(flips): console-ours.js chartStarters, over the flips less the S calls already in the five, so it never makes room for a man already counted) filling a short one.
+ */
+function engineChartFive(team, outSet, flipped, won, tier, chartOf) {
+  const u = withUnplaced(team, outSet, flipped, won, tier.ids), base = u.ids, said = u.note ? [u.note] : [];
+  if (base.length < 5) {
+    const chart = chartOf(Object.fromEntries(Object.entries(flipped).filter(([id, r]) => !(r === "starter" && base.includes(id))))), ids = [...new Set([...base, ...chart.ids])].slice(0, 5);
+    return { ids, notes: [...tier.notes, ...(ids.length < 5 ? chart.notes : []), ...said] }; // the chart's count notes describe its own set, not the merged one: kept only while the merged five is still short
+  }
+  return { ids: base, notes: [...tier.notes, ...said] };
+}
+
+/** Whether the engine places a man's S call itself (console-tier.js tierFive): he has its inputs and is in its order, so his call is never placed a second time here. */
+const enginePlaces = (team, id) => Object.hasOwn(team.tier.men, id) && team.tier.order.includes(id);
+
+/**
+ * One rule on both sources (the lead's ruling of 11-20: the board must match the Console): an S call that stands (won: his flips and standing marks merged, the round-2 review) on a man the engine cannot place
+ * (no engine inputs, or not in its order) fills only a place the engine's five (ids) leaves open, by tonight's board order, then id; on a full five it is not used and the note says so (G62), because the board's
+ * engine cannot know him. { ids, left: [ids not used], note }.
+ */
+function withUnplaced(team, outSet, flipped, won, ids) {
+  const ord = (id) => { const o = team.men.find((p) => p.id === id)?.order; return isNum(o) ? o : Infinity; }, five = [...ids], left = [];
+  const unplaced = Object.keys(won).filter((id) => won[id] === "starter" && team.men.some((p) => p.id === id) && !five.includes(id) && !enginePlaces(team, id) && !outSet.has(id))
+    .sort((a, b) => (ord(a) < ord(b) ? -1 : ord(a) > ord(b) ? 1 : a < b ? -1 : a > b ? 1 : 0));
+  for (const id of unplaced) (five.length < STARTERS ? five.push(id) : left.push(id));
+  const whose = callLook(team, flipped).whoseOf, name = (id) => team.men.find((p) => p.id === id)?.name ?? id;
+  return { ids: five, left, note: left.length ? left.map((id) => `${whose(id)} on ${name(id)} is not used: the minutes engine has no inputs for him, and its five is full`).join("; ") : null };
+}
+
 /** The roles from the minutes engine (Adam 11-12): Starter is tonight's five (the lineup pages' five, else TwoGun's flags) with every man marked S; Bench+ and Bench are the engine's tiers, his marks forcing them. A man with no inputs for the engine is Bench or Out of rotation by TwoGun's minutes. */
 function resolveFromTier(team, outSet, flips) {
-  const flipped = liveFlips(team, outSet, flips), res = tierScenario(team, outSet, flipped, {}, true), { notes } = tierStarters(team, outSet, flipped), roles = {};
+  const flipped = liveFlips(team, outSet, flips), res = tierScenario(team, outSet, flipped, {}, true), { notes } = tierStarters(team, outSet, flipped), roles = {}, won = withStanding(team, flipped); // a flip his newer standing mark beats is not his role (console-tier.js flipWins)
+  // never more than five (Adam 3:52 PM 11-20, Q13): the engine's five stands, its minutes being worked on it; an S call it cannot place fills only a place it leaves open (withUnplaced)
+  const u = withUnplaced(team, outSet, flipped, won, res.five), five = new Set(u.ids), cut = [];
   for (const p of team.men) {
     if (outSet.has(p.id)) roles[p.id] = "out";
-    else if (Object.hasOwn(flipped, p.id)) roles[p.id] = flipped[p.id];
-    else roles[p.id] = res.roles[p.id] ?? (isNum(p.min) && p.min > 0 ? "bench" : "oor");
+    else if (Object.hasOwn(flipped, p.id) && won[p.id] === flipped[p.id] && (flipped[p.id] !== "starter" || five.has(p.id))) roles[p.id] = flipped[p.id];
+    else {
+      const r = res.roles[p.id] ?? (isNum(p.min) && p.min > 0 ? "bench" : "oor"), off = r === "starter" && !five.has(p.id); // the round-2 review: a "starter" the plan gives a man outside the five (one typed with no place in its order) is never a sixth
+      if (off && !u.left.includes(p.id)) cut.push(p.name ?? p.id);
+      roles[p.id] = off ? (isNum(p.min) && p.min > 0 ? "bench" : "oor") : r;
+      if (won[p.id] === "starter" && roles[p.id] !== "starter") roles[p.id] = benchedCall(roles[p.id]);
+    }
   }
-  return { roles, flipped, note: notes.join(" ") || null };
+  const said = cut.length ? `${cut.join(", ")} not used as a starter: the minutes engine's five is full` : null; // G62
+  return { roles, flipped, note: [...notes, u.note, said].filter(Boolean).join(" ") || null };
 }
 
 function resolveByRule(team, outSet, flips) {
@@ -93,9 +135,14 @@ function resolveByRule(team, outSet, flips) {
   for (const p of team.men) if (outSet.has(p.id)) roles[p.id] = "out";
   for (const [id, role] of Object.entries(flipped)) roles[id] = role;
   const need = Math.max(0, STARTERS - Object.values(flipped).filter((r) => r === "starter").length);
-  const open = playing.filter((p) => !Object.hasOwn(flipped, p.id)).sort(fillOrder);
+  const open = playing.filter((p) => !Object.hasOwn(flipped, p.id)).sort(fillOrder), benchRole = (p) => (p.bench_plus_ok ? "bench_plus" : isNum(p.min) && p.min > 0 ? "bench" : "oor");
   for (const p of open.slice(0, need)) roles[p.id] = "starter";
-  for (const p of open.slice(need)) roles[p.id] = p.bench_plus_ok ? "bench_plus" : isNum(p.min) && p.min > 0 ? "bench" : "oor";
+  for (const p of open.slice(need)) roles[p.id] = benchRole(p);
+  // never more than five (Adam 3:52 PM 11-20, Q13): more than five S marks go by the one rule, the man with the fewest of Tonight's minutes benched, named
+  const manOf = (id) => team.men.find((p) => p.id === id), calls = Object.keys(flipped).filter((id) => flipped[id] === "starter");
+  const cut = calls.length > STARTERS ? trimToFive(calls, calls, { ...callLook(team, flipped), figOf: (id) => tonightMin(manOf(id)), nameOf: (id) => manOf(id).name }) : { benched: [], notes: [] }; // whoseOf: a news call is never named as his (the review of 11-20)
+  for (const id of cut.benched) roles[id] = benchedCall(benchRole(manOf(id)));
+  if (cut.notes.length) return { roles, flipped, note: cut.notes.join(" ") };
   let note = null;
   const flagged = playing.filter((p) => p.starter === true).length;
   const starters = Object.values(roles).filter((r) => r === "starter").length;

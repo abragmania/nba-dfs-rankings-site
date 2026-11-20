@@ -42,6 +42,10 @@ export const mayResend = (inputs) => inputs?.newest === true && (openAfterLock(i
 
 export const resendFile = (slate) => path.join(dataDir(), "slates", slate, "resend.json");
 
+/** The marker the board's once-a-minute stamp reads (pull-moves.js): written only when the server changed the projections or the news record (news-apply.js, whatif-arm.js). The one copy. */
+export const newsMarkerFile = (slate) => path.join(dataDir(), "slates", slate, "news-applied.json");
+export const writeNewsMarker = (slate, rec) => writeFileAtomic(newsMarkerFile(slate), `${JSON.stringify(rec, null, 1)}\n`);
+
 /** The slate's last resend record, or null when none was written. A damaged file is { problem }, never silently null. */
 export function readResend(slate) {
   let raw;

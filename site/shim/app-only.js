@@ -41,5 +41,5 @@ export function withUsualMinutes(slate, slateData) {
   };
 }
 
-/** The console's inputs as baked at publish. A missing file throws, which the console route answers with its own sentence. */
-export const buildInputs = (slate) => JSON.parse(fs.readFileSync(`${dataDir()}/slates/${slate}/console-inputs.json`));
+/** The console's inputs as baked at publish, without the bake's own mark (desktop_bake: which read the next bake may carry). A missing file throws, which the console route answers with its own sentence. */
+export const buildInputs = (slate) => { const { desktop_bake: _mark, ...inputs } = JSON.parse(fs.readFileSync(`${dataDir()}/slates/${slate}/console-inputs.json`)); return inputs; };

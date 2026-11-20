@@ -6,9 +6,14 @@ import { esc, money, logo, ICON, statusBadge, restDot, figSourceWord, hisProj, h
 import { bumpControlHtml, bumpFigureHtml } from "./bump-control.js";
 import { rowPin } from "./lateswap-panel.js";
 import { limitCellHtml } from "./row-limits.js";
-import { tonightRate, outFor, isNum } from "./figures.js";
-import { starterChipHtml, undoChipHtml } from "./board-marks.js";
+import { tonightRate, isNum, projAside } from "./figures.js";
+import { starterChipHtml, undoChipHtml, asideChipHtml } from "./board-marks.js";
+import { stepHtml, wholeText } from "./min-step.js";
 import { tgMin } from "./lineup-proposals.js";
+import { noCellHtml, noTagHtml } from "./no-picks.js";
+
+/** Whether the board's minutes `v` are the figure a set-aside gives (aside.fig: the Console's, or the engine's for a Minutes-page number), within a hundredth: only then is the number shown as set aside. */
+export const asideOnBoard = (aside, v) => Boolean(aside) && isNum(v) && isNum(aside.fig) && Math.abs(v - aside.fig) < 0.01;
 
 export const FIG_COLS = {
   // His DraftKings positions as the slate file gives them (PG, SF/PF, C), a column of its own left of Salary (Adam 2:29 PM 11-18).
@@ -29,7 +34,7 @@ export const FIG_COLS = {
 };
 /** The three groups of figure columns (Adam, 11-09): "p" tonight's projections, tinted as one band; "s" stats, what happened, quieter; "c" the controls.
  *  Sal, Star and Player belong to none. A column that opens a group after another group or after Sal gets the divider. */
-const FAM = { projection: "p", value: "p", proj_own: "p", minutes: "p", min_other: "p", dk_tonight: "p", dk_per_min: "s", usage: "s", min_usual: "s", thumbs: "c", lock: "c", exclude: "c", min_pct: "c", max_pct: "c" };
+const FAM = { projection: "p", value: "p", proj_own: "p", minutes: "p", min_other: "p", dk_tonight: "p", dk_per_min: "s", usage: "s", min_usual: "s", thumbs: "c", lock: "c", no: "c", exclude: "c", min_pct: "c", max_pct: "c" };
 /** The band names over the projection and stats families. */
 const BAND = { p: "Projections / Tonight", s: "Season" };
 export const famOf = (k) => FAM[k] ?? "";
@@ -127,7 +132,7 @@ export function comparePlayers(a, b, { key, dir }, source = "twogun") {
 export const hasResettable = (p) => boardTyped(p);
 /** Every key the table can sort on. A remembered sort must be one of these (view-memory.js). */
 export const SORT_KEYS = ["name", ...Object.keys(FIG_COLS)];
-const CTL_HEAD = { star: "Star", lock: "Lock", exclude: "Exclude" };
+const CTL_HEAD = { star: "Star", lock: "Lock", no: "NO: builds in this mode leave him out", exclude: "Exclude" };
 const LIMIT_HEAD = {
   min_pct: ["Min Exp %", "Min Exp %: the least share of the optimizer's lineups he must be in (type a percent in the box)"],
   max_pct: ["Max Exp %", "Max Exp %: the most share of the optimizer's lineups he may be in (type a percent in the box)"],
@@ -160,8 +165,8 @@ export function bandRowHtml(keys) {
   return `<tr class="bandrow">${runs.map((r) => (r.b ? `<th class="band g${r.f}${r.gd ? " gd" : ""}" colspan="${r.n}">${esc(r.b)}</th>` : `<th class="bandgap" colspan="${r.n}"></th>`)).join("")}</tr>`;
 }
 
-/** A number he typed on a man who is Out: kept, drawn struck, and used once he is In (figures.js outFor). */
-const struckOut = (p) => isNum(p?.ovr?.projection) && p.ovr.projection > 0 && outFor(p, { engine: true });
+/** A number he typed on a man who is Out: kept, drawn struck (his number, not the 0 he projects), and used once he is In (figures.js projAside, the merge's own rule). */
+const struckOut = (p) => projAside(p, p?.ovr?.projection);
 
 /** Adam's overrides (server/slate/overrides.js): a click on Proj or Own opens its editor; a typed number wears the marker
  *  with the base on hover; Val follows the effective projection. */
@@ -170,7 +175,7 @@ function figCell(k, p, x) {
   // A figure's own hover keeps its use and carries why the row is greyed after it, as it hides the row's own hover.
   const also = x.why ?? "";
   const withWhy = (t) => (also ? `${t} · ${also}` : t);
-  if (k === "projection") return `<td class="${col.cls}${struckOut(p) ? " ostruck" : ""}"${projTitle(p) || struckOut(p) ? ` title="${esc([projTitle(p), struckOut(p) ? "Your number is kept while he is Out; it counts once he is In" : ""].filter(Boolean).join(" · "))}"` : ""}>${bumpFigureHtml(p, v == null ? dash(p.proj_note ?? col.title) : v.toFixed(1), also)}</td>`;
+  if (k === "projection") return `<td class="${col.cls}${struckOut(p) ? " ostruck" : ""}"${projTitle(p) || struckOut(p) ? ` title="${esc([projTitle(p), struckOut(p) ? "Your number is kept while he is Out; it counts once he is In" : ""].filter(Boolean).join(" · "))}"` : ""}>${bumpFigureHtml(p, struckOut(p) ? p.ovr.projection.toFixed(1) : v == null ? dash(p.proj_note ?? col.title) : v.toFixed(1), also)}</td>`; // struck: his kept number, the projection itself is 0 (round 2 item 4)
   if (k === "dk_tonight") return tonightCell(p, col, dash, withWhy, x.mark?.d);
   if (k === "value" || k === "proj_own") {
     const own = k === "proj_own", typed = own && p.ovr?.proj_own != null;
@@ -202,23 +207,31 @@ function figCell(k, p, x) {
     // Min is typeable (Adam, 11-07): the number goes to the console as his typed minutes, and the console sends the board his projection.
     const mk = x.mark?.m, applied = v != null && hisMin(p), tg = tgMin(p);
     const tgText = `TwoGun's ${typeof tg === "number" ? tg.toFixed(1) : "none"}`;
-    const hover = mk ? `Your typed minutes; ${tgText}. Click to change them` : applied ? `From the console; ${tgText}. Click to type his minutes` : "Click to type his minutes; Proj = Min × DK/min";
+    // a typed number a later role change set aside (typed-aside.js) shows as set aside only once the board holds the figure that replaces it (the Console's send, by itself on a live slate):
+    // until then his number is still what the board and the optimizer use, and the cell says so (the lead's render check of 11-20)
+    const aside = asideOnBoard(mk?.aside, v) ? mk.aside : !mk && asideOnBoard(p.ours?.min_aside && { ...p.ours.min_aside, fig: p.ours.minutes }, v) ? p.ours.min_aside : null, used = mk && !aside;
+    const hover = used ? `Your typed minutes; ${tgText}. Click to change them` : applied && !aside ? `From the console; ${tgText}. Click to type his minutes` : "Click to type his minutes; Proj = Min × DK/min";
     const gap = minGapOf(p), warn = gap ? `<i class="gapw" title="${esc(gapTitle(gap))}">⚠</i>` : "";
-    return `<td class="${col.cls}"><span class="cu">${undoChipHtml(p.dk_id, "m", mk)}</span>${warn}<span class="cedit${mk ? " ctyped" : applied ? " min-typed" : ""}" data-edit="cmin" data-id="${esc(p.dk_id)}" title="${esc(withWhy(hover))}">${shown}</span></td>`;
+    return `<td class="${col.cls}"><span class="cu">${aside ? asideChipHtml(p.dk_id, { aside }) : mk ? undoChipHtml(p.dk_id, "m", mk) : ""}</span>${warn}${stepHtml(`<span class="cedit${used ? " ctyped" : applied ? " min-typed" : ""}" data-edit="cmin" data-id="${esc(p.dk_id)}" title="${esc(withWhy(hover))}">${v == null ? shown : wholeText(v)}</span>`, p.dk_id, p.team, v == null)}</td>`;
   }
   return `<td class="${col.cls}">${shown}</td>`;
 }
 
+/** A lock or exclude button for a mode whose saved picks the server could not read (review 11-20, money): "?" (unknown, never blank); a
+ *  click still saves this mode's lists, which replaces the unreadable ones (the old file kept beside them). */
+const unknownPick = (id, kind, why) => `<button class="${kind === "lock" ? "lk" : "ex"} unk" data-${kind}="${id}" title="${esc(`Unknown: ${why}. A click here saves new ${kind === "lock" ? "locks" : "excludes"} for this mode.`)}">?</button>`;
+
 /**
- * One player row. x: { dash, when(stamp), colourOf(team), lock, ex (Sets of dk_ids),
+ * One player row. x: { dash, when(stamp), colourOf(team), lock, ex (Sets of dk_ids), picksUnknown (why the open mode's picks are unknown, or null),
  * L (lateSwap view or null), inl (Set of the lineup on show, or null), blocks (Map of dk_id to why he cannot go into the
  * working lineup, or null: a greyed row, its figures and controls still there, standard A18), limits (dk_id to
- * his { min, max }, standard B10), marks(dk_id) (board-marks.js: his S chip and typed minutes and DK/min, or null) }.
+ * his { min, max }, standard B10), marks(dk_id) (board-marks.js: his S chip and typed minutes and DK/min, or null), no (Set of the
+ * open mode's NO men, no-picks.js, or null) }.
  */
 export function rowHtml(p, keys, x) {
   const c = x.colourOf(p.team), id = esc(p.dk_id), L = x.L, dash = x.dash;
   const why = L ? null : x.blocks?.get(p.dk_id) ?? null;
-  const lk = x.lock.has(p.dk_id), ex = x.ex.has(p.dk_id);
+  const lk = x.lock.has(p.dk_id), ex = x.ex.has(p.dk_id), no = Boolean(x.no?.has(p.dk_id)); // NO (no-picks.js): x.no is the open list, the late swap list in late swap mode
   x = { ...x, mark: x.marks?.(p.dk_id) ?? null }; // the console's word on him (board-marks.js): S chip, typed minutes and DK/min
   const gone = L && L.started.has(p.dk_id) && !L.inLineup.has(p.dk_id);
   // Any started man's lock and exclude are off in the mode: excluding a frozen man would only make the build fail.
@@ -230,15 +243,16 @@ export function rowHtml(p, keys, x) {
   const cell = (k) => {
     switch (k) {
       case "star": return `<td class="ctl"><button class="fav${p.starred ? " on" : ""}" data-star="${id}" title="${p.starred ? "Unstar" : "Star"}">${p.starred ? "★" : "☆"}</button></td>`;
-      case "name": return `<td class="pl"><div class="who">${logo(p.team)}<div class="nm"><div class="l1"><button class="name" data-dk-id="${id}">${esc(p.name)}</button>${starterChipHtml(x.mark?.chip)}${restDot(p)}${statusBadge(p, x.mark?.inj)}</div><div class="l2">${esc(p.team)} ${p.oppText ? esc(p.oppText) : dash("no opponent in this slate file")} · ${p.tip ? esc(x.when(p.tip)) : dash("no tip time in this slate file")}</div></div>${tools}</div></td>`;
+      case "name": return `<td class="pl"><div class="who">${logo(p.team)}<div class="nm"><div class="l1"><button class="name" data-dk-id="${id}">${esc(p.name)}</button>${noTagHtml(no, Boolean(L))}${starterChipHtml(x.mark?.chip)}${restDot(p)}${statusBadge(p, x.mark?.inj)}</div><div class="l2">${esc(p.team)} ${p.oppText ? esc(p.oppText) : dash("no opponent in this slate file")} · ${p.tip ? esc(x.when(p.tip)) : dash("no tip time in this slate file")}</div></div>${tools}</div></td>`;
       case "thumbs": return `<td class="bmp">${bumpControlHtml(p)}</td>`;
       // Late swap mode: the slot picker takes the lock button's place; a lock is still set from the player card.
-      case "lock": return `<td class="ctl${L ? " ls" : ""}">${L ? rowPin(p, L) : `<button class="lk${lk ? " on" : ""}" data-lock="${id}"${btn("Lock")}>${ICON.lock}</button>`}</td>`;
-      case "exclude": return `<td class="ctl"><button class="ex${ex ? " on" : ""}" data-excl="${id}"${btn("Exclude")}>${ICON.x}</button></td>`;
+      case "lock": return `<td class="ctl${L ? " ls" : ""}">${L ? rowPin(p, L) : x.picksUnknown ? unknownPick(id, "lock", x.picksUnknown) : `<button class="lk${lk ? " on" : ""}" data-lock="${id}"${btn("Lock")}>${ICON.lock}</button>`}</td>`;
+      case "no": return noCellHtml(p, no, Boolean(L), Boolean(L?.started?.has(p.dk_id)));
+      case "exclude": return `<td class="ctl">${x.picksUnknown && !L ? unknownPick(id, "excl", x.picksUnknown) : `<button class="ex${ex ? " on" : ""}" data-excl="${id}"${btn("Exclude")}>${ICON.x}</button>`}</td>`;
       case "min_pct": return limitCellHtml("min", p.dk_id, x.limits, Boolean(L));
       case "max_pct": return limitCellHtml("max", p.dk_id, x.limits, Boolean(L));
       default: return figCell(k, p, { ...x, why });
     }
   };
-  return `<tr class="team${lk ? " locked" : ""}${ex ? " excl" : ""}${gone ? " started" : ""}${L ? "" : why ? " blk" : " pk"}${x.inl?.has(p.dk_id) ? " inl" : ""}" data-row="${id}" style="--t1:${c.t1};--t2:${c.t2}"${gone ? ` title="Game started"` : why ? ` title="${esc(why)}"` : ""}>${keys.map((k, i) => addClass(cell(k), famClass(keys, i))).join("")}</tr>`;
+  return `<tr class="team${lk ? " locked" : ""}${ex ? " excl" : ""}${no ? " isno" : ""}${gone ? " started" : ""}${L ? "" : why ? " blk" : " pk"}${x.inl?.has(p.dk_id) ? " inl" : ""}" data-row="${id}" style="--t1:${c.t1};--t2:${c.t2}"${gone ? ` title="Game started"` : why ? ` title="${esc(why)}"` : ""}>${keys.map((k, i) => addClass(cell(k), famClass(keys, i))).join("")}</tr>`;
 }

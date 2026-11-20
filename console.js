@@ -3,13 +3,15 @@
 // (console-auto.js), so there is no Apply step. This file holds the shared state, drawing, loading and the screen's clicks and keys;
 // console-moves.js acts on the state.
 import { esc, isoToEastern, tipWhen } from "./board-util.js";
-import { buildModel, buildTeam, canonRecord, recordOf, refreshTeams, rolesText, savedBehind, typedText } from "./console-model.js";
+import { buildModel, buildTeam, calc, canonRecord, recordOf, refreshTeams, rolesText, savedBehind, typedText } from "./console-model.js";
 import { depthHtml } from "./console-depth.js";
-import { clearStanding, dropMark, firstPlaying, jumpTeam, pushHist, redo, saveDirty, setPin, setSource, toggleOut, toggleStarter, undo } from "./console-moves.js";
+import { readWhatifs, loadPicked } from "./console-whatif.js";
+import { clearStanding, dropMark, firstPlaying, jumpTeam, pushHist, redo, restoreTyped, saveDirty, setPin, setSource, toggleOut, toggleStarter, undo } from "./console-moves.js";
 import { roleMarksFootHtml } from "./console-role-foot.js";
 import { cardApi, lineupViewOf } from "./console-card.js";
 import { createAutoApply, createPullReads, mayAutoSend, requeueApplied, requeueNews, resendChanged, resultSigs } from "./console-auto.js";
 import { PIN_MAX } from "./override-limits.js";
+import { stepMinutes } from "./min-step.js";
 import { keyOf } from "./console-engine.js";
 import { defaultSourceOf } from "./depth-chart.js";
 import { teamNews, newsView } from "./console-news.js";
@@ -99,12 +101,30 @@ function newsOpt(c) {
   }
 }
 
+/**
+ * A chart save's answer names what the save could not do (minutes/route.js savedAnswer, save_notes: the played games' figures not kept first, role marks the save removed): kept by team for the team's
+ * foot until its next save answers without them (the review of 11-19, findings 4 and 5; G62, G64). Wraps the console's api; every answer passes through unchanged.
+ */
+export function noteSaves(c, api) {
+  return async (url, opts) => {
+    const r = await api(url, opts), m = opts?.method === "POST" ? /^\/api\/minutes\/[^/]+\/team\/([A-Z]{2,4})$/.exec(String(url)) : null;
+    if (!m) return r;
+    const lines = Array.isArray(r?.save_notes) ? r.save_notes.filter((x) => typeof x === "string") : [], had = Boolean(c.saveNotes[m[1]]);
+    if (lines.length) c.saveNotes[m[1]] = lines; else delete c.saveNotes[m[1]];
+    if ((lines.length || had) && c.on && c.model) c.render();
+    return r;
+  };
+}
+
+/** The team's save notes at its foot (noteSaves). "" when none. Pure. */
+export const saveNotesFootHtml = (lines) => (lines?.length ? `<div class="cfoot">${lines.map((l) => `<div>${esc(l)}</div>`).join("")}</div>` : "");
+
 /** The page on show: one team's, or the All teams news list (the team bar is the console's own, with "All teams" first). */
 function pageHtml(c, news) {
   const G = c.G;
-  const team = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr: Object.values(c.saveErrs).join(" ") || null, news, help: G.help, chartSel: G.chartSel ?? null, showInj: showInjured(c), readOnly: c.readOnly });
+  const team = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr: Object.values(c.saveErrs).join(" ") || null, news, help: G.help, chartSel: G.chartSel ?? null, showInj: showInjured(c), readOnly: c.readOnly, whatifs: c.whatifs?.teams?.[G.cur]?.whatifs ?? [], whatifsErr: c.whatifsErr ?? null });
   const foot = readFootHtml(c.readFail, c.inputsAt); // a failed refresh: at the page's foot, under either view
-  if (G.view !== "all") return `${withAllChip(team, false)}${roleMarksFootHtml(c.model.TEAMS[G.cur], c.model.ST[G.cur], G.cur, c.readOnly === true)}${foot}`; // his standing role marks, at the foot (G64)
+  if (G.view !== "all") return `${withAllChip(team, false)}${roleMarksFootHtml(c.model.TEAMS[G.cur], c.model.ST[G.cur], G.cur, c.readOnly === true)}${saveNotesFootHtml(c.saveNotes[G.cur])}${foot}`; // his standing role marks, at the foot (G64)
   const words = !news ? "No lineup news is wired on this page." : news.state === "loading" ? "Reading the lineup news..." : news.state !== "ok" ? `Lineup news not read: ${news.why}` : null;
   const body = words ? `<section class="ca"><header class="ca-h"><h1>Tonight's lineup news</h1></header><div class="ca-empty">${esc(words)}</div></section>` : landingHtml(news.V, G.newsTeam ?? "", c.inputs.games.flatMap((g) => [g.away, g.home]));
   return `${withAllChip(teamBarOf(team), true)}${body}${foot}`;
@@ -145,7 +165,7 @@ async function load(c, name) {
   clearTimeout(c.usageTimer);
   clearTimeout(c.retryTimer);
   clearTimeout(c.readTimer);
-  Object.assign(c, { slate: name, loadError: null, model: null, newsRead: null, usageTries: 0, saveErrs: {}, sync: { state: "ok", at: null }, touched: new Set(), pending: new Set(), readFail: null, inputsAt: null }); // another slate: nothing changed on it yet
+  Object.assign(c, { slate: name, loadError: null, model: null, newsRead: null, usageTries: 0, saveErrs: {}, saveNotes: {}, sync: { state: "ok", at: null }, touched: new Set(), pending: new Set(), readFail: null, inputsAt: null }); // another slate: nothing changed on it yet
   c.E("app").innerHTML = `<div class="fatalc dimc">Loading ${esc(name)}...</div>`;
   try {
     const out = await c.api(`/api/slate/${encodeURIComponent(name)}/console`);
@@ -167,6 +187,7 @@ async function load(c, name) {
     pushHist(c, "Start");
     render(c);
     readNews(c).then(() => { if (c.on && name === c.slate) render(c); }); // the strip says "reading..." until the read lands; readNews never rejects
+    readWhatifs(c).then(() => { if (c.on && name === c.slate) render(c); }); // the Load what-if picker (console-whatif.js, Adam 1:37 PM 11-20); never rejects
     const news = requeueNews(c), applied = requeueApplied(c);
     if (news || applied) c.auto.kick(true); // (no click of his started it: his_at is carried) // a news change whose send never landed, or a pull since the last send, reaches the board now
     else c.auto.settleNow(); // old work this page does not send (a locked or older slate, a mark nothing moved) is said in the header, not "up to date"
@@ -191,6 +212,7 @@ async function refresh(c) {
     const out = await c.api(`/api/slate/${encodeURIComponent(name)}/console`);
     if (name !== c.slate || !c.model) return;
     await readNews(c);
+    await readWhatifs(c); // never rejects
     if (name !== c.slate || !c.model) return;
     const was = resultSigs(c);
     takeInputs(c, out);
@@ -275,8 +297,28 @@ function commitBox(c, inp) {
   if (text === "") { if (had !== undefined) dropMark(c, team, id, k); else render(c); return; }
   const v = /^(\d+\.?\d*|\.\d+)$/.test(text) ? Number(text) : NaN;
   if (!(v >= 0 && v <= PIN_MAX[k])) { c.toast(`${k === "m" ? "Minutes" : "DK/min"} must be a number from 0 to ${PIN_MAX[k]}.`, "err"); render(c); return; }
-  if (shown !== "" && Number(shown) === v) { delete inp.dataset.done; return; } // unchanged as shown
+  const exact = inp.dataset.exact; // minutes show rounded, so the stored figure is the one compared: typing the shown 31 over 31.4 is a change
+  if (shown !== "" && (exact !== undefined && exact !== "" ? Number(exact) : Number(shown)) === v) { delete inp.dataset.done; return; } // unchanged as shown
   setPin(c, team, id, k, v);
+}
+
+/** His set-aside typed minutes back in use (Adam 9:46 AM 11-20, typed-aside.js): a Console number is stamped again (restoreTyped); a Minutes-page number is typed again as it was on the Minutes route, then the inputs are read again. */
+async function restoreRow(c, team, id) {
+  if (restoreTyped(c, team, id)) return true;
+  const T = c.model?.TEAMS?.[team], S = c.model?.ST?.[team], a = T && S ? calc(T, S, S.outs).rows.find((r) => r.id === id)?.min_aside : null;
+  if (a?.src !== "page") { c.toast("Nothing to bring back: he has no typed minutes set aside here.", "err"); return false; }
+  try {
+    await c.api(`/api/minutes/${encodeURIComponent(c.slate)}/team/${encodeURIComponent(team)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "minutes", id, value: a.value }) });
+    await refresh(c);
+    return true;
+  } catch (e) { c.toast(`Your number was not brought back: ${e.message}`, "err"); return false; }
+}
+/** A - or + press beside a Min box: the shown whole minute moved by one, kept as his typed minutes exactly as a typed number is. */
+function stepBox(c, btn) {
+  const { team, id, mstep } = btn.dataset, inp = btn.closest(".mstep")?.querySelector("input.fin");
+  const v = stepMinutes(parseFloat(inp?.defaultValue), Number(mstep));
+  if (v === null) { c.toast("There is no minutes figure to step from; type his minutes.", "err"); return; }
+  setPin(c, team, id, "m", v);
 }
 
 function onClick(c, e) {
@@ -289,7 +331,9 @@ function onClick(c, e) {
   else if ("caFilter" in d) { c.G.newsTeam = d.caFilter; writeStore(FILTER_KEY, d.caFilter); render(c); } // "" is All
   else if (d.caDismiss) { writeStore(dismissKey(c.slate), JSON.stringify({ ...readDismissed(c.slate), [d.caDismiss]: d.caSig ?? "" })); render(c); }
   else if (d.help) { c.G.help = !c.G.help; render(c); }
+  else if (d.mstep) stepBox(c, t); // the - and + beside a Min box (min-step.js)
   else if (d.undo) dropMark(c, d.team, d.id, d.undo);
+  else if (d.restore) restoreRow(c, d.team, d.restore); // his typed minutes a role change set aside, back in use (Adam 9:46 AM 11-20)
   else if (d.clearMark) clearStanding(c, d.team, d.clearMark); // a standing role mark off, back to the rule (Undo brings it back)
   else if (d.s) toggleStarter(c, d.team, d.s);
   else if (d.out) toggleOut(c, d.team, d.out);
@@ -316,17 +360,19 @@ const SHELL = `<div id="app"></div>`;
 export function createConsole({ el, api, toast, colourOf, onPlayers, onWork, news, retryMs = READ_RETRY_MS }) {
   el.innerHTML = SHELL;
   const c = {
-    el, api, toast, colourOf, onPlayers, onWork, news, retryMs, readFail: null, inputsAt: null, newsRead: null, on: false, slate: null, inputs: null, model: null, applied: null, loadError: null, lastSaved: {}, saveErrs: {}, saveQueue: Promise.resolve(), usageTimer: null, usageTries: 0, sync: { state: "ok", at: null },
+    el, api, toast, colourOf, onPlayers, onWork, news, retryMs, readFail: null, inputsAt: null, newsRead: null, on: false, slate: null, inputs: null, model: null, applied: null, loadError: null, lastSaved: {}, saveErrs: {}, saveNotes: {}, saveQueue: Promise.resolve(), usageTimer: null, usageTries: 0, sync: { state: "ok", at: null },
     E: (id) => el.querySelector(`#${id}`),
     G: { cur: null, view: "all", newsTeam: readStore(FILTER_KEY, ""), pick: null, roleMoves: null, focus: null, hist: [], hi: -1, editing: false, rows: [], modal: null },
     render: () => render(c), drawBar: () => render(c), focusCell: () => {},
     readOnly: typeof document !== "undefined" && document.documentElement?.classList?.contains("is-site") === true, // the public site: the depth chart is read-only (its routes are the app's only)
   };
+  c.api = noteSaves(c, api); // a chart save's notes go to the team's foot
   c.auto = createAutoApply(c, { refreshInputs: () => refresh(c), onState: () => { if (c.on) render(c); else c.onWork?.(); } }); // the board shows the send's state too
+  c.restoreRow = (team, id) => restoreRow(c, team, id); // the player card's restore of a Minutes-page number (console-card.js restoreCard)
   // A save the server refused as CHANGED_ELSEWHERE (console-moves.js saveDirty): read the disk's work now, which this page takes for that team, and save what is still its own.
   c.onConflict = () => { clearTimeout(c.conflictTimer); c.conflictTimer = setTimeout(async () => { await refresh(c); saveDirty(c); }, 0); };
   el.addEventListener("click", (e) => onClick(c, e));
-  el.addEventListener("change", (e) => { if (e.target.matches?.("input.fin")) commitBox(c, e.target); else if (c.model) chartChange(c, e); });
+  el.addEventListener("change", (e) => { if (e.target.matches?.("input.fin")) commitBox(c, e.target); else if (e.target.matches?.("select[data-wload]")) loadPicked(c, e.target); else if (c.model) chartChange(c, e); });
   wireChartDrag(c, el);
   el.addEventListener("focusout", () => setTimeout(() => { if (c.redrawLater && c.on) render(c); }, 0)); // the redraw that waited for him to finish typing
   document.addEventListener("keydown", (e) => onKey(c, e));

@@ -44,7 +44,6 @@ export function statusChip(word) {
   return { word: w, cls: "xx" };
 }
 /** An Out-list man's chip: the word TwoGun gave, a dash when it gave none (never a green Active). */
-const outChip = (status) => (String(status ?? "").trim() ? (isOut(status) ? { word: "Out", cls: "ou" } : statusChip(status)) : { word: "—", cls: "xx" });
 
 const KINDS = [[{ test: isOut }, "OUT"], [/question/i, "Q"], [/doubt/i, "D"], [/probable/i, "PROB"], [/playing/i, "IN"], [/^note$/i, "NOTE"], [/^starting$/i, "START"]];
 const kindOf = (label) => KINDS.find(([re]) => re.test(String(label ?? "")))?.[1] ?? "INFO";
@@ -80,13 +79,12 @@ const moveText = (x) => `${x.from.toFixed(1)} → ${x.to.toFixed(1)}${x.to > x.f
  * "TwoGun has not reacted yet") is true for the last two kinds that have news to show: a report between the pulls with no move, a report after the newest pull, and a report that a man on
  * the Out list is back (any card but an Out) newer than the earlier pull. Without a pull comparison nothing is flagged. Ours does not count: only TwoGun's move does.
  */
-export function feedEntries({ cards, players, out, pullChanges, day = null }) {
+export function feedEntries({ cards, players, pullChanges, day = null }) { // TwoGun's Out list is never read (Adam 11-19)
   const byId = new Map((players ?? []).map((p) => [String(p.dk_id), p]));
-  const outBy = new Map((out ?? []).map((o) => [`${o.team}|${o.name}`, o]));
   const pc = pullChanges?.state === "ready" ? { prev: stampMs(pullChanges.prev), now: stampMs(pullChanges.pull) } : null;
   const t = (ms) => timeLabel(ms, { day });
   const entries = (Array.isArray(cards) ? cards : []).map((c) => {
-    const at = atOf(c), p = c.dk_id != null ? byId.get(String(c.dk_id)) : null, o = c.out_as ? outBy.get(`${c.team}|${c.out_as}`) : null, kind = kindOf(c.label);
+    const at = atOf(c), p = c.dk_id != null ? byId.get(String(c.dk_id)) : null, kind = kindOf(c.label);
     const known = pc && Number.isFinite(pc.prev) && Number.isFinite(pc.now) && at != null;
     let effect = "Not on tonight's slate", effectTitle = "No player on this slate matches this report", flag = false;
     let mins = null, react = null; // Console news list (Adam 11-17): minutes at stake as figures ("14.1", "3.5 → 6.6", "usually 11.8") and what TwoGun did: "applied" (it moved him, or he is on its Out list), "waiting" (it has not reacted), "newer" (after the last pull), null (no claim)
@@ -97,11 +95,6 @@ export function feedEntries({ cards, players, out, pullChanges, day = null }) {
       else if (at > pc.now) { effect = "🕒 Newer than your last pull — press Pull now"; effectTitle = `Reported after the ${t(pc.now)} pull, so it is not in the numbers yet${mins0 ? `; TwoGun has him at ${mins0}` : ""}`; flag = true; react = "newer"; }
       else if (mv?.min) { effect = `Minutes ${moveText(mv.min)}${mv.proj ? ` · pts ${moveText(mv.proj)}` : ""}`; effectTitle = "TwoGun's move between the last two pulls"; react = "applied"; if (mv.min.from !== mv.min.to) mins = `${mv.min.from.toFixed(1)} → ${mv.min.to.toFixed(1)}`; }
       else { effect = `⚠️ TwoGun hasn't moved him yet${mins0 ? ` (${mins0})` : ""}`; effectTitle = `No change in TwoGun's minutes since the ${t(pc.prev)} pull`; flag = true; react = "waiting"; }
-    } else if (o) {
-      const back = kind !== "OUT" && kind !== "NOTE";
-      if (back && known && at >= pc.prev) { effect = `⚠️ Listed Out, report says ${c.word ?? c.label ?? "something else"} — check him`; effectTitle = "He is on TwoGun's Out list but this report says otherwise; TwoGun has not changed him yet"; flag = true; react = "waiting"; }
-      else { effect = `🚫 Out${isNum(o.usual_minutes) ? ` · usually ${o.usual_minutes.toFixed(1)} min` : ""}`; effectTitle = "On TwoGun's Out list; his usual minutes are taken off the board"; if (kind === "OUT") react = "applied"; }
-      if (isNum(o.usual_minutes)) mins = o.usual_minutes.toFixed(1);
     }
     const body = c.body ?? null, said = tidyInjury(body), gl = /g[ -]?league/i.test(`${c.word ?? ""} ${c.label ?? ""} ${body ?? ""}`); // a G League assignment or two-way deal means he is not with the team: never "Playing"
     const lead = gl ? "G League" : LEAD_OF[kind];
@@ -176,7 +169,7 @@ const SOURCE = [["monster", "Monster"], ["rotowire", "RotoWire"], ["rotogrinders
  * unmatched: [names in the five with no id on the slate] }, asOf, day, starters, bench, outs, counts }. A man a fresh read says is Out (the proposals' claims: Out in a five, on MAY NOT
  * PLAY, or in Monster's news) is chipped Out and is not in the five.
  */
-export function teamModel({ code, players, out, latest, stale, cards, view, asOf = {}, day = null }) {
+export function teamModel({ code, players, latest, stale, cards, view, asOf = {}, day = null }) {
   const mine = (players ?? []).filter((p) => p.team === code);
   const block = latest?.teams?.[code] ?? {}; // with every source stale the fives are still not used (usable), but the kept Outs are (claims)
   const ok = (b) => b?.state === "ok" && Array.isArray(b.men);
@@ -223,10 +216,9 @@ export function teamModel({ code, players, out, latest, stale, cards, view, asOf
   const srcReadAt = Math.max(asOf.monster ?? -Infinity, asOf.rotowire ?? -Infinity, asOf.rotogrinders ?? -Infinity);
   const row = (p) => {
     // The newest news ruling shows on the row unless a lineup page read after the card says otherwise (news-status.js holds the rule).
-    const ruled = stale ? null : newsRuling({ card: statusCards.get(String(p.dk_id)), tgStatus: p.injury_status, tgSince: p.status_since ?? null, viewOut: markOf(view, code, p.dk_id) === "Out" || (view?.[code]?.newsOut ?? []).includes(String(p.dk_id)) });
+    const ruled = stale ? null : newsRuling({ card: statusCards.get(String(p.dk_id)), tgStatus: null, tgSince: null, viewOut: markOf(view, code, p.dk_id) === "Out" || (view?.[code]?.newsOut ?? []).includes(String(p.dk_id)) || (view?.[code]?.outs ?? []).map(String).includes(String(p.dk_id)) }); // outs: the scenario on show, Tonight's feed Outs included (the lead 11-20)
     const fromSource = srcStatus.get(String(p.dk_id)), useRuling = ruled && !(fromSource && srcReadAt > ruled.at);
-    const tgWord = p.injury_status && p.injury_status !== "Available" ? p.injury_status : null;
-    const word = claimedOut(p.dk_id) ? (doubtfulOnly(p.dk_id) ? "Doubtful" : "Out") : useRuling ? ruled.word : fromSource ?? tgWord;
+    const word = claimedOut(p.dk_id) ? (doubtfulOnly(p.dk_id) ? "Doubtful" : "Out") : useRuling ? ruled.word : fromSource ?? null; // TwoGun's status is never shown (Adam 11-19)
     const mv = p.pull_move ?? null, card = cardById.get(String(p.dk_id));
     return {
       id: String(p.dk_id), name: p.name, pos: Array.isArray(p.positions) && p.positions.length ? p.positions.join("/") : null, salary: money(p.salary), status: statusChip(word),
@@ -238,14 +230,7 @@ export function teamModel({ code, players, out, latest, stale, cards, view, asOf
   const inFive = (p) => (source.kind === "twogun" ? p.starter === true : five.has(String(p.dk_id)) && !claimedOut(p.dk_id) && !contested.has(String(p.dk_id))); // a disputed man is neither Out nor in the five
   const byMin = (a, b) => (tgMin(b) ?? -1) - (tgMin(a) ?? -1) || a.name.localeCompare(b.name);
   const starters = mine.filter(inFive).sort(byMin).map(row), bench = mine.filter((p) => !inFive(p)).sort(byMin).map(row);
-  const outs = (out ?? []).filter((o) => o.team === code).sort((a, b) => (b.usual_minutes ?? -1) - (a.usual_minutes ?? -1)).map((o) => {
-    const card = cardByName.get(`${code}|${o.name}`);
-    return {
-      id: null, name: o.name, pos: null, salary: o.salary_text ?? null, status: outChip(o.status), note: o.reason ?? shortWord(card),
-      noteAt: !o.reason || kindOf(card?.label) === "OUT" ? atOf(card) : null, notePrecision: card?.precision ?? "minute", // the card's time only beside the card's own words, or an Out report; never beside TwoGun's reason for another report
-      tg: null, usual: isNum(o.usual_minutes) ? o.usual_minutes : null, ours: null, mark: null, delta: null, out: true,
-    };
-  });
+  const outs = []; // TwoGun's Out list is never read (Adam 11-19): an Out man is a row with our feeds' word
   const questionable = [...starters, ...bench].filter((r) => ["qu", "db"].includes(r.status.cls)).length;
   return { code, five: source, asOf, day, starters, bench, outs, counts: { onSlate: starters.length + bench.length, out: outs.length, questionable } };
 }
@@ -262,14 +247,13 @@ export function newsModel({ slate, latest: latestIn, nowMs, view, tip = (t) => t
   const asOf = asOfTimes({ slate, latest }), day = dayOf(slate);
   const games = (slate?.games ?? []).map((g) => {
     const t0 = tipAt(g.tip), status = !isNum(t0) ? null : nowMs < t0 ? "Pregame" : "Started";
-    const make = (code) => teamModel({ code, players: slate.players, out: slate.out, latest, stale, cards, view, asOf, day });
+    const make = (code) => teamModel({ code, players: slate.players, latest, stale, cards, view, asOf, day });
     return { game: g.game, away: make(g.away), home: make(g.home), tip: tip(g.tip), status, line: g.line ?? null };
   });
   const inGames = new Set((slate?.games ?? []).flatMap((g) => [g.home, g.away]));
   const orphanTeams = new Map();
   for (const p of slate?.players ?? []) if (!inGames.has(p.team)) orphanTeams.set(p.team, { team: p.team, players: (orphanTeams.get(p.team)?.players ?? 0) + 1, outs: orphanTeams.get(p.team)?.outs ?? 0 });
-  for (const o of slate?.out ?? []) if (!inGames.has(o.team)) orphanTeams.set(o.team, { team: o.team, players: orphanTeams.get(o.team)?.players ?? 0, outs: (orphanTeams.get(o.team)?.outs ?? 0) + 1 });
   const teams = new Set([...inGames, ...orphanTeams.keys()]);
-  const log = [...feedEntries({ cards: cards.filter((c) => teams.has(c.team)), players: slate?.players, out: slate?.out, pullChanges: slate?.pull_changes, day }), ...foundEntries(latest?.found_by_check, teams, day)].sort((a, b) => (b.at ?? -Infinity) - (a.at ?? -Infinity));
+  const log = [...feedEntries({ cards: cards.filter((c) => teams.has(c.team)), players: slate?.players, pullChanges: slate?.pull_changes, day }), ...foundEntries(latest?.found_by_check, teams, day)].sort((a, b) => (b.at ?? -Infinity) - (a.at ?? -Infinity));
   return { games, log, stale, hasRead: Boolean(latest), asOf, day, orphans: [...orphanTeams.values()], foot: checkFoot(latest, day) };
 }

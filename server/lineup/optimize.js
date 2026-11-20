@@ -113,9 +113,12 @@ function readSettings(mode, settings, slateTeams, slateGames) {
   return { s };
 }
 
-/** A man the board or our minutes say is not playing: Out by status or our engine's playing === false (figures.js outFor), unless he put him In himself; his own Out always holds. Whatever his projection, the
+/** A man our minutes engine has not playing (our own injury feeds: figures.js outFor; TwoGun's status is never read, Adam 11-19), unless he put him In himself; his own Out always holds. Whatever his projection, the
  *  pool never holds him (RULES R4); a man the caller locks, hand-picks or pins is its explicit choice and is named in the run's note instead. */
 export const isNotPlaying = (p) => outFor(p, { engine: true });
+/** A man whose playing is not known (minutes/board.js applyOurs play_unknown: no engine row, or no feed of ours can judge his team): never in the pool unless he put him In (review 11-19, money). */
+export const UNKNOWN_WHY = "whether he plays is not known";
+const playUnknown = (p) => p?.play_unknown === true && p?.his !== "in";
 
 /** What a man lacks for this run, as phrases ("no salary"); empty when he is eligible. */
 function gaps(p, mode, s) {
@@ -559,6 +562,7 @@ function preparePool(players, mode, s, lockSet, exSet) {
   for (const { p, g } of byId.values()) {
     if (exSet.has(p.dk_id) || lockSet.has(p.dk_id)) continue;
     if (isNotPlaying(p)) skipped.push({ dk_id: p.dk_id, name: p.name, why: OUT_WHY });
+    else if (playUnknown(p)) skipped.push({ dk_id: p.dk_id, name: p.name, why: UNKNOWN_WHY });
     else if (g.length) skipped.push({ dk_id: p.dk_id, name: p.name, why: `${g.join(", ")} in this slate file` });
     else pool.push(p);
   }

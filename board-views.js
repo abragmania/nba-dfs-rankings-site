@@ -7,6 +7,7 @@ import { noteLists as dataNotes, warningCount } from "./box-note.js";
 import { hasResettable } from "./player-table.js";
 import { borderStyle } from "./game-borders.js";
 import { themeHtml } from "./theme.js";
+import { poolSwitchHtml, poolCounts, DEFAULT_POOL_VIEW } from "./pool-view.js";
 
 export function slateLabel(name) {
   const m = name.match(/^(\d{4})-(\d{2})-(\d{2})-(.+)$/);
@@ -16,14 +17,14 @@ export function slateLabel(name) {
 }
 
 /** The header: slate menu, tabs, data-warning list, Pull now, Console, Pin slots and theme. `panel` and `pullNow` are the page's own. */
-export function topHtml({ s, slates, name, view, news, consoleOn, panel, pullNow, theme, when }) {
+export function topHtml({ s, slates, name, view, news, consoleOn, scenarioOn, panel, pullNow, theme, when }) { // scenarioOn: the Scenario tab's state; undefined (a page that has not wired the tab) shows no Scenario button
   const { injuries, injuriesAbsent } = topStamps(s);
   const badges = badgeHtml({ injuriesMissing: injuriesAbsent && !when(injuries), projProblem: s.proj_problem ?? "" });
   const n = dataNotes(s); const count = warningCount(n);
   const list = (h, a) => (a.length ? `<h4>${h}</h4><ul>${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "");
   return `<div class="brand"><span class="mk"></span>NBA_BOARD<small>dk classic</small></div>
 <select class="slate" id="slateSel">${slates.map((x) => `<option value="${esc(x.slate)}"${x.slate === name ? " selected" : ""}>${esc(slateLabel(x.slate))}${x.slate === name ? ` · ${s.games.length} game${s.games.length === 1 ? "" : "s"}` : ""}</option>`).join("")}</select>
-<span class="vtabs"><button data-view="list" class="${view === "lineups" || consoleOn ? "" : "on"}">Player list</button><button data-view="lineups" class="${view === "lineups" && !consoleOn ? "on" : ""}">Lineups${panel.builtCount() ? ` <b>${panel.builtCount()}</b>` : ""}</button><button id="csBtn" class="${consoleOn ? "on" : ""}${news?.need ? " need" : ""}" title="${news?.need ? "Lineup news that needs your look (open the Console: All teams)" : consoleOn ? "Back to the board" : "Scenario console: minutes and usage when men sit, and tonight's lineup news"}">Console${news?.n ? ` <b>${news.n}</b>` : ""}</button></span>
+<span class="vtabs"><button data-view="list" class="${view === "lineups" || consoleOn || scenarioOn ? "" : "on"}">Player list</button><button data-view="lineups" class="${view === "lineups" && !consoleOn && !scenarioOn ? "on" : ""}">Lineups${panel.builtCount() ? ` <b>${panel.builtCount()}</b>` : ""}</button><button id="csBtn" class="${consoleOn ? "on" : ""}${news?.need ? " need" : ""}" title="${news?.need ? "Lineup news that needs your look (open the Console: All teams)" : consoleOn ? "Back to the board" : "Scenario console: minutes and usage when men sit, and tonight's lineup news"}">Console${news?.n ? ` <b>${news.n}</b>` : ""}</button>${scenarioOn === undefined ? "" : `<button id="snBtn" class="${scenarioOn ? "on" : ""}" title="${scenarioOn ? "Back to the board" : "What if a man sits: where his minutes and usage go in our engine, with your edits saved and armed"}">Scenario</button>`}</span>
 ${badges ? `<div class="stamps">${badges}</div>` : ""}
 ${count ? `<div class="notes"><button id="notesBtn" title="${count} data warning${count === 1 ? "" : "s"} on this slate">Data warnings</button><div class="list" id="notesList" hidden>${list("Conflicts", n.conflicts)}${list("Missing", n.missing)}${list("Box scores", n.boxes)}</div></div>` : ""}
 ${pullNow.html()}
@@ -60,41 +61,14 @@ export function headTitle(slate, players, c) {
   return `${c.head}, Basketball-Reference, ${at(f.this_season)}${ly ? `; 2025-26 figures (LY) ${at(f.last_season)}` : ""}`;
 }
 
-/** Locked / Excluded / Starred filter chips with their counts (only men still on the slate are counted); 0 is dim but
- *  clickable. Then "Reset all overrides" (A6): it clears typed numbers, bumps and console minutes, never stars (NFL D72), so it is
- *  disabled while no row has any, and it asks first (the click in board.js). */
-export function chipsHtml({ players, picks, byId, pickFilter, slate }) {
+/** Locked and Starred filter chips with their counts (only men still on the slate are counted); 0 is dim but clickable. Between
+ *  them, where the Excluded chip sat, the In / Out / All switch (pool-view.js, Adam 11-20). Then "Reset all overrides" (A6): it clears
+ *  typed numbers, bumps and console minutes, never stars (NFL D72), so it is disabled while no row has any, and it asks first (the click in board.js). */
+export function chipsHtml({ players, picks, byId, pickFilter, slate, view = DEFAULT_POOL_VIEW, mode = "" }) {
   const n = (k) => (k === "starred" ? players.filter((p) => p.starred).length : picks[k].filter((id) => byId.has(id)).length);
   const nOvr = players.filter(hasResettable).length;
-  return [["locked", "Locked"], ["excluded", "Excluded"], ["starred", "Starred"]].map(([k, label]) => `<button data-chip="${k}" class="chip ${k}${pickFilter === k ? " on" : ""}${n(k) ? "" : " zero"}" title="${pickFilter === k ? "Show everyone again" : `Show only ${label.toLowerCase()} players`}">${label} <b>${n(k)}</b></button>`).join("")
+  const chip = (k, label) => `<button data-chip="${k}" class="chip ${k}${pickFilter === k ? " on" : ""}${n(k) ? "" : " zero"}" title="${pickFilter === k ? "Show everyone in this view again" : `Show only ${label.toLowerCase()} players`}">${label} <b>${n(k)}</b></button>`;
+  return chip("locked", "Locked") + poolSwitchHtml(view, poolCounts(players, picks), mode) + chip("starred", "Starred")
     + `<button id="ovReset" class="chip ovr${nOvr ? "" : " zero"}"${nOvr ? ` title="${nOvr} ${nOvr === 1 ? "man has" : "men have"} a projection, ownership or bump typed on the board"` : ` disabled title="Nothing typed on the board to reset"`}>Reset all overrides</button>`;
 }
 
-/** A man from the Out list as the card opens him: on the slate's player pool when he is there, else only what the list says. */
-export function outMan(players, o) {
-  const on = players.find((p) => p.name === o.name && p.team === o.team);
-  if (on) return o.absence && !on.absence ? { ...on, absence: o.absence } : on;
-  return { dk_id: null, name: o.name, team: o.team, positions: [], injury_status: o.status ?? "Out", salary_text: o.salary_text ?? null, his_in_note: o.his_in_note ?? null, absence: o.absence ?? null };
-}
-/** A salary in dollars from the Out entry: its number when it has one, else the "$4.4K" text; 0 when neither reads. */
-const outSalary = (o) => {
-  if (Number.isFinite(o.salary)) return o.salary;
-  const m = /^\$?\s*([\d.,]+)\s*(k?)$/i.exec(String(o.salary_text ?? "").trim());
-  const n = m ? parseFloat(m[1].replace(/,/g, "")) : NaN;
-  return Number.isFinite(n) ? Math.round(n * (m[2] ? 1000 : 1)) : 0;
-};
-/** The Out list, closed on every load (a per-visit open): one line per team, the teams with the most usual minutes out first, the men by salary; each man keeps his index into slate.out for the click. */
-export function outsHtml({ out, outOpen, colourOf }) {
-  if (!out.length) return "";
-  const teams = new Map();
-  out.forEach((o, i) => { if (!teams.has(o.team)) teams.set(o.team, []); teams.get(o.team).push({ o, i }); });
-  const mins = (men) => men.reduce((t, { o }) => t + (Number.isFinite(o.usual_minutes) ? o.usual_minutes : 0), 0);
-  const lines = [...teams].sort((x, y) => mins(y[1]) - mins(x[1]) || String(x[0]).localeCompare(String(y[0]))).map(([team, men]) => {
-    const items = men.sort((x, y) => outSalary(y.o) - outSalary(x.o) || x.i - y.i).map(({ o, i }) => {
-      const st = String(o.status ?? "OUT").toUpperCase(), word = st === "OUT" || st === "O" ? "" : ` <i>${esc(st.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()))}</i>`;
-      return `<span class="o" title="${esc([o.reason, o.usual_minutes != null ? `usual minutes ${o.usual_minutes}` : null].filter(Boolean).join(" · "))}"><button class="oname" data-out-i="${i}" title="Open ${esc(o.name)}'s card">${esc(o.name)}</button>${o.salary_text ? ` <em>${esc(o.salary_text)}</em>` : ""}${word}</span>`;
-    }).join('<span class="osep"> · </span>');
-    return `<div class="otm"><span class="otc" style="color:${esc(colourOf(team).t1)}">${logo(team, "xs")}${esc(team)}</span><span class="oit">${items}</span></div>`;
-  }).join("");
-  return `<button class="oh2" id="outTog" aria-expanded="${outOpen}" title="${outOpen ? "Hide" : "Show"} the Out list">Out ${outOpen ? "▾" : `(${out.length}) ▸`}</button>${outOpen ? `<div class="olist">${lines}</div>` : ""}`; // the strip folds (C2); stored uppercase; shown "Doubtful" and the like only when not plain Out
-}

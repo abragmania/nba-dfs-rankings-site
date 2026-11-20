@@ -2,7 +2,7 @@
 // out, a click on a filled slot empties it, and Build keeps the hand-picked men and fills the rest (the working lineup's 8
 // slots go to the server as handPicks; each hand-picked man is held in every lineup of that build only, and any man may
 // move to another slot his positions allow; his Lock state never changes). The placement rules are in worklineup.js (pure). The working lineup is
-// kept per slate on the server (GET/POST /api/slate/<name>/working, the file cache/working/<slate>.json), the way the
+// kept per slate and per mode on the server (GET/POST /api/slate/<name>/working, the file cache/working/<slate>.json), the way the
 // picks are, so it survives a reload. Outside late swap mode only: in the mode a row click does nothing new and the mode's
 // own working lineup (lateswap-panel.js) is untouched.
 //
@@ -21,6 +21,36 @@ const N = SLOTS.length;
 export const NOT_LOADED = "The working lineup has not loaded yet";
 /** Standard D17's words: a click on the lineup while a build runs would be lost, so it says why nothing happened. */
 export const BUILD_RUNNING = "Lineups are already being made; try again when that finishes.";
+
+// Kept per mode (Adam 11-14, 11-19 and 11-20: Cash and GPP keep fully separate player picks and lineups): P.workByMode holds both modes'
+// slots and P.loadedByMode the saved lineup each was loaded from; P.work and P.loaded read and write the open mode's (P.mode), as
+// P.overrides does (settings-panel.js perModeOverrides), so every click, save, build and mark here touches the open mode's only.
+export const WORK_MODES = Object.freeze(["Cash", "GPP"]);
+const modeKey = (P) => (P.mode === "Cash" ? "Cash" : "GPP");
+/** Gives the panel state P its per-mode working lineups (keeping any P.workByMode / P.loadedByMode it holds). Returns P. */
+export function perModeWork(P) {
+  if (!P.workByMode) P.workByMode = { Cash: emptyWork(), GPP: emptyWork() };
+  if (!P.loadedByMode) P.loadedByMode = { Cash: null, GPP: null };
+  if (!P.workLeftByMode) P.workLeftByMode = { Cash: [], GPP: [] };
+  if (!P.workUnreadable) P.workUnreadable = { Cash: null, GPP: null };
+  for (const [key, store] of [["work", "workByMode"], ["loaded", "loadedByMode"], ["workLeft", "workLeftByMode"]]) {
+    Object.defineProperty(P, key, { get() { return this[store][modeKey(this)]; }, set(v) { this[store][modeKey(this)] = v; }, enumerable: true, configurable: true });
+  }
+  return P;
+}
+/** Why the clicked mode's saved working lineup could not be read (store.js readWorking `unreadable`), or null. Until a click in that mode saves a
+ *  new one, Build in it refuses with this (review 11-20, money): its hand-picked men are unknown, never "none". The other mode is usable. */
+export const workUnreadableWhy = (P, mode = modeKey(P)) => P.workUnreadable?.[mode] ?? null;
+/** Both modes' slots from a working-lineup answer (store.js readWorking). An answer without both throws: the lineup is then unknown. Pure. */
+export function workByModeOf(out) {
+  const bad = WORK_MODES.filter((m) => !Array.isArray(out?.[m]?.slots) || out[m].slots.length !== N);
+  if (bad.length) throw new Error(`the saved working lineup came back without the ${bad.join(" and ")} lineup`);
+  return Object.fromEntries(WORK_MODES.map((m) => [m, out[m].slots]));
+}
+/** The page foot's facts from a working-lineup answer: { carried, unreadable, replaced } (board-saves.js troubleLine words the last two). */
+const footFacts = (out) => ({ carried: out?.carried ?? null, unreadable: out?.unreadable ?? null, replaced: out?.replaced ?? null });
+/** The foot line for a working lineup still carried from before the split (store.js readWorking `carried`), or "" with none. Pure. */
+export const workCarriedLine = (c) => (c && Array.isArray(c.modes) && c.modes.length ? `${c.men} ${c.men === 1 ? "man" : "men"} from before Cash and GPP were kept apart, carried into ${c.modes.join(" and ")}; a change in a mode makes it its own.` : "");
 
 /** The working lineup's view (worklineup.js seatWork) from the panel state and the board context. */
 export const workView = (P, c) => seatWork(P.work, c.byId, c.picks.locked);
@@ -53,6 +83,21 @@ export function workAfterRoster(X, slots, left, own) {
   X.P.workLeft = left;
   own.render(X);
   X.toast(`Left the working lineup, no longer on the slate: ${left.join(", ")}.`);
+}
+
+/** The same for the other mode's working lineup (the open mode's goes through workAfterRoster): a man off the slate leaves it too, it is
+ *  saved for that mode, and he is named. Before the read nothing changes (the build route refuses an id it does not know, by name). */
+export function otherModeAfterRoster(X, own) {
+  if (!X.P.workReady) return;
+  const c = X.ctx();
+  for (const m of WORK_MODES.filter((x) => x !== modeKey(X.P))) {
+    const was = X.P.workByMode[m], next = cleanWork(was, c.byId);
+    const left = was.filter((id) => id != null && !next.includes(id));
+    if (!left.length) continue;
+    X.P.workByMode[m] = next; X.P.loadedByMode[m] = null; X.P.workLeftByMode[m] = left.map((id) => c.knownName?.(id) ?? `DraftKings id ${id}`);
+    saveWork(X, own, m);
+    X.toast(`Left the ${m} working lineup, no longer on the slate: ${left.map((id) => c.knownName?.(id) ?? `DraftKings id ${id}`).join(", ")}.`);
+  }
 }
 
 /** A row click: the man goes in, or out when he is in; a refusal (position, cap, excluded, a missing figure) is a toast. */
@@ -136,12 +181,17 @@ export function saveIds(P, c, order) {
 }
 
 // Saves go out one at a time, in order (the picks' rule in board.js): quick clicks never reach the server out of order.
-// After a failed save the panel reads the server's copy back (the saved file is the truth).
-function saveWork(X, own) {
-  const name = X.ctx().name, body = JSON.stringify({ slots: X.P.work });
+// After a failed save the panel reads the server's copy back (the saved file is the truth). Each save sends the open mode with its
+// lineup, taken at the click, and the server replaces that mode's only.
+function saveWork(X, own, mode = modeKey(X.P)) {
+  const name = X.ctx().name, body = JSON.stringify({ mode, slots: X.P.workByMode[mode] });
   X.P.workQueue = (X.P.workQueue ?? Promise.resolve()).then(async () => {
     try {
-      await X.api(`/api/slate/${encodeURIComponent(name)}/working`, { method: "POST", headers: { "content-type": "application/json" }, body });
+      const out = await X.api(`/api/slate/${encodeURIComponent(name)}/working`, { method: "POST", headers: { "content-type": "application/json" }, body });
+      if (out?.replaced_unreadable) X.toast(out.replaced_unreadable, "err");
+      if (name === X.ctx().name && X.P.workUnreadable?.[mode] && !out?.[mode]?.unreadable) { X.P.workUnreadable[mode] = null; own.render(X); } // saved a new one: Build in this mode may go
+      const foot = footFacts(out);
+      if (name === X.ctx().name && JSON.stringify(foot) !== JSON.stringify(X.P.workFoot ?? null)) { X.P.workFoot = foot; X.onWork(); }
     } catch (e) {
       X.toast(`Could not save the working lineup: ${e.message}`, "err");
       if (name === X.ctx().name) await readWork(X, name, own);
@@ -154,11 +204,20 @@ function saveWork(X, own) {
  * a failure leaves it as it was (false at first: clicks stay refused) and says so. One read at a time (P.workReading).
  */
 export function readWork(X, name, own) {
-  const at = X.P.work; // a change made while a re-read is out (after a failed save) wins over the copy it brings back
+  const at = { ...X.P.workByMode }; // a change made while a re-read is out (after a failed save) wins over the copy it brings back, mode by mode
   const read = X.api(`/api/slate/${encodeURIComponent(name)}/working`)
     .then((out) => {
-      if (name !== X.ctx().name || X.P.work !== at) return;
-      Object.assign(X.P, { work: cleanWork(out.slots, X.ctx().byId), workReady: true, workFailed: null });
+      if (name !== X.ctx().name) return;
+      const fresh = workByModeOf(out);
+      const nameOf = (id) => X.ctx().knownName?.(id) ?? `DraftKings id ${id}`;
+      for (const m of WORK_MODES) {
+        if (X.P.workByMode[m] !== at[m]) continue;
+        X.P.workByMode[m] = cleanWork(fresh[m], X.ctx().byId);
+        X.P.workUnreadable[m] = out[m].unreadable ?? null; // unknown, shown in the header, and Build in this mode refuses (workUnreadableWhy)
+        // The men the server opened because they left the slate or their slot (store.js readWorking `dropped`), named on that mode's Left line.
+        X.P.workLeftByMode[m] = (out[m].dropped ?? []).map(nameOf);
+      }
+      Object.assign(X.P, { workReady: true, workFailed: null, workFoot: footFacts(out) });
       own.render(X); X.onWork();
     })
     .catch((e) => {
@@ -179,8 +238,8 @@ export function retryWork(X, own) {
   return X.P.workReading ?? readWork(X, name, own);
 }
 
-/** A fresh working lineup for a new slate: not loaded until the server answers. */
-export const freshWork = () => ({ work: emptyWork(), workQueue: Promise.resolve(), workReady: false, workReading: null, workFailed: null });
+/** A fresh working lineup per mode for a new slate: not loaded until the server answers. P.work and P.loaded read these (perModeWork). */
+export const freshWork = () => ({ workByMode: { Cash: emptyWork(), GPP: emptyWork() }, loadedByMode: { Cash: null, GPP: null }, workQueue: Promise.resolve(), workReady: false, workReading: null, workFailed: null, workFoot: null, workLeftByMode: { Cash: [], GPP: [] }, workUnreadable: { Cash: null, GPP: null } });
 
 /** Salary left over the open slots, whole dollars rounded down; null (nothing to show) when the lineup is unread, has no open slot,
  *  is over the cap, a man's salary is missing, or a locked man has no seat (`unplaced`: his salary would be missing from the sum). Pure. */
@@ -195,7 +254,8 @@ export function perOpenSlot(ready, men, unplaced = []) {
 export function workLineupHtml(P, c, { slotRow, capLine, dash }) {
   const v = workView(P, c), res = P.results[P.mode], n = res?.lineups.length ?? 0;
   const filled = v.men.filter((p) => p !== undefined).length;
-  const title = P.loaded ? `Saved · ${esc(P.loaded.mode)} · ${esc(isoToEastern(P.loaded.saved_at) ?? "time unknown")} ${illegalTag(P.loaded)}` : "Working lineup";
+  const bad = workUnreadableWhy(P); // this mode's saved lineup could not be read: said here, never shown as an empty lineup that is his
+  const title = bad ? `Working lineup <span class="unp" title="${esc(`${bad}. Build in ${P.mode} waits until a click here saves a new lineup.`)}">could not be read</span>` : P.loaded ? `Saved · ${esc(P.loaded.mode)} · ${esc(isoToEastern(P.loaded.saved_at) ?? "time unknown")} ${illegalTag(P.loaded)}` : "Working lineup";
   const why = P.workFailed ? `Could not read it: ${P.workFailed}. Click in the panel to try again.` : "Reading it from the server";
   const right = !P.workReady ? `<span class="unp" title="${esc(why)}">not loaded</span>` : n ? "" : `<span>${filled} of ${N} slots</span>`;
   const canClear = P.workReady && !P.running && (filled > 0 || v.unplaced.length > 0);
@@ -214,4 +274,4 @@ export function workLineupHtml(P, c, { slotRow, capLine, dash }) {
 
 /** The working lineup a build sends as handPicks (8 entries, id or null: the 8 slots go as they are and are checked; only the ids reach the optimizer); null when nobody is
  *  hand-picked or in late swap mode. */
-export const buildHand = (P) => (P.ls || !handIds(P.work).length ? null : [...P.work]);
+export const buildHand = (P, slots = P.work) => (P.ls || !handIds(slots).length ? null : [...slots]); // slots: the clicked mode's (panel.js build)

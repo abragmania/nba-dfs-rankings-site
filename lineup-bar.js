@@ -82,10 +82,17 @@ export function newsLabel(bar, state = {}, feedCount = 0) {
   return { n: n(bar.applied) + n(bar.info) + n(bar.conflicts) + n(state.notes) + feedCount, check, need: check > 0 };
 }
 
-/** The news entries the console holds, newest first: [{ team, key, entry }] for every applied, reverted or failed one (an undone one is gone from the bar). */
+/**
+ * The news entries the console holds, newest first: [{ team, key, entry, staysOut? }] for every applied, reverted or failed one. An undone one is gone from the bar, unless it is an Out on a man
+ * the Console's Tonight still has Out (our feeds or his Minutes page, the lead 11-20): his X ended the news's move but did not play him, so the row stays and says why (staysOut: the words; G62, round 2 item 2).
+ */
 export function newsRows(view) {
   const rows = [];
-  for (const [team, v] of Object.entries(view ?? {})) for (const [key, entry] of Object.entries(v.news ?? {})) if (entry.state !== "undone") rows.push({ team, key, entry });
+  for (const [team, v] of Object.entries(view ?? {})) for (const [key, entry] of Object.entries(v.news ?? {})) {
+    if (entry.state !== "undone") { rows.push({ team, key, entry }); continue; }
+    const id = kindOf(key) === "out" ? key.split("|").at(-1) : null;
+    if (id && (v.tonightOut ?? []).includes(id) && (v.outs ?? []).includes(id)) rows.push({ team, key, entry, staysOut: v.feedWhy?.[id] ?? "your Out on the Minutes page" });
+  }
   return rows.sort((a, b) => String(b.entry.at).localeCompare(String(a.entry.at)) || a.key.localeCompare(b.key));
 }
 /** A news key's kind: "out", "starter", or "news" for a key of neither shape (never guessed as a start). */
@@ -112,11 +119,12 @@ export function proposalRows(bar, state = {}) {
   const clock = (at) => timeLabel(at, { day: state.day ?? null, log: true }) ?? "—";
   const row = (cls, o) => `<div class="lprow le ${cls}"${o.key ? ` data-lp="${esc(o.key)}"` : ""}><span class="lt">${esc(clock(o.at))}</span><span class="lsr">${esc(o.src)}</span>`
     + `<span class="lpkind k-${o.kind}">${o.kind}</span><span class="ltm">${esc(o.team ?? "—")}</span><span class="ltx"${o.title ? ` title="${esc(o.title)}"` : ""}>${o.plain ? esc(o.text) : announceHtml(o.text)}</span><span class="lef" title="${esc(o.effectTitle ?? o.effect)}">${effectHtml(o.effect)}</span><span class="lxx">${o.x}</span>${o.sides ?? ""}</div>`;
-  const news = ({ team, key, entry }) => {
-    const k = kindOf(key), failed = entry.state === "failed", reverted = entry.state === "reverted", putBack = entry.state === "reversed", at = ms(entry.at), sp = splitSource(entry.text);
+  const news = ({ team, key, entry, staysOut }) => {
+    const k = kindOf(key), failed = entry.state === "failed", reverted = entry.state === "reverted" || staysOut !== undefined, putBack = entry.state === "reversed", at = ms(entry.at), sp = splitSource(entry.text);
     const clk = at == null ? "" : ` · ${timeLabel(at, { day: state.day ?? null })}`;
-    const when = failed ? `⚠️ Not applied: ${entry.why ?? ""}` : reverted ? "↩️ Taken back by hand" : putBack ? (k === "out" ? `↩️ Put back in${clk}` : `↩️ Taken off${clk}`) : `✅ Applied${clk}`;
-    const whenTitle = failed ? when : reverted ? "You took this change back by hand" : putBack ? (k === "out" ? `The news put him back in by itself ${timeText(entry.at)}` : `Taken off ${timeText(entry.at)}; it applies again if the news still says so`) : `Applied by itself ${timeText(entry.at)}`;
+    const stays = staysOut === undefined ? null : `Undone, but he stays Out: ${staysOut}; put him In to play him`; // newsRows: his X on a man the Console's Tonight still has Out
+    const when = failed ? `⚠️ Not applied: ${entry.why ?? ""}` : stays ? `↩️ ${stays}` : reverted ? "↩️ Taken back by hand" : putBack ? (k === "out" ? `↩️ Put back in${clk}` : `↩️ Taken off${clk}`) : `✅ Applied${clk}`;
+    const whenTitle = failed ? when : stays ?? (reverted ? "You took this change back by hand" : putBack ? (k === "out" ? `The news put him back in by itself ${timeText(entry.at)}` : `Taken off ${timeText(entry.at)}; it applies again if the news still says so`) : `Applied by itself ${timeText(entry.at)}`);
     // The X only on a live entry; a failed note can be hidden; a change taken back with Ctrl+Z or put back by the news has nothing left to undo.
     const x = failed ? hide(key, "note") : reverted || putBack ? "" : `<button type="button" class="lpx" data-lp-undo="${esc(key)}" data-team="${esc(team)}" title="Undo this change: the console goes back to how it was before it">&#10005;</button>`;
     return { needs: failed, at, sortAt: at, team, html: row(`auto ${k}${failed ? " failed" : ""}${reverted || putBack ? " reverted" : ""}`, { key, at, src: sp.who ?? "Auto", kind: putBack ? KIND.news : KIND[k], team, text: sp.text, title: entry.text, effect: when, effectTitle: whenTitle, x }) };

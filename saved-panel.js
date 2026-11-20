@@ -155,7 +155,7 @@ async function deleteSaved(X, id, own) {
 export function savedClick(X, d, own) {
   const { P } = X;
   switch (d.op) {
-    case "save": { const ids = own.saveIds(X); if (ids) savedCall(X, { slots: ids, mode: own.saveMode?.(X) ?? P.mode }, "save the lineup", own); return true; }
+    case "save": { const ids = own.saveIds(X), no = own.saveNo?.(X) ?? null; if (ids) savedCall(X, { slots: ids, mode: own.saveMode?.(X) ?? P.mode, ...(no?.length ? { no } : {}) }, "save the lineup", own); return true; } // no: a built lineup's NO line goes with it (Adam 11-19)
     case "load": { const l = P.saved.find((x) => x.id === d.id); if (l) own.loadSaved(X, l); return true; }
     case "del": deleteSaved(X, d.id, own); return true;
     case "svrename": P.svEdit = { id: d.id, text: P.svNames?.[d.id] ?? "" }; own.render(X); (X.lel ?? X.el).querySelector?.(`[data-svname="${CSS.escape(d.id)}"]`)?.focus({ preventScroll: true }); return true;

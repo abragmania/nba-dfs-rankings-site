@@ -51,7 +51,7 @@ export function lineupStats(l, top = null) {
     sal: t.salary, left: t.salary != null ? SALARY_CAP - t.salary : null, own: t.own,
     lo: lo ? { name: lo.name, v: lo.proj_own, id: lo.dk_id } : null, hi: hi ? { name: hi.name, v: hi.proj_own, id: hi.dk_id } : null,
     u5: own ? own.filter((p) => p.proj_own < 5).length : null, u10: own ? own.filter((p) => p.proj_own < 10).length : null,
-    q: men.length && men.every((p) => p && !p.stale && p.injury_status !== undefined) ? men.filter((p) => isQ(p.injury_status)).length : null,
+    q: null, // the Questionable count was TwoGun's status, never read now (Adam 11-19)
     min: sumOf(men, "minutes"),
     value: t.projection != null && t.salary ? (t.projection / t.salary) * 1000 : null,
     stack, teams: men.length && men.every((p) => p && !p.stale && p.team != null) ? new Set(men.map((p) => p.team)).size : null, diff,

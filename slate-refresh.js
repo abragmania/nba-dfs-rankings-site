@@ -72,7 +72,7 @@ export function rememberRows(known, rows) {
 }
 
 /** The names on a slate's Out list. Pure. */
-export const outNamesOf = (slate) => new Set((slate?.out ?? []).map((o) => o.name));
+export const outNamesOf = () => new Set(); // TwoGun's Out list is never read (Adam 11-19); an Out man is on the board, judged by outFor
 
 /** Why a slate answer must not be drawn; null when it may. An empty or malformed answer is a failure, never an empty board (the old numbers stay). Pure. */
 export function freshProblem(fresh) {
@@ -122,7 +122,7 @@ export const overrideKey = (players) => JSON.stringify(players.filter((p) => p.o
 /** The picks as the board acts on them: only men on the slate. A view, never stored over the picks: a man who leaves and comes back is locked on the board as he still is in the server's file. Pure. */
 export function picksOnBoard(picks, byId) {
   const keep = (list) => list.filter((id) => byId.has(id));
-  return { locked: keep(picks.locked), excluded: keep(picks.excluded) };
+  return { locked: keep(picks.locked), excluded: keep(picks.excluded), ...(picks.unreadable ? { unreadable: picks.unreadable } : {}) }; // a mode the server could not read stays marked (board-saves.js picksByMode)
 }
 
 /**

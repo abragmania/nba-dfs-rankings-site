@@ -10,6 +10,7 @@ import { optimize } from "../lineup/optimize.js";
 import { readExposure, countLimits } from "../lineup/exposure.js";
 import { lineupOf, spotEntries, spotNames, sameLineup, cleanName, unusableIn, modeFromName } from "./maps.js";
 import { contextFor, nameOf, frozenWhy, notAddableWhy, holdsMen, spotBlocks, spotPins, lineupProblems, partLineupProblems, frozenProblems, movesBetween, outAlert, isBoardOut } from "./entry-state.js";
+import { excludedOk, excludedFor, spotModeOf } from "./board-excludes.js";
 
 export const refused = (state, error) => ({ state, outcomes: [], error });
 const idsOf = (state, spot) => spotEntries(state, spot).map((e) => e.entryId);
@@ -89,7 +90,7 @@ export function readLimits(state, exposure, ctx, isGpp) {
 
 /** The sentences naming every man a re-fill left out for his Max % ("Left out for his Max % (allows 1 of 3 entries): A, B."); a Max that rounds
  *  down to none names him with the build's wording. barred: the men kept out for it. */
-function maxNotes(barred, limit, ctx) {
+export function maxNotes(barred, limit, ctx) {
   if (!limit || !barred.length) return [];
   const byAllowed = new Map(), notes = [];
   for (const id of barred) {
@@ -103,12 +104,13 @@ function maxNotes(barred, limit, ctx) {
 
 /** The men this spot's entries would carry past their Max: a Set of dk_ids. Every other spot counts with its lineup now, except a spot that
  *  will re-fill later in this action (pending): only its frozen men and the men this action locks into it (heldLater: spot -> ids) are sure,
- *  and the rest of its lineup is about to be decided. */
-export function atLimit(maxOf, state, spot, pending, ctx, isGpp, heldLater = null) {
-  const out = new Set(), here = spotEntries(state, spot).length;
+ *  and the rest of its lineup is about to be decided. alsoHere: other spots taking this same lineup (a picked option, reopt.js); their GPP
+ *  entries count as this spot's. */
+export function atLimit(maxOf, state, spot, pending, ctx, isGpp, heldLater = null, alsoHere = []) {
+  const mine = [spot, ...alsoHere.filter(isGpp)], out = new Set(), here = mine.reduce((t, s) => t + spotEntries(state, s).length, 0);
   for (const [id, most] of maxOf) {
     const counts = (s) => (pending.includes(s) ? id in spotPins(state, s, ctx) || (heldLater?.get(s) ?? []).includes(id) : lineupOf(state, s).includes(id));
-    const elsewhere = spotNames(state).filter((s) => s !== spot && isGpp(s) && counts(s)).reduce((t, s) => t + spotEntries(state, s).length, 0);
+    const elsewhere = spotNames(state).filter((s) => !mine.includes(s) && isGpp(s) && counts(s)).reduce((t, s) => t + spotEntries(state, s).length, 0);
     if (elsewhere + here > most) out.add(id);
   }
   return out;
@@ -283,13 +285,13 @@ function removeAction(state, { man: x, backup: y = null, scope, slate, nowMs, mo
   const settings = given ?? {};
   if (typeof settings !== "object" || Array.isArray(settings)) return refused(state, "Settings must be an object.");
   if ("exposure" in settings) return refused(state, "A Max % across the set goes in exposure, not in the optimizer settings.");
-  const excluded = barred ?? [];
-  if (!Array.isArray(excluded) || !excluded.every((id) => typeof id === "string")) return refused(state, "Excluded men must be a list of DraftKings ids.");
+  const excluded = barred ?? []; // one list, or { Cash, GPP }: each spot honours its own mode's (board-excludes.js, Adam 11-20)
+  if (!excludedOk(excluded)) return refused(state, "Excluded men must be a list of DraftKings ids.");
   const { ctx, error } = contextFor(state, slate, nowMs);
   if (error) return refused(state, error);
   const sc = readScope(state, scope, x);
   if (sc.error) return refused(state, sc.error);
-  const isGpp = (spot) => (mode ?? (Object.hasOwn(state.spots, spot) ? state.spots[spot].mode : modeFromName(spot))) === "GPP";
+  const isGpp = (spot) => spotModeOf(state, spot, mode) === "GPP";
   const limits = readLimits(state, exposure, ctx, isGpp);
   if (limits.error) return refused(state, limits.error);
   const gm = readGames(excludedGames, ctx);
@@ -302,7 +304,7 @@ function removeAction(state, { man: x, backup: y = null, scope, slate, nowMs, mo
   const outcomes = [], taken = new Map(); // spots go in map order, so the same action repeats exactly
   for (const [k, spot] of sc.names.entries()) {
     const pending = sc.names.slice(k + 1).filter((later) => !removeRefusal(s, later, ctx, backup)); // a spot that will not re-fill keeps its lineup, and counts whole
-    const r = removeRefusal(s, spot, ctx, backup) ?? refill(s, spot, ctx, { out: new Set([...unusableIn(s, spot), ...excluded, x]), lock: y == null ? [] : [y], keep: kept.of(spot), mode, settings, settingsByMode, extra, limit: limits, overLimit: isGpp(spot) ? atLimit(limits.maxOf, s, spot, pending, ctx, isGpp) : new Set(), taken, games: gm.games });
+    const r = removeRefusal(s, spot, ctx, backup) ?? refill(s, spot, ctx, { out: new Set([...unusableIn(s, spot), ...excludedFor(excluded, spotModeOf(s, spot, mode)), x]), lock: y == null ? [] : [y], keep: kept.of(spot), mode, settings, settingsByMode, extra, limit: limits, overLimit: isGpp(spot) ? atLimit(limits.maxOf, s, spot, pending, ctx, isGpp) : new Set(), taken, games: gm.games });
     outcomes.push(r.outcome);
     if (r.state) s = r.state;
     if (r.outcome.status === "changed") s = { ...s, unusable: { ...s.unusable, [spot]: [...new Set([...unusableIn(s, spot), x])] } }; // only the spots this action changed

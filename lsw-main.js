@@ -10,11 +10,14 @@ import { spotHtml } from "./lsw-spot.js";
 import { lineupName, entrySpotOptions, lineupOptions, entriesHtml, lineupsHtml, tabStatus, rangeBetween, numberInOrder, screenOrder, emptyRowIds, contestGroups } from "./lsw-maps.js";
 import { exportHtml } from "./lsw-export.js";
 import { gamesHtml, gameToggleBody } from "./lsw-games.js";
-import { byLineupHtml, byLineupClick, byLineupChange } from "./lsw-lineups.js";
+import { byLineupHtml, byLineupClick, byLineupChange, lateNoLine } from "./lsw-lineups.js";
 import { logo, shortTime, slateRefMs, topStamps, centralToMs, keepFocus } from "./board-util.js";
 import { showActive } from "./lineups-panel.js";
 import { loadSavedNames } from "./saved-panel.js";
 import { refillState } from "./settings-panel.js";
+import { LATE } from "./no-picks.js";
+import { resetFlow } from "./lsw-reset.js";
+import { guardedAct } from "./lsw-export-guard.js";
 
 const POLL_MS = 20000;
 const $ = (id) => document.getElementById(id);
@@ -22,7 +25,8 @@ const fresh = () => ({ slate: null, loaded: false, has: false, M: null, uploads:
   assignFor: null, saved: [], savedErr: null, filter: "All", blunt: { man: "", scope: "holding", spot: "", backup: "" }, backupText: "", outcomes: [], msg: null, busy: false, swapSlot: null, swapSort: "proj",
   exportPick: new Set(), upMsg: null, upName: null, boardMs: null, boardLabel: null, clockOffset: 0, injected: false, lastMs: null, lastFile: null, banner: null, ask: null, exportAsk: null, dirty: false });
 let L = fresh();
-let root = null, fileInput = null, open = false, poll = null, tick = null;
+let root = null, fileInput = null, open = false, poll = null, tick = null, noApi = null;
+const REFILLS = ["remove", "options", "reoptimize"]; // the actions that read the late swap NO list (lateswap-route.js); a picked option does not
 let epoch = 0, appliedRev = 0, appliedBoot = null; // epoch changes with the slate; appliedRev is the newest server revision drawn, appliedBoot the server start it counted in
 
 const slateName = () => $("slateSel")?.value ?? new URLSearchParams(location.search).get("slate");
@@ -89,12 +93,16 @@ function titleOf(label, outcomes) {
   return `${label}: ${parts.join(", ")}`;
 }
 
+/** One action, through the after-export ask (lsw-export-guard.js, review F1 11-19). */
+function act(body, opts) { return guardedAct(actOnce, L, body, opts); }
+
 /** One action: sends it, draws what comes back, and reports how long it took. A refusal in words (j.refused) shows on every screen. */
-async function act(body, { label = null } = {}) {
+async function actOnce(body, { label = null } = {}) {
   if (L.busy) return null;
   const mine = epoch;
   L.busy = true; render();
   try {
+    if (noApi && REFILLS.includes(body?.op)) await noApi.settled(); // a re-fill reads the saved late swap NO list: a NO click still on its way lands first
     const j = await request(body);
     if (mine !== epoch) return null; // another slate is on show now: nothing here is its business, and its busy flag is not ours to touch
     if (j.discarded) { L.busy = false; render(); return null; }
@@ -105,6 +113,7 @@ async function act(body, { label = null } = {}) {
     if (L.ask) setTimeout(render, 520); // the go-ahead button wakes up half a second later, so a double click cannot reach it
     L.msg = j.refused ? { kind: "err", text: tidyReasons(j.refused) } : null;
     const lines = (j.overMax ?? []).map((m) => `${m.name} is in ${m.entries} entries, past his Max of ${m.most}: ${m.spots.join(", ")}.`);
+    if (lateNoLine(j.lateNo)) lines.push(lateNoLine(j.lateNo)); // what the late swap NO list did in this re-fill, in one line (G62)
     L.banner = label && (L.outcomes.length || lines.length) ? { title: titleOf(label, L.outcomes), lines, outcomes: L.outcomes } : null;
     render();
     return j;
@@ -126,7 +135,7 @@ function barHtml() {
   const board = shortTime(M.boardStamp, M.refMs);
   const st = tabStatus(M), cur = L.screen === "entries" ? "entries" : L.screen === "lineups" ? "lineups" : L.screen === "upload" ? "" : "swap";
   const tab = (k, n, title, to) => `<button class="tab3${cur === k ? " on" : ""}${st[k].bad ? " bad" : ""}" data-lsw="go" data-s="${to}"><b>${n}</b><span class="tt">${title}</span><small>${esc(st[k].text)}</small></button>`;
-  return `<nav class="tabs3">${tab("entries", 1, "Entries", "entries")}${tab("lineups", 2, "Lineups", "lineups")}${tab("swap", 3, "Swap &amp; export", "all")}</nav>
+  return `<nav class="tabs3">${tab("entries", 1, "Entries → Spots", "entries")}${tab("lineups", 2, "Spots → Lineups", "lineups")}${tab("swap", 3, "Swap &amp; export", "all")}</nav>
 <div class="bar" id="lswBar"><div class="barl"><div class="barr">
 <div class="bst"><small>CLOCK</small><b id="lswClock" class="am">${fmtClock(Date.now() + L.clockOffset)}</b>${L.injected ? '<i class="tc" title="This copy runs on a fixed test clock">TEST CLOCK</i>' : ""}</div>
 <div class="bst"><small>BOARD AS OF</small><b>${esc(board ?? "—")}</b></div>
@@ -156,7 +165,7 @@ function bannerHtml() {
     if (notes.length) parts.push('<div class="msg warn"><button data-lsw="dismissNotes">Dismiss these notes about the Lineups tab</button></div>');
   }
   for (const p of M?.pendingSpots ?? []) {
-    const why = [p.alert?.text, p.back?.length ? `It holds ${p.back.map((b) => b.name).join(", ")}, taken out of ${p.spot} earlier.` : "", p.held ? "It waited for your go-ahead before and still does, so it is never applied behind your back." : ""].filter(Boolean).join(" ");
+    const why = [p.alert?.text, p.back?.length ? `It holds ${p.back.map((b) => b.name).join(", ")}, taken out of ${p.spot} earlier.` : "", p.afterExport ? "You exported after the entries file, so it waits for your go-ahead." : "", p.held ? "It waited for your go-ahead before and still does, so it is never applied behind your back." : ""].filter(Boolean).join(" ");
     if (p.takenBack) {
       parts.push(`<div class="alert"><b>${esc(p.spot)}:</b> the Lineups tab took this lineup back, but ${esc(p.spot)} still holds ${esc(p.holds.map((h) => h.name).join(", "))}. Its entries stay out of the upload file until you answer. ${p.canReset ? `<button class="go red2" data-lsw="resetSpot" data-spot="${esc(p.spot)}">Reset to upload</button> ` : ""}<button class="ol" data-lsw="keepTaken" data-spot="${esc(p.spot)}">Keep it</button></div>`);
       continue;
@@ -195,6 +204,7 @@ let drawnScreen = null;
 function render() {
   if (!root || !open) return;
   L.dirty = false;
+  L.no = noApi ? { ids: noApi.ids(LATE), error: noApi.error(LATE) } : null; // the late swap NO list the cards draw (lsw-lineups.js)
   L.drawnNotes = [...(L.M?.syncNotes ?? [])];
   L.drawnFp = L.M?.fp ?? null; // what the page is about to show: an export names this fingerprint, not a newer model that was never drawn
   if (L.M && L.sel.size) { const ids = new Set(L.M.entries.map((e) => e.entryId)); L.sel = new Set([...L.sel].filter((id) => ids.has(id))); } // a selection survives a refresh, minus rows no longer in the file
@@ -448,6 +458,7 @@ async function onClick(e) {
       return void (await mapAction({ op: "mapSet", pairs, newSpots }, a === "fill" ? `Filled ${rows.length} into ${spot}` : `Numbered ${rows.length} rows from ${spot}`));
     }
     case "autoFill": return void (await mapAction({ op: "autoFill" }, "Auto-filled"));
+    case "reassignAll": case "resetEntries": return void (await resetFlow(a, { L, act, render })); // Adam 6:30 PM 11-19; each asks first (lsw-reset.js)
     case "undoFill": {
       const u = L.fillUndo; if (!u) return;
       const j = await act({ op: "mapSet", pairs: u.prior, restoreProposals: u.priorProposals, dropRows: u.madeRows, mapFp: L.M.mapFp, newSpots: [...new Set(u.prior.map((p) => p[1]).filter(Boolean))] }); // the exact earlier map, even a spot that has since emptied
@@ -492,14 +503,14 @@ async function onClick(e) {
     case "exportSpots": { const live = livePicks(L.exportPick, L.M.spots); L.exportPick = new Set(live); if (!live.length) { L.msg = { kind: "warn", text: "Pick a spot that is still on the screen." }; return render(); } return doExport("changed", live); } // a spot removed since it was picked is not sent
     case "exportGo": { const x = L.exportAsk; if (x && Date.now() - x.armedAt >= 500) return doExport(x.kind, x.spots, { confirmed: true }); return; } // armed half a second, like the other go-aheads
     case "exportCancel": L.exportAsk = null; return render();
-    default: await byLineupClick(a, d, { L, M, act, render, boardState });
+    default: await byLineupClick(a, d, { L, M, act, render, boardState, noApi });
   }
 }
 
 async function onChange(e) {
   const t = e.target;
   if (t.tagName === "SELECT") t.blur(); // a menu is let go of when it has been used, so polls and redraws are not held back by it
-  if (t.dataset.lswIn) return void (await byLineupChange(t, { L, M: L.M, act }));
+  if (t.dataset.lswIn) return void (await byLineupChange(t, { L, M: L.M, act, render, boardState }));
   if (t.dataset.lswSel === "entrySpot") {
     let spot = t.value;
     if (spot === "__new" && !(spot = askSpot())) return render();
@@ -517,7 +528,7 @@ async function onChange(e) {
 }
 
 function onInput(e) {
-  if (e.target.dataset?.lswIn) return void byLineupChange(e.target, { L, M: L.M, act });
+  if (e.target.dataset?.lswIn) return void byLineupChange(e.target, { L, M: L.M, act, render, boardState });
   if (e.target.id !== "lswBackup") return;
   L.backupText = e.target.value;
   const lab = backupLabels(L.M).find((x) => x.label === L.backupText);
@@ -526,7 +537,16 @@ function onInput(e) {
   if (b) b.disabled = !(lab && L.blunt.man && !L.busy);
 }
 
-export function mountLateSwap() {
+/** The page's NO lists changed (board.js): the cards redraw when the screen is open, after a box being typed in lets go. */
+export function lateSwapNoChanged() {
+  if (!open) return;
+  if (focusedInput()) { L.dirty = true; return; }
+  render();
+}
+
+/** opts.noPicks: the page's NO lists (no-picks.js), shared with the Player list so both show and save the one late swap list. */
+export function mountLateSwap(opts = {}) {
+  noApi = opts.noPicks ?? null;
   if (root) return;
   const css = document.createElement("link"); css.rel = "stylesheet"; css.href = "lsw.css"; document.head.append(css);
   root = document.createElement("section"); root.id = "lsw"; root.hidden = true;

@@ -4,8 +4,13 @@
 //        acceptProposals | setLineup { spot, lineupId, confirmOut?, confirmMen? } | syncConfirm { spot, confirmOut, confirmMen } |
 //        confirmMan { spot, man } | remove { man, backup?, scope, confirmOut?, confirmMen? } | swap { spot, slot, inId, confirmOut?, confirmMen? } |
 //        reset { scope, man? } | undoSpot { spot } | undoAll | allow { spot, man } | dismissNotes | export { kind, spots?, fp } |
-//        options { spot, count?, remove? } | pickOption { spot, lineup, proven?, remove?, confirmOut?, confirmMen? } |
-//        reoptimize { scope, remove?, atLeast?, confirmOut?, confirmMen? } | excludeGames { games } | keepMen { spot, keep }
+//        options { spot, count?, remove? } | pickOption { spot, lineup, current, proven?, remove?, confirmOut?, confirmMen? } |
+//        reoptimize { scope, remove?, atLeast?, confirmOut?, confirmMen? } | excludeGames { games } | keepMen { spot, keep } |
+//        mapSet { pairs, newSpots, mapFp } | autoFill { mapFp } | resetEntries { afterExport? } | reassignAll { mapFp, afterExport? }
+//        (pickOption's current: the lineup its options were worked out from. reassignAll is resetEntries then autoFill as one change.)
+//        After an export later than the entries file, resetEntries, reassignAll and every lineup or map op (screen-ops.js LINEUP_OPS:
+//        remove, reoptimize, pickOption, swap, reset, undoSpot, undoAll, setLineup, syncConfirm, assign, mapSet, autoFill, acceptProposals)
+//        are refused unless afterExport is that export's stamp (the model's file.exportedAt), and every Lineups-tab lineup waits as pending.
 // Answers: 200 with the model for everything the engine decided (refused: "words" when it would not, confirms when it asks about an Out or
 // gone man); an HTTP error only when something failed. An export carries the fingerprint of what the page drew; another one now means the
 // screen is behind (a pull or an action came in), so { stale: true, model } comes back and no file is made.
@@ -22,6 +27,7 @@ import { buildModel } from "../lateswap/screen-model.js";
 import { readEntries } from "../lateswap/entries-csv.js";
 import { suggestShell } from "../lateswap/shell.js";
 import { topStamps } from "../board/board-util.js";
+import { readNoKind, LATE } from "../lineup/no-list.js";
 
 export const MAX_UPLOAD = 4 * 1024 * 1024; // an entries file is about 50 KB; the cap is a guard
 
@@ -134,13 +140,30 @@ async function handle(req, res, slate, ctx) {
     }
     if (body.op === "export") return exportOp(res, ctx, slate, slateData, saved, body, { sl, nowMs, dirty, extra, t0 });
     const lineups = body.op === "setLineup" ? readLineups(slate, slateData).lineups : [];
-    // The board's excluded men, saved on the server: read only for a re-optimize; a failed read passes null, which the outcome's notes name.
+    // The board's excluded men, saved on the server per mode (store.js readPicks; Adam 11-14, 11-19, 11-20): this screen has no one mode, so
+    // both are read and each spot's re-fill honours its own mode's (lateswap/board-excludes.js). Unreadable means who is excluded is unknown,
+    // so a re-fill (remove, options, reoptimize) is refused, never run as if nobody were (review 11-20, money: fail closed). A picked option
+    // is his own choice (Adam 6:16 PM 11-19), so it goes ahead with null, which the outcome's notes name (the lead's call 11-20).
     let picks = null;
-    if (["remove", "options", "reoptimize", "pickOption"].includes(body.op)) { try { picks = readPicks(slate, slateData); } catch (e) { error("late swap: the board's picks could not be read", { slate, message: e.message }); } }
-    const out = applyOp(saved, body, { slate: sl, nowMs, lineups, spotsFile, picks });
+    let lateNo = null;
+    if (["remove", "options", "reoptimize", "pickOption"].includes(body.op)) {
+      let why = null;
+      try { picks = readPicks(slate, slateData); why = picks.unreadable ? Object.values(picks.unreadable).join("; ") : null; } catch (e) { why = e.message; }
+      if (why) {
+        error("late swap: the board's picks could not be read", { slate, op: body.op, message: why });
+        if (body.op !== "pickOption") return ctx.fail(res, 500, "PICKS_UNREADABLE", `The board's saved locks and excludes (cache/picks/${slate}.json) could not be read, so nothing was re-filled: ${why}. A lock or exclude change on the board's Player list, in that mode, replaces them (the old file is kept beside it).`);
+      }
+      // The late swap NO list (lineup/no-list.js, Adam 5:28 PM 11-19), never the build's: unreadable means who is NO is unknown, so nothing is re-filled (fail closed).
+      // A picked option is his own choice (Adam 6:16 PM 11-19), so pickOption never reads it: a damaged NO file never blocks a pick (review F2, F3).
+      if (body.op !== "pickOption") try { const r = readNoKind(slate, slateData, "late"); lateNo = { ids: r[LATE], dropped: r.dropped }; } catch (e) {
+        error("late swap: the late swap NO list could not be read", { slate, message: e.message });
+        return ctx.fail(res, 500, "NO_UNREADABLE", `The late swap NO list could not be read, so nothing was re-filled: ${e.message}. Reset it from the red NO chip.`);
+      }
+    }
+    const out = applyOp(saved, body, { slate: sl, nowMs, lineups, spotsFile, picks, lateNo });
     if (out.error) { if (dirty) writeSaved(slate, saved); return respond(res, ctx, slate, slateData, saved, { ...extra, refused: out.error, outcomes: out.outcomes }, t0); }
     if (out.confirms?.length && !out.spotWrite && out.saved === saved) { if (dirty) writeSaved(slate, saved); return respond(res, ctx, slate, slateData, saved, { ...extra, outcomes: out.outcomes, confirms: out.confirms }, t0); } // nothing is written until the go-ahead
-    if (body.op === "options") { if (dirty) writeSaved(slate, saved); return respond(res, ctx, slate, slateData, saved, { ...extra, options: out.options }, t0); } // nothing is saved by a look at the options
+    if (body.op === "options") { if (dirty) writeSaved(slate, saved); return respond(res, ctx, slate, slateData, saved, { ...extra, options: out.options, lateNo: out.lateNo ?? null }, t0); } // nothing is saved by a look at the options
     let next = mergeNotes(out.saved, out.notes ?? []);
     // What this action did may change what waits on the Lineups tab's file (a go-ahead, a spot reset), so it is looked at again, but only
     // looked at: nothing from that file is applied in the same answer as an action, and no stamp is used up. The next read applies it.
@@ -159,7 +182,7 @@ async function handle(req, res, slate, ctx) {
       error("late swap write failed", { slate, message: e.message });
       return ctx.fail(res, 500, "LATESWAP_WRITE", `Nothing was changed: the spot's file could not be written (${e.message}).`);
     }
-    return respond(res, ctx, slate, slateData, next, { ...extra, outcomes: out.outcomes, confirms: out.confirms, overMax: out.overMax ?? [], minResults: out.minResults, mapResult: out.mapResult }, t0);
+    return respond(res, ctx, slate, slateData, next, { ...extra, outcomes: out.outcomes, confirms: out.confirms, overMax: out.overMax ?? [], minResults: out.minResults, mapResult: out.mapResult, ...(out.lateNo ? { lateNo: out.lateNo } : {}) }, t0); // lateNo: the late swap NO men applied, kept and ignored, by name
   } catch (e) {
     error("late swap failed", { slate, message: e.message });
     return ctx.fail(res, 500, "LATESWAP_FAILED", `The Entries screen could not finish: ${e.message}`);

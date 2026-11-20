@@ -88,7 +88,16 @@ export function splitScenarios(W, B, version, teamOf = () => "?") {
   const wa = appliedByTeam(W.applied, teamOf), ba = appliedByTeam(B?.applied, teamOf), edited = {};
   for (const t of new Set([...Object.keys(wa), ...Object.keys(ba)])) if (!same(wa[t] ?? null, ba[t] ?? null)) edited[t] = wa[t] ?? null;
   const applied = Object.keys(edited).length ? { teams: edited, at: W.applied?.at ?? null, pull: W.applied?.pull ?? null } : null;
-  return { site_layer: MARK, kind: "scenarios", base_version: version ?? null, edits: { teams, ...(applied ? { applied } : {}) }, schema: W.schema, slate: W.slate, updated_at: W.updated_at ?? null };
+  const hisAt = W.his_at !== undefined && W.his_at !== (B?.his_at ?? undefined) ? { his_at: W.his_at } : {}; // the file's his_at, kept only when his own click moved it off the baseline's (the console route answers with it)
+  return { site_layer: MARK, kind: "scenarios", base_version: version ?? null, edits: { teams, ...(applied ? { applied } : {}) }, schema: W.schema, slate: W.slate, ...hisAt, updated_at: W.updated_at ?? null };
+}
+
+/** The later of two ISO times; a missing or unreadable one gives way to the other; undefined when neither is there. Pure. */
+export function laterTime(a, b) {
+  const ta = typeof a === "string" ? Date.parse(a) : NaN, tb = typeof b === "string" ? Date.parse(b) : NaN;
+  if (!Number.isFinite(ta)) return Number.isFinite(tb) ? b : undefined;
+  if (!Number.isFinite(tb)) return a;
+  return tb > ta ? b : a;
 }
 
 export function mergeScenarios(B, layer, teamOf = () => "?") {
@@ -101,7 +110,8 @@ export function mergeScenarios(B, layer, teamOf = () => "?") {
     for (const [t, rec] of Object.entries(ap.teams ?? {})) { if (rec === null) delete parts[t]; else parts[t] = rec; }
     applied = appliedFrom(parts, { at: ap.at ?? B?.applied?.at, pull: ap.pull ?? B?.applied?.pull });
   }
-  return { schema: layer.schema ?? B?.schema, ...(layer.slate ?? B?.slate ? { slate: layer.slate ?? B?.slate } : {}), teams, applied, updated_at: layer.updated_at ?? B?.updated_at ?? null };
+  const hisAt = laterTime(layer.his_at, B?.his_at); // the later of his own click's stamp and the baseline's, so a newer publish is never hidden under an older click (console-route.js file_base); none when neither has one
+  return { schema: layer.schema ?? B?.schema, ...(layer.slate ?? B?.slate ? { slate: layer.slate ?? B?.slate } : {}), teams, applied, ...(hisAt ? { his_at: hisAt } : {}), updated_at: layer.updated_at ?? B?.updated_at ?? null };
 }
 
 // ---------- the fs shim's hook (shim/fs.js setLayer) ----------

@@ -1,0 +1,67 @@
+/* The Scenario tab (layout A of the 11-19 mock-ups; scenario-tab.js). G71: every size in rem off the root, which grows with the width (board.css); the 1920 page is the design.
+   Every colour is a theme variable or mixed from one, so Dark, Navy and Light all read (R9). Everything sits under #scenario. */
+body.scenario-on .games,body.scenario-on main.work,body.scenario-on #dropnote,body.scenario-on #lineups,body.scenario-on #console,body.scenario-on .bcheck,body.scenario-on #updline,body.scenario-on #sources{display:none}
+#scenario{margin:1rem 0 0}
+#scenario .sn-panel{background:var(--p);border:1px solid var(--ln)}
+#scenario .sn-bar{display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.9rem;border-bottom:1px solid var(--ln);white-space:nowrap;flex-wrap:wrap;row-gap:0.4rem}
+#scenario .sn-k{color:var(--mu);font-size:0.75rem;letter-spacing:0.03em}
+#scenario .sn-gap{width:0.75rem}
+#scenario .sn-grow{flex:1}
+#scenario .sn-sel{background:var(--p2);border:1px solid var(--ln);padding:0.25rem 0.5rem;color:var(--tx);font-size:0.8125rem}
+#scenario .sn-pick{display:inline-flex;align-items:center;gap:0.25rem}
+#scenario .sn-pick.on .sn-sel{border-color:var(--am);color:var(--am)}
+#scenario .sn-st{border:1px solid var(--am);color:var(--am);background:var(--p2);padding:0.25rem 0.25rem 0.25rem 0.65rem;font-size:0.8125rem}
+#scenario .sn-add{color:var(--mu)}
+#scenario .sn-chip{border:1px solid var(--ln);background:var(--p2);padding:0.25rem 0.65rem;color:var(--tx);font-size:0.8125rem}
+#scenario .sn-chip.on{border-color:var(--am);color:var(--am)}
+#scenario .sn-saved{display:inline-flex;align-items:stretch}
+#scenario .sn-saved.on .sn-chip{border-color:var(--am);color:var(--am)}
+#scenario .sn-saved .sn-x{border:1px solid var(--ln);border-left:0;background:var(--p2)}
+#scenario .sn-x{background:none;border:0;color:var(--mu);padding:0 0.4rem;font-size:0.875rem;line-height:1}
+#scenario .sn-x:hover{color:var(--rd)}
+#scenario .sn-dot{display:inline-block;width:0.45rem;height:0.45rem;border-radius:50%;background:var(--am);margin-right:0.45rem;vertical-align:0.08rem}
+#scenario .sn-none{color:var(--dim);font-size:0.75rem}
+#scenario .sn-arm{display:inline-flex;align-items:center;gap:0.5rem;background:none;border:0;color:var(--mu);font-size:0.8125rem;padding:0}
+#scenario .sn-arm.on{color:var(--am)}
+#scenario .sn-arm[disabled]{opacity:0.45;cursor:default}
+#scenario .sn-sw{width:2.1rem;height:1.1rem;border-radius:1rem;background:var(--ln);position:relative;display:inline-block}
+#scenario .sn-sw::after{content:"";position:absolute;left:0.125rem;top:0.125rem;width:0.85rem;height:0.85rem;border-radius:50%;background:var(--mu)}
+#scenario .sn-arm.on .sn-sw{background:var(--am)}
+#scenario .sn-arm.on .sn-sw::after{left:1.125rem;background:var(--bg)}
+#scenario .sn-save{border:1px solid var(--am);background:var(--am);color:var(--bg);padding:0.3rem 0.8rem;font-weight:600;font-size:0.8125rem}
+#scenario .sn-save[disabled]{background:var(--p2);color:var(--mu);border-color:var(--ln);cursor:default}
+#scenario .sn-sum{padding:0.6rem 0.9rem;border-bottom:1px solid var(--ln);background:var(--p2);font-size:0.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#scenario .sn-lead{color:var(--am)}
+#scenario .up{color:var(--gr)}
+#scenario .dn{color:var(--rd)}
+#scenario .sn-tw{overflow-x:auto}
+#scenario .sn-t{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+#scenario .sn-t th{color:var(--mu);font-weight:400;text-align:right;padding:0.4rem 0.45rem;border-bottom:1px solid var(--ln);font-size:0.6875rem;letter-spacing:0.03em;white-space:nowrap}
+#scenario .sn-t td{padding:0.32rem 0.45rem;text-align:right;border-bottom:1px solid color-mix(in srgb,var(--ln) 60%,transparent);white-space:nowrap;font-size:0.8125rem}
+#scenario .sn-t th:first-child,#scenario .sn-t td:first-child{text-align:left}
+#scenario .sn-t .sep{border-left:1px solid var(--ln)}
+#scenario .sn-t tr.out td{color:var(--mu);background:color-mix(in srgb,var(--rd) 7%,transparent)}
+#scenario .sn-t tr.out td:first-child{color:var(--rd)}
+#scenario .sn-d.up{background:color-mix(in srgb,var(--gr) 9%,transparent)}
+#scenario .sn-d.dn{background:color-mix(in srgb,var(--rd) 10%,transparent)}
+#scenario .sn-pos{color:var(--mu);font-size:0.6875rem;margin-left:0.4rem}
+#scenario .sn-miss{color:var(--dim);cursor:help}
+#scenario td.sn-e{padding:0.15rem 0.3rem}
+#scenario .sn-in{width:4.25rem;text-align:right;background:transparent;border:1px solid transparent;color:var(--tx);padding:0.15rem 0.3rem;font-size:0.8125rem;font-variant-numeric:tabular-nums}
+#scenario .sn-in:hover{border-color:var(--ln)}
+#scenario .sn-in:focus{outline:0;border-color:var(--am);background:var(--p2)}
+#scenario td.ed .sn-in{color:var(--am);border-color:color-mix(in srgb,var(--am) 55%,transparent);background:color-mix(in srgb,var(--am) 8%,transparent)}
+#scenario .sn-rip td.sn-rb{width:22%;padding-right:0.9rem}
+#scenario .sn-rb i{display:block;height:0.6rem;min-width:0.0625rem}
+#scenario .sn-rb i.up{background:var(--gr);opacity:0.8}
+#scenario .sn-rb i.dn{background:var(--rd);opacity:0.8}
+#scenario .sn-rl{text-align:left !important}
+#scenario .sn-foot{color:var(--mu);font-size:0.6875rem;padding:0.5rem 0.9rem;line-height:1.55}
+#scenario .sn-empty{padding:1.25rem 0.9rem;color:var(--mu)}
+/* The header's view tabs with the Scenario button last: the Console button keeps the fixed width lineups.css gave the last button, so its count never moves the header */
+.top .vtabs #csBtn{min-width:6.5rem;text-align:center}
+@media (max-width:900px){.top .vtabs button{padding:0.25rem 0.45rem}.top .vtabs #csBtn,.top .vtabs #snBtn{min-width:0}}
+/* The Console's Load what-if picker in a team's header (console-whatif.js) */
+#console .wload{height:2rem;padding:0 0.5rem;background:var(--p);border:1px solid var(--am);border-radius:0.25rem;color:var(--am);font-weight:600;font-size:0.8125rem}
+#console .wl-err{color:var(--dim);font-size:0.75rem;cursor:help}
+@media (max-width:900px){#scenario .sn-sum{white-space:normal}#scenario .sn-gap{display:none}#scenario .sn-bar{gap:0.5rem}}

@@ -65,15 +65,14 @@ body.light .top .lswnav button.on{color:#fff}
 #lineups .lt-acts{display:flex;align-items:center;gap:0.5rem;flex-shrink:0}
 #lineups .lt-run{display:flex;align-items:center;gap:0.75rem;margin:0.75rem 0;padding:0.5rem 0.75rem;border:1px solid var(--am);font-size:0.75rem;color:var(--am)}
 #lineups .lt-empty{padding:1.875rem;color:var(--dim);font-size:0.8125rem}
-#lineups .lt-body{display:grid;grid-template-columns:minmax(30rem,31.25rem) minmax(0,1fr);gap:0.875rem;align-items:start}
+#lineups .lt-body{display:grid;grid-template-columns:minmax(30rem,max-content) minmax(0,1fr);gap:0.875rem;align-items:start}
 #lineups .lt-ex{border:1px solid var(--ln);background:var(--p);padding:0.5rem 0}
 #lineups .lt-exh{padding:0.125rem 1rem 0.5rem;font-size:0.6563rem;letter-spacing:0.05rem;text-transform:uppercase;color:var(--dim)}
 #lineups .lt-ex .sec{display:none}
-#lineups .lt-ex .exl{padding:0 0.75rem 0.25rem}
+#lineups .lt-ex .exl{padding:0 0.5rem 0.25rem}
 #lineups .lt-ex .ext th:nth-child(4),#lineups .lt-ex .ext td:nth-child(4){display:none}
-#lineups .lt-ex .ext .ex-bar{width:2.5rem}
 #lineups .lt-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(21.875rem,1fr));gap:0.625rem;align-items:start}
-#lineups .lt-ex .ext td,#lineups .lt-ex .ext th{padding-right:0.25rem}
+#lineups .lt-ex .ext td,#lineups .lt-ex .ext th{padding-right:0.125rem}
 #lineups .lt-away{margin:0.625rem 0.125rem;color:var(--dim);font-size:0.75rem}
 #lineups .lt-other{margin:0.875rem 0 0.5rem}
 #lineups .lt-other details{border-top:1px solid var(--ln);padding:0.375rem 0.125rem}
@@ -121,6 +120,10 @@ body.light .top .lswnav button.on{color:#fff}
 /* A build's header over its cards (Recently generated), and the filtered men as chips. */
 #lineups .lt-bh{grid-column:1/-1;display:flex;align-items:center;gap:0.875rem;padding:0.5rem 0.125rem 0.25rem;margin-top:0.375rem;border-bottom:1px solid var(--ln)}
 #lineups .lt-bh:first-child{margin-top:0}
+/* The strip never wraps (Adam 11-19): every part stays on one line; only the build note gives way, to its own ellipsis (the full note is its hover). */
+#lineups .lt-bh>*{white-space:nowrap;flex:none}
+#lineups .lt-bh>.lt-bn{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+#lineups .lt-bh button+button{margin-left:0}
 #lineups .lt-bh b{font:700 0.8125rem "Space Grotesk",sans-serif;color:var(--tx)}
 #lineups .lt-bh button{margin-left:auto;background:none;border:1px solid #ff4d5e66;color:var(--rd);font-size:0.6563rem;font-weight:800;padding:0.1875rem 0.625rem}
 #lineups .lt-chips{display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem;margin:0 0 0.625rem;padding:0.5rem 0.75rem;border:1px solid var(--am);background:#ffb00010}
@@ -161,7 +164,6 @@ body.light .top .lswnav button.on{color:#fff}
 #lineups .capt{flex-wrap:nowrap;justify-content:space-between;gap:0.5rem;font-size:0.6875rem;white-space:nowrap}
 #lineups .lch{flex-wrap:wrap;gap:0.25rem 0.5rem}
 #lineups .lch button.sm{white-space:nowrap;font-size:0.625rem;padding:0.125rem 0.375rem}
-#lineups .lt-ex .ext .ex-bar{width:2rem;padding-right:0.25rem}
 #lineups .lt-ex .ext .ex-n{font-size:0.625rem}
 #lineups .lt-ex .ext td.ex-f{padding-right:0.25rem}
 #lineups .lt-ex .ext .xf{padding:0 0.25rem;font-size:0.625rem}
@@ -193,11 +195,15 @@ body.light .top .lswnav button.on{color:#fff}
   #lineups .lt-ex .ext thead th{position:sticky;top:1.625rem;z-index:2;background:var(--p);box-shadow:inset 0 -0.0625rem var(--ln)}
   #lineups .cp-scroll thead tr:not(.cp-cap) th{position:sticky;top:0;z-index:2;box-shadow:inset 0 -0.0625rem var(--ln)}
 }
-/* The exposure table fits its column: a long name ends in an ellipsis, so the Filter buttons are never cut off. */
-#lineups .lt-ex .ext td.ex-name{max-width:0;overflow:hidden;text-overflow:ellipsis}
-#lineups .lt-ex .ext td.ex-name>.exn{display:flex;align-items:center;gap:0.375rem;min-width:0}
+/* The exposure table never cuts a name (Adam 11-19): the Player column sizes to the longest name. */
+#lineups .lt-ex .ext th:nth-child(2){width:auto}
+#lineups .lt-ex .ext td.ex-name{white-space:nowrap;padding-right:0.375rem}
+#lineups .lt-ex .ext td.ex-name>.exn{display:flex;align-items:center;gap:0.375rem;min-width:max-content}
 #lineups .lt-ex .ext td.ex-name .logo.sm,#lineups .lt-ex .ext td.ex-name .chipx.sm{flex:none;width:1.25rem;height:1.25rem}
-#lineups .lt-ex .ext td.ex-name .exn>:not(.logo):not(.chipx){display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#lineups .lt-ex .ext td.ex-name .exn>:not(.logo):not(.chipx){display:block;white-space:nowrap}
+#lineups .lt-ex .ext th.ex-fig,#lineups .lt-ex .ext td.ex-fig{text-align:right;font-variant-numeric:tabular-nums;padding-left:0.25rem}
+#lineups .lt-ex .ext th.ex-fig,#lineups .lt-ex .ext th.ex-own{font-size:0.75rem;letter-spacing:0;text-transform:none}
+#lineups .lt-ex .ext td.ex-fig{color:var(--tx)}
 /* The spot filter: each button on one line; the row wraps between buttons. */
 #lineups .lt-sort button{white-space:nowrap}
 /* With many spots the buttons stay within two lines and scroll inside their own box, so the cards below never move far. */

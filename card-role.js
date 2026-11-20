@@ -2,11 +2,17 @@
 // same console work as the console's own controls (console-card.js). Each change goes to the board by itself, as the console's own changes do;
 // a change the send would hold back is taken back and said. Typed numbers are his: never scaled, never refused (0 to the pin limits). roleBoxHtml is DOM-free; cardRoles wires it.
 import { esc, figSourceWord } from "./board-util.js";
+import { stepHtml, stepMinutes, wholeText } from "./min-step.js";
 import { ROLES, ROLE_LABEL, ROLE_SHORT } from "./console-roles.js";
 import { PIN_MAX } from "./override-limits.js";
 import { isNum } from "./figures.js";
 import { basisText, medianFlag, tgMinHtml } from "./console-render.js";
 import { typedText } from "./console-model.js";
+import { clearQueued } from "./instant-pins.js";
+
+/** The card writes his number straight to the console: the board's own number for him of that kind not yet sent is older and is dropped first,
+ *  and one being written now lands before the card's (instant-pins.js clearQueued), so the card's is the last word. */
+const afterBoard = (id, k, fn) => { const going = clearQueued(id, k); return going ? going.then(fn) : fn(); };
 
 const f1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
 const MISS = "—";
@@ -21,7 +27,9 @@ export function roleBoxHtml(v, state = {}) {
   const seg = `<span class="seg">${ROLES.map((k) => `<button type="button" class="rs${r.role === k ? ` on ${k}${r.pinned.r || (k === "out" && r.out) ? " set" : ""}` : ""}" data-crole-set="${k}" title="${ROLE_LABEL[k]}">${ROLE_SHORT[k]}</button>`).join("")}</span>`;
   const boxOf = (k, val, text) => {
     const pinned = !r.out && r.pinned[k];
-    return `<label class="crb${pinned ? " pin" : ""}">${k === "m" ? "Min" : "DK/min"}<input data-crk="${k}" inputmode="decimal" autocomplete="off" value="${r.out ? (k === "m" ? "OUT" : "") : isNum(val) ? text(val) : ""}" placeholder="${MISS}"${r.out ? " readonly" : ""} title="${k === "m" ? `Minutes, 0 to ${PIN_MAX.m}` : `DK points per minute, 0 to ${PIN_MAX.d}`}: typed numbers are kept as typed. Empty clears it.">${pinned ? `<button type="button" class="x" data-crx="${k}" title="Clear what you typed">x</button>` : ""}</label>`;
+    const input = `<input data-crk="${k}" inputmode="decimal" autocomplete="off" value="${r.out ? (k === "m" ? "OUT" : "") : isNum(val) ? text(val) : ""}" placeholder="${MISS}"${r.out ? " readonly" : ""} title="${k === "m" ? `Minutes, 0 to ${PIN_MAX.m}` : `DK points per minute, 0 to ${PIN_MAX.d}`}: typed numbers are kept as typed. Empty clears it.">`;
+    const aside = k === "m" && !r.out && r.min_aside ? `<button type="button" class="x" data-crrestore="1" title="${esc(`${r.min_aside.words.charAt(0).toUpperCase()}${r.min_aside.words.slice(1)}. Click to use it again`)}">&#8617; ${esc(wholeText(r.min_aside.value) ?? "")}</button>` : ""; // Adam 9:46 AM 11-20 (typed-aside.js)
+    return `<span class="crb${pinned ? " pin" : ""}">${k === "m" ? "Min" : "DK/min"}${k === "m" ? stepHtml(input, v.id, v.team, r.out || !isNum(val)) : input}${pinned ? `<button type="button" class="x" data-crx="${k}" title="Clear what you typed">x</button>` : ""}${aside}</span>`;
   };
   const proj = r.out ? "0.0" : isNum(r.proj) ? f1(r.proj) : MISS;
   const moves = v.moves.length ? `<div class="crm">To keep five starters: ${v.moves.map((m) => `${esc(m.name)} ${esc(ROLE_LABEL[m.from])} to ${esc(ROLE_LABEL[m.to])}`).join(", ")}. Ctrl+Z in the console undoes it.</div>` : "";
@@ -33,7 +41,7 @@ export function roleBoxHtml(v, state = {}) {
   const differs = b && isNum(b.minutes) && isNum(r.min) && !r.out && Math.abs(b.minutes - r.min) > 0.05;
   const differ = differs ? `<div class="crs">Console scenario (${esc(basisText(r))} minutes): ${f1(r.min)} min. The board above uses ${word ? `${esc(word)}: ` : ""}${f1(b.minutes)}.</div>` : "";
   return `${head}<div class="crr">${seg}<span class="crf">TwoGun's own ${tgMinHtml(p)}</span></div>`
-    + `<div class="crr">${boxOf("m", r.min, f1)}${boxOf("d", r.rate, (x) => x.toFixed(2))}<span class="crf">Console proj <b class="${r.pinned.m || r.pinned.d || r.pinned.r ? "pin" : ""}">${proj}</b></span></div>`
+    + `<div class="crr">${boxOf("m", r.min, wholeText)}${boxOf("d", r.rate, (x) => x.toFixed(2))}<span class="crf">Console proj <b class="${r.pinned.m || r.pinned.d || r.pinned.r ? "pin" : ""}">${proj}</b></span></div>`
     + `<div class="crs" title="${esc(basisText(r))}">${medianFlag(r)}Console minutes from: ${esc(basisText(r))}</div>${differ}${moves}${err}`
     + `<div class="crr"><span class="crsaid">${state.busy ? "Sending to the board…" : esc(state.said ?? "")}</span></div>${refusal}${notes}`;
 }
@@ -77,7 +85,7 @@ export function cardRoles({ api, slate, toast }) {
     /** The card's change goes to the board by itself, checked and sent in one step (console-card.js applyNow). A refusal takes the card's moves back and says why; nothing is sent. */
     const send = async () => {
       if (!view) return;
-      await draw({ busy: true });
+      view = (await draw({ busy: true })) ?? view; // the next press steps from the number shown, not the one before the send
       try {
         const out = await api().applyNow(view.team);
         said = sentText(out);
@@ -91,23 +99,31 @@ export function cardRoles({ api, slate, toast }) {
     };
     slot.addEventListener("click", async (e) => {
       if (!view) return;
-      const set = e.target.closest("[data-crole-set]"), clear = e.target.closest("[data-crx]");
+      const set = e.target.closest("[data-crole-set]"), clear = e.target.closest("[data-crx]"), step = e.target.closest("[data-mstep]"), back = e.target.closest("[data-crrestore]");
+      if (back) { fresh(); last = null; api().restoreCard(view.team, view.id); return send(); } // his set-aside typed minutes back in use (Adam 9:46 AM 11-20)
+      if (step && !step.disabled) {
+        const n = stepMinutes(view.row.min, Number(step.dataset.mstep));
+        if (n === null) return toast("There is no minutes figure to step from; type his minutes.", "err");
+        fresh(); last = { id: view.id, k: "m", n };
+        const { team, id } = view;
+        return afterBoard(id, "m", () => { api().setPin(team, id, "m", n); return send(); });
+      }
       if (set) { fresh(); last = null; api().setRole(view.team, view.id, set.dataset.croleSet); return send(); }
-      if (clear) { fresh(); last = null; api().clearPin(view.team, view.id, clear.dataset.crx); return send(); }
+      if (clear) { fresh(); last = null; const { team, id } = view, k = clear.dataset.crx; return afterBoard(id, k, () => { api().clearPin(team, id, k); return send(); }); }
     });
     const commit = (inp) => {
       if (!view || inp.readOnly) return;
       const k = inp.dataset.crk, text = inp.value.trim();
       fresh();
-      if (text === "") { last = null; api().clearPin(view.team, view.id, k); return send(); }
+      const { team, id } = view;
+      if (text === "") { last = null; return afterBoard(id, k, () => { api().clearPin(team, id, k); return send(); }); }
       const n = Number(text);
       if (!Number.isFinite(n) || n < 0) { toast(`${k === "m" ? "Minutes" : "DK/min"} must be a number from 0 up.`, "err"); return redraw(); }
       // Enter then the box's change event: one commit, not two, whether or not the redraw has landed yet.
       const now = k === "m" ? view.row.min : view.row.rate;
       if ((view.row.pinned[k] && isNum(now) && Math.abs(now - n) < 1e-9) || (last && last.id === view.id && last.k === k && last.n === n)) return;
       last = { id: view.id, k, n };
-      api().setPin(view.team, view.id, k, n);
-      return send();
+      return afterBoard(id, k, () => { api().setPin(team, id, k, n); return send(); });
     };
     slot.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches("[data-crk]")) { e.preventDefault(); commit(e.target); } });
     slot.addEventListener("change", (e) => { if (e.target.matches("[data-crk]")) commit(e.target); });

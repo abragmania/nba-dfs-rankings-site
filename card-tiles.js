@@ -94,7 +94,7 @@ export function newsHtml(p, news, dash, state = null) {
     return wrap(`${word ? `<span class="pill">${esc(word)}</span>` : ""}<small>${time ? `${esc(time)} - ` : ""}Basketball Monster news</small>${body}`);
   }
   const why = state?.failed ? `lineup news could not be read: ${state.why}` : state?.stale ? `lineup news is ${state.ageMin ?? "an unknown number of"} min old, so it is not used` : state === null ? "lineup news has not been read yet" : "";
-  const tg = p.injury_status ? `<div><span class="pill">${esc(p.injury_status)}</span><small>TwoGun injury report</small></div>` : "";
+  const tg = ""; // TwoGun's injury status is never shown (Adam 11-19): the card's news is our own feeds'
   if (why) return wrap(`${dash(why)} <span class="mu">${esc(why)}</span>${tg}`);
   return wrap(tg || `<span class="mu" title="no news card and no injury status for him in this pull">No news for him in this pull.</span>`);
 }

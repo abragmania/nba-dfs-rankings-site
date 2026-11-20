@@ -47,17 +47,13 @@ export function sourcesOfReason(text, latest, team) {
   return out;
 }
 
-/** The men the board shows Out: board rows the engine has not playing (his own Out aside) with the engine's reason, and the slate's Out list (TwoGun's board). [{ name, team, dk_id, reason, listed }] */
+/** The men the board shows Out: board rows the engine has not playing (his own Out aside) with the engine's reason (TwoGun's Out list is never read, Adam 11-19). [{ name, team, dk_id, reason, listed }] */
 function outMen(slate, players) {
   const men = [], seen = new Set();
   for (const p of players) {
     if (p.ours?.playing !== false || p.ours?.marks?.status?.by === "you") continue;
     seen.add(`${p.team}|${nameKey(p.name)}`);
     men.push({ name: p.name, team: p.team, dk_id: String(p.dk_id), reason: p.ours?.marks?.status?.text ?? (p.ours?.why ?? []).join("; "), listed: false });
-  }
-  for (const o of Array.isArray(slate?.out) ? slate.out : []) {
-    if (seen.has(`${o.team}|${nameKey(o.name)}`)) continue;
-    men.push({ name: o.name, team: o.team, dk_id: null, reason: Array.isArray(o.sources) && o.sources.includes("twogun_row") ? "Out on TwoGun's board" : "", listed: true });
   }
   return men;
 }

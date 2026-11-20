@@ -10,7 +10,7 @@ import { totals, capLine, cardRowHtml, skippedList, lineupTag, lineupRefusals, i
 import { KEPT_NOTE, lsView, startSlots, lsLineupHtml, lsNotesHtml, enterLateSwap, lsPin, lsUnpin, lsBuild, refresh, runClock, lsDownloadRefusal, lsClick } from "./lateswap-panel.js";
 import { readSettings, loadRaw, readRaw, pinRaw, saveRaw, addLowRule, readOverridesByMode, perModeOverrides, overridesKey, settingsHtml, countHtml, slateGames, liveOverrides } from "./settings-panel.js";
 import { savedClick, readSaved, retrySaved, pickedSaved, savedName, loadSavedNames, savedNameKey, savedNameBlur, savedNameInput } from "./saved-panel.js";
-import { workView, shownIds, rowClick, slotClick, dropMan, loadSaved, saveIds, readWork, retryWork, freshWork, workLineupHtml, buildHand, blockedRows, clearLineup, workAfterRoster, NOT_LOADED } from "./work-panel.js";
+import { workView, shownIds, rowClick, slotClick, dropMan, loadSaved, saveIds, readWork, retryWork, freshWork, workLineupHtml, buildHand, blockedRows, clearLineup, workAfterRoster, otherModeAfterRoster, perModeWork, workUnreadableWhy, NOT_LOADED } from "./work-panel.js";
 import { rememberSlots } from "./lateswap.js";
 import { startedByTip } from "./swap-list.js";
 import { limitsMoved, oversMoved, picksMoved } from "./slate-refresh.js";
@@ -137,8 +137,13 @@ const ovStaleHtml = (res, c) => (res?.ovAt != null && oversMoved(res.ovAt, c.ovK
 const pullStaleHtml = (res, c) => (res?.lineups.length && res.pullAt?.key != null && c.pull?.key != null && res.pullAt.key !== c.pull.key ? `<div class="actnote">Built on the ${esc(res.pullAt.label)} pull; the board has moved since.</div>` : "");
 
 const picksKeyOf = (c) => JSON.stringify([c.picks.locked, c.picks.excluded]);
+/** The board context with one mode's own picks and NO list in place of the mode on show (ctx.picksOf / ctx.noOf, board.js); as given when the board has none. */
+const modeCtx = (c, mode) => ({ ...c, picks: c.picksOf ? c.picksOf(mode) : c.picks, no: c.noOf ? c.noOf(mode) : c.no });
 /** "Built before your last lock change" once the saved picks differ from the ones the lineups on show were built with (res.picksAt). A man off the slate counts on neither side. */
 const picksStaleHtml = (res, c) => (res?.lineups.length && res.picksAt != null && picksMoved(res.picksAt, picksKeyOf(c), c.byId) ? `<div class="actnote">Built before your last lock change; build again.</div>` : "");
+/** The open mode's NO list a build reads (no-picks.js), as one string; "Built before your last NO change" once it differs from the build's (res.noAt, review F9b 11-19). Builds only: late swap does not use it. */
+const noKeyOf = (c) => JSON.stringify([c.no ?? []]);
+const noStaleHtml = (res, c) => (res?.lineups.length && res.noAt != null && picksMoved(res.noAt, noKeyOf(c), c.byId) ? `<div class="actnote">Built before your last NO change; build again.</div>` : "");
 
 /** The Min % and Max % a build would send, as one string: compared to say a result is out of date. */
 const limitsKey = (P, c) => JSON.stringify(P.mode === "GPP" ? sentLimits(P.limits, c.byId) : null); // a Cash build sends none
@@ -149,6 +154,7 @@ function notesHtml(P, c) {
   const out = [];
   if (res.error) out.push(`<div class="actnote err">${esc(res.error)}</div>`);
   out.push(picksStaleHtml(res, c));
+  out.push(noStaleHtml(res, c));
   if (res.lineups.length && res.workKey != null && res.workKey !== workKey(P.work)) out.push(`<div class="actnote">Built before your last working-lineup change; build again.</div>`);
   out.push(ovStaleHtml(res, c));
   out.push(pullStaleHtml(res, c));
@@ -188,7 +194,7 @@ function render(X) {
   // The panel redraws on many events: a keyboard user keeps his place (a text box its caret) through every one.
   P.drawing = true; // a box the redraw lifts away is not being left (savedNameBlur)
   keepFocus(el, () => {
-    el.innerHTML = `<div class="oh"><h3>Optimizer</h3><div class="seg">${MODES.map((m) => `<button data-op="mode" data-m="${m}" class="${m === P.mode ? "on" : ""}">${m}</button>`).join("")}</div></div>
+    el.innerHTML = `<div class="oh"><h3>Optimizer</h3><div class="seg">${MODES.map((m) => `<button data-op="mode" data-m="${m}" class="${m === P.mode ? "on" : ""}"${P.running ? ' disabled title="A build is running; switch after it finishes."' : ""}>${m}</button>`).join("")}</div></div>
 ${settings}<div class="lu${v ? "" : " wk"}">${lineup}</div>
 <div class="act">${buildButtonsHtml(P, ICON.bolt, "Build")}${v || !built ? "" : `<button class="ol opentab" data-op="opentab">${built} lineup${built === 1 ? "" : "s"} built: open Lineups</button>`}${v ? "" : limitCountHtml(P.mode === "GPP" ? sentLimits(P.limits, c.byId) : null)}
 <div class="two"><button class="ol" data-op="save"${canSave ? "" : " disabled"}>Save working lineup</button>${v ? `<button class="ol" data-op="csv"${n ? "" : " disabled"}>Download DK CSV${n ? ` (${n})` : ""}</button>` : ""}</div></div>
@@ -238,6 +244,9 @@ async function build(X) {
   const name = X.ctx().name, mode = P.mode;
   // Before the working lineup is read, a build would leave out hand-picked men it cannot see: it waits (fails closed).
   if (!P.ls && !P.workReady) { X.toast(`${NOT_LOADED}; build again once it has.`); retryWork(X, own); return; }
+  // This mode's saved working lineup could not be read: its hand-picked men are unknown, so nothing is built in it until a click saves a new one (review 11-20, money).
+  const unread = P.ls ? null : workUnreadableWhy(P, mode);
+  if (unread) { X.toast(`The ${mode} working lineup could not be read (${unread}), so nothing was built. Click a row or a slot in it to save a new one, then build.`, "err"); return; }
   P.running = true;
   const watch = watchBuild(X);
   render(X);
@@ -245,25 +254,25 @@ async function build(X) {
   try {
     await picksSettled(X);
     if (name !== X.ctx().name || P.build !== watch) return; // moved slate during the wait: nothing is sent, so no build runs unseen
-    const picksAt = picksKeyOf(X.ctx()), ovAt = X.ctx().ovKey, pullAt = X.ctx().pull; // the locks and the overrides the server reads for this build, and the pull on the board
+    // Everything this build sends or is stamped with is the CLICKED mode's (review 11-20, money: Cash and GPP keep separate picks and
+    // lineups, Adam 11-14/11-20), never the mode on show after the wait: its locks, its NO list and its working lineup.
+    const c = modeCtx(X.ctx(), mode);
+    const picksAt = picksKeyOf(c), noAt = noKeyOf(c), ovAt = c.ovKey, pullAt = c.pull; // the locks, the NO list and the overrides the server reads for this build, and the pull on the board
     // The working lineup's hand-picked men are held in every lineup of this build only, and may take any slot their
     // positions allow (work-panel.js; the server sends optimize only their ids).
-    const hand = buildHand(P), wk = workKey(P.work);
+    const hand = buildHand(P, P.workByMode[mode]), wk = workKey(P.workByMode[mode]);
     const exposure = mode === "GPP" ? sentLimits(P.limits, X.ctx().byId) : null, limAt = JSON.stringify(exposure); // a man's Min % and Max % (B10): GPP builds only; never sent in late swap, where they do not apply
     const out = await postBuild(X, { mode, settings: exposure ? { ...settings, exposure } : settings, ...(hand ? { handPicks: hand } : {}) }, watch);
     if (P.build !== watch) return; // an abandoned build's answer, even if the panel is back on its slate
     const prev = P.results[mode];
     if (!out.lineups.length && prev?.lineups.length) P.results[mode] = { ...prev, note: out.note ?? null, partial: out.partial ?? null, error: null, kept: true }; // nothing built (a stop, or a note saying why): the lineups on show stay, the note at the foot of the tab
-    else P.results[mode] = { idx: 0, lineups: out.lineups.map((l) => ({ ...l, ids: l.slots.map((p) => p.dk_id), men: frozenMen(l.slots, X.ctx().byId) })), skipped: out.skipped ?? [], note: out.note ?? null, partial: out.partial ?? null, error: null, picksAt, ovAt, limAt, workKey: wk, pullAt, builtAt: Date.now() };
-    // The lineups are kept as the slate's one build on the Lineups tab, replacing the last build of either mode (Adam, 2026-11-07),
-    // so the other mode's result and its notes go with it; the panel says "N lineups built: open Lineups" and Build never moves Adam
+    else P.results[mode] = { idx: 0, lineups: out.lineups.map((l) => ({ ...l, ids: l.slots.map((p) => p.dk_id), men: frozenMen(l.slots, X.ctx().byId) })), skipped: out.skipped ?? [], note: out.note ?? null, partial: out.partial ?? null, error: null, picksAt, noAt, ovAt, limAt, workKey: wk, pullAt, builtAt: Date.now(), no: out.no?.names ?? null }; // no: the NO men this build left out (lineup/no-list.js), each lineup's heading line
+    // The lineups are kept as this mode's build on the Lineups tab, replacing only the last build of this mode (Adam 11-07, 11-12, 11-14,
+    // 11-20); the other mode's result, notes and build stay. The panel says "N lineups built: open Lineups" and Build never moves Adam
     // to another tab by itself. Nothing here writes a saved lineup: only Save does.
-    P.loaded = null;
+    P.loadedByMode[mode] = null;
     const done = P.results[mode];
-    if (done?.lineups.length && !done.kept) {
-      for (const m of MODES) if (m !== mode) delete P.results[m];
-      keepBuild(X, newBuild(done, mode), own);
-    }
+    if (done?.lineups.length && !done.kept) keepBuild(X, newBuild(done, mode), own);
   } catch (e) {
     if (P.build !== watch) return;
     if (e.code === "BUSY") X.toast(e.message); // D17: a notice, not an error; the lineups on show stay as they were
@@ -294,8 +303,9 @@ async function buildLateSwap(X, settings, watch) {
   try {
     await picksSettled(X);
     if (name !== X.ctx().name || X.P.build !== watch) return; // moved slate during the wait: nothing is sent, so no build runs unseen
-    const ovAt = X.ctx().ovKey, picksAt = picksKeyOf(X.ctx()), pullAt = X.ctx().pull, res0 = X.P.ls?.res;
-    await lsBuild(X, settings, (_X, _what, body) => postBuild(X, body, watch), () => X.P.build === watch);
+    const c = modeCtx(X.ctx(), mode); // the clicked mode's locks, never the mode on show after the wait (review 11-20, money)
+    const ovAt = c.ovKey, picksAt = picksKeyOf(c), pullAt = c.pull, res0 = X.P.ls?.res;
+    await lsBuild(X, settings, (_X, _what, body) => postBuild(X, body, watch), () => X.P.build === watch, mode);
     if (X.P.build === watch && X.P.ls?.res && X.P.ls.res.lineups !== res0?.lineups) Object.assign(X.P.ls.res, { ovAt, picksAt, pullAt }); // new lineups: stamp what they were built with (cards kept keep theirs)
   } catch (e) {
     if (X.P.build !== watch || !X.P.ls) return;
@@ -405,8 +415,8 @@ function onClick(X, e) {
   if (tabClick(X, d, own)) return; // the Lineups tab's own clicks (lineups-panel.js)
   switch (d.op) {
     case "setopen": return set({ setOpen: !P.setOpen });
-    // One build per slate (a new build of either mode replaces it); the board's mode picks which build and saved lineups the Lineups tab lists; the working lineup is shared by both.
-    case "mode": set({ mode: d.m, showSkipped: false, swap: null }); return X.onWork();
+    // The newest build per mode (recent-builds.js); the board's mode picks which build and saved lineups the Lineups tab lists, and which working lineup shows (work-panel.js perModeWork, Adam 11-14/11-20: Cash and GPP keep separate lineups).
+    case "mode": if (P.running) return X.toast("A build is running; switch Cash or GPP after it finishes."); set({ mode: d.m, showSkipped: false, swap: null }); return X.onWork(); // off during a build, as the late swap switch is (review 11-20, money)
     case "build": return build(X);
     case "stop": return stopBuild(X);
     case "clearwork": return clearLineup(X, own);
@@ -512,6 +522,7 @@ async function toggleLateSwap(X, idx = null, from = null) {
 export function createPanel({ el, lineupsEl = null, onView = () => {}, onTabs = () => {}, isLineupsView = () => false, api, toast, tryStore, dash, ctx, onLateSwap = () => {}, onWork = () => {}, onMode = () => {}, onClearLocks = () => {}, onMemory = () => {}, confirm = askConfirm }) {
   const P = { mode: "GPP", raw: Object.fromEntries(MODES.map((m) => [m, loadRaw(tryStore, m)])), limits: {}, results: {}, swap: null, lt: freshLt(), spots: {}, spotsReady: false, spotsError: null, spotsReading: null, spotQueue: null, spotPending: 0, spotGen: 0, spotMenu: null, spotWarn: null, spotMove: null, builds: [], buildsReady: false, buildsError: null, buildsReading: null, buildQueue: null, buildGen: 0, setOpen: false, loaded: null, saved: [], savedPick: new Set(), savedError: null, savedReady: false, savedReading: null, running: false, showSkipped: false, ovOpen: false, ovMsg: null, lrOpen: false, lrMsg: null, ls: null, expSort: { ...DEFAULT_EXPOSURE_SORT }, expPos: "All", svNames: {}, svEdit: null, ...freshWork() };
   perModeOverrides(P); // P.overrides: the team and game limits of the mode in force; Cash and GPP each keep their own
+  perModeWork(P); // P.work and P.loaded: the working lineup of the mode in force; Cash and GPP each keep their own (work-panel.js)
   const X = { P, el, lel: lineupsEl, onView, onTabs, isLineupsView, onMode, api, toast, tryStore, dash, ctx, onLateSwap, onWork, onClearLocks, onMemory, confirm, settle: pressSettle() };
   X.redraw = () => render(X);
   el.addEventListener("click", (e) => { const was = P.mode; onClick(X, e); if (P.mode !== was) { onMode(P.mode); onMemory(); } });
@@ -537,12 +548,14 @@ export function createPanel({ el, lineupsEl = null, onView = () => {}, onTabs = 
     toggleLateSwap: () => toggleLateSwap(X),
     lateSwap: () => (P.ls && ctx().name ? lsView(P, ctx()) : null),
     running: () => P.running, // the header's Late swap switch is off while a build runs
+    workFoot: () => P.workFoot ?? null, // the working lineup's foot facts (carried from before the split, unreadable, replaced; store.js readWorking), for the page foot
     // Before a new pull replaces the rows: each late swap slot man's last row, so a man it drops is still known by name.
     beforeRoster: () => { if (P.ls) P.ls.last = rememberSlots(P.ls.slots, ctx().byId, lsView(P, ctx()).started, P.ls.last); },
     rosterInput: () => ({ work: P.work, workReady: P.workReady, ls: P.ls }),
     // After one: the working lineup without the men who left (slate-refresh.js rosterCleanup), and the saved list read again on every refresh, so its legal verdicts are the new slate's.
     afterRoster: (out) => {
       workAfterRoster(X, out.work, out.workLeft, own);
+      otherModeAfterRoster(X, own); // the other mode's working lineup loses the same men
       readSaved(X, ctx().name, own);
     },
     limits: () => P.limits,

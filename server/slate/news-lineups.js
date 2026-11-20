@@ -7,7 +7,6 @@ import { nameKey, soleNear } from "../lib/names.js";
 import { readLook } from "./lineup-look.js";
 import { warn } from "../../site/shim/log.js";
 import { withCardStatus } from "../board/news-claims.js";
-import { readStatusSinceChecked } from "../../site/shim/status-since.js";
 import { readOverrides, hisNumbers } from "./overrides.js";
 import { readScenarios, heldTeams } from "./scenarios.js";
 import { keyOf, outsOf } from "../board/console-engine.js";
@@ -19,13 +18,7 @@ import { keyOf, outsOf } from "../board/console-engine.js";
 export function cardContext(slate, local) {
   const ctx = { players: [], typed: new Set(), problems: [] };
   const problem = (text, extra = {}) => { ctx.problems.push(text); warn(`card status: ${text}`, { slate, ...extra }); }; // G62: counted, logged and shown at the foot of the News tab
-  try {
-    const file = path.join(dataRoot(), "slates", slate, "slate.json");
-    const players = JSON.parse(fs.readFileSync(file, "utf8")).players ?? [];
-    const { since, problem: sinceProblem } = readStatusSinceChecked(slate); // the committed raw pulls on the app; the baked times on the site (shim)
-    if (sinceProblem) problem(sinceProblem);
-    ctx.players = players.map((p) => (since[String(p.dk_id)] != null ? { ...p, status_since: since[String(p.dk_id)] } : p));
-  } catch (e) { if (e.code !== "ENOENT") problem(`the slate file could not be read (${e.name}), so cards are judged without TwoGun's status`); }
+  // TwoGun's status and when it changed are never read (Adam 11-19, 4:18 PM ET): a card is judged against our own feeds only, so ctx.players stays empty
   if (local) {
     try {
       const o = readOverrides(slate), sent = new Set(o.auto?.min ?? []);

@@ -1,5 +1,5 @@
-// Tab 1 Entries ("Which spot does each entry play?") and tab 2 Lineups ("Which lineup plays each spot?") of the Late swap screen. Entries:
-// rows grouped by contest, Auto-fill empty rows, check boxes (shift-click for a range, one per contest, Select unmapped), one spot picker
+// Tab 1 Entries → Spots ("Step 1 · Give each DraftKings entry a spot") and tab 2 Spots → Lineups ("Step 2 · Put a lineup in each spot") of the
+// Late swap screen. Entries: rows grouped by contest, Auto-fill empty rows, Re-assign all and Reset entries (lsw-reset.js), check boxes (shift-click for a range, one per contest, Select unmapped), one spot picker
 // with Fill and Number in order, one-step undo, and the single-row picker for single changes. Lineups: one row per spot with its lineup, its
 // eight men on one line, a picker of saved lineups and the Out alert. An entry with no spot is red: "No lineup assigned"; it is never edited
 // or exported.
@@ -91,8 +91,10 @@ export function entriesHtml(M, L) {
   const fresh = [...(L.newIds ?? [])].filter((id) => M.entries.some((e) => e.entryId === id));
   const none = nSel ? "" : " disabled";
   const undo = L.fillUndo ? `<div class="fillnote"><span>${esc(L.fillUndo.text)}</span><button class="ol" data-lsw="undoFill">Undo</button></div>` : "";
-  return `<section class="mapcol tabq"><div class="mh"><span class="t">Which spot does each entry play?</span><span class="grow"></span><span class="muted">${M.entries.length} entries in ${groups.length} contests</span></div>
+  return `<section class="mapcol tabq"><div class="mh"><span class="t">Step 1 · Give each DraftKings entry a spot</span><span class="muted">A spot (Cash, GPP #1, GPP #2…) is one lineup; every entry in it plays that lineup.</span><span class="grow"></span><span class="muted">${M.entries.length} entries in ${groups.length} contests</span></div>
 <div class="bulk"><button class="${un.length ? "go" : "ol"}" data-lsw="autoFill" title="Fills every empty row: Cash for the Double Ups, GPP #1 for the first entry of each other contest, GPP #2 for the second, and so on. Rows that already have a spot are not touched."${un.length ? "" : " disabled"}>Auto-fill empty rows${un.length ? ` (${un.length})` : ""}</button>
+<button class="ol" data-lsw="reassignAll" title="Reset entries, then Auto-fill, as on a first upload: every spot row is rebuilt from the uploaded file's lineups, Cash goes to the Double Ups, GPP #1 to the first entry of each other contest, GPP #2 to the second, and so on. No Undo; it asks first."${M.entries.length ? "" : " disabled"}>Re-assign all (auto)</button>
+<button class="ol" data-lsw="resetEntries" title="Clears every row's spot and the spot rows, back to how the file was just uploaded, so Auto-fill offers itself again. Locked men and men taken out of single spots go too; the take-out list, put in at least and excluded games stay. It asks first.">Reset entries</button>
 <span class="cb${allSel ? " on" : ""}" data-lsw="pickAll" role="checkbox" aria-checked="${allSel}" tabindex="0" title="Select every row"></span><span class="muted">${nSel} selected</span>
 <button class="ol" data-lsw="selectUnmapped"${un.length ? "" : " disabled"}>Select empty rows</button><span class="grow"></span>
 <select class="spsel" id="lswFill" title="The spot Fill puts the selected rows in, and where Number in order starts">${spotOptions(M, L.fillSpot ?? M.spots[0]?.name)}</select>
@@ -136,7 +138,7 @@ ${s.alert ? outFlag(s) : ""}${ask ? `<div class="alert"><b>${esc(ask.confirms[0]
 
 /** Tab 2. */
 export function lineupsHtml(M, L) {
-  return `<section class="mapcol tabq"><div class="mh"><span class="t">Which lineup plays each spot?</span><span class="grow"></span><span class="muted">${M.spots.length} ${M.spots.length === 1 ? "spot" : "spots"}, made in tab 1</span></div>
+  return `<section class="mapcol tabq"><div class="mh"><span class="t">Step 2 · Put a lineup in each spot</span><span class="grow"></span><span class="muted">${M.spots.length} ${M.spots.length === 1 ? "spot" : "spots"}, made in tab 1</span></div>
 ${L.savedErr ? `<div class="rs red">${esc(L.savedErr)}</div>` : !(L.saved ?? []).length && L.savedLoaded ? '<div class="rs">No saved lineups for this slate yet. Save one from the Lineups tab of the board, then come back here.</div>' : ""}
 ${M.spots.length ? M.spots.map((s) => spotRow(s, M, L)).join("") : '<div class="rs">No spots yet. Give your entries a spot in tab 1 first.</div>'}
 <div class="hints"><div><b>NEXT UPLOAD</b>Spots you have set stay as they are. Contests you have not seen arrive with <em class="red">No lineup assigned</em>.</div><div><b>TO CHANGE A SPOT'S LINEUP</b>Pick another saved lineup from the list on its row. Entries do not move.</div></div></section>`;

@@ -4,7 +4,7 @@
 import { info, error } from "../../site/shim/log.js";
 import { refuseNonJsonPost, refuseCrossSiteRead } from "../lib/origin.js";
 import { optimizeErrorKind } from "../server-util.js";
-import { SLATE_NAME, readPicks, checkWorking } from "../slate/store.js";
+import { SLATE_NAME, modePicks, PICK_MODES, checkWorking } from "../slate/store.js";
 import { hisProblem } from "../slate/out-pool.js";
 import { send, fail, readJson, openSlate } from "../slate/http-helpers.js";
 import { effectivePlayers } from "../slate/effective-players.js";
@@ -12,10 +12,11 @@ import { slateRefMs, startedSplit, leftOut } from "../board/lateswap.js";
 import { DEFAULT_COUNT } from "../board/slots.js";
 import { ONE_GAME_NOTE } from "./optimize.js";
 import { APP_MAX_STEPS, newJob, runOptimize, keepAnswerOpen, partialResult } from "./build-run.js";
+import { noForBuild } from "./no-list.js";
 
 export const LATE_ONE_GAME_NOTE = "Only one game left unstarted; DraftKings needs players from at least two games, so pin or keep a started man.";
 
-/** POST { mode, settings, handPicks? }: lineups for the slate's players; locked and excluded come from the saved picks, never the body.
+/** POST { mode, settings, handPicks? }: lineups for the slate's players; locked and excluded come from the mode's saved picks, never the body.
  *  One search at a time per server (409 while one runs), so builds cannot pile up workers. A Stop or the ceiling answers 200
  *  with the finished lineups, a sentence in note and a partial field (lineup/build-run.js). */
 export async function handleOptimize(req, res, slate, opts) {
@@ -45,8 +46,12 @@ export async function handleOptimize(req, res, slate, opts) {
   if (!hand.ok) return fail(res, 400, "BAD_SETTINGS", hand.message);
   const handIdList = hand.slots.filter((id) => id != null);
   if (lateSwap && handIdList.length) return fail(res, 400, "BAD_SETTINGS", "Hand-picked men are not used in late swap mode; pin them instead.");
+  // A build reads its own mode's locks and excludes only (Adam 11-14, 11-19, 11-20): a GPP lock never reaches a Cash build, nor the reverse.
+  // Late swap in the optimizer panel is a build of one mode too, so it reads that mode's.
+  if (!PICK_MODES.includes(body.mode)) return fail(res, 400, "BAD_SETTINGS", 'Mode must be "Cash" or "GPP".');
   if (opts.build) return fail(res, 409, "BUSY", "Lineups are already being made; try again when that finishes.");
-  const picks = readPicks(slate, slateData);
+  const picks = picksForBuild(res, slate, slateData, body.mode);
+  if (!picks) return;
   // Adam's overrides (typed numbers and bumps) are what the build scores, late swap included.
   const unknownMarks = hisProblem(slateData); // his In and Out calls unreadable: who is Out is unknown, so nothing is built (fail closed)
   if (unknownMarks) return fail(res, 409, "HIS_MARKS_UNREADABLE", unknownMarks);
@@ -66,8 +71,15 @@ export async function handleOptimize(req, res, slate, opts) {
     excluded = [...new Set([...excluded, ...lo.excluded])].filter((id) => !pinIds.has(id));
     lateOut = { now_ms: nowMs, dropped_locks: lo.droppedLocks, pinned_not_excluded: unexcluded };
   }
-  const settings = { ...body.settings, maxSteps: body.settings?.maxSteps ?? APP_MAX_STEPS };
+  // His NO list (lineup/no-list.js noForBuild, Adam 11-19): a build reads its mode's list, late swap its own late swap list (never the
+  // build's); out of every lineup of this run only. An unreadable list builds nothing (fail closed). Late swap names what it did in late_swap.no.
+  const nb = noForBuild({ slate, slateData, players, mode: body.mode, lateSwap, locked, excluded, handPicked: handIdList, exposure: body.settings?.exposure ?? null, pinned: pinned ?? {}, count: Number.isInteger(body.settings?.count) ? body.settings.count : DEFAULT_COUNT });
+  if (nb.error) { if (nb.error.status === 500) error("NO list unreadable", { slate, message: nb.error.message }); return fail(res, nb.error.status, nb.error.code, nb.error.message); }
+  excluded = nb.excluded;
+  if (lateOut) lateOut.no = nb.late;
+  const settings = { ...body.settings, ...(nb.exposure !== (body.settings?.exposure ?? null) ? { exposure: nb.exposure } : {}), maxSteps: body.settings?.maxSteps ?? APP_MAX_STEPS };
   const args = { players, mode: body.mode, settings, locked, excluded, handPicked: handIdList };
+  const noOut = nb.noOut;
   const gone = new AbortController();
   res.on("close", () => { if (!res.writableFinished) gone.abort(); });
   const job = newJob(slate);
@@ -79,12 +91,22 @@ export async function handleOptimize(req, res, slate, opts) {
   } catch (e) {
     error("optimizer failed", { slate, message: e.message, finished_lineups: job.lineups.length });
     // Lineups finished before the failure are whole and stay; only when there are none is the build a failure.
-    if (job.lineups.length) return answerBuild(res, slate, { result: partialResult("failed", job, settings.count ?? DEFAULT_COUNT, undefined, args) }, lateOut);
+    if (job.lineups.length) return answerBuild(res, slate, { result: partialResult("failed", job, settings.count ?? DEFAULT_COUNT, undefined, args) }, lateOut, noOut);
     return answerBuildFail(res, 500, "OPTIMIZER_FAILED", "The optimizer failed on this slate and built nothing. The server log has the details.");
   } finally {
     endKeepalive();
   }
-  return answerBuild(res, slate, out, lateOut);
+  return answerBuild(res, slate, out, lateOut, noOut);
+}
+
+/** The mode's saved picks, or null after a named 500: an unreadable file means who is locked or excluded is unknown, so nothing is built
+ *  (review 11-20, money: fail closed, never "nobody"). */
+function picksForBuild(res, slate, slateData, mode) {
+  try { return modePicks(slate, slateData, mode); } catch (e) {
+    error("picks unreadable; nothing built", { slate, mode, message: e.message });
+    fail(res, 500, "PICKS_UNREADABLE", `The saved locks and excludes (cache/picks/${slate}.json) could not be read, so nothing was built: ${e.message}. A lock or exclude change on the Player list replaces the file.`);
+    return null;
+  }
 }
 
 /** A build's refusal. Once a long build's 200 has started the status cannot change, so the error goes in the body with its status. */
@@ -93,8 +115,9 @@ export function answerBuildFail(res, status, code, message) {
   res.end(JSON.stringify({ error: { code, message, status } }));
 }
 
-/** A build's answer from runOptimize's outcome. */
-export function answerBuild(res, slate, out, lateOut) {
+/** A build's answer from runOptimize's outcome. `noOut` ({ applied: { ids, names } | null, note }) is the NO list this build left
+ *  out: the answer carries it as `no` (each lineup's heading line, stored with the build), and its note joins the build's note. */
+export function answerBuild(res, slate, out, lateOut, noOut = null) {
   if (out.cancelled) return res.destroy(); // nobody is waiting for this answer
   const err = out.result.error;
   if (err && optimizeErrorKind(err) === "slate") {
@@ -104,7 +127,8 @@ export function answerBuild(res, slate, out, lateOut) {
   if (err) return answerBuildFail(res, 400, "BAD_SETTINGS", err);
   if (out.result.partial) info("build ended early", { slate, ...out.result.partial });
   // In late swap the one-game case means the started games took the rest out: say so in those words.
-  const body = !lateOut ? out.result : { ...out.result, note: out.result.note === ONE_GAME_NOTE ? LATE_ONE_GAME_NOTE : out.result.note, late_swap: lateOut };
+  const result = !noOut?.applied && !noOut?.note ? out.result : { ...out.result, ...(noOut.applied ? { no: noOut.applied } : {}), note: [out.result.note, noOut.note].filter(Boolean).join(" ") || null };
+  const body = !lateOut ? result : { ...result, note: result.note === ONE_GAME_NOTE ? LATE_ONE_GAME_NOTE : result.note, late_swap: lateOut };
   if (res.headersSent) return res.end(JSON.stringify(body)); // a long build's 200 has started (build-run.js)
   return send(res, 200, body);
 }

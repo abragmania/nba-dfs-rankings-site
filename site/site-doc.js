@@ -10,7 +10,7 @@
 
 export const SITE_FORMAT = "nba-site-bake/2";
 /** The fields our engine puts on a man (server/minutes/board.js applyOurs): what is baked, and what the browser lays back on the slate's own row. */
-export const OURS_KEYS = Object.freeze(["ours", "role_tonight", "role_usual", "role_change", "role_reason", "proj_source", "projection", "minutes", "value", "tg_projection", "tg_minutes", "tg_value", "proj_note"]);
+export const OURS_KEYS = Object.freeze(["ours", "role_tonight", "role_usual", "role_change", "role_reason", "proj_source", "projection", "minutes", "value", "tg_projection", "tg_minutes", "tg_value", "proj_note", "play_unknown"]); // play_unknown: whether he plays is not known, so no build takes him (review 11-19)
 /** The saved-work files the site starts from, by kind (the app keeps them at data/cache/<kind>/<slate>.json). */
 export const SAVED_KINDS = Object.freeze(["picks", "working", "lineups", "builds", "spots"]);
 
@@ -24,11 +24,26 @@ export const baseOf = (players) => Object.fromEntries((players ?? []).map((p) =>
 
 const ROLE_BLANK = { role_tonight: null, role_usual: null, role_change: null, role_reason: null };
 
-/** A man the baked read has no row for: applyOurs's own answer for a man with no row, with `why` as the reason. */
+/**
+ * A man the baked read has no row for: applyOurs's own answer for a man with no row (server/minutes/board.js), with `why` as the reason: on either source no projection and play_unknown, so no
+ * build takes him. The one place this file restates applyOurs; it applies only when the browser's pool holds a man the bake's did not.
+ */
 export function missingMan(p, source, why) {
-  const out = { ...p, ours: { minutes: null, rate: null, projection: null, value: null, missing: why }, ...ROLE_BLANK };
-  if (source !== "ours") return { ...out, proj_source: "twogun" };
-  return { ...out, proj_source: "ours", projection: null, minutes: null, value: null, tg_projection: p.projection ?? null, tg_minutes: p.minutes ?? null, tg_value: p.value ?? null, proj_note: `Our projection is missing: ${why}` };
+  const out = { ...p, ours: { minutes: null, rate: null, projection: null, value: null, missing: why }, ...ROLE_BLANK, projection: null, value: null, tg_projection: p.projection ?? null, play_unknown: true };
+  if (source !== "ours") return { ...out, proj_source: "twogun", proj_note: `Whether he plays is not known: ${why}; no projection until our engine has him` };
+  return { ...out, proj_source: "ours", minutes: null, tg_minutes: p.minutes ?? null, tg_value: p.value ?? null, proj_note: `Our projection is missing: ${why}` };
+}
+
+/**
+ * One man as applyOurs gave him, laid on the row in hand, on either source (Adam 11-19: the site follows the app's applyOurs exactly): every field it set comes from the baked read; a figure it
+ * replaced (its tg_ twin is present; value goes with projection) comes from the read, and a figure it left as TwoGun's comes from the row in hand, as do the tg_ twins. Pure.
+ */
+function layMan(p, m) {
+  const out = { ...p, ...m }, proj = "tg_projection" in m, mins = "tg_minutes" in m;
+  if (!proj) { out.projection = p.projection ?? null; out.value = p.value ?? null; }
+  if (!mins) out.minutes = p.minutes ?? null;
+  for (const k of ["projection", "minutes", "value"]) if (`tg_${k}` in m) out[`tg_${k}`] = p[k] ?? null;
+  return out;
 }
 
 /** A man shown with TwoGun's current numbers, said on his row (his `ours` block carries the reason, his source is TwoGun). */
@@ -58,8 +73,7 @@ export function layOurs(slateData, ours) {
         return twogunMan(p, why);
       }
     }
-    if (m.proj_source !== "ours") return { ...p, ours: m.ours, role_tonight: m.role_tonight ?? null, role_usual: m.role_usual ?? null, role_change: m.role_change ?? null, role_reason: m.role_reason ?? null, proj_source: m.proj_source ?? "twogun" };
-    return { ...p, ...m, tg_projection: p.projection ?? null, tg_minutes: p.minutes ?? null, tg_value: p.value ?? null };
+    return layMan(p, m);
   });
   return { players, twogun };
 }
@@ -72,10 +86,10 @@ export function applyOursDoc(slateData, site) {
   const ours = site?.ours ?? null;
   if (!ours) {
     const why = site ? (site.ours_gap ?? "our figures were not published with this slate") : "this slate was published without the site's data file";
-    const problem = `Our projections are not on the public site for this slate (${why}); TwoGun's numbers are shown.`;
+    const problem = `Our projections are not on the public site for this slate (${why}), so whether any man plays is not known: every projection is blank and nobody is built with, as in the app when our engine cannot run.`;
     return { ...slateData, proj_source: "twogun", proj_problem: problem, players: (slateData.players ?? []).map((p) => missingMan(p, "twogun", why)) };
   }
-  return { ...slateData, proj_source: ours.proj_source, ...(ours.proj_problem ? { proj_problem: ours.proj_problem } : {}), players: layOurs(slateData, ours).players };
+  return { ...slateData, proj_source: ours.proj_source, ...(ours.proj_problem ? { proj_problem: ours.proj_problem } : {}), ...(Array.isArray(ours.blind_teams) ? { blind_teams: ours.blind_teams } : {}), players: layOurs(slateData, ours).players };
 }
 
 /** The files a visitor's browser starts from, as [{ file, text }] under the app's data folder (dataDir "/data"): Adam's overrides and scenarios, then his saved work. */
@@ -85,6 +99,8 @@ export function baselineFiles(site, slate) {
   const out = [];
   if (b.overrides) out.push({ file: `/data/slates/${slate}/overrides.json`, text: JSON.stringify(b.overrides) });
   if (b.scenarios) out.push({ file: `/data/slates/${slate}/scenarios.json`, text: JSON.stringify(b.scenarios) });
+  if (b.whatifs) out.push({ file: `/data/slates/${slate}/whatifs.json`, text: JSON.stringify(b.whatifs) }); // his saved what-ifs (the Scenario tab), whole: a visitor's own saves replace the file in his browser only
+  if (b.whatif_status) out.push({ file: `/data/slates/${slate}/whatif-status.json`, text: JSON.stringify(b.whatif_status) }); // the app's last words on them, read-only
   for (const kind of SAVED_KINDS) if (b.saved?.[kind]) out.push({ file: `/data/cache/${kind}/${slate}.json`, text: JSON.stringify(b.saved[kind]) });
   return out;
 }

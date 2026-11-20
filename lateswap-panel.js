@@ -173,6 +173,8 @@ export function lsNotesHtml(P, c, v) {
   if (res?.error) out.push(`<div class="actnote err">${esc(res.error)}</div>`);
   if (res?.droppedLocks?.length) out.push(`<div class="actnote">Locked but started, so left out: ${nameLinks(menOf(res.droppedLocks, c.byId))}</div>`);
   if (res?.unexcluded?.length) out.push(`<div class="actnote">Pinned, so not excluded this build: ${nameLinks(menOf(res.unexcluded, c.byId))}</div>`);
+  if (res?.noLate?.applied?.length) out.push(`<div class="actnote">Late swap NO, left out of the open slots: ${esc(res.noLate.applied.join(", "))}</div>`);
+  if (res?.noLate?.ignored?.length) out.push(`<div class="actnote">Late swap NO ignored: ${esc(res.noLate.ignored.join("; "))}</div>`);
   if (res?.note) out.push(`<div class="actnote wrap${res.partial?.reason === "failed" ? " err" : ""}">${esc(res.note)}${res.kept ? ` ${KEPT_NOTE}` : ""}</div>`);
   if (res?.skipped?.length) {
     const n = res.skipped.length;
@@ -229,10 +231,11 @@ export function lsPage(X, i) {
 /**
  * Builds in the mode: re-reads now (a game may have started since), pins every frozen and pinned man, and asks the server
  * to fill the open slots. `post` is the panel's POST helper; the server leaves out every started man who is not pinned.
- * `current` is false once the panel has abandoned this build (a move to another slate, even if it has moved back).
+ * `current` is false once the panel has abandoned this build (a move to another slate, even if it has moved back). `mode` is the mode
+ * taken at the click (panel.js buildLateSwap), with `settings` read for it then: never the mode on show later (review 11-20, money).
  */
-export async function lsBuild(X, settings, post, current = () => true) {
-  const name = X.ctx().name, mode = X.P.mode;
+export async function lsBuild(X, settings, post, current = () => true, mode = X.P.mode) {
+  const name = X.ctx().name;
   const ls0 = X.P.ls; // the state this build started from; a mode switched off and on again replaces it
   await readNow(X);
   if (name !== X.ctx().name || X.P.ls !== ls0 || !current()) return;
@@ -263,6 +266,7 @@ export async function lsBuild(X, settings, post, current = () => true) {
     idx: 0, mode, pinned: v.pinned, started: [...v.started], lineups: out.lineups.map((l) => ({ ...l, ids: l.slots.map((p) => p.dk_id) })), note: out.note ?? null, partial: out.partial ?? null, error: null, skipped: out.skipped ?? [],
     droppedLocks: out.late_swap?.dropped_locks ?? [],
     unexcluded: out.late_swap?.pinned_not_excluded ?? [],
+    noLate: out.late_swap?.no ?? null, // the late swap NO list as applied (lineup/no-list.js noForBuild, Adam 5:28 PM 11-19)
   };
   if (X.P.ls.res.lineups.length) X.P.ls.slots = [...X.P.ls.res.lineups[0].ids];
   X.P.ls.msg = null;
@@ -299,7 +303,9 @@ export function lsClick(X, d, own) {
   const redraw = () => { own.render(X); X.onLateSwap(); }; // the table's pickers follow the working lineup
   switch (d.op) {
     // A Cash/GPP switch counts as a change: a build still running for the other mode is discarded, not shown.
-    case "mode": ls.res = null; touched(ls); Object.assign(P, { mode: d.m, showSkipped: false }); own.render(X); return true;
+    case "mode": // off during a build, as outside late swap (panel.js; review 11-20, money): a build reads the mode it was clicked in
+      if (P.running) { X.toast("A build is running; switch Cash or GPP after it finishes."); return true; }
+      ls.res = null; touched(ls); Object.assign(P, { mode: d.m, showSkipped: false }); own.render(X); return true;
     case "lsunpin": if (!P.running) lsUnpin(X, +d.i); redraw(); return true;
     case "lsgone": if (!P.running) lsTakeOut(X, +d.i); redraw(); return true;
     case "lspage": lsPage(X, +d.i); redraw(); return true;

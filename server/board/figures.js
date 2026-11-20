@@ -14,6 +14,12 @@ export const isSitting = (status) => isOut(status) || /^(d|doubtful)$/i.test(Str
  * Pure. One copy for the optimizer, the lineup cards, late swap and the board.
  */
 export const outFor = (p, { engine = false } = {}) => (p?.his === "in" ? false : p?.his === "out" ? true : engine && p?.ours?.playing === false);
+/**
+ * Whether his typed projection `typed` on man `p` is set aside (Adam 5:33 PM: a man the board shows Out has no projection): a number other than 0 on a man not playing tonight, outFor with the engine
+ * (his In first, then his Out, then our engine's Out). Kept as he typed it and counted again once he plays. Pure. One copy: the merge (server/slate/overrides.js), the instant guess
+ * (instant-overrides.js) and the board's struck cell (player-table.js) (the money review of 11-20, round 2, item 4).
+ */
+export const projAside = (p, typed) => isNum(typed) && typed !== 0 && outFor(p, { engine: true });
 /** A team's console work with nothing in it, as stored. */
 export const EMPTY_RECORD = () => ({ saved: [], pins: {}, handouts: {}, combos: {} });
 /** "a" or "an" before a team code, as it is said. */

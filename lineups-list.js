@@ -2,7 +2,7 @@
 // helpers the Lineups tab shares: a man's name opens his player card (board.js reads data-dk-id from any click). Layout ported from the
 // NFL app's exposure table, written in this app's own style. exposureRows, sortExposure and savedKeys are pure and tested in node.
 // The cards themselves are drawn by lineups-tab.js.
-import { esc, logo } from "./board-util.js";
+import { esc, logo, money } from "./board-util.js";
 import { setKey } from "./slots.js";
 import { nameLink } from "./card-row.js";
 import { EXPOSURE_POS } from "./view-memory.js";
@@ -17,7 +17,7 @@ export function exposureRows(lineups, byId) {
     const p = byId.get(id);
     if (!p) continue;
     const positions = p.positions ?? [];
-    rows.push({ id, name: p.name ?? String(id), positions, pos: positions.length ? positions.join("/") : null, team: p.team ?? null, oppText: p.oppText ?? null, own: p.proj_own ?? null, count, pct: (count / lineups.length) * 100, diff: typeof p.proj_own === "number" ? (count / lineups.length) * 100 - p.proj_own : null });
+    rows.push({ id, name: p.name ?? String(id), positions, pos: positions.length ? positions.join("/") : null, team: p.team ?? null, oppText: p.oppText ?? null, own: p.proj_own ?? null, salary: p.salary ?? null, projection: p.projection ?? null, value: p.value ?? null, count, pct: (count / lineups.length) * 100, diff: typeof p.proj_own === "number" ? (count / lineups.length) * 100 - p.proj_own : null });
   }
   return sortExposure(rows);
 }
@@ -67,30 +67,28 @@ export function builtFigures(lineups, live) {
   return out;
 }
 
-/** The two extra cells (Adam, 2026-11-04): a bar of the man's share of the lineups with a tick at his projected own, then the
- *  share minus that own. Only in this table, never on a lineup card; a man with no projected own gets dashes. */
-function fieldCells(r, dash) {
-  const why = "no projected ownership in this pull";
-  if (r.own == null) return `<td class="ex-bar">${dash(why)}</td><td class="ex-own">${dash(why)}</td>`;
-  const cap = (v) => Math.max(0, Math.min(100, v)).toFixed(1);
-  return `<td class="ex-bar"><span class="xb"><i style="width:${cap(r.pct)}%"></i><u style="left:${cap(r.own)}%"></u></span></td>`
-    + `<td class="ex-diff">${r.diff >= 0 ? "+" : "−"}${Math.abs(r.diff).toFixed(1)}</td>`;
+/** The Salary, Points and Value cells (Adam 11-19, in place of You vs field and Diff): the board's own figures, formatted as its
+ *  columns do (player-table.js: money, one decimal, Value two decimals); a missing figure shows the board's dash with its reason. */
+function figureCells(r, dash) {
+  const num = (v, text, why) => `<td class="ex-fig">${typeof v === "number" ? text(v) : dash(why)}</td>`;
+  return num(r.salary, money, "no salary in this slate file") + num(r.projection, (v) => v.toFixed(1), "no projection in this pull") + num(r.value, (v) => v.toFixed(2), "no value in this pull");
 }
 
 /** The one exposure table (A10): every column sorts, `Pos` shows the men who can play one position (`pos`, "All" for all), and
  *  each man's Filter button shows only the lineups holding him (`only` is the man it is on now; his name opens his card, A7). */
-export function exposureHtml(rows, sort, dash, only = null, pos = "All", field = false, dim = false) {
+export function exposureHtml(rows, sort, dash, only = null, pos = "All", dim = false) {
   const head = (key, label, cls = "") => `<th class="sortable${cls ? ` ${cls}` : ""}" data-op="expsort" data-key="${key}" title="Sort by ${label}">${label}${sort.key === key ? (sort.dir > 0 ? " ▲" : " ▼") : ""}</th>`;
   const isOn = (id) => (Array.isArray(only) ? only.includes(id) : only === id); // the men filtered (an AND), or the one the older list had
   const shown = pos === "All" ? rows : rows.filter((r) => (r.positions ?? []).includes(pos));
-  const body = !shown.length ? `<tr><td colspan="${field ? 8 : 6}" class="ex-none">No man in these lineups plays ${esc(pos)}.</td></tr>` : sortExposure(shown, sort).map((r) => `<tr${dim && isOn(r.id) ? ' class="held"' : ""}><td class="ex-pct">${r.pct.toFixed(1)}% <span class="ex-n">(${r.count})</span></td>`
+  const body = !shown.length ? `<tr><td colspan="9" class="ex-none">No man in these lineups plays ${esc(pos)}.</td></tr>` : sortExposure(shown, sort).map((r) => `<tr${dim && isOn(r.id) ? ' class="held"' : ""}><td class="ex-pct">${r.pct.toFixed(1)}% <span class="ex-n">(${r.count})</span></td>`
     + `<td class="ex-name"><span class="exn">${logo(r.team, "sm")}${nameLink({ dk_id: r.id, name: r.name })}</span></td>`
     + `<td>${r.pos ? esc(r.pos) : dash("no position in this slate file")}</td><td>${r.team ? esc(r.team) : dash("no team in this slate file")}</td>`
     + `<td class="ex-own">${r.own == null ? dash("no projected ownership in this pull") : r.own.toFixed(1) + "%"}</td>`
-    + (field ? fieldCells(r, dash) : "")
-    + `<td class="ex-f"><button class="xf${isOn(r.id) ? " on" : ""}" data-op="expfilter" data-man="${esc(r.id)}" title="${isOn(r.id) ? `Take ${esc(r.name)} out of the filter` : `Show only the lineups with ${esc(r.name)} (and every man already filtered)`}">Filter</button></td></tr>`).join("");
+    + figureCells(r, dash)
+    + `<td class="ex-f"><button class="xf${isOn(r.id) ? " on" : ""}" data-op="expfilter" data-man="${esc(r.id)}" title="${isOn(r.id) ? `Take ${esc(r.name)} out of the filter` : `Show only the lineups with ${esc(r.name)} (and every man already filtered)`}">Filter</button>`
+    + `<button class="xf xw" data-op="expwithout" data-man="${esc(r.id)}" title="Without: show only the lineups that do not hold ${esc(r.name)}">w/o</button></td></tr>`).join("");
   const filter = `<div class="expos"><span>Pos</span>${EXPOSURE_POS.map((p) => `<button class="xf${p === pos ? " on" : ""}" data-op="exppos" data-pos="${p}">${p}</button>`).join("")}</div>`;
-  return `<div class="sec">Exposure</div><div class="exl">${filter}<table class="ext"><thead><tr>${head("pct", "Exposure", "ex-pct")}${head("name", "Player")}${head("pos", "Pos")}${head("team", "Team")}${head("own", "Own", "ex-own")}${field ? `<th title="Amber: his share of these lineups. Blue tick: his projected ownership.">You vs field</th>${head("diff", "Diff", "ex-own")}` : ""}<th></th></tr></thead><tbody>${body}</tbody></table></div>`;
+  return `<div class="sec">Exposure</div><div class="exl">${filter}<table class="ext"><thead><tr>${head("pct", "Exposure", "ex-pct")}${head("name", "Player")}${head("pos", "Pos")}${head("team", "Team")}${head("own", "Own", "ex-own")}<th class="ex-fig" title="Salary">Salary</th><th class="ex-fig" title="Projected DraftKings points tonight">Points</th><th class="ex-fig" title="Projected points per $1,000 of salary">Value</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
 /** A Build's result with card i gone (its Discard, standard A13): a saved copy stays saved, the lineup on show stays in range,

@@ -1,7 +1,7 @@
 // The console's moves on his work: history and ripple, saving, pins, roles, who is out, hand-outs. Each takes the console's shared state `c`.
 import { oursUse } from "./console-ours.js";
-import { keyOf, outsOf, usageStart } from "./console-engine.js";
-import { calc, canonRecord, chipName, dropCopies, hasPins, label, moveTo, noteOuts, pinsOf, recordOf, rolesText, savedFor, sgn } from "./console-model.js";
+import { keyOf, outsOf, usageStart, teamFor } from "./console-engine.js";
+import { calc, canonRecord, chipName, dropCopies, hasPins, label, moveStamps, moveTo, noteOuts, pinsOf, recordOf, rolesText, savedFor, sgn } from "./console-model.js";
 import { FN, fmtv } from "./console-cmd.js";
 import { COLS } from "./console-render.js";
 import { PIN_MAX } from "./override-limits.js";
@@ -11,6 +11,7 @@ import { MINUTE_SOURCES, SOURCE_LABEL } from "./depth-chart.js";
 import { alignNews, endNewsOuts, manAsLeft, marksOf, stillAsLeft } from "./console-marks.js";
 import { addMove } from "./depth-cols.js";
 import { MARK_ROLES } from "./role-marks.js";
+import { STAMP_ROLES } from "./typed-aside.js";
 
 const THR = { m: 0.05, u: 0.05, d: 0.004, p: 0.05 };
 const STEP = { m: [0.5, 2], u: [0.5, 2], d: [0.01, 0.05], p: [0.1, 1] };
@@ -19,7 +20,7 @@ const EMPTY_RECORD_TEXT = JSON.stringify(EMPTY_RECORD());
 /** A history snapshot: his work without the lineup-news record, which no undo or redo ever changes (it would let news apply twice). */
 export const snap = (c) => JSON.stringify({ ST: Object.fromEntries(Object.entries(c.model.ST).map(([code, S]) => [code, { ...S, news: undefined }])), cur: c.G.cur });
 /** One team's work as the send compares it: who is out and every pin. */
-const teamState = (S) => JSON.stringify([keyOf(S.outs), S.pins, S.source ?? null, S.depth_moves ?? null, rolesText(S.role_marks)]); // a depth-chart move or a role mark is a change to send like any other
+const teamState = (S) => JSON.stringify([keyOf(S.outs), S.pins, S.source ?? null, S.depth_moves ?? null, rolesText(S.role_marks), S.stamps ?? null]); // a depth-chart move or a role mark is a change to send like any other
 /** The teams a step changed join c.touched: only those (and teams the board already holds an Apply for) are sent (console-auto.js). */
 function touch(c, before, { track = false } = {}) {
   c.touched ??= new Set();
@@ -119,7 +120,11 @@ export function saveDirty(c, auto = c.autoMove === true) {
 export function mutate(c, text, fn) {
   const before = vals(c), was = states(c);
   c.G.roleMoves = null; // the five-starter note names only the move that made it
-  fn();
+  c.stepAt = stepStamp(c); // one time for every stamp this step writes (typed-aside.js)
+  try {
+    fn();
+    for (const [code, S] of Object.entries(c.model.ST)) if (was[code] !== undefined) stampFlips(c, S, was[code]);
+  } finally { c.stepAt = null; }
   touch(c, was, { track: true });
   pushHist(c, text);
   c.G.editing = false;
@@ -236,9 +241,44 @@ const nameOf = (c, t, id) => chipName(c.model.TEAMS[t], c.model.TEAMS[t].byId[id
 export function setPin(c, t, id, k, raw) {
   const S = c.model.ST[t];
   if (S.outs.includes(id)) return false;
-  const v = Math.max(0, Math.min(PIN_MAX[k], Math.round(raw * 1000) / 1000));
-  mutate(c, `${t} ${nameOf(c, t, id)} ${FN[k]} = ${fmtv(k, v)}`, () => { pinsOf(S, keyOf(S.outs))[k][id] = v; });
+  const v = Math.max(0, Math.min(PIN_MAX[k], Math.round(raw * 1000) / 1000)), role = k === "m" ? roleNow(c, t, id) : null; // the role he holds as his minutes are typed (typed-aside.js)
+  mutate(c, `${t} ${nameOf(c, t, id)} ${FN[k]} = ${fmtv(k, v)}`, () => { pinsOf(S, keyOf(S.outs))[k][id] = v; if (k === "m") stampTyped(c, S, id, role); });
   return true;
+}
+/** Adam 9:46 AM 11-20: his typed number a role change set aside comes back: it is stamped again now, in the role he holds now, so it wins until his role crosses the starter line again. One Undo step. False with none. */
+export function restoreTyped(c, t, id) {
+  const S = c.model.ST[t], v = S.pins[keyOf(S.outs)]?.m?.[id];
+  if (v === undefined) return false;
+  const role = roleNow(c, t, id);
+  mutate(c, `${t} ${nameOf(c, t, id)} typed ${fmtv("m", v)} back`, () => stampTyped(c, S, id, role));
+  return true;
+}
+/** A step's stamp time: the page's clock, or a headless caller's c.clock() (ms), and always later than the page's last step, so two steps never share a time and the strictly newer call wins (console-tier.js flipWins). */
+function stepStamp(c) {
+  const ms = Math.max(typeof c.clock === "function" ? c.clock() : Date.now(), (c.lastStampMs ?? -Infinity) + 1);
+  c.lastStampMs = ms;
+  return new Date(ms).toISOString();
+}
+/** The time a stamp written now carries: the step's (mutate), else a fresh one. */
+const stampNow = (c) => c.stepAt ?? stepStamp(c);
+/** The stamps of one scenario's pins of a kind (m or r), made when first written: { id: stamp }. Stamps are kept per scenario, as the pins are (the money review of 11-20, finding 1). */
+const stampsAt = (S, k, key) => { S.stamps ??= {}; S.stamps[k] ??= {}; return (S.stamps[k][key] ??= {}); };
+const roleNow = (c, t, id) => calc(c.model.TEAMS[t], c.model.ST[t], c.model.ST[t].outs).rows.find((r) => r.id === id)?.role ?? null;
+/** His typed minutes' stamp (scenarios.js badStamps): the time and the role he held; a role with no figure (Out) leaves it unstamped, so his number stands, counted. */
+function stampTyped(c, S, id, role) {
+  const at = stampsAt(S, "m", keyOf(S.outs));
+  if (STAMP_ROLES.includes(role)) at[id] = { at: stampNow(c), role }; else delete at[id];
+}
+/**
+ * Every role flip on the scenario on show that a step made or changed carries the step's time (typed-aside.js: a flip after his typed number sets the number aside). On a move to another scenario a flip that
+ * came with its pins keeps the stamp it carried (carryPins, moveStamps); only one with no stamp there takes the step's. wasText: the team's teamState before the step.
+ */
+function stampFlips(c, S, wasText) {
+  const [k, pins, , , marksText] = JSON.parse(wasText), key = keyOf(S.outs), before = pins?.[k]?.r ?? {}, after = S.pins?.[key]?.r ?? {};
+  for (const [id, role] of Object.entries(after)) if (before[id] !== role && (k === key || S.stamps?.r?.[key]?.[id] === undefined)) stampsAt(S, "r", key)[id] = stampNow(c);
+  // a standing mark set or cleared on this page carries the step's time too, so a flip made after it on this page still wins (console-tier.js callTimes; the money review of 11-20, finding 5)
+  const was = Object.fromEntries(JSON.parse(marksText ?? "[]")), now = S.role_marks ?? {};
+  for (const id of new Set([...Object.keys(was), ...Object.keys(now)])) if (was[id] !== now[id]) (S.mark_at ??= {})[id] = stampNow(c);
 }
 export function clearPin(c, t, id, k) {
   const S = c.model.ST[t], pn = pinsOf(S, keyOf(S.outs));
@@ -303,7 +343,7 @@ export function undoNews(c, t, key, ends = { state: "undone" }) {
       if (m.kind === "out" && !tonight.has(m.id)) {
         toggleOut(c, t, m.id);
         if (m.was !== undefined && setRole(c, t, m.id, m.was, { perNight: true }) === null) { const S2 = c.model.ST[t]; mutate(c, `${t} ${nameOf(c, t, m.id)} role back`, () => { pinsOf(S2, keyOf(S2.outs)).r[m.id] = m.was; }); } // the flip he had when the Out applied comes back on the scenario he lands on, whatever that scenario held
-      } else if (m.kind === "out") mutate(c, `${t} ${nameOf(c, t, m.id)} news Out undone`, () => { cur.mine.out = cur.mine.out.filter((x) => x !== m.id); }); // TwoGun has him Out too now: he stays Out, never "back in", for as long as TwoGun says so; a history step, so Ctrl+Z then Ctrl+Y keeps it
+      } else if (m.kind === "out") mutate(c, `${t} ${nameOf(c, t, m.id)} news Out undone`, () => { cur.mine.out = cur.mine.out.filter((x) => x !== m.id); }); // Tonight has him Out too now (our feeds or his Minutes page): he stays Out, never "back in", for as long as Tonight has him; a history step, so Ctrl+Z then Ctrl+Y keeps it
       else if (m.kind === "r") clearFlip(c, t, m.id);
     }
   } finally { c.inNewsUndo = false; }
@@ -338,7 +378,7 @@ const opensSaved = (S, from, to) => from !== to && hasPins(S.pins[to]);
  */
 function carryPins(S, T, from, to, changes) {
   if (from === to) return;
-  if (!hasPins(S.pins[to])) S.pins[to] = structuredClone(pinsOf(S, from));
+  if (!hasPins(S.pins[to])) { S.pins[to] = structuredClone(pinsOf(S, from)); moveStamps(S, from, to); } // the copied pins keep their stamps (typed-aside.js)
   else {
     const r = pinsOf(S, to).r;
     for (const [id, role] of Object.entries(changes)) if (role === null) delete r[id]; else r[id] = role;
@@ -370,10 +410,10 @@ export function setRole(c, t, id, role, { perNight = false } = {}) { // perNight
   const standing = !perNight && S.role_marks !== undefined && MARK_ROLES.includes(role) && Boolean(T.tier?.men?.[id]?.key);
   if (mine.role === role) { // the review of 11-18: a click on the role he already has writes the mark, so he can freeze it (Bench on a man who may cross 20)
     if (!standing || S.role_marks[id] === role) return null;
-    mutate(c, `${t} ${nameOf(c, t, id)} ${ROLE_LABEL[role]} (kept as your mark)`, () => { S.role_marks = { ...S.role_marks, [id]: role }; });
+    mutate(c, `${t} ${nameOf(c, t, id)} ${ROLE_LABEL[role]} (kept as your mark)`, () => { S.role_marks = { ...S.role_marks, [id]: role }; dropFlipsOf(S, id); });
     return [];
   }
-  const res = roleMove({ ...T, source: S.source, role_marks: S.role_marks ?? null }, S.outs, pinsOf(S, key).r, id, role, Object.fromEntries(rows.map((r) => [r.id, r.min])));
+  const res = roleMove(moveTeam(T, S), S.outs, pinsOf(S, key).r, id, role, Object.fromEntries(rows.map((r) => [r.id, r.min])));
   const also = res.moved.map((m) => `${nameOf(c, t, m.id)} to ${ROLE_LABEL[m.to]}`).join(", ");
   const flips = Object.fromEntries(Object.entries(res.flips).filter(([fid]) => T.byId[fid])); // a man no longer on the team keeps no flip
   const next = keyOf(res.outs), opened = opensSaved(S, key, next);
@@ -383,10 +423,20 @@ export function setRole(c, t, id, role, { perNight = false } = {}) { // perNight
     if (next === key) pinsOf(S, next).r = flips;
     else if (opened) carryPins(S, T, key, next, changes);
     else { carryPins(S, T, key, next, changes); pinsOf(S, next).r = flips; }
-    if (standing) { S.role_marks = { ...S.role_marks, [id]: role }; delete pinsOf(S, keyOf(S.outs)).r[id]; } // the standing mark, in place of tonight's flip on him
+    if (standing) { S.role_marks = { ...S.role_marks, [id]: role }; dropFlipsOf(S, id); } // the standing mark, in place of tonight's flips on him in every scenario
     c.G.roleMoves = { team: t, moved: res.moved };
   });
   return res.moved;
+}
+/** The team a role move reads (console-roles.js roleMove, swapStarterMove): his work's view of it (teamFor: the news, stamps and his page's marks with their times, so the move sees the calls in force as calc
+ *  does), on the scenario on show, with his source. */
+const moveTeam = (T, S) => ({ ...T, ...teamFor(T, S), source: S.source, scenario_key: keyOf(S.outs) });
+/** Adam 7:28 PM 11-19 ("q2 newest"): the newest role call on a man wins. A standing mark is newer than every per-night flip on him, so it takes his `r` flip off in every scenario of the team (a saved one
+ *  coming back no longer lays an older flip over it); a flip made after the mark stays and wins in its own scenario. Other men's flips are untouched. The stamps' times decide which call is newer
+ *  (console-tier.js flipWins); this clearing keeps the files tidy.
+ *  An out-of-rotation call (`oor`, console-tier.js tierFive) is kept: the mark says his tier, not whether he plays. */
+function dropFlipsOf(S, id) {
+  for (const p of Object.values(S.pins ?? {})) if (p?.r && Object.hasOwn(p.r, id) && p.r[id] !== "oor") delete p.r[id];
 }
 /** His standing role mark on a man comes off (Adam 10:25 AM 11-18): the man goes back to the role the app gives him. False when he had none. */
 export function clearStanding(c, t, id) {
@@ -410,7 +460,7 @@ export function setSource(c, t, source, all = false) {
 export function swapStarter(c, t, inId, outId) {
   const T = c.model.TEAMS[t], S = c.model.ST[t], key = keyOf(S.outs);
   const rows = calc(T, S, S.outs).rows;
-  const res = swapStarterMove({ ...T, source: S.source }, S.outs, pinsOf(S, key).r, inId, outId, Object.fromEntries(rows.map((r) => [r.id, r.min]))); // the pure move (console-roles.js): through the chart where the team has one
+  const res = swapStarterMove(moveTeam(T, S), S.outs, pinsOf(S, key).r, inId, outId, Object.fromEntries(rows.map((r) => [r.id, r.min]))); // the pure move (console-roles.js): through the chart where the team has one
   if (res === null) return null;
   if (res.backIn) {
     // He is Out here: back in on a non-starting role first (the scenario moves once), then the swap in the scenario he is back in, so both flips land there; one history step.

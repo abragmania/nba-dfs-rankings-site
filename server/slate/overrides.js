@@ -20,7 +20,7 @@ import { dataDir } from "../../site/shim/log.js";
 import { writeFileAtomic } from "../../site/shim/atomic.js";
 import { keepSlatePrelock } from "./prelock-copy.js";
 import { BUMP_STEP_PCT, BUMP_MAX_STEPS, PROJ_MAX, OWN_MAX } from "../board/override-limits.js";
-import { isNum, isPlain, round2 } from "../board/figures.js";
+import { isNum, isPlain, round2, projAside, outFor } from "../board/figures.js";
 
 export { BUMP_STEP_PCT, BUMP_MAX_STEPS, PROJ_MAX, OWN_MAX };
 const SECTIONS = ["proj", "own", "bump", "stars"];
@@ -335,27 +335,37 @@ export function mergeOverrides(players, overrides, { held = null } = {}) {
     const typedOwn = has(o.own ?? {}, id) ? o.own[id] : null;
     const steps = has(o.bump ?? {}, id) ? o.bump[id] : 0; // the real steps, on a typed row too
     const out = { ...p, starred: stars.has(id), ...(stale.proj || stale.min ? { stale_auto: stale } : {}) };
-    if (stale.no_figure) out.proj_note = `A ${stale.proj ? `projection (${o.proj[id]})` : "minutes number"} a send wrote is not used: ${p.ours_changed === true ? (p.ours?.missing ?? "our figure for him is carried from an earlier pull and no longer stands") : "the engine has no figure for him"}`;
+    const note = (text) => { out.proj_note = [out.proj_note, text].filter(Boolean).join("; "); }; // round 2 item 5: each note joins the ones already on him (applyOurs' "excluded at 0" included), none is lost
+    if (stale.no_figure) note(`A ${stale.proj ? `projection (${o.proj[id]})` : "minutes number"} a send wrote is not used: ${p.ours_changed === true ? (p.ours?.missing ?? "our figure for him is carried from an earlier pull and no longer stands") : "the engine has no figure for him"}`);
     // auto: this figure came from a send's news or engine numbers, not his hand; the board marks and resets only his (the figure itself is the same).
     // Minutes count only when they are applied: under our engine a man it has Out ignores them (the proj_note below), so they carry no mark. pin: the projection is the console's, from his marks.
-    const minApplied = storedMin && !(p.proj_source === "ours" && p.ours?.playing === false);
+    const outNow = outFor(p, { engine: true }); // round 3, item 6: Out on either projection source (his In first, then his Out, then our engine's), as projAside judges it
+    const minApplied = storedMin && !outNow;
     const autoProj = typedProj != null && (o.auto?.proj ?? []).includes(id), autoMin = minApplied && (o.auto?.min ?? []).includes(id), pin = typedProj != null && (o.auto?.pin ?? []).includes(id);
     if (autoProj || autoMin || pin) out.auto = { proj: autoProj, min: autoMin, pin };
     let q = p; // the figures the typed number and bump work on
-    if (storedMin && p.proj_source === "ours" && p.ours?.playing === false) {
-      // Under our engine the Minutes page decides who plays: console minutes on a man it has Out are ignored, and said (the console is being retired).
-      out.proj_note = `Your console minutes (${o.min[id]}) are ignored: he is Out tonight on the Minutes page`;
+    if (outNow) {
+      // The Minutes page decides who plays: console minutes on a man Out are ignored, and said (the console is being retired). He shows 0 minutes (Adam 5:33 PM: Out is 0 minutes and no projection):
+      // on TwoGun's projection source the row still carries TwoGun's own minutes for a man our feeds have Out, which a send's stored 0 used to cover (round 3, item 6).
+      if (isNum(p.minutes) && p.minutes !== 0) out.minutes = 0;
+      if (storedMin && o.min[id] !== 0) note(`Your console minutes (${o.min[id]}) are ignored: he is Out tonight on the Minutes page`);
     } else if (storedMin) {
       out.minutes = o.min[id]; out.base_minutes = p.minutes ?? null;
       // Under our minutes engine the projection is minutes x DK/min (Adam 11-10), so applied minutes carry it: the shown minutes times our rate, never the engine's minutes' projection.
       if (p.proj_source === "ours" && isNum(p.ours?.rate)) {
         const pr = round2(o.min[id] * p.ours.rate);
         q = { ...p, projection: pr, value: valueFrom(pr, p.salary) };
-        Object.assign(out, { projection: q.projection, value: q.value, proj_note: `Projection = your applied ${o.min[id]} minutes x our DK/min ${p.ours.rate}` });
+        Object.assign(out, { projection: q.projection, value: q.value });
+        note(`Projection = your applied ${o.min[id]} minutes x our DK/min ${p.ours.rate}`); // round 3, item 5: joined, never over the notes already on him
       }
     }
     if (typedProj == null && typedOwn == null && !steps) return out;
-    const projection = effectiveProjection(q.projection, typedProj, steps);
+    // Adam 5:33 PM (tests/resend_follows_engine.test.mjs): a man the board shows Out has no projection. A typed number on a man not playing (figures.js projAside: his In first, then his Out, then our
+    // engine's Out, on either projection source, as minutes/board.js applyOurs puts him at 0) is set aside, kept in ovr, and counts again when he plays; said in proj_note (G62). Before 11-20 only a
+    // send's 0 did this, for held teams; a feed's Out now reaches the Console's Tonight with no send (console-inputs.js consoleTonight).
+    const aside = projAside(p, typedProj);
+    if (aside) note(`Your typed projection (${typedProj}) is set aside while he is Out: it counts again if he plays`);
+    const projection = effectiveProjection(q.projection, aside ? null : typedProj, steps);
     const moved = projection !== q.projection;
     return {
       ...out,

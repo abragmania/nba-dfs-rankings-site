@@ -1,0 +1,18 @@
+/* The minus and plus buttons beside every adjustable minutes figure (min-step.js; Adam 8:19 PM 11-19). Small and quiet; all sizes in rem (G71). */
+.mstep{display:inline-flex;align-items:center;gap:0.125rem;vertical-align:middle}
+.msb{width:1.125rem;height:1.125rem;padding:0;display:inline-grid;place-items:center;border:1px solid color-mix(in srgb,var(--mu) 38%,transparent);border-radius:0.1875rem;background:transparent;color:var(--mu);font:700 0.8125rem/1 "Segoe UI",system-ui,sans-serif;cursor:pointer}
+.msb:hover:not(:disabled){border-color:var(--tx);color:var(--tx);background:color-mix(in srgb,var(--tx) 8%,transparent)}
+.msb:disabled{opacity:.35;cursor:default}
+/* the player list: the figure is a centred whole number between the buttons; it still opens to type on a click */
+#tbody .mstep>.cedit.cedit{min-width:2ch;padding:0 0.125rem;margin-right:0;text-align:center}
+/* the console: the Min column holds the two buttons and a narrower box (4rem before, 8rem with an undo chip) */
+#console input.fin.mfin{width:2.25rem;padding:0 0.125rem;text-align:center}
+#console .mstep .msb{height:1.875rem;width:1.25rem}
+#console .wrap{--wm:5.25rem}
+#console .wrap.mk-m{--wm:9.25rem}
+/* the player card's Min box */
+#card .crole .crb .mstep input{width:2.5rem;padding:0 0.125rem;text-align:center}
+#card .crole .crb .mstep .msb{height:1.5rem;width:1.375rem}
+@media (max-width:899px){#card .crole .crb .mstep .msb{height:2.25rem}#console .mstep .msb{height:2.25rem}}
+/* his number shown before the server's answer (instant-pins.js): the Min figure and his row's Proj and Value dimmed and slanted until it settles */
+#tbody .mstep.pend>.cedit,#tbody tr:has(.mstep.pend)>td.proj,#tbody tr:has(.mstep.pend)>td.val,.swt td.swpj.pend{opacity:.6;font-style:italic}

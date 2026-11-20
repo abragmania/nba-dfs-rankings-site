@@ -9,7 +9,7 @@
 //  3. stored_override: a number a send wrote (listed in auto.proj / auto.min) must equal what the engine computes now; Adam's own number passes. A man Out has his stored minutes set aside, said.
 //  4. hidden_by_lower_source / conflict: board-check-sources.js.
 //  5. team_240: each team's playing minutes, as shown, add to TEAM_MINUTES within TEAM_TOL.
-import { isNum, round2, isOut } from "../board/figures.js";
+import { isNum, round2 } from "../board/figures.js";
 import { effectiveProjection, PROJ_TOL, MIN_TOL } from "./overrides.js";
 import { checkHiddenByLowerSource } from "./board-check-sources.js";
 
@@ -87,18 +87,18 @@ function checkStored(players, c) {
   }
 }
 
-/** Who plays, for check 5: the engine's word under our projections; under TwoGun's, the shown figures (minutes above 0 and not on the Out list). */
-function playsOf(p, slate, outKeys) {
+/** Who plays, for check 5: the engine's word (our own injury feeds); under TwoGun's projections also minutes above 0 shown. TwoGun's Out word and Out list are never read (Adam 11-19). */
+function playsOf(p, slate) {
   if (p.his) return p.his === "in"; // his own call (out-pool.js) decides who plays
   if (slate.proj_source === "ours") return p.ours?.playing !== false;
-  return isNum(p.minutes) ? p.minutes > 0 && !isOut(p.injury_status) && !outKeys.has(`${p.team}|${p.name}`) : null; // null: no minutes shown, cannot tell
+  return isNum(p.minutes) ? p.minutes > 0 && p.ours?.playing !== false : null; // null: no minutes shown, cannot tell
 }
 
 /** Check 5: each team's playing minutes, as shown, add to 240 within TEAM_TOL. */
 function checkTeams(players, slate, c) {
-  const outKeys = new Set((slate.out ?? []).map((o) => `${o.team}|${o.name}`)), teams = new Map();
+  const teams = new Map();
   for (const p of players) {
-    const t = teams.get(p.team) ?? { sum: 0, missing: [] }, plays = playsOf(p, slate, outKeys);
+    const t = teams.get(p.team) ?? { sum: 0, missing: [] }, plays = playsOf(p, slate);
     if (plays === null || (plays && !isNum(p.minutes))) t.missing.push(p.name); else if (plays) t.sum += p.minutes;
     teams.set(p.team, t);
   }
@@ -158,7 +158,7 @@ export const exemptLine = (u) => `${u.count} left out of ${u.check.replace(/_/g,
 export function checkBoard({ slate, overrides = null, overridesProblem = null, lineups = null, resend = null, depth = null, nowMs = Date.now() }) {
   const players = Array.isArray(slate?.players) ? slate.players : [], un = makeGroups(), ex = makeGroups(), bad = [], conflicts = [];
   const o = { proj: {}, min: {}, bump: {}, ...(overrides ?? {}) };
-  const known = new Map([...players.map((p) => [String(p.dk_id), p.name]), ...(slate?.out ?? []).filter((x) => x.dk_id != null).map((x) => [String(x.dk_id), x.name])]);
+  const known = new Map(players.map((p) => [String(p.dk_id), p.name]));
   const c = { o, bad, un, ex, flagged: o.auto !== undefined, auto: { proj: new Set(o.auto?.proj ?? []), min: new Set(o.auto?.min ?? []), pin: new Set(o.auto?.pin ?? []) }, held: new Set(resend?.held ?? []), nameOf: (id) => known.get(String(id)) ?? `id ${id} (no longer on the board)` };
   if (!overrides) un.add("stored_override", overridesProblem ?? "the slate's overrides were not given to the check");
   if (!players.length) un.add("projection_math", "the slate has no players");

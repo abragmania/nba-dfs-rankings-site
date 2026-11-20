@@ -3,8 +3,22 @@
 // team.source says which minutes feed the optimizer: "twogun" (TwoGun's own; the default unless the inputs' source_default says "ours"), "ours" (the tier engine with the scenario's outs), or "ours_edits" (the tier engine that also knows his marks
 // and typed minutes, so the other men move with them). His typed minutes and marks always win on their own man whichever source is on. The tier engine's inputs are team.tier (server/minutes/tier-inputs.js).
 import { MINUTE_SOURCES, badChart, chartFive, defaultSourceOf, fiveNotes } from "./depth-chart.js";
-import { tierUse, tierScenario, tierFive } from "./console-tier.js";
+import { tierUse, tierScenario, tierFive, callTimes } from "./console-tier.js";
 import { isNum } from "./figures.js";
+import { newsFlips, whoseCall } from "./role-marks.js";
+
+/**
+ * By man id, the look role-marks.js trimToFive takes on the Console's own resolvers (the review of 11-20): whoseOf (his Starter call or the lineup news's), atOf (ms: when the call in force was made, the
+ * flip's time, else his standing mark's; console-tier.js callTimes), orderOf (his place in tonight's order: the engine's order where the team has it, else the board row's). flips: { id: role }.
+ */
+export function callLook(team, flips) {
+  const t = callTimes(team, flips), standing = team.role_marks ?? team.tier?.role_marks ?? {}, list = Array.isArray(team.tier?.order) ? team.tier.order : null, row = new Map(team.men.map((p) => [p.id, p.order]));
+  return {
+    whoseOf: whoseCall(newsFlips(team.news, flips), standing),
+    atOf: (id) => (Object.hasOwn(flips, id) ? t.flipAt(id) : t.markAt(id)),
+    orderOf: (id) => { if (list) { const i = list.indexOf(id); return i < 0 ? Infinity : i; } return isNum(row.get(id)) ? row.get(id) : Infinity; },
+  };
+}
 
 export const sourceOf = (team) => (MINUTE_SOURCES.includes(team.source) ? team.source : defaultSourceOf(team));
 
@@ -12,9 +26,9 @@ export const sourceOf = (team) => (MINUTE_SOURCES.includes(team.source) ? team.s
 export const oursUse = tierUse;
 
 /** { id: { min, basis, median, tier, flag } } for the men the engine has inputs for, or null when the team has none. `withEdits`: his marks and typed minutes go in. */
-export function oursFor(team, outSet, flips = {}, typed = {}, withEdits = false) {
+export function oursFor(team, outSet, flips = {}, typed = {}, withEdits = false, consoleIds = null) { // consoleIds: console-tier.js tierScenario's
   if (!oursUse(team).ok) return null;
-  const res = tierScenario(team, outSet, flips, typed, withEdits), out = {};
+  const res = tierScenario(team, outSet, flips, typed, withEdits, consoleIds), out = {};
   for (const p of team.men) if (res.minutes[p.id]) out[p.id] = res.minutes[p.id];
   Object.defineProperty(out, "totalNote", { value: res.notes.length ? res.notes.join("\n") : null, enumerable: false }); // the engine's notes for the team: the five, the pot, the trims; not a man
   return out;
@@ -65,7 +79,7 @@ export function chartUsualNote(ours, nameOf, source, chartOf = () => null) {
   return parts.length ? `No game this season, so Ours uses the depth chart's usual${source === "twogun" ? "; the table shows TwoGun's minutes while the source is TwoGun" : ""}: ${parts.join("; ")}` : null;
 }
 
-/** The chart's five as man ids, and notes: { ids, notes }. A set (depth-chart.js chartFive): the named starters who play and are not flipped away, every man marked S, and while fewer than five the named backup of a starter not playing. */
+/** The chart's five as man ids, and notes: { ids, notes }. A set (depth-chart.js chartFive): the named starters who play and are not flipped away, every man marked S, and while fewer than five the named backup of a starter not playing; never more than five (Q13). */
 export function chartStarters(team, outSet, flips) {
   const keyOf = {}, idOf = {};
   for (const p of team.men) { const k = keyOfMan(team, p); if (k) { keyOf[p.id] = k; idOf[k] = p.id; } }
@@ -74,8 +88,9 @@ export function chartStarters(team, outSet, flips) {
   const manOf = (k) => team.men.find((p) => p.id === idOf[k]); // G68: a chart-injured man tonight's sources have playing is a normal rotation man; one Out (outSet) or with no minutes stays out
   const active = (k) => idOf[k] !== undefined && !outSet.has(idOf[k]) && (team.depth.men[k].role !== "injured" || flipKeys[k] !== undefined || playsDespiteInjured(team, manOf(k), outSet));
   const extra = team.men.filter((p) => !keyOfMan(team, p) && flips[p.id] === "starter" && !outSet.has(p.id)).map((p) => ({ key: `~${p.id}` }));
-  const { five, why, notes } = chartFive(team.depth, active, flipKeys, extra);
-  const ids = five.map((k) => (k.startsWith("~") ? k.slice(1) : idOf[k]));
+  const idOfKey = (k) => (k.startsWith("~") ? k.slice(1) : idOf[k]), look = callLook(team, flips), byId = (f) => (k) => f(idOfKey(k));
+  const { five, why, notes } = chartFive(team.depth, active, flipKeys, extra, { nameOf: (k) => team.men.find((p) => p.id === idOfKey(k))?.name ?? k, whoseOf: byId(look.whoseOf), orderOf: byId(look.orderOf), atOf: byId(look.atOf) });
+  const ids = five.map(idOfKey);
   return { ids, notes: [...notes, ...fiveNotes(team.depth, five, active, why, flipKeys)] };
 }
 

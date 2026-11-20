@@ -3,8 +3,8 @@
 // CSV writer, the seat, late swap, the build notes) come in as `own`, so this file never imports panel.js back.
 import { keepFocus, remScale } from "./board-util.js";
 import { lineupRefusals, isOutNow } from "./card-row.js";
-import { lineupsTabHtml, viewModel, builtAtText, viewOf, entriesOf, unavailableMen, unavailableLabel, savedLabel, heldSpots, outNamesOfCtx, SORTS,nextLtSort } from "./lineups-tab.js";
-import { swapContext, swapOptions, swapIds, startedByTip } from "./swap-list.js";
+import { lineupsTabHtml, viewModel, builtAtText, viewOf, entriesOf, unavailableMen, unavailableLabel, savedLabel, heldSpots, outNamesOfCtx, SORTS, nextLtSort, nextManFilter } from "./lineups-tab.js";
+import { swapContext, swapContextFor, swapOptions, swapIds, startedByTip } from "./swap-list.js";
 import { savedCall, saveBatch, savedClick, savedNameInput } from "./saved-panel.js";
 import { cleanSpotName } from "./spot-name.js";
 import { planInOrder, orderSummary } from "./assign-order.js";
@@ -18,7 +18,7 @@ export function renderTab(X, c, own) {
   const seat = (men) => own.lateSwapSeat(men);
   const key = `${X.P.lt?.view ?? ""}|${X.P.lt?.show ?? "cards"}`; // the same list as last time: its boxes keep their place
   // The boxes are sized before their scroll is put back: a box with no height limit yet has nothing to scroll.
-  keepScroll(el, X.tabScrollKey === key, () => keepFocus(el, () => { el.innerHTML = lineupsTabHtml(X.P, c, { dash: X.dash, seat, swapCtx: swapContext(c, own.lateSwapSeat), notes: own.notesHtml(X.P, c) }); sizeBoxes(el); }));
+  keepScroll(el, X.tabScrollKey === key, () => keepFocus(el, () => { el.innerHTML = lineupsTabHtml(X.P, c, { dash: X.dash, seat, swapCtx: swapContext(c, own.lateSwapSeat), swapCtxOf: (m) => swapContextFor(c, own.lateSwapSeat, m), notes: own.notesHtml(X.P, c) }); sizeBoxes(el); }));
   X.tabScrollKey = key;
   placeSpotMenu(el);
   spotCount(el);
@@ -139,7 +139,7 @@ export function refit(el) {
   fitNames(el);
   fitted.add(el);
   if (typeof document === "undefined") return;
-  document.fonts?.ready.then(() => fitNames(el));
+  if (document.fonts && document.fonts.status !== "loaded") document.fonts.ready.then(() => fitNames(el)); // only while fonts load: reading fonts.ready on every redraw made the browser recalculate the page's style (150-290 ms a lock or exclude click, 11-20); loaded, the measure above stands
   if (!hooked && document.fonts?.addEventListener) { hooked = true; document.fonts.addEventListener("loadingdone", () => fitted.forEach((x) => fitNames(x))); }
   globalThis.requestAnimationFrame?.(() => fitNames(el));
 }
@@ -147,6 +147,8 @@ export function refit(el) {
 const buildOf = (P, bid) => (P.builds ?? []).find((b) => b.id === bid);
 /** The ids of the lineup a key names ("b:<build id>:<index>" built, "s:<saved id>" saved), or undefined. */
 const idsOf = (P, key) => { const [kind, a, i] = key.split(":"); return kind === "b" ? buildOf(P, a)?.lineups[+i]?.ids : P.saved.find((l) => String(l.id) === a)?.slots; };
+/** The mode of the card a key names: its build's or its saved lineup's (null when unknown). */
+const modeOfKey = (P, key) => { const [kind, a] = key.split(":"); return (kind === "b" ? buildOf(P, a)?.mode : P.saved.find((l) => String(l.id) === a)?.mode) ?? null; };
 
 /** A card's own name, for a message that names it: a built lineup by its build's mode and time ("Cash 5:43 PM ET, Lineup 3"). */
 const labelOf = (X, e) => (e?.kind === "saved" ? savedLabel(e.l, X.P.svNames, X.P.saved) : `${e?.mode} build of ${builtAtText(e?.builtAt)}, Lineup ${e?.n}`);
@@ -176,7 +178,7 @@ function download(X, entries, own) {
  *  saved lineup changes on the page only (`swapped`, with the men as saved kept in `orig`); Save keeps it as a new saved lineup. */
 function swapUse(X, key, inId, own) {
   const { P } = X, open = P.swap, ids = idsOf(P, key);
-  const o = ids && open?.key === key ? swapOptions(ids, open.id, swapContext(X.ctx(), own.lateSwapSeat)) : null;
+  const o = ids && open?.key === key ? swapOptions(ids, open.id, swapContextFor(X.ctx(), own.lateSwapSeat, modeOfKey(P, key))) : null; // the card's own mode's excludes, locks and NO (review 11-20)
   P.swap = null;
   if (!o?.options.some((x) => x.p.dk_id === inId)) { X.toast("That swap is no longer legal; pick again."); return own.render(X); }
   const next = swapIds(o, inId);
@@ -197,7 +199,7 @@ const noPicks = (cmp) => (cmp ? { ...cmp, picks: [] } : cmp);
 
 /** The panel on the mode of the lineup acted on (Late swap from a Cash card builds in Cash). */
 function inModeOf(X, mode) {
-  if (!mode || X.P.mode === mode) return;
+  if (!mode || X.P.mode === mode || X.P.running) return; // never during a build: its mode's picks and lineup are what it reads (review 11-20); the late swap switch refuses then too
   X.P.mode = mode;
   X.onMode(mode);
   X.onMemory();
@@ -248,8 +250,8 @@ function sendBuild(X, slate, body, own) {
   });
 }
 
-/** A finished build replaces the build on the page (one build per slate, either mode) and on the server. It never
- *  touches the saved lineups: only Save does (savedClick). */
+/** A finished build replaces the build of its own mode on the page and on the server (one per mode, recent-builds.js keepRecent; Adam
+ *  11-07, 11-12, 11-14): the other mode's build stays. It never touches the saved lineups: only Save does (savedClick). */
 export function keepBuild(X, b, own) {
   X.P.builds = keepRecent([b, ...(X.P.builds ?? []).filter((x) => x.id !== b.id)]);
   sendBuild(X, X.ctx().name, { put: toRecord(b) }, own);
@@ -460,8 +462,8 @@ export function tabClick(X, d, own) {
     }
     case "spotmovex": P.spotMove = null; redraw(); return true;
     case "ltspot": P.lt.spot = d.s; redraw(); return true;
-    case "ltview": P.lt = { ...P.lt, view: d.v, men: [] }; P.swap = null; redraw(); return true;
-    case "opentab": P.lt = { ...P.lt, view: "build", men: [] }; redraw(); X.onView("lineups"); return true; // the panel's "N lineups built: open Lineups"
+    case "ltview": P.lt = { ...P.lt, view: d.v, men: [], without: [] }; P.swap = null; redraw(); return true;
+    case "opentab": P.lt = { ...P.lt, view: "build", men: [], without: [] }; redraw(); X.onView("lineups"); return true; // the panel's "N lineups built: open Lineups"
     case "bremove": {
       const b = buildOf(P, d.b);
       if (!b) return true;
@@ -478,7 +480,7 @@ export function tabClick(X, d, own) {
       return true;
     }
     // Save keeps the lineup in the mode of the build it came from, not the mode the panel is on now.
-    case "savecard": { const b = buildOf(P, d.b), ids = b?.lineups[+d.i]?.ids; if (ids) savedClick(X, { op: "save" }, { ...own, saveIds: () => ids, saveMode: () => b.mode }); return true; }
+    case "savecard": { const b = buildOf(P, d.b), ids = b?.lineups[+d.i]?.ids; if (ids) savedClick(X, { op: "save" }, { ...own, saveIds: () => ids, saveMode: () => b.mode, saveNo: () => b.no ?? null }); return true; }
     case "lscard": { // late swap from this lineup's men as the board has them now, in the lineup's own mode
       const b = buildOf(P, d.b), ids = b?.lineups[+d.i]?.ids, c = X.ctx();
       if (ids) { inModeOf(X, b.mode); own.lateSwapFrom(X, own.lateSwapSeat(ids.map((id) => c.byId.get(id) ?? { dk_id: id, stale: true })).men); }
@@ -492,19 +494,21 @@ export function tabClick(X, d, own) {
     }
     case "ltshow": P.lt.show = d.v === "compare" ? "compare" : "cards"; P.swap = null; redraw(); return true;
     case "cmp": P.cmp = compareClick(d, P.cmp ?? freshCompare()); redraw(); return true; // the Compare view's own controls (lineups-compare.js)
-    case "menoff": P.lt.men = (P.lt.men ?? []).filter((x) => x !== d.man); redraw(); return true;
+    case "menoff": P.lt.men = (P.lt.men ?? []).filter((x) => x !== d.man); P.lt.without = (P.lt.without ?? []).filter((x) => x !== d.man); redraw(); return true;
     case "ltgray": P.lt.gray = P.lt.gray !== true; redraw(); return true; // quick on/off, off on reload (Adam, 11-11)
-    case "menclear": P.lt.men = []; redraw(); return true;
+    case "menclear": P.lt.men = []; P.lt.without = []; redraw(); return true;
     case "ltsort": if (SORTS.some(([k]) => k === d.s)) Object.assign(P.lt, nextLtSort(P.lt, d.s)); redraw(); return true;
     // Each Filter click adds a man (only lineups holding all of them show); clicking a filtered man again takes him out.
-    case "expfilter": P.lt.men = (P.lt.men ?? []).includes(d.man) ? P.lt.men.filter((x) => x !== d.man) : [...(P.lt.men ?? []), d.man]; redraw(); return true;
+    case "expfilter": Object.assign(P.lt, nextManFilter(P.lt, "men", d.man)); redraw(); return true;
+    // Without (Adam 4:52 PM 11-19): each click adds a man no shown lineup may hold; with Filter, a lineup holds all the Filter men and none of these.
+    case "expwithout": Object.assign(P.lt, nextManFilter(P.lt, "without", d.man)); redraw(); return true;
     case "swap": P.swap = P.swap?.key === d.k && P.swap.id === d.id ? null : { key: d.k, id: d.id }; redraw(); return true;
     case "swapuse": swapUse(X, d.k, d.in, own); return true;
     case "ltcsv": { const m = viewModel(P, X.ctx(), (men) => own.lateSwapSeat(men)); download(X, m.shown, own); return true; }
     case "ltdl": { const m = viewModel(P, X.ctx(), (men) => own.lateSwapSeat(men)); const e = [...m.all, ...m.others.flatMap((g) => g.shown)].find((x) => x.key === d.k); if (e) download(X, [e], own); return true; }
     case "savesw": saveSwapped(X, d.id, own); return true;
     case "saveall": {
-      const items = viewModel(P, X.ctx(), (men) => own.lateSwapSeat(men)).shown.filter((e) => e.kind === "build").map((e) => ({ slots: e.ids, mode: e.mode }));
+      const items = viewModel(P, X.ctx(), (men) => own.lateSwapSeat(men)).shown.filter((e) => e.kind === "build").map((e) => ({ slots: e.ids, mode: e.mode, ...(e.b?.no?.length ? { no: e.b.no } : {}) }));
       if (items.length) saveBatch(X, items, own);
       return true;
     }

@@ -172,10 +172,17 @@ function planProj(plan, ctx, t, man, r, his, hasPin) {
 /** Whether a projection stands stored on him once this plan is written (a send's number or his own): then his minutes are stored with it, never left to the engine alone (R4, review round 2). */
 const projStored = (plan, ctx, id) => { const v = Object.hasOwn(plan.typed, id) ? plan.typed[id] : ctx.overrides.proj?.[id]; return v !== undefined && v !== null; };
 
+/** His pins on a scenario with the typed minutes a role change set aside taken out (typed-aside.js; the money review of 11-20, finding 3): Apply treats only numbers in use as his. rows: the scenario's (min_aside). Pure. */
+export function livePins(pins, rows) {
+  const aside = new Set((rows ?? []).filter((r) => r.min_aside).map((r) => r.id));
+  return aside.size ? { ...pins, m: Object.fromEntries(Object.entries(pins?.m ?? {}).filter(([id]) => !aside.has(id))) } : pins;
+}
+
 /** One team's moves into the plan. A hand-typed board number with no pin in this scenario, not one an Apply set, stays and is listed as kept. On our engine a man on his own call or the engine's Out follows the engine (followEngine). */
 function planTeam(plan, t, rec, key, ctx) {
   const pins = rec?.pins?.[key] ?? emptyPins();
   const res = scenario(teamFor({ ...t, source_default: ctx.dflt }, rec), outsOf(key), pins);
+  const live = livePins(pins, res.rows); // the money review of 11-20, finding 3: a typed number a role change set aside is not his on the board (typed-aside.js)
   const before = plan.changes.length;
   const onBoard = (r) => ctx.board.has(r.id) && t.men.find((p) => p.id === r.id)?.board;
   const close = res.rows.filter(onBoard).every((r) => r.pinned?.m || pageTyped(ctx.base.get(r.id)) !== null || (isNum(r.min) && isNum(ctx.base.get(r.id).minutes) && Math.abs(r.min - ctx.base.get(r.id).minutes) <= MIN_TOL));
@@ -190,10 +197,10 @@ function planTeam(plan, t, rec, key, ctx) {
       continue;
     }
     ctx.men.set(r.id, { man, t });
-    const his = isHis(rec, key, pins, r, t);
-    const followed = followEngine(plan, ctx, t, man, r, pins, his);
+    const his = isHis(rec, key, live, r, t);
+    const followed = followEngine(plan, ctx, t, man, r, live, his);
     if (followed !== null) { minMoves += followed; continue; }
-    planProj(plan, ctx, t, man, r, his, ["m", "u", "d", "p", "r"].some((k) => Object.hasOwn(pins[k] ?? {}, r.id)));
+    planProj(plan, ctx, t, man, r, his, ["m", "u", "d", "p", "r"].some((k) => Object.hasOwn(live[k] ?? {}, r.id)));
     const kept = projStored(plan, ctx, r.id);
     minMoves += planMinutes(plan, r, ctx, his, close && !kept, kept);
   }

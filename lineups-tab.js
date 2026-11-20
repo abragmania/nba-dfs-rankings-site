@@ -22,7 +22,7 @@ export const SORTS = [["proj", "Projection", "Most projected points first"], ["s
 export const sortArrow = (key, rev) => ((key === "own") !== !!rev ? "▲" : "▼");
 
 /** The tab's own state: view null means "this build when there is one, else saved". */
-export const freshLt = () => ({ view: null, show: "cards", q: "", sort: "proj", rev: false, men: [], spot: "All", replace: false, openOther: [] });
+export const freshLt = () => ({ view: null, show: "cards", q: "", sort: "proj", rev: false, men: [], without: [], spot: "All", replace: false, openOther: [] });
 
 // ---- spots (Adam's contest entries; spots.json on the server): a saved lineup holds none, one or several ----
 const SPOT_COLOURS = ["#7ee787", "#79c0ff", "#d2a8ff", "#f778ba", "#56d4dd", "#b6e354", "#9ea8ff", "#e6edf3"]; // eight, so a card's spots never share one
@@ -111,7 +111,7 @@ const stampET = (iso) => {
 
 /** The two lists the tab switches between, each entry { key, kind, ids, mode, ... } (key "b:<index>" or "s:<saved id>"). */
 export function entriesOf(P) {
-  // The slate's latest build (P.builds holds one: a new build replaces the last); a lineup's key names its build and its place in it.
+  // The slate's latest build of each mode (P.builds holds one per mode: a new build replaces only its mode's); a lineup's key names its build and its place in it.
   // The board's mode is the filter (Adam, 11-12): a held build of the other mode is not listed; `buildOther` says it is there.
   const cur = P.mode === "Cash" || P.mode === "GPP" ? P.mode : null;
   const held = (P.builds ?? []).filter((b) => cur == null || b.mode === cur), away = (P.builds ?? []).find((b) => cur != null && b.mode !== cur);
@@ -156,12 +156,21 @@ export function sortEntries(list, key, rev = false) {
   });
 }
 
-/** Filter by player (any man whose name holds the text), by the exposure table's man, and (saved) by mode. */
-export function filterEntries(list, { q = "", men = [], mode = "All" }, useMode) {
+/** Filter by player (any man whose name holds the text), by the exposure table's men (Filter: holding all; Without: holding none,
+ *  Adam 4:52 PM 11-19), and (saved) by mode. */
+export function filterEntries(list, { q = "", men = [], without = [], mode = "All" }, useMode) {
   const text = q.trim().toLowerCase();
   return list.filter((e) => (!useMode || mode === "All" || e.mode === mode)
     && men.every((m) => e.ids.includes(m)) // the men filtered: only lineups holding every one of them (an AND)
+    && !without.some((m) => e.ids.includes(m)) // the men left out: only lineups holding none of them
     && (!text || e.men.some((p) => String(p?.name ?? "").toLowerCase().includes(text))));
+}
+
+/** The filter after a Filter or Without click on a man: on that side he is added, or taken off when he is on it; a man is never on both sides. A new object. */
+export function nextManFilter(lt, side, id) {
+  const men = lt.men ?? [], without = lt.without ?? [];
+  if (side === "without") return without.includes(id) ? { men, without: without.filter((x) => x !== id) } : { men: men.filter((x) => x !== id), without: [...without, id] };
+  return men.includes(id) ? { men: men.filter((x) => x !== id), without } : { men: [...men, id], without: without.filter((x) => x !== id) };
 }
 
 const range = (vals, f) => {
@@ -205,7 +214,7 @@ function cardHtml(e, { byId, dash, colourOf, chipWhen, swap, locked, savedSet, n
     const isSaved = savedSet.has(savedKey(e.mode, e.ids));
     const at = `data-b="${esc(e.bid)}" data-i="${e.i}"`;
     const btns = `<button class="sm" data-op="lscard" ${at} title="Start late swap from this lineup">Late swap</button>${isSaved ? `<button class="sm on" disabled>Saved ✓</button>` : `<button class="sm" data-op="savecard" ${at}>Save</button>`}<button class="sm x" data-op="discard" ${at} title="Take this lineup off the list">Discard</button>`;
-    return `<div class="lc${isSaved ? " savedc" : ""}"><div class="lch"><span>Lineup ${e.n}${sameTag(e)}</span><span class="lcb">${btns}</span></div>${badTag(bannerMen)}${rows}${foot}</div>`;
+    return `<div class="lc${isSaved ? " savedc" : ""}"><div class="lch"><span>Lineup ${e.n}${sameTag(e)}</span><span class="lcb">${btns}</span></div>${noLineHtml(e.b?.no)}${badTag(bannerMen)}${rows}${foot}</div>`;
   }
   const at = stampET(e.savedAt);
   const name = names?.[e.id], dflt = `Lineup ${savedLetterOf(e.l, saved)}`;
@@ -218,8 +227,12 @@ function cardHtml(e, { byId, dash, colourOf, chipWhen, swap, locked, savedSet, n
   const heldNow = heldSpots(spots, e.id);
   const note = e.swapped ? `<div class="lt-sw">Swapped on this page only; it is not saved until you press Save.${spotsReady && heldNow.length ? ` ${esc(heldNow.join(", "))} still ${heldNow.length === 1 ? "has" : "have"} the saved men, not this swap.` : ""}</div>` : "";
   const ill = e.legal === false ? `<div class="lt-sw ill" title="${esc((e.reasons ?? []).join(" "))}">${e.stale ? "Off this slate" : "Not legal now"}</div>` : "";
-  return `<div class="lc svc${e.swapped ? " swapped" : ""}"><div class="lch"><span class="lt-title">${title}</span><span class="lcb">${btns}</span></div>${edit?.id === e.id ? `<div class="lt-sw ed-hint">${HINT}</div>` : ""}<div class="lt-at"><span class="md${e.mode === "Cash" ? " cash" : ""}">${esc(e.mode)}</span>${sameTag(e)} <span class="lt-time">${at ? `Saved ${esc(at)}` : dash("no time on this saved lineup")}</span>${spotChipHtml(e, spotCtx)}</div>${badTag(bannerMen)}${note}${ill}${rows}${foot}</div>`;
+  return `<div class="lc svc${e.swapped ? " swapped" : ""}"><div class="lch"><span class="lt-title">${title}</span><span class="lcb">${btns}</span></div>${edit?.id === e.id ? `<div class="lt-sw ed-hint">${HINT}</div>` : ""}${noLineHtml(e.l?.no)}<div class="lt-at"><span class="md${e.mode === "Cash" ? " cash" : ""}">${esc(e.mode)}</span>${sameTag(e)} <span class="lt-time">${at ? `Saved ${esc(at)}` : dash("no time on this saved lineup")}</span>${spotChipHtml(e, spotCtx)}</div>${badTag(bannerMen)}${note}${ill}${rows}${foot}</div>`;
 }
+
+/** The muted line under a lineup's heading naming the men its build left out by NO (Adam 4:50 PM 11-19): "NO: Boozer, Coward",
+ *  stored with the build and the saved lineup, so it stays after the NO is cleared. "" when the build had none. */
+export const noLineHtml = (names) => (Array.isArray(names) && names.length ? `<div class="lt-no" title="Built while these men were on the NO list">NO: ${names.map(esc).join(", ")}</div>` : "");
 
 /** "same as Cash 1" on a GPP lineup that holds exactly a Cash lineup's men. */
 const sameTag = (e) => (e.same ? ` <span class="lt-same" title="This GPP lineup holds exactly the men of ${esc(e.same)}">same as ${esc(e.same)}</span>` : "");
@@ -268,37 +281,50 @@ export function viewModel(P, c, seat) {
     if (x) e.same = x.kind === "build" ? `Cash ${x.n}` : `Cash ${savedLabel(x.l, P.svNames, P.saved)}`;
   }
   const inMode = bySpot(all, P.spots, spotOf(P, view));
-  const sorted = sortEntries(filterEntries(inMode, { q: P.lt.q, men: P.lt.men ?? [] }, false), P.lt.sort, P.lt.rev);
+  const sorted = sortEntries(filterEntries(inMode, { q: P.lt.q, men: P.lt.men ?? [], without: P.lt.without ?? [] }, false), P.lt.sort, P.lt.rev);
   // Builds stay newest first whatever the sort: the sort orders the lineups inside each build.
   const at = new Map((P.builds ?? []).map((b, i) => [b.id, i]));
   const shown = view === "build" ? [...sorted].sort((a, b) => at.get(a.bid) - at.get(b.bid)) : sorted;
   // The other mode's saved lineups (and any with no mode), drawn collapsed below the saved list; the spot filter, player filter and sort apply as in the list.
-  const others = view !== "saved" ? [] : Object.entries(lists.other).filter(([, list]) => list.length).map(([key, list]) => ({ key, n: list.length, shown: sortEntries(filterEntries(bySpot(list.map((e) => prep(e, { byId: c.byId, seat, outNames, knownName: c.knownName })), P.spots, spotOf(P, view)), { q: P.lt.q, men: P.lt.men ?? [] }, false), P.lt.sort, P.lt.rev) }));
+  const others = view !== "saved" ? [] : Object.entries(lists.other).filter(([, list]) => list.length).map(([key, list]) => ({ key, n: list.length, shown: sortEntries(filterEntries(bySpot(list.map((e) => prep(e, { byId: c.byId, seat, outNames, knownName: c.knownName })), P.spots, spotOf(P, view)), { q: P.lt.q, men: P.lt.men ?? [], without: P.lt.without ?? [] }, false), P.lt.sort, P.lt.rev) }));
   return { lists, view, all, inMode, shown, others };
 }
 
 /** Compare mode (Adam, 11-11): a held man's row is dimmed so only the men who differ stand out. `held` is the dimmed set, or null when off. */
 export const heldRow = (p, held) => !!(held && p?.dk_id != null && held.has(p.dk_id));
 
-/** The filtered men as chips (each with its own ×), the count of lineups holding all of them, and Clear all. "" with nobody filtered. */
-function filterChipsHtml(men, figures, shownN, totalN, gray = null) {
-  if (!men.length) return "";
-  const chips = men.map((id) => `<span class="lt-chip">${nameOpen(figures.get(id)?.name ?? `DraftKings id ${id}`, figures.get(id) ? id : null, "b")}<button data-op="menoff" data-man="${esc(id)}" title="Take ${esc(figures.get(id)?.name ?? id)} out of the filter" aria-label="Remove from the filter">×</button></span>`).join("");
-  return `<div class="lt-chips"><em>Holding all of</em>${chips}<span class="lt-count">${shownN} of ${totalN} lineup${totalN === 1 ? "" : "s"}</span>${gray === null ? "" : `<button class="ol sm lt-gray${gray ? " on" : ""}" data-op="ltgray" aria-pressed="${gray}" title="${gray ? "Turn off: show the held men in normal type again" : "Gray out the men held by the filter, so only the men who differ stand out"}">Compare</button>`}<button class="ol sm lt-clear" data-op="menclear">Clear all</button></div>`;
+/** The filtered men as chips (each with its own ×): "Holding all of" for Filter, "Without" (red, struck) for Without; the count of
+ *  lineups that pass both, and Clear all. "" with nobody filtered. */
+function filterChipsHtml(men, figures, shownN, totalN, gray = null, without = []) {
+  if (!men.length && !without.length) return "";
+  const nm = (id) => figures.get(id)?.name ?? `DraftKings id ${id}`;
+  const chip = (id, cls, title) => `<span class="lt-chip${cls}">${nameOpen(nm(id), figures.get(id) ? id : null, "b")}<button data-op="menoff" data-man="${esc(id)}" title="${esc(title(nm(id)))}" aria-label="Remove from the filter">×</button></span>`;
+  const held = men.length ? `<em>Holding all of</em>${men.map((id) => chip(id, "", (n) => `Take ${n} out of the filter`)).join("")}` : "";
+  const out = without.length ? `<em class="lt-wo">Without</em>${without.map((id) => chip(id, " wo", (n) => `Show lineups with ${n} again`)).join("")}` : "";
+  return `<div class="lt-chips${men.length ? "" : " wo-only"}">${held}${out}<span class="lt-count">${shownN} of ${totalN} lineup${totalN === 1 ? "" : "s"}</span>${gray === null || !men.length ? "" : `<button class="ol sm lt-gray${gray ? " on" : ""}" data-op="ltgray" aria-pressed="${gray}" title="${gray ? "Turn off: show the held men in normal type again" : "Gray out the men held by the filter, so only the men who differ stand out"}">Compare</button>`}<button class="ol sm lt-clear" data-op="menclear">Clear all</button></div>`;
+}
+
+/** The exposure head's count: "12 lineups", or how many of them pass the Filter and Without men. */
+export function countedText(shownN, totalN, men, without) {
+  if (!men.length && !without.length) return `${totalN} lineup${totalN === 1 ? "" : "s"}`;
+  const hold = men.length ? `holding all ${men.length === 1 ? "of him" : `${men.length} men`}` : "";
+  const none = without.length ? `without ${without.length === 1 ? "him" : `${without.length} men`}` : "";
+  return `${shownN} of ${totalN} lineup${totalN === 1 ? "" : "s"} ${[hold, none].filter(Boolean).join(", ")}`;
 }
 
 const OTHER_LABEL = { Cash: "Cash saved", GPP: "GPP saved", none: "Saved, no mode" };
 
 /** The saved lineups of the board's other mode (and those with no mode), each group collapsed under its own label; `open` lists the groups left open (a redraw keeps them). */
-function otherSavedHtml(groups, ctx, open) {
-  return `<div class="lt-other">${groups.map((g) => `<details data-og="${g.key}"${open.includes(g.key) ? " open" : ""}><summary data-op="ogtoggle" data-og="${g.key}">${OTHER_LABEL[g.key]} (${g.n})${g.shown.length === g.n ? "" : ` · ${g.shown.length} match the filter`}</summary><div class="lt-ocards">${g.shown.map((e) => cardHtml(e, ctx)).join("")}</div></details>`).join("")}</div>`;
+/** ctxOf(key): the cards' context for one group (Cash, GPP, none): each mode's group swaps and marks locks with that mode's own picks and NO (review 11-20). */
+function otherSavedHtml(groups, ctxOf, open) {
+  return `<div class="lt-other">${groups.map((g) => `<details data-og="${g.key}"${open.includes(g.key) ? " open" : ""}><summary data-op="ogtoggle" data-og="${g.key}">${OTHER_LABEL[g.key]} (${g.n})${g.shown.length === g.n ? "" : ` · ${g.shown.length} match the filter`}</summary><div class="lt-ocards">${g.shown.map((e) => cardHtml(e, ctxOf(g.key))).join("")}</div></details>`).join("")}</div>`;
 }
 
 /**
  * The whole tab. P: the panel state (results, saved, lt, mode, expSort, expPos, swap, running, build, ls, svNames).
- * c: { byId, picks, colourOf, name }; env: { dash, seat, swapCtx }.
+ * c: { byId, picks, picksOf?, colourOf, name }; env: { dash, seat, swapCtx (the mode on show), swapCtxOf? (mode -> that mode's, swap-list.js swapContextFor) }.
  */
-export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
+export function lineupsTabHtml(P, c, { dash, seat, swapCtx, swapCtxOf = null, notes = "" }) {
   const { lists, view, all, inMode, shown, others } = viewModel(P, c, seat);
   const chipRef = slateRefMs(c.name) ?? Date.now(); // a card's tip is Eastern, read against the slate's own date
   const chipWhen = (s) => (shortTime(s, chipRef) ?? "").replace(/ ([AP]M) ET$/, (_, ap) => ap.toLowerCase()); // "7:00 PM ET" -> "7:00pm"
@@ -337,16 +363,16 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
     const live = (p) => lineupTag(p, c.byId, c.outNames);
     const tagOf = (kind, p) => (kind === "saved" && isOutNow(p) ? "now Out" : live(p));
     // The exposure table counts the lineups shown (after the player filter), so clicking Filter on the next man narrows it further.
-    const men = P.lt.men ?? [];
+    const men = P.lt.men ?? [], without = P.lt.without ?? [];
     const grayOn = men.length > 0 && P.lt.gray === true;
     const rows = exposureRows(shown.map((e) => e.ids), figures);
-    const sort = shown.length === 1 && P.expSort.key === "diff" ? { key: "pct", dir: -1 } : P.expSort;
-    // You vs field and Diff are GPP figures: a list of Cash lineups alone does not show them.
-    const ex = shown.length ? exposureHtml(rows, sort, dash, men, P.expPos, shown.length > 1 && shown.some((e) => e.mode === "GPP"), grayOn) : "";
+    const sort = P.expSort.key === "diff" ? { key: "pct", dir: -1 } : P.expSort; // the Diff column is gone (11-19): a remembered sort on it falls back to Exposure
+    const ex = shown.length ? exposureHtml(rows, sort, dash, men, P.expPos, grayOn) : "";
     const ctx = { byId: figures, live: c.byId, tagOf, spotText: P.spotText ?? null, dash, colourOf: c.colourOf, chipWhen, swap: { ctx: swapCtx, open: P.swap ?? null }, locked: new Set(c.picks.locked), savedSet, names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true, held: grayOn ? new Set(men) : null };
-    const counted = men.length ? `${shown.length} of ${inMode.length} lineup${inMode.length === 1 ? "" : "s"} holding all ${men.length === 1 ? "of him" : `${men.length} men`}` : `${inMode.length} lineup${inMode.length === 1 ? "" : "s"}`;
-    const none = men.length
-      ? `<div class="lt-empty">No lineup holds all of ${men.map((id) => esc(figures.get(id)?.name ?? id)).join(", ")}. <button class="ol sm lt-clear" data-op="menclear">Clear all</button></div>`
+    const counted = countedText(shown.length, inMode.length, men, without);
+    const nameList = (ids) => ids.map((id) => esc(figures.get(id)?.name ?? id)).join(", ");
+    const none = men.length || without.length
+      ? `<div class="lt-empty">No lineup ${[men.length ? `holds all of ${nameList(men)}` : "", without.length ? `${men.length ? "and " : ""}leaves out ${nameList(without)}` : ""].filter(Boolean).join(" ")}. <button class="ol sm lt-clear" data-op="menclear">Clear all</button></div>`
       : `<div class="lt-empty">No lineup matches this filter.</div>`;
     let lastBuild = null;
     const shownIn = new Map();
@@ -356,7 +382,7 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
       lastBuild = e.bid;
       return head + cardHtml(e, ctx);
     }).join("");
-    const chips = filterChipsHtml(men, figures, shown.length, inMode.length, (P.lt.show ?? "cards") === "compare" ? null : P.lt.gray === true);
+    const chips = filterChipsHtml(men, figures, shown.length, inMode.length, (P.lt.show ?? "cards") === "compare" ? null : P.lt.gray === true, without);
     if (P.lt.show === "compare") {
       // Compare lays the same filtered lineups side by side (lineups-compare.js); nothing shown says so, with Clear all in view.
       const cmp = compareLineups(shown, P);
@@ -376,8 +402,11 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, notes = "" }) {
   const undo = view === "saved" && P.spotUndo ? `<div class="lt-run"><span>${esc(P.spotUndo.text)}</span><button class="ol sm" data-op="orderundo">Undo</button><button class="ol sm" data-op="orderokay">Keep</button></div>` : "";
   // The panel's notes and stale warnings sit at the foot of the tab; they belong to the last build made on this page in the panel's mode, not to every build below.
   const noted = notes ? `<div class="lt-notes"><em>The last ${esc(P.mode)} build made on this page:</em>${notes}</div>` : "";
-  const otherHtml = others.length && !readErr ? otherSavedHtml(others, { byId: c.byId, live: c.byId, tagOf: (kind, p) => (isOutNow(p) ? "now Out" : lineupTag(p, c.byId, c.outNames)), spotText: P.spotText ?? null, dash, colourOf: c.colourOf, chipWhen, swap: { ctx: swapCtx, open: P.swap ?? null }, locked: new Set(c.picks.locked), savedSet, names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true, held: null }, P.lt.openOther ?? []) : "";
-  const away = lists.buildOther ? `<div class="lt-away">The last build is ${esc(lists.buildOther.mode)} (${lists.buildOther.n} lineup${lists.buildOther.n === 1 ? "" : "s"}); switch the board to ${esc(lists.buildOther.mode)} to see it.</div>` : "";
+  const otherBase = { byId: c.byId, live: c.byId, tagOf: (kind, p) => (isOutNow(p) ? "now Out" : lineupTag(p, c.byId, c.outNames)), spotText: P.spotText ?? null, dash, colourOf: c.colourOf, chipWhen, savedSet, names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true, held: null };
+  // Each other-mode group swaps and marks locks with its own mode's picks and NO (review 11-20, money; Adam 11-14/11-20: Cash and GPP keep separate picks).
+  const otherCtx = (key) => { const m = key === "Cash" || key === "GPP" ? key : null; return { ...otherBase, swap: { ctx: m && swapCtxOf ? swapCtxOf(m) : swapCtx, open: P.swap ?? null }, locked: new Set(m && c.picksOf ? c.picksOf(m).locked : c.picks.locked) }; };
+  const otherHtml = others.length && !readErr ? otherSavedHtml(others, otherCtx, P.lt.openOther ?? []) : "";
+  const away = lists.buildOther ? `<div class="lt-away">The ${esc(lists.buildOther.mode)} build (${lists.buildOther.n} lineup${lists.buildOther.n === 1 ? "" : "s"}) is under ${esc(lists.buildOther.mode)}.</div>` : "";
   const stars = starStripHtml(starredCounts(inMode.map((e) => e.ids), c.byId)); // every starred man and how many of these lineups hold him
   return `${run}${view === "build" ? readNote : ow + undo + mv}<div class="lt-top">${strip}<span class="lt-acts">${saveAll}${dl}</span></div>${top}${stars}${body}${otherHtml}${away}${view === "build" ? noted : ""}`;
 }

@@ -18,21 +18,24 @@ const warnedStarts = new Set(); // box-reading problems already logged, each dis
 import { withSeasonFigures, seasonUsageTable } from "../site/shim/app-only.js";
 import { OPTIMIZE_CEILING_MS, ANSWER_START_MS, ANSWER_KEEPALIVE_MS } from "./lineup/build-run.js";
 import { handleOptimize, handleBuildProgress, handleBuildStop } from "./lineup/build-route.js";
+import { handleNo } from "./lineup/no-list.js";
 import { send, fail, readJson, openSlate } from "./slate/http-helpers.js";
 import { mergedFor, effectivePlayers, withOurs } from "./slate/effective-players.js";
 
 export { LATE_ONE_GAME_NOTE } from "./lineup/build-route.js";
 export { mergedFor } from "./slate/effective-players.js";
 import {
-  SLATE_NAME, MAX_SAVED, listSlates, readSlate, readPicks, checkPicks, savePicks, readLineups, checkLineupBody, addLineups, removeLineup, idsRemovedWith,
+  SLATE_NAME, MAX_SAVED, listSlates, readSlate, readPicks, PICK_MODES, checkPicks, savePicks, readLineups, checkLineupBody, addLineups, removeLineup, idsRemovedWith,
   checkWorking, readWorking, saveWorking,
 } from "./slate/store.js";
+import { replacedWords } from "./slate/mode-file.js";
 import { readSpots, readSpotsShown, writeSpots, checkSpotsBody, applySpots, vacateSpots } from "./slate/spots.js";
 import { readSaved } from "./slate/lateswap-store.js";
 import { heldSpotNames } from "./lateswap/maps.js";
 import { readBuilds, writeBuilds, checkBuildsBody, applyBuilds } from "./slate/builds.js";
 import { readOverrides, writeOverrides, checkChanges, applyChanges, resetPlayer, resetAll, minutesBase, publicOverrides } from "./slate/overrides.js";
 import { consoleHandler } from "./slate/console-route.js";
+import { whatifHandler } from "./slate/whatif-route.js";
 import { handleResend } from "./slate/resend-route.js";
 import { depthHandler } from "./slate/depth-store.js";
 import { minutesHandler, consoleBenchPlus } from "../site/shim/app-only.js";
@@ -44,7 +47,6 @@ import { pullStamp, withPullMoves } from "../site/shim/pull-moves.js";
 import { withRest } from "../site/shim/back-to-back.js";
 import { withAbsence } from "../site/shim/absence.js";
 import { withBoxFreshness, readBoxFreshness } from "../site/shim/site-data.js";
-import { withStatusSince } from "../site/shim/status-since.js";
 import { lateswapHandler } from "./slate/lateswap-route.js";
 import { runAndLogOnChange, handleBoardCheck } from "../site/shim/site-data.js";
 
@@ -84,15 +86,42 @@ function serveStatic(res, pathname) {
   res.end(data);
 }
 
+/** GET both modes' picks (store.js readPicks), or one mode's with ?mode=Cash|GPP; POST { mode, locked, excluded } sets that mode's lists
+ *  only (Adam 11-14, 11-19, 11-20: Cash and GPP keep separate locks and excludes). The answer to a POST is both modes as saved. */
+/** GET ?mode= for picks or the working lineup: that mode's, or 500 `code` naming the mode and why when it cannot be read (review 11-20). */
+function sendMode(res, all, mode, code, noun) {
+  if (!PICK_MODES.includes(mode)) return fail(res, 400, code === "PICKS_UNREADABLE" ? "BAD_PICKS" : "BAD_WORKING", '"mode" must be "Cash" or "GPP".');
+  const one = all[mode];
+  if (one.unreadable) return fail(res, 500, code, `The ${mode} ${noun} could not be read: ${one.unreadable}.`);
+  return send(res, 200, { slate: all.slate, mode, ...one });
+}
+/** A per-mode save; a failed copy-aside of an unreadable file answers 500 with nothing written (slate/mode-file.js COPY_ASIDE_FAILED). Returns the save's result, or null after answering. */
+function saveOr500(res, fn) {
+  try { return fn(); } catch (e) {
+    if (e?.code !== "COPY_ASIDE_FAILED") throw e;
+    error("save refused: the unreadable file could not be copied aside", { message: e.message });
+    fail(res, 500, "COPY_ASIDE_FAILED", e.message);
+    return null;
+  }
+}
+
 async function handlePicks(req, res, slate) {
   const slateData = openSlate(req, res, slate, "Picks");
   if (!slateData) return;
-  if (req.method === "GET") return send(res, 200, readPicks(slate, slateData));
+  if (req.method === "GET") {
+    const mode = new URL(req.url, "http://127.0.0.1").searchParams.get("mode");
+    return mode === null ? send(res, 200, readPicks(slate, slateData)) : sendMode(res, readPicks(slate, slateData), mode, "PICKS_UNREADABLE", "locks and excludes");
+  }
   const read = await readJson(req, res);
   if (!read) return;
   const checked = checkPicks(read.body, slateData);
   if (!checked.ok) return fail(res, 400, "BAD_PICKS", checked.message);
-  send(res, 200, savePicks(slate, checked.locked, checked.excluded));
+  // Read only now, after the body has arrived, and written in the same step: only this mode's lists change (store.js savePicks).
+  const saved = saveOr500(res, () => savePicks(slate, checked.mode, checked.locked, checked.excluded)); // an unreadable mode: the old file copied aside, only that mode emptied (slate/mode-file.js)
+  if (!saved) return;
+  const { replaced } = saved;
+  if (replaced) error("picks file held an unreadable mode; copied aside and replaced by a save", { slate, mode: checked.mode, ...replaced });
+  send(res, 200, { ...readPicks(slate, slateData), mode: checked.mode, ...(replaced ? { replaced_unreadable: replacedWords(replaced, "locks and excludes") } : {}) });
 }
 
 /** GET { slate, overrides }; POST a change ({ proj, own, bump, stars }), { reset: dk_id } or { resetAll: true }.
@@ -216,16 +245,25 @@ async function handleBuilds(req, res, slate) {
 // The worker, the limits and the partial answer are in lineup/build-run.js; the routes are in lineup/build-route.js.
 const OPTIMIZE_URL = pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), "lineup", "optimize.js")).href;
 
-/** GET the slate's working lineup; POST { slots: 8 entries, a player id or null each } saves it (server/slate/store.js). */
+/** GET both modes' working lineups (?mode=Cash|GPP: one); POST { mode, slots: 8 entries, a player id or null each } saves that mode's only
+ *  (server/slate/store.js; Adam 11-14, 11-19, 11-20: Cash and GPP keep separate lineups). The answer to a POST is both modes as saved. */
 async function handleWorking(req, res, slate) {
   const slateData = openSlate(req, res, slate, "The working lineup");
   if (!slateData) return;
-  if (req.method === "GET") return send(res, 200, readWorking(slate, slateData));
+  if (req.method === "GET") {
+    const mode = new URL(req.url, "http://127.0.0.1").searchParams.get("mode");
+    return mode === null ? send(res, 200, readWorking(slate, slateData)) : sendMode(res, readWorking(slate, slateData), mode, "WORKING_UNREADABLE", "working lineup");
+  }
   const read = await readJson(req, res);
   if (!read) return;
+  if (!PICK_MODES.includes(read.body?.mode)) return fail(res, 400, "BAD_WORKING", '"mode" must be "Cash" or "GPP": the working lineup is kept per mode. Reload the page if it is older than that.');
   const checked = checkWorking(read.body, slateData);
   if (!checked.ok) return fail(res, 400, "BAD_WORKING", checked.message);
-  send(res, 200, saveWorking(slate, checked.slots));
+  const saved = saveOr500(res, () => saveWorking(slate, read.body.mode, checked.slots)); // read and written in one step: only this mode's lineup changes
+  if (!saved) return;
+  const { replaced } = saved;
+  if (replaced) error("working lineup file held an unreadable mode; copied aside and replaced by a save", { slate, mode: read.body.mode, ...replaced });
+  send(res, 200, { ...readWorking(slate, slateData), mode: read.body.mode, ...(replaced ? { replaced_unreadable: replacedWords(replaced, "working lineup") } : {}) });
 }
 
 /** GET /api/player-log?name=&team= : all the player's regular-season games this season, newest first, from ESPN (Basketball-Reference as the
@@ -262,7 +300,7 @@ function builtSlate(res, slate, opts) {
   const players = effectivePlayers(res, slate, ours); // the board shows the effective figures, each with its base
   if (!players) return null;
   const usual = withUsualMinutes(slate, { ...ours, players }, { nowMs: opts.now() }); // each man's usual minutes, the console's figure
-  return withBoxFreshness(withStatusSince(slate, withAbsence(slate, withRest(slate, withPullMoves(slate, withOurMinutes(slate, usual), { nowMs: opts.now() })), { nowMs: opts.now() }), { nowMs: opts.now() }), { nowMs: opts.now() }); // who the newest pull moved against the one before it; absence: how many games each injured man has missed (server/boxes/absence.js); box_freshness: whether the stored box scores are behind the schedule
+  return withBoxFreshness(withAbsence(slate, withRest(slate, withPullMoves(slate, withOurMinutes(slate, usual), { nowMs: opts.now() })), { nowMs: opts.now() }), { nowMs: opts.now() }); /* TwoGun status-change times are never stamped (Adam 11-19) */ // who the newest pull moved against the one before it; absence: how many games each injured man has missed (server/boxes/absence.js); box_freshness: whether the stored box scores are behind the schedule
 }
 
 /** Decodes a path segment; a malformed escape (%E0) comes back as "" so the slate-name check refuses it with 400. */
@@ -306,12 +344,16 @@ async function route(req, res, opts) {
   if (depth) return depth.handler(req, res, depth.team, { send, fail, readJson, now: opts.now, syncBusy: () => syncBusyNow(opts) });
   const cons = consoleHandler(p); // the scenario console (slate/console-route.js)
   if (cons) return cons.handler(req, res, safeDecode(cons.encodedSlate), { send, fail, readJson, openSlate, syncBusy: () => syncBusyNow(opts), usageTable: opts.usageTable, benchPlus: consoleBenchPlus, now: opts.now, effectivePlayers: (res, slate, slateData) => effectivePlayers(res, slate, slateData, opts), ourPlayers: (slate, slateData) => withOurs(slate, slateData, opts) });
+  const wif = whatifHandler(p); // the Scenario tab's saved what-ifs, and the send right after each of his writes (slate/whatif-route.js; Adam 11-19 and 1:37 PM 11-20)
+  if (wif) return wif.handler(req, res, safeDecode(wif.encodedSlate), { send, fail, readJson, openSlate, syncBusy: () => syncBusyNow(opts), usageTable: opts.usageTable, ourPlayers: (slate, slateData) => withOurs(slate, slateData, opts), now: opts.now });
   const lsw = lateswapHandler(p); // the Late swap screen (slate/lateswap-route.js)
   if (lsw) return lsw.handler(req, res, safeDecode(lsw.encodedSlate), { send, fail, readJson, openSlate, effectivePlayers: (res, slate, slateData) => effectivePlayers(res, slate, slateData, opts), now: opts.now, injected: opts.injected });
   let m = p.match(/^\/api\/slate\/([^/]+)\/resend$/);
   if (m) return handleResend(req, res, safeDecode(m[1]), { send, fail, readJson, openSlate, usageTable: opts.usageTable, ourPlayers: (slate, slateData) => withOurs(slate, slateData, opts), now: opts.now }); // held teams' numbers re-sent on the new Tonight, inside the app (update_cycle.mjs)
   m = p.match(/^\/api\/slate\/([^/]+)\/picks$/);
   if (m) return handlePicks(req, res, safeDecode(m[1]));
+  m = p.match(/^\/api\/slate\/([^/]+)\/no$/);
+  if (m) return handleNo(req, res, safeDecode(m[1]), { openSlate, send, fail, readJson }); // the NO list (lineup/no-list.js), kept beside the picks
   m = p.match(/^\/api\/slate\/([^/]+)\/lineups$/);
   if (m) return handleLineups(req, res, safeDecode(m[1]));
   m = p.match(/^\/api\/slate\/([^/]+)\/spots$/);

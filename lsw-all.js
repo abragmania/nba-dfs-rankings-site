@@ -25,7 +25,8 @@ export function scopeFor(M, b) {
   return { type: "chosen", spots: shown };
 }
 
-/** Backup candidates: men on the slate whose game has not started and who are not Out, best projection first. */
+/** Backup candidates: men on the slate whose game has not started and who are not Out, best projection first. A late swap NO man is
+ *  offered like anyone (a backup is his own pick; Adam 6:16 and 6:19 PM 11-19). */
 export function backupLabels(M) {
   return M.pool.filter((p) => !p.missing && !p.started && !p.untimed && !p.out).sort((a, b) => (b.proj ?? 0) - (a.proj ?? 0))
     .map((p) => ({ id: p.dk_id, label: `${p.name} (${p.team} ${money(p.salary)})` }));

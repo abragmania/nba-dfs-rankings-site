@@ -4,11 +4,18 @@ import { paletteOf, teamColors } from "./teams.js";
 import { assignColours } from "./colours.js";
 import { sourceRows, sourcesHtml } from "./sources-panel.js";
 import { checkFootHtml, hisPoolHtml, outPoolHtml } from "./board-check-foot.js";
+import { shownPicks } from "./excluded.js";
 import { esc, logo, tipWhen, tipMs, slateRefMs, shortTime, topStamps, keepFocus, remScale } from "./board-util.js";
 import { createPanel } from "./panel.js";
 import { initCard, figureSource } from "./card.js";
 import { cardRoles } from "./card-role.js";
-import { bumpPatch, delegateBumpClicks } from "./bump-control.js";
+import { stepMinutes } from "./min-step.js";
+import { bumpPatch } from "./bump-control.js";
+import { bumpOf } from "./instant-overrides.js";
+import { createRowPatch } from "./row-patch.js";
+import { inPoolView, DEFAULT_POOL_VIEW, POOL_VIEWS, withoutOldFilter } from "./pool-view.js";
+import { createPickClicks } from "./pick-clicks.js";
+import { fitGameStrip } from "./games-fit.js";
 import { createEditors } from "./cell-editor.js";
 import { askConfirm, CONFIRM } from "./confirm.js";
 import { columnsControl, sortNote } from "./columns.js";
@@ -22,24 +29,34 @@ import { limitPatch } from "./row-limits.js";
 import { loadView, saveView, DEFAULT_SORT } from "./view-memory.js";
 import { loadTheme, saveTheme, themeClasses } from "./theme.js";
 import { createConsole } from "./console.js";
+import { createScenarioTab } from "./scenario-tab.js";
 import { createLineupBar } from "./lineup-bar.js";
 import { createBoardMarks } from "./board-marks.js";
 import { confirmedByGame } from "./game-borders.js";
-import { mountLateSwap } from "./lsw-main.js";
+import { mountLateSwap, lateSwapNoChanged } from "./lsw-main.js";
 import { createOptStrip } from "./opt-strip.js";
 import { createToast } from "./toast.js";
-import { createSaves } from "./board-saves.js";
+import { createSaves, picksByMode, carriedLine, troubleLine, footOf, PICK_MODES } from "./board-saves.js";
+import { workCarriedLine } from "./work-panel.js";
 import { createFullScreen } from "./board-fullscreen.js";
-import { topHtml, gamesHtml, headTitle as viewHeadTitle, chipsHtml, outMan, outsHtml } from "./board-views.js";
+import { topHtml, gamesHtml, headTitle as viewHeadTitle, chipsHtml } from "./board-views.js";
+import { createNoPicks, noChipHtml, combineSettled, LATE } from "./no-picks.js";
 
 const $ = (id) => document.getElementById(id);
 const TABS = ["ALL", "PG", "SG", "SF", "PF", "C", "G", "F"];
 /** The slate's assigned colours for a team, {t1, t2}; the fixed table's colours if the team is not on the slate. */
 const colourOf = (t) => (S.colours?.[t] ? { t1: S.colours[t].main, t2: S.colours[t].second } : teamColors(t));
 
-const S = { slates: [], name: null, slate: null, players: [], byId: new Map(), picks: { locked: [], excluded: [] }, dropped: [], ...noFilters(), sort: { ...DEFAULT_SORT }, outOpen: false, held: new Map(), known: new Map(), outNames: new Set(), refreshGen: 0, topStale: false, consolePull: null, rosterDropped: [], upd: { updatedMs: null, failed: null, waiting: false, added: [], removed: [] } };
-/** The picks as the board acts on them (slate-refresh.js picksOnBoard). */
-const livePicks = () => picksOnBoard(S.picks, S.byId);
+const S = { slates: [], name: null, slate: null, players: [], byId: new Map(), picks: { Cash: { locked: [], excluded: [] }, GPP: { locked: [], excluded: [] } }, picksFoot: null, dropped: [], ...noFilters(), sort: { ...DEFAULT_SORT }, outOpen: false, poolView: DEFAULT_POOL_VIEW /* In every time the page opens (pool-view.js) */, held: new Map(), known: new Map(), outNames: new Set(), refreshGen: 0, topStale: false, consolePull: null, rosterDropped: [], upd: { updatedMs: null, failed: null, waiting: false, added: [], removed: [] } };
+/** The picks as the board acts on them (slate-refresh.js picksOnBoard): the optimizer's open mode's own (Adam 11-14, 11-19, 11-20: Cash and
+ *  GPP keep separate locks and excludes), so the Player list, the card, the panel and every click show and change that mode's only. */
+const livePicks = () => picksOnBoard(S.picks[panel.mode()], S.byId);
+/** The foot rows for what is still carried from before Cash and GPP were kept apart: picks and the working lineup (none once each mode has saved its own). */
+const carriedRows = () => [["Picks", [carriedLine(S.picksFoot?.carried), troubleLine(S.picksFoot, "locks and excludes")]], ["Working lineup", [workCarriedLine(panel.workFoot()?.carried), troubleLine(panel.workFoot(), "working lineup")]]].map(([k, v]) => [k, v.filter(Boolean).join(" "), v[1] !== ""]).filter(([, v]) => v); // an unreadable or emptied mode in red (review 11-20)
+/** Both modes' saved lists in one, for naming the men a new pull took off the slate (settleRoster). */
+const allSaved = () => ({ locked: [...new Set(PICK_MODES.flatMap((m) => S.picks[m].locked))], excluded: [...new Set(PICK_MODES.flatMap((m) => S.picks[m].excluded))] });
+/** What the Player list shows: his saved picks plus the men not playing tonight, excluded as a derived state (excluded.js, Adam 11-19: nobody leaves the pool). Saves always send livePicks. */
+const shown = () => shownPicks(livePicks(), S.players);
 /** A man's name, on the slate or remembered from an earlier pull this page held; his id when never seen. */
 const nameOf = (id) => S.byId.get(id)?.name ?? S.known.get(id)?.name ?? `DraftKings id ${id}`;
 
@@ -50,18 +67,21 @@ const toast = createToast(); // the message beside the clicked control (toast.js
 const api = async (url, opts) => {
   const r = await fetch(url, opts);
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw Object.assign(new Error(body.error?.message ?? `HTTP ${r.status}`), { code: body.error?.code });
+  if (!r.ok) throw Object.assign(new Error(body.error?.message ?? `HTTP ${r.status}`), { code: body.error?.code, status: r.status }); // status: a refusal (4xx) is told from an unknown outcome (board-saves.js)
   return body;
 };
 const dash = (title) => `<span class="miss" title="${esc(title)}">—</span>`;
 /** A slate stamp in Eastern time; the slate's own date (from its name) settles the year TwoGun's stamps leave out. */
 const when = (s) => tipWhen(S.name)(s);
 // The picks and override saves (board-saves.js); settled() lets a build wait for picks and override saves in flight, since the server reads the saved locks and the saved overrides.
-const saves = createSaves({ S, api, toast, renderRows: () => renderRows(), renderPick: () => renderPick(), renderDropNote: () => renderDropNote(), applyPlayers: (p) => applyPlayers(p) });
-const { savePicks, saveOverride, settled } = saves;
+const saves = createSaves({ S, api, toast, mode: () => panel.mode(), renderRows: () => renderRows(), renderPick: () => renderPick(), renderDropNote: () => renderDropNote(), renderCarried: () => renderSources(), applyPlayers: (p) => applyPlayers(p), reread: async (n) => { const s = await api(`/api/slate/${encodeURIComponent(n)}`); if (n === S.name) applyPlayers(s.players); } });
+const { savePicks, saveOverride } = saves;
+// The NO list (no-picks.js, Adam 11-19): per mode, apart from his picks; a build waits for its saves too, since the server reads the saved list.
+const noPicks = createNoPicks({ api, toast, slate: () => S.name, mode: () => (panel.lateSwap() ? LATE : panel.mode()), onChange: () => { if (S.slate) renderRows(); lateSwapNoChanged(); }, nameOf: (id) => nameOf(id) });
+const settled = combineSettled(saves.settled, noPicks.settled);
 // The player panel (card.js), docked on the right; it closes itself on Esc. A man's figures follow the board's copy of him (a man from the
 // Out list has none and stays as he was opened).
-const card = initCard({ root: document.body, dash, colourOf, picks: () => S.picks,
+const card = initCard({ root: document.body, dash, colourOf, picks: () => shown(),
   figs: () => ({ source: figureSource(S.slate), asOf: when(topStamps(S.slate).board) }),
   current: (p) => S.byId.get(p.dk_id) ?? p, marks: (id) => boardMarks.of(id), newsState: () => boardMarks.newsState(), onDock: () => { fixTableWidth(); stickyHeights(); }, roles: cardRoles({ api: () => scenarioConsole, slate: () => S.name, toast }) });
 new MutationObserver(() => { if (document.body.classList.contains("lsw-on")) card.close(); }).observe(document.body, { attributes: true, attributeFilter: ["class"] }); // Late swap lists entries, not names: the panel is for the Player list and the Console, so it closes when that screen opens
@@ -69,7 +89,7 @@ createOptStrip({ el: $("optstrip"), opt: $("opt"), onWorking: () => card.close()
 // The optimizer panel (panel.js).
 // Late swap mode lives in the panel; onLateSwap redraws the header switch and the table's slot pickers when it changes.
 // onWork redraws the rows when the lineup on show changes (their in-lineup mark); onMode swaps in that mode's columns.
-const panel = createPanel({ el: $("opt"), lineupsEl: $("lineups"), onView: (v) => setView(v), onTabs: () => renderTop(), isLineupsView: () => S.view === "lineups", api, toast, tryStore, dash, ctx: () => ({ name: S.name, byId: S.byId, outList: S.slate?.out ?? [], outNames: S.outNames, knownName: (id) => S.known.get(id)?.name ?? null, knownRow: (id) => S.known.get(id) ?? null, pull: pullOf(S.slate), refreshGen: S.refreshGen, players: S.players, picks: livePicks(), settled, ovKey: ovKeyOf(), colourOf }), onLateSwap: () => { drawTop(); applyFullScreen(); renderHead(); renderRows(); }, onWork: () => renderRows(), onMode: (m) => columns.setMode(m), onClearLocks: () => savePicks({ locked: [], excluded: livePicks().excluded }), onMemory: () => rememberView() });
+const panel = createPanel({ el: $("opt"), lineupsEl: $("lineups"), onView: (v) => setView(v), onTabs: () => renderTop(), isLineupsView: () => S.view === "lineups", api, toast, tryStore, dash, ctx: () => ({ name: S.name, byId: S.byId, outList: [], outNames: S.outNames, knownName: (id) => S.known.get(id)?.name ?? null, knownRow: (id) => S.known.get(id) ?? null, pull: pullOf(S.slate), refreshGen: S.refreshGen, players: S.players, picks: livePicks(), settled, ovKey: ovKeyOf(), colourOf, no: noPicks.ids(panel.mode()) /* the open build mode's list, never the late swap list */, noMode: panel.mode(), picksOf: (m) => picksOnBoard(S.picks[m], S.byId), noOf: (m) => noPicks.ids(m) /* one mode's own: a build and an other-mode card read these (review 11-20) */ }), onLateSwap: () => { drawTop(); applyFullScreen(); renderHead(); renderRows(); }, onWork: () => { renderRows(); if (JSON.stringify(carriedRows()) !== S.carriedShown) renderSources(); }, onMode: (m) => { columns.setMode(m); if (S.slate) { renderRows(); card.refresh(); } } /* the mode's own locks and excludes show (livePicks) */, onClearLocks: () => savePicks({ locked: [], excluded: livePicks().excluded }), onMemory: () => rememberView() });
 // The table's own columns, ticked and ordered by Adam per mode (columns.js); the list's and the table's redraws keep each other.
 const columns = columnsControl({ btn: $("colsBtn"), pop: $("colPop"), mode: panel.mode, tryStore, onChange: () => { if (S.slate) { renderHead(); fixTableWidth(); } } });
 const shownCols = () => columns.keys({ lateSwap: Boolean(panel.lateSwap()) });
@@ -78,10 +98,20 @@ const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: 
   news: { slateData: () => (S.slate ? { ...S.slate, players: S.players } : null), tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; } }, // the lineup news strip and Status column (same inputs as the News tab)
   onWork: () => { boardMarks.refresh({ news: false }); lineupBar.newsOnly(); } });
 // The console's word on each row (board-marks.js): the S chip, and his typed Min and DK/m TON with their undo chips; those cells write through the console.
-const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, pullAt: () => pullOf(S.slate).label, players: () => S.players, onChange: () => { if (!S.slate) return; card.badge(); if (formHasFocus()) { S.rowsLater = true; return; } renderRows(); }, noteEl: $("updline").insertAdjacentElement("beforebegin", Object.assign(document.createElement("div"), { hidden: true })) });
+const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, reload: () => loadSlate(S.name), pullAt: () => pullOf(S.slate).label, players: () => S.players, onChange: () => { if (!S.slate) return; card.badge(); if (formHasFocus()) { S.rowsLater = true; return; } renderRows(); }, noteEl: $("updline").insertAdjacentElement("beforebegin", Object.assign(document.createElement("div"), { hidden: true })) });
 // The lineup bar above the list (lineup-bar.js): an Out or a confirmed start from the Monster, RotoWire and RotoGrinders pages applies itself through the console, with an undo X; a projected start is words only.
 const lineupBar = createLineupBar({ api, slate: () => S.name, players: () => S.players, slateData: () => S.slate, tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; }, console: scenarioConsole, toast, tryStore, tick: true, onLabel: (l) => { S.news = l; renderTop(); }, onModel: (m) => { const f = confirmedByGame(m); if (JSON.stringify(f) !== JSON.stringify(S.fives)) { S.fives = f; if (S.slate) renderGames(); } }, applyInPage: Boolean(globalThis.nbadfsSitePull) });
 const applyFullScreen = createFullScreen({ panel, tryStore, stickyHeights: () => stickyHeights(), fixTableWidth: () => fixTableWidth() }); // Full screen button (board-fullscreen.js)
+const scenarioTab = createScenarioTab({ el: $("scenario"), api, toast });
+function setScenario(open) {
+  if (open && scenarioConsole.isOn()) setConsole(false);
+  document.body.classList.toggle("scenario-on", open);
+  const q = new URLSearchParams(location.search);
+  if (open) q.set("view", "scenario"); else if (q.get("view") === "scenario") q.delete("view");
+  history.replaceState(null, "", `?${q}`);
+  if (open) scenarioTab.show(S.name); else { scenarioTab.hide(); fixTableWidth(); }
+  renderTop();
+}
 /** Shows the console or the board. The board's table holds a measured width, so it is measured again on the way back. */
 function setConsole(open) {
   document.body.classList.toggle("console-on", open);
@@ -118,7 +148,7 @@ function rememberView() {
   saveView(tryStore, S.name, { tab: S.tab, q: S.q, game: S.game, pickFilter: S.pickFilter, teams: S.teams, minSal: S.minSal, maxSal: S.maxSal, sort: S.sort, ...panel.memory() });
 }
 
-mountLateSwap(); // the Late swap tab and screen (lsw-main.js)
+mountLateSwap({ noPicks }); // the Late swap tab and screen (lsw-main.js); it shows and saves the same late swap NO list
 
 // ---------- loading ----------
 /** The slate's rows as the board holds them: each with his opponent's words. */
@@ -139,13 +169,14 @@ async function loadSlateNow(name, slates, gen) {
   if (slates) S.slates = slates; // the list is taken only once the slate it brings is in hand
   card.close();
   editors.drop();
-  S.name = name; S.slate = slate; S.picks = { locked: picks.locked, excluded: picks.excluded }; S.dropped = picks.dropped ?? []; S.rosterDropped = [];
-  S.players = boardRows(slate);
+  boardMarks.reset(); // his typed numbers still on their way belong to the slate he left (instant-pins.js)
+  S.name = name; S.slate = slate; S.picks = picksByMode(picks); S.picksFoot = footOf(picks); S.dropped = picks.dropped ?? []; S.rosterDropped = [];
+  S.players = saves.overlay(boardRows(slate)); // his changes still on their way show over the server's rows (board-saves.js)
   S.byId = new Map(S.players.map((p) => [p.dk_id, p]));
   S.held = new Map(); S.known = new Map(); S.outNames = outNamesOf(slate); S.refreshGen++; S.topStale = false; S.consolePull = pullOf(slate).key;
   S.upd = { updatedMs: Date.now(), failed: S.upd.failed, added: [], removed: [] };
   const view = loadView(tryStore, name, { tabs: TABS, teams: teamsOf(S.players), games: slate.games.map((g) => g.game), sortKeys: SORT_KEYS });
-  setFilters(view);
+  setFilters(withoutOldFilter(view)); // the old Excluded chip's remembered filter is the Out view now (pool-view.js)
   S.sort = view.sort; S.outOpen = false; // the Out list is closed on every load (never restored)
   // One colour per team for this slate, chosen so no two teams' shades look alike (colours.js).
   const onSlate = [...S.players.map((p) => p.team), ...slate.games.flatMap((g) => [g.away, g.home])].filter(Boolean);
@@ -153,10 +184,12 @@ async function loadSlateNow(name, slates, gen) {
   history.replaceState(null, "", slateQuery(name, S.slates, scenarioConsole.isOn(), location.pathname));
   panel.setSlate(name, view);
   scenarioConsole.setSlate(name);
+  scenarioTab.setSlate(name);
   renderAll();
   renderUpdLine();
   fixTableWidth();
-  lineupBar.refresh(); boardMarks.refresh();
+  lineupBar.refresh(); noPicks.load(name);
+  boardMarks.refresh().then(() => { if (S.name === name && !scenarioConsole.isOn()) fixTableWidth(); }); // the S chips widen the Player column: measured again with them, so the In and Out views hold one width
 }
 
 // ---------- the numbers refreshing by themselves (slate-refresh.js) ----------
@@ -185,12 +218,14 @@ function renderSources() {
   const { board, injuries } = topStamps(s);
   const box = boxNote(s.box_freshness), missed = absenceNote(s.absence_state); // the missed-games line (server/boxes/absence.js) sits with the box score line at the foot
   el.hidden = false;
-  el.innerHTML = sourcesHtml(sourceRows({ board: t(board), injuries: t(injuries), pulled: t(s.as_of?.pull_started), lock: t(s.lock), slate: s, numbers: numbersLine() }), [...(box.text ? [["Box scores", box.text, true]] : []), ...(missed.text ? [["Games missed", missed.text.replace(/^Games missed: /, ""), true]] : [])]);
+  const carried = carriedRows(); // his locks, excludes and working lineup from before Cash and GPP were kept apart, counted (G62) at the foot (G64)
+  S.carriedShown = JSON.stringify(carried);
+  el.innerHTML = sourcesHtml(sourceRows({ board: t(board), injuries: t(injuries), pulled: t(s.as_of?.pull_started), lock: t(s.lock), slate: s, numbers: numbersLine() }), [...(box.text ? [["Box scores", box.text, true]] : []), ...(missed.text ? [["Games missed", missed.text.replace(/^Games missed: /, ""), true]] : []), ...carried]);
 }
 /** What names men, against the rows now (slate-refresh.js rosterCleanup): a man off the slate leaves the picks and the working lineup, named; a filter on a team or game gone ends. */
 function settleRoster() {
   const out = rosterCleanup({
-    byId: S.byId, picks: S.picks, ...panel.rosterInput(), filters: { teams: S.teams, game: S.game }, nameOf,
+    byId: S.byId, picks: allSaved(), ...panel.rosterInput(), filters: { teams: S.teams, game: S.game }, nameOf,
     teamsOn: teamsOf(S.players), gamesOn: S.slate.games.map((g) => g.game),
   });
   // S.picks stays as saved: the server's file still holds a man off the slate, and if he comes back both agree he is locked. livePicks reads them.
@@ -208,9 +243,9 @@ function drawTop() {
 function applyFresh(slate) {
   const { scrollX: x, scrollY: y } = window;
   panel.beforeRoster();
-  const { players, held, added, removed } = mergeFresh(S.players, boardRows(slate), editors.openId());
+  const { players, held, added, removed } = mergeFresh(saves.bare(S.players), boardRows(slate), editors.openId()); // the server's rows under his pending guesses (board-saves.js), laid over again below
   S.known = rememberRows(S.known, S.players);
-  S.slate = slate; S.players = players; S.held = held; S.refreshGen++;
+  S.slate = slate; S.players = saves.overlay(players); S.held = held; S.refreshGen++;
   S.byId = new Map(S.players.map((p) => [p.dk_id, p]));
   S.outNames = outNamesOf(slate);
   const changed = added.length || removed.length;
@@ -227,13 +262,14 @@ function applyFresh(slate) {
   if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
   boardMarks.refresh(); // a new pull: TwoGun's flags may have moved; the lineup bar follows the console's new inputs below, so it never reads the old model
   scenarioConsole.onPull(S.name).then((ok) => { if (ok && S.slate) { S.consolePull = pullOf(S.slate).key; renderUpdLine(); } }).catch((e) => toast(`The console could not check the new pull: ${e.message}`, "err")).then(() => lineupBar.refresh()); // the console has the new pull, so its line stops asking to reopen it; his marks are sent over the new pull with no click (console.js onPull)
+  scenarioTab.refresh();
 }
 /** He has left the box: the row that waited takes its new figures, and whatever named a man it dropped follows. */
 function flushHeld() {
   if (!S.held.size || editors.openId()) return;
   const { scrollX: x, scrollY: y } = window;
   S.known = rememberRows(S.known, S.players);
-  S.players = applyHeld(S.players, S.held);
+  S.players = saves.overlay(applyHeld(saves.bare(S.players), S.held));
   S.held = new Map();
   S.byId = new Map(S.players.map((p) => [p.dk_id, p]));
   const out = settleRoster();
@@ -285,7 +321,7 @@ function renderBoxNote() {
 }
 function renderTop() {
   const s = S.slate; if (!s) return;
-  $("top").innerHTML = topHtml({ s, slates: S.slates, name: S.name, view: S.view, news: S.news, consoleOn: scenarioConsole.isOn(), panel, pullNow, theme, when });
+  $("top").innerHTML = topHtml({ s, slates: S.slates, name: S.name, view: S.view, news: S.news, consoleOn: scenarioConsole.isOn(), scenarioOn: scenarioTab.isOn(), panel, pullNow, theme, when });
 }
 function renderDropNote() {
   const el = $("dropnote");
@@ -299,25 +335,12 @@ function renderDropNote() {
 // Numbers light up by tier (see highlight.js): game totals in house amber, team totals in the team's own colour.
 function renderGames() {
   $("games").innerHTML = gamesHtml({ slateGames: S.slate.games, players: S.players, game: S.game, fives: S.fives, colourOf, when, dash });
-  fitGames();
-}
-
-/** The game boxes fill the strip's full width: one row when every game fits at the box floor, else two rows with row 1 filled first (Adam 7:21 PM 11-18).
- *  Never a third row. GAME_MIN_REM is a box's content at its narrowest (tip, O/U, logo, code, spread, implied points), measured in the browser
- *  with the game CSS (board.css .game, .side): nothing cut at that width. GAP_REM is the strip's gap (board.css .games). */
-const GAME_MIN_REM = 12.27, GAP_REM = 0.5;
-function fitGames() {
-  const el = $("games"), n = el.children.length;
-  if (!n || !el.clientWidth) return;
-  const px = remScale() * 16; // one rem in px at this root size
-  const cap = Math.max(1, Math.floor((el.clientWidth + GAP_REM * px) / (GAME_MIN_REM * px + GAP_REM * px))); // most boxes one row holds at the floor
-  const cols = n <= cap ? n : n <= 2 * cap ? cap : Math.ceil(n / 2); // row 1 filled first; past 2 rows the boxes would need to be narrower
-  el.style.gridTemplateColumns = `repeat(${cols}, minmax(${GAME_MIN_REM}rem, 1fr))`;
+  fitGameStrip($("games")); // games-fit.js
 }
 
 // ---------- table ----------
 function visible() {
-  const rows = filterPlayers(S.players, S, S.picks);
+  const sp = shown(), rows = inPoolView(filterPlayers(S.players, S, sp), S.poolView, sp); // the In / Out / All view, then the filters inside it (pool-view.js)
   return rows.sort((a, b) => comparePlayers(a, b, S.sort, minSourceOf(S.slate)));
 }
 function renderHead() { $("thead").innerHTML = headHtml(shownCols(), S.sort, headTitle, minSourceOf(S.slate)); }
@@ -325,7 +348,7 @@ function renderHead() { $("thead").innerHTML = headHtml(shownCols(), S.sort, hea
 const headTitle = (c) => viewHeadTitle(S.slate, S.players, c);
 function renderRows() {
   const rows = visible();
-  const lock = new Set(S.picks.locked), ex = new Set(S.picks.excluded);
+  const sp = shown(), lock = new Set(sp.locked), ex = new Set(sp.excluded);
   const keys = shownCols();
   // Late swap mode: each row's slot picker takes the lock button's place; a started man outside the working lineup cannot
   // be added, so his row is dimmed. Outside it a click on the row puts the man in the working lineup or takes him out
@@ -333,16 +356,17 @@ function renderRows() {
   const L = panel.lateSwap();
   const inl = L ? null : panel.inLineup();
   const blocks = panel.blocked(); // who cannot go in now (A18); null, so nobody greyed, while that is not known
+  const no = new Set(noPicks.ids()); // the open list's NO men (the build mode's, or the late swap list in late swap): pink row and tag (no-picks.js)
   renderChips();
   renderFilterMarks();
   rememberView();
   stickyHeights();
   $("cnt").textContent = `${rows.length} player${rows.length === 1 ? "" : "s"}${sortNote(keys, S.sort)}`;
-  // A keyboard user keeps his place, and an open box what he typed: the rows redraw on every pick, save and answer from the server.
-  editors.around(() => keepFocus($("tbody"), () => {
-    $("tbody").innerHTML = rows.length ? rows.map((p) => rowHtml(p, keys, { minSource: minSourceOf(S.slate), dash, when, colourOf, lock, ex, L, inl, blocks, limits: panel.limits(), marks: boardMarks.of })).join("") : `<tr><td colspan="${keys.length}" class="nores">No players match.</td></tr>`;
-  }));
+  // A keyboard user keeps his place, and an open box what he typed: the rows redraw on every pick, save and answer from the server, only the rows whose markup changed (row-patch.js).
+  const x = { minSource: minSourceOf(S.slate), dash, when, colourOf, lock, ex, L, inl, blocks, limits: panel.limits(), marks: boardMarks.of, no, picksUnknown: livePicks().unreadable ?? null };
+  editors.around(() => keepFocus($("tbody"), () => rowPatch.draw(rows.map((p) => ({ id: String(p.dk_id), html: rowHtml(p, keys, x) })), `<tr><td colspan="${keys.length}" class="nores">No players match.</td></tr>`)));
 }
+const rowPatch = createRowPatch($("tbody"));
 // The table is only as wide as its content, so its width would follow the visible rows and the optimizer beside it would
 // slide on every filter. After the unfiltered render, measure the table and hold that width for the slate.
 function fixTableWidth() {
@@ -351,8 +375,10 @@ function fixTableWidth() {
   const table = $("tbody").closest("table");
   table.style.width = "";
   measuring = true;
-  Object.assign(S, noFilters());
+  const view = S.poolView;
+  Object.assign(S, noFilters(), { poolView: "all" }); // measured with every man, the Out men too, so no view moves the optimizer
   renderRows();
+  S.poolView = view;
   table.style.width = table.offsetWidth + "px";
   Object.assign(S, keep);
   measuring = false;
@@ -389,25 +415,28 @@ function renderFilterMarks() {
   $("clearF").disabled = !filtersOn(S);
 }
 function renderTabs() { $("tabs").innerHTML = TABS.map((t) => `<button data-tab="${t}" class="${t === S.tab ? "on" : ""}">${t}</button>`).join(""); }
-// The Locked / Excluded / Starred chips and Reset all overrides (board-views.js chipsHtml).
+// The Locked chip, the In / Out / All switch, the Starred chip and Reset all overrides (board-views.js chipsHtml); written only when they changed, so a click redraws no more than it must.
 function renderChips() {
-  $("chips").innerHTML = chipsHtml({ players: S.players, picks: S.picks, byId: S.byId, pickFilter: S.pickFilter, slate: S.slate });
+  const html = chipsHtml({ players: S.players, picks: shown(), byId: S.byId, pickFilter: S.pickFilter, slate: S.slate, view: S.poolView, mode: panel.mode() });
+  if (S.chipsShown !== html || !$("chips").firstChild) keepFocus($("chips"), () => { $("chips").innerHTML = html; S.chipsShown = html; });
   // The gap chip rides the team-chip row: the toolbar's first row has no room for it at 1920 (renderTeamChips rebuilds that row, and renderRows follows it).
-  $("teamChips").querySelector(".gapchip")?.remove();
-  $("teamChips").insertAdjacentHTML("afterbegin", gapChipHtml(S.players, S.pickFilter === "gap"));
+  // The NO chip sits beside the Min gap alert (Adam 11-19), loud and red, naming the open mode's NO men.
+  const gap = gapChipHtml(S.players, S.pickFilter === "gap"), noc = noChipHtml({ mode: panel.lateSwap() ? LATE : panel.mode(), ids: noPicks.ids(), nameOf, error: noPicks.error() }), tc = $("teamChips");
+  if (S.tcShown === gap + noc && tc.querySelector(".gapchip")) return;
+  tc.querySelector(".gapchip")?.remove(); tc.querySelector(".nochip")?.remove();
+  tc.insertAdjacentHTML("afterbegin", gap + noc); S.tcShown = gap + noc;
 }
-/** The Out list (board-views.js outsHtml), closed on every load. */
-function renderOuts() { $("outs").innerHTML = outsHtml({ out: S.slate.out ?? [], outOpen: S.outOpen, colourOf }); }
+/** A NO click on a row: on or off for the open list. A locked NO man is still used, with no note (Adam 6:16 and 6:19 PM 11-19). */
+function toggleNo(id) {
+  noPicks.toggle(id);
+}
+/** The old Out list section: never filled (TwoGun's Out list is never read, Adam 11-19). */
+function renderOuts() { $("outs").innerHTML = ""; } // TwoGun's Out list is never read or shown (Adam 11-19): every man is in the Player list, an Out man in its Excluded section
 const renderPick = () => { panel.render(); card.refresh(); };
 function renderAll() { renderTop(); renderDropNote(); renderBoxNote(); renderGames(); renderTabs(); renderTeamChips(); renderHead(); renderRows(); renderOuts(); renderPick(); }
 
-function toggle(id, kind) {
-  const other = kind === "locked" ? "excluded" : "locked";
-  const live = livePicks(); // a save names only men on the slate: the server refuses any other
-  const has = live[kind].includes(id);
-  savePicks({ [kind]: has ? live[kind].filter((x) => x !== id) : [...live[kind], id], [other]: has ? live[other] : live[other].filter((x) => x !== id) });
-  if (kind === "excluded" && !has) panel.dropMan(id); // an excluded man leaves the working lineup (a build would refuse him)
-}
+// Lock, Exclude and un-pick clicks, with the In / Out / All toast (pick-clicks.js).
+const picks = createPickClicks({ S, api, toast, livePicks, shown, savePicks, panel, loadSlate: (n) => loadSlate(n) });
 
 /** The figures a build scores from Adam's overrides, as one string: the panel compares it before and after a build to say
  *  "built before your last projection or ownership change" (stars leave it unchanged). */
@@ -425,7 +454,7 @@ function applyPlayers(players) {
     if (!f) return p;
     return takeAnswer(p, f);
   };
-  S.players = S.players.map(withAnswer);
+  S.players = saves.overlay(S.players.map(withAnswer)); // the answer's figures, then his changes still on their way over them (board-saves.js)
   S.held = new Map([...S.held].map(([id, row]) => [id, row && withAnswer(row)])); // a row waiting on his box takes the answer too
   S.byId = new Map(S.players.map((p) => [p.dk_id, p]));
   renderRows(); renderPick();
@@ -445,13 +474,20 @@ function refreshCheck() {
     } catch (e) { console.warn("The board self-check could not be refreshed:", e.message); }
   }, 1200);
 }
+/** A - or + press in a Min cell: the shown whole minute moved by one, kept as his typed minutes like a typed number (boardMarks.setPin, the same path as the Min box). */
+function stepRowMinutes(id, dir) {
+  const p = S.byId.get(id), v = p ? stepMinutes(p.minutes, dir) : null;
+  if (v === null) { toast("There is no minutes figure to step from; click the cell and type his minutes.", "err"); return; }
+  boardMarks.setPin(id, "m", v);
+}
 // The typed Proj and Own boxes (cell-editor.js, standard A3).
 const editors = createEditors({
   root: $("tbody"), rowOf: (id) => S.byId.get(id), toast, onClosed: () => press(() => setTimeout(flushHeld, 0)), limits: { current: (kind, id) => panel.limits()[id]?.[kind] ?? null, outcome: (kind, id, text) => panel.limitOutcome(kind, id, text) },
-  save: (kind, id, v, settle) => (kind === "min" || kind === "max" ? (limitPatch($("tbody"), kind, id, v), panel.setLimit(kind, id, v, settle)) : kind === "cmin" || kind === "crate" ? boardMarks.setPin(id, kind === "cmin" ? "m" : "d", v) : saveOverride({ [kind]: { [id]: v } }, kind === "proj" ? "the projection" : "the ownership")),
+  save: (kind, id, v, settle) => (kind === "min" || kind === "max" ? (limitPatch($("tbody"), kind, id, v), rowPatch.forget(id), panel.setLimit(kind, id, v, settle)) : kind === "cmin" || kind === "crate" ? boardMarks.setPin(id, kind === "cmin" ? "m" : "d", v) : saveOverride({ [kind]: { [id]: v } }, kind === "proj" ? "the projection" : "the ownership")),
 });
-// The thumbs pairs are redrawn with the rows, so one listener on the table body serves them all (bump-control.js).
-delegateBumpClicks($("tbody"), { rowOf: (id) => S.byId.get(id), onBump: (id, stepsAt) => saveOverride(() => bumpPatch(id, stepsAt()), "the projection bump") });
+// The thumbs pairs: one listener on the table body serves them all. A press works its steps out from the row as shown and shows them at once (instant-overrides.js bumpOf), so quick presses stack.
+$("tbody").addEventListener("click", (e) => { const btn = e.target.closest?.(".bump-ctl .bump-btn"); const b = btn && !btn.disabled ? bumpOf(btn.dataset.action, S.byId.get(btn.dataset.id)) : null; if (b) saveOverride(bumpPatch(b.id, b.steps), "the projection bump"); });
+$("tbody").addEventListener("change", (e) => rowPatch.forget(e.target.closest?.("tr[data-row]")?.dataset.row)); // a slot picker changed by hand is drawn fresh next time
 
 // A click on a player row (Adam, 5:34 PM ET 2026-10-29): the man goes into the working lineup, or out when he is in it.
 // Never on a control: the star, lock and exclude cells, the name (it opens his card), the reset, the thumbs cell, an
@@ -466,13 +502,15 @@ $("tbody").addEventListener("click", (e) => {
 
 // ---------- events ----------
 document.addEventListener("click", (e) => {
-  const t = e.target.closest("[data-sort],[data-tab],[data-game],[data-dk-id],[data-out-i],[data-out-name],[data-lock],[data-excl],[data-unpick],[data-chip],[data-view],[data-theme],[data-star],[data-reset],[data-edit],[data-unmark],[data-fteam],[data-shade],#ovReset,#clearF,#notesBtn,#lsBtn,#csBtn,#outTog");
+  const t = e.target.closest("[data-sort],[data-tab],[data-game],[data-dk-id],[data-out-i],[data-out-name],[data-lock],[data-excl],[data-unpick],[data-chip],[data-view],[data-theme],[data-star],[data-reset],[data-edit],[data-unmark],[data-mrestore],[data-mstep],[data-fteam],[data-shade],[data-no],[data-nox],[data-noclear],[data-noretry],[data-pview],#ovReset,#clearF,#notesBtn,#lsBtn,#csBtn,#snBtn,#outTog");
   if (!t) { const l = $("notesList"); if (l && !e.target.closest(".notes")) l.hidden = true; return; }
   const d = t.dataset;
   if (t.id === "notesBtn") { const l = $("notesList"); l.hidden = !l.hidden; }
-  else if (d.view) { card.close(); if (scenarioConsole.isOn()) setConsole(false); setView(d.view); } // a tab leaves the console, so the bar shows where you are
-  else if (t.id === "lsBtn") { setView("list"); panel.toggleLateSwap().then(fixTableWidth); }
-  else if (t.id === "csBtn") setConsole(!scenarioConsole.isOn());
+  else if (d.view) { card.close(); if (scenarioConsole.isOn()) setConsole(false); if (scenarioTab.isOn()) setScenario(false); setView(d.view); } // a tab leaves the console, so the bar shows where you are
+  else if (t.id === "lsBtn") { if (scenarioTab.isOn()) setScenario(false); setView("list"); panel.toggleLateSwap().then(fixTableWidth); }
+  else if (t.id === "csBtn") { if (scenarioTab.isOn()) setScenario(false); setConsole(!scenarioConsole.isOn()); }
+  else if (t.id === "snBtn") { card.close(); setScenario(!scenarioTab.isOn()); }
+  else if (d.pview) { if (POOL_VIEWS.includes(d.pview) && S.poolView !== d.pview) { S.poolView = d.pview; renderRows(); } } // In / Out / All (pool-view.js)
   else if (t.id === "outTog") { S.outOpen = !S.outOpen; renderOuts(); $("outTog")?.focus({ preventScroll: true }); }
   else if (d.shade) setTheme({ light: d.shade === "light" });
   else if (t.id === "clearF") { setFilters(noFilters()); renderGames(); renderTabs(); renderTeamChips(); renderRows(); }
@@ -481,16 +519,21 @@ document.addEventListener("click", (e) => {
   else if (d.tab) { S.tab = d.tab; renderTabs(); renderRows(); }
   else if (d.game) { S.game = S.game === d.game ? null : d.game; renderGames(); renderRows(); }
   else if (d.dkId) { const man = S.byId.get(d.dkId); if (man) card.open(man); else toast("He is not in the slate on this page."); }
-  else if (d.outI) card.open(outMan(S.players, S.slate.out[+d.outI]));
-  else if (d.outName) { const o = (S.slate.out ?? []).find((x) => x.name === d.outName && x.team === d.outTeam), on = S.players.find((p) => p.name === d.outName && p.team === d.outTeam); if (o) card.open(outMan(S.players, o)); else if (on) card.open(on); else toast("He is not on this slate's Out list."); }
-  else if (d.lock) toggle(d.lock, "locked");
-  else if (d.excl) toggle(d.excl, "excluded");
-  else if (d.unpick) { const live = livePicks(); savePicks({ locked: live.locked.filter((x) => x !== d.unpick), excluded: live.excluded.filter((x) => x !== d.unpick) }); }
+  else if (d.outName) { const on = S.players.find((p) => p.name === d.outName && p.team === d.outTeam); if (on) card.open(on); else toast("He is not on this slate."); }
+  else if (d.no) toggleNo(d.no);
+  else if (d.nox) noPicks.drop(d.nox);
+  else if (t.hasAttribute("data-noclear")) noPicks.clear();
+  else if (t.hasAttribute("data-noretry")) noPicks.load();
+  else if (d.lock) picks.toggle(d.lock, "locked");
+  else if (d.excl) picks.toggle(d.excl, "excluded");
+  else if (d.unpick) picks.unpick(d.unpick);
   else if (d.chip) { S.pickFilter = S.pickFilter === d.chip ? null : d.chip; renderRows(); }
   else if (d.theme) setTheme({ dark: d.theme });
-  else if (d.star) { const id = d.star; saveOverride(() => ({ stars: { [id]: !S.byId.get(id)?.starred } }), "the star"); }
+  else if (d.star) saveOverride({ stars: { [d.star]: !S.byId.get(d.star)?.starred } }, "the star"); // from the star as shown (instant-overrides.js): a second click turns it back
   else if (d.reset) saveOverride({ reset: d.reset }, "the reset");
+  else if (d.mstep) { if (t.closest("#tbody")) stepRowMinutes(d.id, Number(d.mstep)); } // the - and + in a player list Min cell (min-step.js); the console's and the card's own handlers take theirs
   else if (d.unmark) boardMarks.drop(d.id, d.unmark);
+  else if (d.mrestore) boardMarks.restore(d.mrestore); // his typed minutes a role change set aside, back in use (Adam 9:46 AM 11-20)
   else if (d.edit) editors.openNumber(t);
   else if (t.id === "ovReset") askConfirm(CONFIRM.resetAll, { ok: "Reset" }).then((yes) => { if (yes) saveOverride({ resetAll: true }, "the reset"); });
 });
@@ -514,7 +557,7 @@ $("search").addEventListener("input", (e) => { S.q = e.target.value; renderRows(
 $("minSal").addEventListener("input", (e) => { S.minSal = e.target.value; renderRows(); });
 $("maxSal").addEventListener("input", (e) => { S.maxSal = e.target.value; renderRows(); });
 if (typeof ResizeObserver === "function") new ResizeObserver(stickyHeights).observe($("fbar"));
-if (typeof ResizeObserver === "function") new ResizeObserver(() => fitGames()).observe($("games")); // the strip narrows when the player panel docks (R11), with no window resize to go on
+if (typeof ResizeObserver === "function") new ResizeObserver(() => fitGameStrip($("games"))).observe($("games")); // the strip narrows when the player panel docks (R11), with no window resize to go on
 if (typeof MutationObserver === "function") new MutationObserver(stickyHeights).observe($("opt"), { childList: true }); // the panel redraws its band: --luh follows it
 let resizeTimer;
 window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { fixTableWidth(); }, 150); }); // the game tiles refit through their own observer above
@@ -529,6 +572,7 @@ const fail = (e) => { document.querySelector(".work").innerHTML = `<div class="f
     const query = new URLSearchParams(location.search), want = query.get("slate"), openConsole = query.get("view") === "console";
     await loadSlate(pickSlate(S.slates, want));
     if (openConsole) setConsole(true);
+    else if (query.get("view") === "scenario") setScenario(true);
     setInterval(() => checkAll(), CHECK_MS);
   } catch (e) { fail(e); }
 })();

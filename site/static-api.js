@@ -52,7 +52,25 @@ async function bakedFigures(slate) {
   return { ...slate, players: slate.players.map((p) => ({ ...p, ...(f?.players?.[p.dk_id] ?? blank) })), ...(f?.season_figures ? { season_figures: f.season_figures } : {}) };
 }
 
-const SLATE_FILES = ["slate.json", "figures.json", "console-inputs.json", "pull-moves.json", "site.json"];
+const SLATE_FILES = ["slate.json", "figures.json", "console-inputs.json", "pull-moves.json", "site.json", "row-men.json", "minutes-edits.json"];
+
+/**
+ * The board row's men as baked (row-men.json, site-src/bake.mjs rowMenFile), put where the app's pool join reads its raw pull (out-pool.js), so every row man is in the
+ * pool here as in the app. Only when the baked row is the one the slate in hand was built from; otherwise the join says the row could not be read, as the app would.
+ */
+const rowMenOf = (slate, slateText) => loadOnce(`slates/${slate}/row-men.json`, () => readBaked(`slates/${slate}/row-men.json`)).then((text) => {
+  if (text === null || slateText === null) return text;
+  const { from, players } = JSON.parse(text), builtFrom = JSON.parse(slateText)?.built_from;
+  if (typeof from === "string" && from === builtFrom) seed(`/data/${from}/board_row.json`, JSON.stringify({ players }));
+  return text;
+});
+/** His Minutes-page calls (minutes-edits.json), which the app's read of the slate applies (out-pool.js applyHis); none baked: none here either. */
+const editsOf = (slate) => loadOnce(`slates/${slate}/minutes-edits.json`, () => readBaked(`slates/${slate}/minutes-edits.json`)).then((text) => {
+  const file = `${DATA}/${slate}/minutes-edits.json`;
+  if (text !== null) seed(file, text);
+  else dropKept(file);
+  return text;
+});
 
 // ---------- the slate's site.json: our figures, and his overrides, scenarios and saved work as the starting point (site-src/site-doc.js) ----------
 setLayer({ encode, decode, migrate });
@@ -181,7 +199,8 @@ async function loadFor(pathname) {
   if (!/^[a-z0-9-]+$/.test(slate)) return null;
   if (m[2] === "/pull-stamp") return freshStamp(slate);
   if (m[2] === "/news-lineups") return freshLineups(slate);
-  const jobs = [seedBaked(`slates/${slate}/slate.json`, `${DATA}/${slate}/slate.json`).then((t) => { rosterOf(slate, t); return t; }), seedBaked(`slates/${slate}/pull-moves.json`, `${DATA}/${slate}/pull-moves.json`), figuresOf(slate), siteOf(slate)];
+  const jobs = [seedBaked(`slates/${slate}/slate.json`, `${DATA}/${slate}/slate.json`).then((t) => { rosterOf(slate, t); return rowMenOf(slate, t).then(() => t); }), seedBaked(`slates/${slate}/pull-moves.json`, `${DATA}/${slate}/pull-moves.json`), figuresOf(slate), siteOf(slate), editsOf(slate)];
+  if (m[2] === undefined || m[0].startsWith("/api/board-check/")) jobs.push(freshLineups(slate)); // the board and its self-check read the lineup read (board-check.js), so it is in memory before the first board read, not only after the bar's own ask
   if (/^\/console/.test(m[2] ?? "")) jobs.push(seedBaked(`slates/${slate}/console-inputs.json`, `${DATA}/${slate}/console-inputs.json`));
   return Promise.all(jobs);
 }

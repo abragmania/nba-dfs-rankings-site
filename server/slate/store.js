@@ -1,4 +1,4 @@
-// Reads slates and reads/writes picks (locked and excluded players), the working lineup and saved lineups. Pure file access under the data root; no HTTP here.
+// Reads slates and reads/writes picks (locked and excluded players, per mode), the working lineup and saved lineups. Pure file access under the data root; no HTTP here.
 // Data root: NBADFS_DATA_DIR when set, else the repo's data/ folder (read on every call, as server/lib/log.js does).
 import fs from "../../site/shim/fs.js";
 import path from "../../site/shim/path.js";
@@ -6,7 +6,9 @@ import { dataDir } from "../../site/shim/log.js";
 import { writeFileAtomic } from "../../site/shim/atomic.js";
 import { SLOTS, checkLineup, setKey, arrangeForLateSwap } from "../board/slots.js";
 import { slateRefMs } from "../board/board-util.js";
-import { applyHis, joinOutList } from "./out-pool.js";
+import { noNamesOk, noOf, NO_NAMES_RULE } from "../board/recent-builds.js";
+import { applyHis, joinRowMen, statusFree } from "./out-pool.js";
+import { MODES as SPLIT_MODES, readModeFile, saveModeFile, modeTrouble } from "./mode-file.js";
 
 export const SLATE_NAME = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+$/;
 export const MAX_LOCKED = 8; // DraftKings classic has eight roster slots
@@ -35,37 +37,85 @@ export function readSlate(slate) {
   return built ? applyHis(slate, built) : null;
 }
 
-/** slate.json as built, with none of his calls on it (the site bake reads this, so its figures are the same on every machine), or null. TwoGun's Out list is joined into the pool (out-pool.js joinOutList: our own injury feeds decide who is Out, never TwoGun's list; Adam 11-19). */
+/** slate.json as built, with none of his calls on it (the site bake reads this, so its figures are the same on every machine), or null. Every man TwoGun's board row lists is in the pool, and no status of TwoGun's is kept (out-pool.js statusFree, joinRowMen; Adam 11-19). */
 export function readSlateAsBuilt(slate) {
   const file = slateFile(slate);
   if (!fs.existsSync(file)) return null;
-  return joinOutList(readJson(file));
+  return joinRowMen(statusFree(readJson(file))); // TwoGun's statuses and Out list never leave this read (out-pool.js statusFree); every row man is in the pool
 }
 
-/** The saved picks, or empty lists when none were saved. Ids no longer in the slate's players (slate rebuilt, man gone)
- *  are dropped from the lists and returned as `dropped`, so a stale id can never block the next save. */
-export function readPicks(slate, slateData) {
-  const file = picksFile(slate);
-  if (!fs.existsSync(file)) return { slate, locked: [], excluded: [], dropped: [], saved_at: null };
-  const saved = readJson(file);
-  const known = new Set((slateData?.players ?? []).map((p) => String(p.dk_id)));
-  const keep = (list) => (Array.isArray(list) ? list : []).filter((id) => known.has(String(id)));
-  const all = [...(Array.isArray(saved.locked) ? saved.locked : []), ...(Array.isArray(saved.excluded) ? saved.excluded : [])];
-  return {
-    slate,
-    locked: keep(saved.locked),
-    excluded: keep(saved.excluded),
-    dropped: all.filter((id) => !known.has(String(id))).map(String),
-    saved_at: saved.saved_at ?? null,
+// ---------- picks: cache/picks/<slate>.json, kept per mode (Adam 11-14; his yes 5:14 PM ET 11-19 and "yes go" 12:42 PM ET 11-20: Cash and
+// GPP keep fully separate locks and excludes, so a lock or an exclude made in one never touches the other) ----------
+//   { slate, Cash: { locked, excluded, saved_at, carried?, replaced? }, GPP: { ... } }   (read and written by mode-file.js)
+// A file in the shape from before the split ({ slate, locked, excluded, saved_at }) is read as the same lists for BOTH modes, each marked
+// carried, so nothing he set before disappears. A mode's first save writes the split shape with its own lists; the other mode keeps the
+// carried copy, still marked, until its own first save. The answer counts what is carried (G62); the page names it at its foot (G64).
+// A mode that cannot be read is answered `unreadable` (never empty lists in its place): its builds and re-fills refuse, and its next save
+// replaces it, the old file copied aside (mode-file.js; review 11-20).
+export const PICK_MODES = SPLIT_MODES;
+const picksRel = (slate) => `cache/picks/${slate}.json`;
+/** One mode's stored lists (ids not checked against the slate). A list present but not a list of text ids makes the mode unreadable (review 11-20). */
+function parsePicksMode(one) {
+  const list = (k) => {
+    const v = one?.[k];
+    if (v == null) return [];
+    if (!Array.isArray(v) || v.some((id) => typeof id !== "string")) throw new Error(`"${k}" is not a list of player ids`);
+    return v;
   };
+  return { locked: list("locked"), excluded: list("excluded") };
+}
+const readPicksFile = (slate) => readModeFile(picksFile(slate), picksRel(slate), parsePicksMode);
+
+/** What is still carried from the shared list of before the split: { modes, locked, excluded } (counts of men on the slate, the same
+ *  lists in each carried mode), or null when no mode holds a carried man. */
+function carriedOf(byMode) {
+  const modes = PICK_MODES.filter((m) => byMode[m].carried && byMode[m].locked.length + byMode[m].excluded.length > 0);
+  if (!modes.length) return null;
+  return { modes, locked: byMode[modes[0]].locked.length, excluded: byMode[modes[0]].excluded.length };
 }
 
 /**
- * Checks a picks body against the slate's players. Returns { ok: true, locked, excluded } or { ok: false, message }.
- * Rule: ids are strings found in the slate's players; no repeats; nobody both locked and excluded.
+ * The saved picks of both modes: { slate, Cash: { locked, excluded, dropped, saved_at, carried, replaced, unreadable }, GPP: { ... },
+ * dropped, saved_at, carried, unreadable, replaced }. Empty lists when none were saved. Ids no longer in the slate's players (slate rebuilt,
+ * man gone) are left out of the lists and returned as `dropped` (per mode, and once each at the top), so a stale id can never block the next
+ * save. Top-level saved_at is the newer mode's. A mode that cannot be read has empty lists AND `unreadable` (its why); the top-level
+ * `unreadable` and `replaced` ({ mode: ... } or null) are for the page foot.
+ */
+export function readPicks(slate, slateData) {
+  const stored = readPicksFile(slate);
+  const known = new Set((slateData?.players ?? []).map((p) => String(p.dk_id)));
+  const on = (list) => list.filter((id) => known.has(id));
+  const out = { slate, dropped: [], saved_at: null, carried: null, ...modeTrouble(stored) };
+  for (const m of PICK_MODES) {
+    const e = stored?.[m];
+    if (e?.unreadable) { out[m] = { locked: [], excluded: [], dropped: [], saved_at: null, carried: false, replaced: null, unreadable: e.unreadable }; continue; }
+    const f = e?.fields ?? { locked: [], excluded: [] };
+    const dropped = [...f.locked, ...f.excluded].filter((id) => !known.has(id));
+    out[m] = { locked: on(f.locked), excluded: on(f.excluded), dropped, saved_at: e?.saved_at ?? null, carried: e?.carried ?? false, replaced: e?.replaced ?? null, unreadable: null };
+    for (const id of dropped) if (!out.dropped.includes(id)) out.dropped.push(id);
+    if (out[m].saved_at && (!out.saved_at || out[m].saved_at > out.saved_at)) out.saved_at = out[m].saved_at;
+  }
+  out.carried = carriedOf(out);
+  return out;
+}
+
+/** One mode's saved picks, as readPicks gives them: { slate, mode, locked, excluded, dropped, saved_at, carried, replaced, unreadable }.
+ *  A mode other than Cash or GPP, or one that cannot be read, throws: who is locked or excluded is then unknown (a build refuses). */
+export function modePicks(slate, slateData, mode) {
+  if (!PICK_MODES.includes(mode)) throw new Error(`Picks are kept for Cash and GPP only, not ${String(mode).slice(0, 20)}.`);
+  const one = readPicks(slate, slateData)[mode];
+  if (one.unreadable) throw new Error(one.unreadable);
+  return { slate, mode, ...one };
+}
+
+/**
+ * Checks a picks body { mode, locked, excluded } against the slate's players. Returns { ok: true, mode, locked, excluded } or
+ * { ok: false, message }. Rule: mode is Cash or GPP (the lists are that mode's only); ids are strings found in the slate's players;
+ * no repeats; nobody both locked and excluded.
  */
 export function checkPicks(body, slateData) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return { ok: false, message: "Body must be a JSON object." };
+  if (!PICK_MODES.includes(body.mode)) return { ok: false, message: '"mode" must be "Cash" or "GPP": locks and excludes are kept per mode. Reload the page if it is older than that.' };
   const known = new Set((slateData.players ?? []).map((p) => String(p.dk_id)));
   const lists = {};
   for (const key of ["locked", "excluded"]) {
@@ -81,16 +131,21 @@ export function checkPicks(body, slateData) {
   if (lists.locked.length > MAX_LOCKED) return { ok: false, message: `At most ${MAX_LOCKED} players can be locked.` };
   const both = lists.locked.filter((id) => lists.excluded.includes(id));
   if (both.length) return { ok: false, message: `A player cannot be both locked and excluded: ${both[0]}` };
-  return { ok: true, locked: lists.locked, excluded: lists.excluded };
+  return { ok: true, mode: body.mode, locked: lists.locked, excluded: lists.excluded };
 }
 
-export function savePicks(slate, locked, excluded) {
-  const out = { slate, locked, excluded, saved_at: new Date().toISOString() };
-  writeFileAtomic(picksFile(slate), JSON.stringify(out, null, 1) + "\n");
-  return out;
+/**
+ * Sets one mode's lists and keeps the other mode's exactly as stored (ids off the slate, its carried and replaced marks included): one read
+ * and one atomic write with nothing awaited between, so two pages saving different modes never undo each other (the audit's "last page
+ * wins"). A file in the old shared shape is split here: the other mode keeps the carried copy. A file holding an unreadable mode is copied
+ * aside first and only that mode is emptied, marked replaced (mode-file.js saveModeFile). Returns { replaced: null | { copy, emptied, why } }.
+ */
+export function savePicks(slate, mode, locked, excluded) {
+  if (!PICK_MODES.includes(mode)) throw new Error(`Picks are kept for Cash and GPP only, not ${String(mode).slice(0, 20)}.`);
+  return { replaced: saveModeFile({ file: picksFile(slate), rel: picksRel(slate), slate, mode, fields: { locked, excluded }, parse: parsePicksMode, empty: () => ({ locked: [], excluded: [] }) }) };
 }
 
-// ---------- the working lineup: cache/working/<slate>.json, { slate, slots: [8 dk_ids or null in SLOTS order], saved_at } ----------
+// ---------- the working lineup: cache/working/<slate>.json, per mode, each { slots: [8 dk_ids or null in SLOTS order], saved_at } ----------
 // The optimizer panel's hand-picked men (server/board/worklineup.js), kept per slate on the server as the picks are.
 const workingFile = (slate) => path.join(dataRoot(), "cache", "working", `${slate}.json`);
 
@@ -125,33 +180,64 @@ export function checkWorking(body, slateData, what = "Working-lineup") {
   return { ok: true, slots };
 }
 
-/** The saved working lineup, or 8 open slots. A man no longer on the slate (or no longer legal in his slot) opens his slot
- *  and is named in `dropped`. An unreadable file throws (a 500), never an empty lineup in its place. */
+// Kept per mode as the picks are (Adam 11-14, 11-19 and 11-20: Cash and GPP keep fully separate player picks and lineups):
+//   { slate, Cash: { slots, saved_at, carried? }, GPP: { slots, saved_at, carried? } }
+// A file from before the split ({ slate, slots, saved_at }) is read as the same lineup for both modes, marked carried, until each mode's first save.
+const openSlots = () => new Array(SLOTS.length).fill(null);
+
+const workingRel = (slate) => `cache/working/${slate}.json`;
+/** One mode's stored lineup: 8 entries (an id or null); anything else makes the mode unreadable (mode-file.js). */
+function parseWorkingMode(one) {
+  if (one == null) return { slots: openSlots() };
+  if (!Array.isArray(one.slots) || one.slots.length !== SLOTS.length || one.slots.some((id) => id != null && typeof id !== "string" && typeof id !== "number")) throw new Error("has no 8-slot list");
+  return { slots: one.slots };
+}
+const readWorkingFile = (slate) => readModeFile(workingFile(slate), workingRel(slate), parseWorkingMode);
+
+/**
+ * The saved working lineups: { slate, Cash: { slots, dropped, saved_at, carried, replaced, unreadable }, GPP: { ... }, dropped, saved_at,
+ * carried, unreadable, replaced }, 8 open slots for a mode with none. A man no longer on the slate (or no longer legal in his slot) opens his
+ * slot and is named in his mode's `dropped` (and once at the top). carried: { modes, men } while a mode still holds the lineup from before
+ * the split (G62), else null. A mode that cannot be read has open slots AND `unreadable` (its why), never an empty lineup passed off as his.
+ */
 export function readWorking(slate, slateData) {
-  const file = workingFile(slate);
-  const open = new Array(SLOTS.length).fill(null);
-  if (!fs.existsSync(file)) return { slate, slots: open, dropped: [], saved_at: null };
-  const saved = readJson(file);
-  if (!saved || !Array.isArray(saved.slots) || saved.slots.length !== SLOTS.length) throw new Error(`cache/working/${slate}.json has no 8-slot list`);
+  const stored = readWorkingFile(slate);
   const byId = new Map((slateData?.players ?? []).map((p) => [String(p.dk_id), p]));
-  const dropped = [];
-  const slots = saved.slots.map((id, i) => {
-    if (id == null) return null;
-    const p = byId.get(String(id));
-    if (p && (p.roster_positions ?? []).includes(SLOTS[i])) return String(id);
-    dropped.push(String(id));
-    return null;
-  });
-  return { slate, slots, dropped, saved_at: saved.saved_at ?? null };
+  const out = { slate, dropped: [], saved_at: null, carried: null, ...modeTrouble(stored) };
+  for (const m of PICK_MODES) {
+    const e = stored?.[m];
+    if (e?.unreadable) { out[m] = { slots: openSlots(), dropped: [], saved_at: null, carried: false, replaced: null, unreadable: e.unreadable }; continue; }
+    const dropped = [];
+    const slots = (e?.fields.slots ?? openSlots()).map((id, i) => {
+      if (id == null) return null;
+      const p = byId.get(String(id));
+      if (p && (p.roster_positions ?? []).includes(SLOTS[i])) return String(id);
+      dropped.push(String(id));
+      return null;
+    });
+    out[m] = { slots, dropped, saved_at: e?.saved_at ?? null, carried: e?.carried ?? false, replaced: e?.replaced ?? null, unreadable: null };
+    for (const id of dropped) if (!out.dropped.includes(id)) out.dropped.push(id);
+    if (out[m].saved_at && (!out.saved_at || out[m].saved_at > out.saved_at)) out.saved_at = out[m].saved_at;
+  }
+  const modes = PICK_MODES.filter((m) => out[m].carried && out[m].slots.some((id) => id !== null));
+  out.carried = modes.length ? { modes, men: out[modes[0]].slots.filter((id) => id !== null).length } : null;
+  return out;
 }
 
-export function saveWorking(slate, slots) {
-  const out = { slate, slots, saved_at: new Date().toISOString() };
-  writeFileAtomic(workingFile(slate), JSON.stringify(out, null, 1) + "\n");
-  return { ...out, dropped: [] };
+/** One mode's working lineup, as readWorking gives it: { slate, mode, slots, dropped, saved_at, carried, replaced, unreadable }. */
+export function modeWorking(slate, slateData, mode) {
+  if (!PICK_MODES.includes(mode)) throw new Error(`Working lineups are kept for Cash and GPP only, not ${String(mode).slice(0, 20)}.`);
+  return { slate, mode, ...readWorking(slate, slateData)[mode] };
 }
 
-// ---------- saved lineups: cache/lineups/<slate>.json, { slate, next_id, lineups: [{ id, mode, slots, names, saved_at }] } ----------
+/** Sets one mode's working lineup and keeps the other mode's exactly as stored, in one read and one atomic write; a file holding an
+ *  unreadable mode is copied aside and only that mode emptied, marked (mode-file.js, as savePicks). Returns { replaced: null | { copy, emptied, why } }. */
+export function saveWorking(slate, mode, slots) {
+  if (!PICK_MODES.includes(mode)) throw new Error(`Working lineups are kept for Cash and GPP only, not ${String(mode).slice(0, 20)}.`);
+  return { replaced: saveModeFile({ file: workingFile(slate), rel: workingRel(slate), slate, mode, fields: { slots }, parse: parseWorkingMode, empty: () => ({ slots: openSlots() }) }) };
+}
+
+// ---------- saved lineups: cache/lineups/<slate>.json, { slate, next_id, lineups: [{ id, mode, slots, names, saved_at, no? }] } ----------
 export const MAX_SAVED = 300; // per slate (shown lineups, copies in an older file not counted); room for two full builds of 150
 const MODES = ["Cash", "GPP"];
 const lineupsFile = (slate) => path.join(dataRoot(), "cache", "lineups", `${slate}.json`);
@@ -211,8 +297,13 @@ function checkOne(body, slateData) {
     }
     pinned = Object.keys(pins).length ? pins : null;
   }
-  return { ok: true, slots, mode: body.mode, pinned };
+  // The NO line of the build it came from (lineup/no-list.js, Adam 11-19): kept with the saved lineup, so it stays after the NO is cleared.
+  if (!noNamesOk(body.no)) return bad(NO_NAMES_RULE);
+  const no = noOf(body.no); // each name cut to 60 characters, so a long name never refuses the save
+  return { ok: true, slots, mode: body.mode, pinned, ...(no ? { no } : {}) };
 }
+/** A checked lineup as an item to save: slots, mode, pins, and its NO line when it has one. */
+const itemOf = (c) => ({ slots: c.slots, mode: c.mode, pinned: c.pinned, ...(c.no ? { no: c.no } : {}) });
 
 export const MAX_BATCH = 150; // lineups in one Save all call: a DraftKings contest's most entries
 
@@ -234,12 +325,12 @@ export function checkLineupBody(body, slateData) {
     for (const [i, one] of body.batch.entries()) {
       const c = checkOne(one, slateData);
       if (!c.ok) return { ...c, message: `Lineup ${i + 1}: ${c.message}` };
-      items.push({ slots: c.slots, mode: c.mode, pinned: c.pinned });
+      items.push(itemOf(c));
     }
     return { ok: true, items };
   }
   const c = checkOne(body, slateData);
-  return c.ok ? { ok: true, items: [{ slots: c.slots, mode: c.mode, pinned: c.pinned }] } : c;
+  return c.ok ? { ok: true, items: [itemOf(c)] } : c;
 }
 
 /** A saved lineup's identity: its mode and its set of men, whatever the slot order (Adam, 2026-11-09: never saved twice). */
@@ -289,7 +380,7 @@ export function addLineups(slate, items, slateData) {
     // The men's names are kept with the lineup: a man who is Out leaves the slate's players, and his name is all that is left to say who he was.
     const added = fresh.map((it, i) => {
       const slots = seated(slate, it.slots, byPlayer, it.pinned ?? null);
-      return { id: String(file.next_id + i), mode: it.mode, slots, names: slots.map((id) => byPlayer.get(id)?.name ?? null), saved_at: now };
+      return { id: String(file.next_id + i), mode: it.mode, slots, names: slots.map((id) => byPlayer.get(id)?.name ?? null), saved_at: now, ...(it.no ? { no: it.no } : {}) };
     });
     writeFileAtomic(lineupsFile(slate), JSON.stringify({ slate, next_id: file.next_id + fresh.length, lineups: [...file.lineups, ...added] }, null, 1) + "\n");
   }

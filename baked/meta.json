@@ -1,12 +1,13 @@
 {
-  "publishedAt": "2026-11-19T21:15:05.257Z",
-  "sourceCommit": "7fc4a41f8cb0db406c97ad3e18817de20079bac4",
+  "publishedAt": "2026-11-20T23:26:00.561Z",
+  "sourceCommit": "74cf201f6e4a40e95ac07322d59374f30ae5cf8a",
   "latest": {
-    "slate": "2026-11-19-main",
-    "players": 112,
-    "pulled_at": "2026-11-19T10:32:50-05:00"
+    "slate": "2026-11-20-main",
+    "players": 212,
+    "pulled_at": "2026-11-20T18:08:11-05:00"
   },
   "slates": [
+    "2026-11-20-main",
     "2026-11-19-main",
     "2026-11-18-main",
     "2026-11-17-main",
@@ -33,20 +34,41 @@
     }
   ],
   "console_missing": [],
-  "files_missing": [],
+  "files_missing": [
+    {
+      "slate": "2026-11-02-main",
+      "file": "row-men.json",
+      "why": "the board row's men could not be read (ENOENT)"
+    },
+    {
+      "slate": "2026-10-31-main",
+      "file": "row-men.json",
+      "why": "the board row's men could not be read (ENOENT)"
+    },
+    {
+      "slate": "2026-10-30-main",
+      "file": "row-men.json",
+      "why": "the board row's men could not be read (ENOENT)"
+    },
+    {
+      "slate": "2026-10-29-main",
+      "file": "row-men.json",
+      "why": "the board row's men could not be read (ENOENT)"
+    }
+  ],
   "cards": {
-    "log": 0,
-    "usage": 0,
-    "kept": 942,
-    "none": 120
+    "log": 30,
+    "usage": 457,
+    "kept": 455,
+    "none": 124
   },
   "pull_facts": {
-    "slate": "2026-11-19-main",
-    "bbm_checked_at": "2026-11-19T21:00:41.000Z",
+    "slate": "2026-11-20-main",
+    "bbm_checked_at": "2026-11-20T23:25:27.000Z",
     "nba_edition": {
-      "label": "10:30 AM",
-      "published_at": "2026-11-19T15:30:05.000Z",
-      "seen_at": "2026-11-19T15:32:50.000Z"
+      "label": "6:00 PM",
+      "published_at": "2026-11-20T23:00:04.000Z",
+      "seen_at": "2026-11-20T23:08:11.000Z"
     },
     "last_read": {
       "read_at": "2026-11-18T19:21:49.419Z",

@@ -1,0 +1,41 @@
+/* The NO list (no-picks.js, Adam 11-19): the row's NO button, the pink row and its tag, the red pulsing chip beside the Min gap alert,
+   and the lineup cards' NO line and Without filter chips. One colour, --no, legible on Dark (Black, Navy) and Light (rule R9). */
+:root{--no:#ff2e63}
+body.light{--no:#c2185b}
+.ctl .nob{width:2rem;font-size:0.625rem;font-weight:800;letter-spacing:0.02em;font-family:inherit}
+.ctl .nob.on{background:var(--no);border-color:var(--no);color:#fff}
+.ctl .nob.on:hover{color:#fff;border-color:var(--tx)}
+td.ctl:has(>.nob){width:2.125rem}
+tr.isno td{background-color:color-mix(in srgb,var(--no) 8%,transparent)}
+tr.isno:hover td{background-color:color-mix(in srgb,var(--no) 13%,transparent)}
+tr.isno .name{color:var(--tx)}
+.notag{display:inline-block;background:var(--no);color:#fff;font-size:0.625rem;font-weight:800;line-height:1.35;padding:0 0.3125rem;margin-left:0.375rem;letter-spacing:0.03em}
+.nochip{display:inline-flex;align-items:center;flex-wrap:wrap;gap:0.375rem;margin-right:0.375rem;padding:0.125rem 0.5rem;border:2px solid var(--no);background:color-mix(in srgb,var(--no) 18%,transparent);color:var(--tx);font-size:0.75rem;font-weight:800;letter-spacing:0.02em;animation:nopulse 1.6s ease-in-out infinite}
+.nochip .nolbl{color:var(--no);white-space:nowrap}
+.nochip .nonm{display:inline-flex;align-items:center;gap:0.125rem;padding:0 0 0 0.375rem;background:var(--bg);border:1px solid var(--no);color:var(--tx);white-space:nowrap}
+.nochip .nox{background:none;border:0;padding:0 0.3125rem;color:var(--no);font:inherit;font-weight:800;cursor:pointer;line-height:1.4}
+.nochip .nox:hover{color:var(--tx)}
+.nochip .noclr{background:none;border:0;padding:0 0 0 0.125rem;color:var(--mu);font:inherit;font-weight:400;text-decoration:underline;cursor:pointer}
+.nochip .noclr:hover{color:var(--tx)}
+.nochip .nolate{color:var(--mu);font-weight:400}
+.nochip.noerr{cursor:pointer;font-family:inherit}
+@keyframes nopulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--no) 55%,transparent)}50%{box-shadow:0 0 0 0.3rem transparent}}
+@media (prefers-reduced-motion:reduce){.nochip{animation:none}}
+/* The Entries screen (lsw-lineups.js): the same late swap NO list on its lineup cards, the chip over the cards. */
+#lsw .lbno{margin:0 0 0.625rem}
+#lsw .lbr .nob{flex:none;width:1.875rem;height:1.125rem;padding:0;border:1px solid var(--ln);background:none;color:var(--dim);font:800 0.5625rem "JetBrains Mono",monospace;letter-spacing:0.02em;cursor:pointer}
+#lsw .lbr .nob:hover{color:var(--tx);border-color:var(--no)}
+#lsw .lbr .nob.on{background:var(--no);border-color:var(--no);color:#fff}
+#lsw .lbr .nob:disabled{cursor:default;opacity:.5}
+#lsw .lbr.isno{background:color-mix(in srgb,var(--no) 10%,transparent)}
+#lsw .lbr.isno .notag{margin-left:0}
+/* The Lineups tab: the NO line under a lineup's heading, muted; the Without chips red and struck. */
+#lineups .lt-no{font-size:0.6563rem;color:var(--dim);padding:0 0 0.25rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#lineups .lt-chips.wo-only{border-color:var(--rd);background:color-mix(in srgb,var(--rd) 6%,transparent)}
+#lineups .lt-chips em.lt-wo{color:var(--rd);font-weight:700;margin-left:0.25rem}
+#lineups .lt-chip.wo{border-color:var(--rd)}
+#lineups .lt-chip.wo b,#lineups .lt-chip.wo [data-dk-id]{text-decoration:line-through;text-decoration-color:var(--rd);text-decoration-thickness:0.125rem}
+#lineups .lt-chip.wo button{color:var(--rd)}
+#lineups .lt-chip.wo button:hover{color:var(--tx)}
+#lineups .lt-ex .ext .xf.xw{margin-left:0.125rem}
+#lineups .lt-ex .ext .xf.xw:hover{border-color:var(--rd);color:var(--rd)}

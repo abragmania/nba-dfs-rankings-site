@@ -36,13 +36,16 @@ export function runBoardCheck(slate, built, nowMs) {
     overridesProblem = e.message;
   }
   // The baked notes, then a line for each of his files that moved after this visitor's last change (layers.js).
-  const lines = [...footLines(siteDoc(slate)), ...["overrides", "scenarios"].flatMap((k) => layerLines(slate, k, readRaw(`${dataDir()}/slates/${slate}/${k}.json`)))];
+  const doc = siteDoc(slate);
+  const lines = [...footLines(doc), ...["overrides", "scenarios"].flatMap((k) => layerLines(slate, k, readRaw(`${dataDir()}/slates/${slate}/${k}.json`)))];
+  // What the app's check reads from the computer, baked at publish (site-src/bake-site.mjs checkPart): the depth charts' ages and refresh lines, and the minutes scoreboard line.
+  const minutes = doc?.check ? { minutes_line: doc.check.minutes_line } : {};
   try {
-    const r = checkBoard({ slate: built, overrides, overridesProblem, lineups: readNewsLineups(slate), nowMs });
-    return { ...r, exempt_lines: [...(r.exempt_lines ?? []), ...lines] };
+    const r = checkBoard({ slate: built, overrides, overridesProblem, lineups: readNewsLineups(slate), ...(doc?.check?.depth ? { depth: doc.check.depth } : {}), ...(doc?.check?.resend ? { resend: doc.check.resend } : {}), nowMs });
+    return { ...r, exempt_lines: [...(r.exempt_lines ?? []), ...lines], ...minutes };
   } catch (e) {
     console.error("board self-check could not run", e);
-    return { slate, checked_at: new Date(nowMs).toISOString(), problem: `the board self-check could not run (${e.message})${lines.length ? `. ${lines.join(" ")}` : ""}`, failures: [], conflicts: [], unchecked: [], exempt: [], failure_lines: [], conflict_lines: [], unchecked_lines: [], exempt_lines: [], men: null, ok: false };
+    return { slate, checked_at: new Date(nowMs).toISOString(), problem: `the board self-check could not run (${e.message})${lines.length ? `. ${lines.join(" ")}` : ""}`, failures: [], conflicts: [], unchecked: [], exempt: [], failure_lines: [], conflict_lines: [], unchecked_lines: [], exempt_lines: [], men: null, ok: false, ...minutes };
   }
 }
 export const runAndLogOnChange = (slate, built, nowMs) => runBoardCheck(slate, built, nowMs);

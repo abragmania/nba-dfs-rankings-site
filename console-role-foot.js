@@ -15,7 +15,7 @@ export function roleMarksFootHtml(T, S, code, ro = false) {
   const flips = Object.entries(S?.pins?.[keyOf(S?.outs ?? [])]?.r ?? {}).filter(([id, r]) => marks[id] && marks[id] !== r && T.byId[id]);
   if (!ids.length && !flips.length) return "";
   const lines = [];
-  if (ids.length) lines.push(`Your standing role marks: ${ids.map((id) => `${esc(name(id))} ${WORD[marks[id]]} (${when(id)})${ro ? "" : ` <button class="rv" type="button" data-clear-mark="${esc(id)}" data-team="${esc(code)}" title="Back to the Bench+ rule and tonight's five">Clear</button>`}`).join("; ")}`);
-  if (flips.length) lines.push(`${flips.length} of tonight's role marks in this scenario override${flips.length === 1 ? "s" : ""} a standing one: ${flips.map(([id, r]) => `${esc(name(id))} ${WORD[r] ?? esc(r)} over ${WORD[marks[id]]}`).join("; ")}`);
+  if (ids.length) lines.push(`Your role marks for tonight's slate: ${ids.map((id) => `${esc(name(id))} ${WORD[marks[id]]} (${when(id)})${ro ? "" : ` <button class="rv" type="button" data-clear-mark="${esc(id)}" data-team="${esc(code)}" title="Back to the Bench+ rule and tonight's five">Clear</button>`}`).join("; ")}`);
+  if (flips.length) lines.push(`${flips.length} of tonight's role marks in this scenario override${flips.length === 1 ? "s" : ""} your mark for tonight's slate: ${flips.map(([id, r]) => `${esc(name(id))} ${WORD[r] ?? esc(r)} over ${WORD[marks[id]]}`).join("; ")}`);
   return `<div class="cfoot">${lines.map((l) => `<div>${l}</div>`).join("")}</div>`;
 }

@@ -3,7 +3,7 @@
 // this browser's storage. Every storage read and write is in a try/catch: with storage blocked or full, a write stays in memory for
 // this page's life and the page is told once (onKeepFailure). A kept file that is not JSON counts as no file, and is removed.
 const PREFIX = "nbadfs.site:";
-const KEPT = /^\/data\/(cache\/(picks|working|lineups|spots|builds|lateswap)\/[^/]+\.json|cache\/lateswap\/[^/]+\.uploads\/[^/]+|slates\/[^/]+\/(overrides|scenarios)\.json)$/;
+const KEPT = /^\/data\/(cache\/(picks|working|lineups|spots|builds|lateswap)\/[^/]+\.json|cache\/lateswap\/[^/]+\.uploads\/[^/]+|slates\/[^/]+\/(overrides|scenarios|whatifs)\.json)$/; // whatifs: a visitor's own saved what-ifs (the Scenario tab) stay in his browser
 // A late swap upload is DraftKings' entries CSV, kept byte for byte: the one kept file that is not JSON.
 const NOT_JSON = /\.uploads\/[^/]+$/;
 const memory = new Map();
@@ -43,8 +43,10 @@ function removeKept(p) {
   }
 }
 
+const versions = new Map(); // path -> how many times this page put a new text there: the file time statSync gives, so a reader that caches by it (out-pool.js) sees a new text
+const bump = (p, text) => { if (memory.get(p) !== text) versions.set(p, (versions.get(p) ?? 0) + 1); };
 /** Puts a published file in memory (the stand-in, after it fetches one). */
-export function seed(p, text) { memory.set(p, text); }
+export function seed(p, text) { bump(p, text); memory.set(p, text); }
 /** What this page's memory holds at p, or null. */
 export const peek = (p) => memory.get(p) ?? null;
 /** What this browser's storage holds at p, as stored (before the layer reads it), or null. */
@@ -67,7 +69,17 @@ function readFileSync(p) {
   if (memory.has(p)) return memory.get(p);
   throw noFile(p);
 }
+/** A file's size and its time as this page counts it (versions above); a folder that holds a file is a folder. Missing: ENOENT, as Node says. */
+function statSync(p) {
+  if (memory.has(p) || (KEPT.test(p) && readKept(p) !== null)) {
+    const text = readFileSync(p);
+    return { mtimeMs: versions.get(p) ?? 0, size: text.length, isFile: () => true, isDirectory: () => false };
+  }
+  if (readdirSync(p).length > 0) return { mtimeMs: 0, size: 0, isFile: () => false, isDirectory: () => true };
+  throw noFile(p);
+}
 function writeFileSync(p, text) {
+  bump(p, String(text));
   memory.set(p, String(text));
   if (!KEPT.test(p)) return;
   try {
@@ -82,6 +94,12 @@ function writeFileSync(p, text) {
 }
 function mkdirSync() {}
 function rmSync(p) { dropKept(p); }
+const constants = Object.freeze({ COPYFILE_EXCL: 1 });
+/** A copy, as Node's: COPYFILE_EXCL refuses an existing target (EEXIST); a missing source is ENOENT. The app copies an unreadable saved file aside before replacing it (server/slate/mode-file.js). */
+function copyFileSync(from, to, flags = 0) {
+  if ((flags & constants.COPYFILE_EXCL) && existsSync(to)) throw Object.assign(new Error(`EEXIST: file already exists, copyfile '${from}' -> '${to}'`), { code: "EEXIST" });
+  writeFileSync(to, readFileSync(from));
+}
 /** The names in a folder: this page's memory and this browser's kept files directly under it. */
 function readdirSync(dir) {
   const head = `${String(dir).replace(/\/+$/, "")}/`;
@@ -97,4 +115,4 @@ function readdirSync(dir) {
   return [...names];
 }
 
-export default { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync };
+export default { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, statSync, copyFileSync, constants };

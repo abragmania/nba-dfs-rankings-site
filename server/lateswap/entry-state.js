@@ -4,7 +4,7 @@ import { SLOTS, checkLineup } from "../board/slots.js";
 import { slateRefMs, startedSplit, pinsOf } from "../board/lateswap.js";
 import { lineupOf, spotEntries, modeFromName } from "./maps.js";
 import { departedFrom } from "./salary-table.js";
-import { isOut, outFor } from "../board/figures.js";
+import { outFor } from "../board/figures.js";
 
 /**
  * The slate read at nowMs; { ctx } or { error }. slate = { name: "2026-11-04-main", players, departed? }. players is the newest
@@ -24,7 +24,7 @@ export function slateContext(slate, nowMs) {
   const split = startedSplit([...players, ...departed], { nowMs, refMs });
   const untimedIds = new Set(split.untimed.map((p) => p.dk_id));
   const started = new Set([...split.started].filter((id) => !untimedIds.has(id))); // startedSplit counts an untimed man as started; here he stays apart so the words say "tip unreadable"
-  const outNames = new Set((Array.isArray(slate.out) ? slate.out : []).filter((o) => isOut(o?.status)).map((o) => o.name));
+  const outNames = new Set(); // TwoGun's Out list is never read (Adam 11-19): a man off the board is "gone from the board"
   return { ctx: { name: slate.name, players, byId, departedById, started, untimed: untimedIds, outNames, nowMs, refMs, man: (id) => byId.get(id) ?? departedById.get(id) ?? null } };
 }
 

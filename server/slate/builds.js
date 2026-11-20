@@ -1,8 +1,9 @@
-// The latest build (Adam, 2026-11-07: "the only lineups that should save are the ones I press Save on"): a slate keeps only its
-// last build, which a new build of either mode replaces, so a reload or a restart still shows it. Per slate, in
+// The latest build of each mode (Adam, 2026-11-07: "the only lineups that should save are the ones I press Save on"; 11-12: "not keep any
+// except the ones I saved"; 11-14, his yes 11-19 and 11-20: Cash and GPP keep separate lineups): a slate keeps only the last Cash build and
+// the last GPP build, a new build replacing only its own mode's, so a reload or a restart still shows them. Per slate, in
 // data/cache/builds/<slate>.json (beside the saved lineups and the spots; it stays on this machine, never on GitHub):
 //   { slate, builds: [ { id, mode, built_at, lineups: [{ ids: [8 dk ids in slot order] }], rows: { dk_id: row }, skipped, note,
-//                        partial, stamps, minutes_file } ] }   (one build at most; a file from before keeps up to ten, and only its newest is read)
+//                        partial, stamps, minutes_file } ] }   (one build per mode at most; an older file may hold more, and only the newest of each mode is read)
 // `stamps.pullAt` is the pull the build used and `minutes_file` the newest minutes snapshot (data/slates/<slate>/minutes-history/<stamp>-<reason>.json)
 // at or before the time the server first kept the build, set by the server only (null when there is none); with those two, "what did that build see"
 // is answerable, except minutes typed after the last snapshot, which are in no file.
@@ -15,7 +16,7 @@ import { writeFileAtomic } from "../../site/shim/atomic.js";
 import { SLOTS, MAX_COUNT } from "../board/slots.js";
 import * as log from "../../site/shim/log.js";
 
-import { ROW_KEYS, KEEP_BUILDS, keepRecent } from "../board/recent-builds.js";
+import { ROW_KEYS, KEEP_BUILDS, keepRecent, noNamesOk, noOf, NO_NAMES_RULE } from "../board/recent-builds.js";
 
 export { KEEP_BUILDS };
 export const MAX_LINEUPS_PER_BUILD = MAX_COUNT;
@@ -67,20 +68,21 @@ export function checkBuild(b, fromDisk = false) {
   if (!Array.isArray(skipped) || skipped.length > 300 || skipped.some((s) => !plain(s) || Object.values(s).some((v) => !scalar(v) || (typeof v === "string" && v.length > 300)))) return bad('"skipped" must be a list of short records.');
   if (b.partial != null && (!plain(b.partial) || Object.values(b.partial).some((v) => !scalar(v)))) return bad('"partial" must be a short record.');
   if (b.stamps != null && (!plain(b.stamps) || JSON.stringify(b.stamps).length > 8000)) return bad('"stamps" must be a short record.');
+  if (!noNamesOk(b.no)) return bad(NO_NAMES_RULE); // the NO line of each lineup's heading (lineup/no-list.js, Adam 11-19)
   // minutes_file is the server's own stamp: only our file on disk carries it (fromDisk); a request body's is dropped, never read.
   if (fromDisk && b.minutes_file != null && (typeof b.minutes_file !== "string" || b.minutes_file.length > 200)) return bad('"minutes_file" must be a file name.');
-  return { ok: true, build: { id: b.id, mode: b.mode, built_at: b.built_at, lineups, rows, skipped, note, partial: b.partial ?? null, stamps: b.stamps ?? null, minutes_file: fromDisk ? b.minutes_file ?? null : null } };
+  return { ok: true, build: { id: b.id, mode: b.mode, built_at: b.built_at, lineups, rows, skipped, note, partial: b.partial ?? null, stamps: b.stamps ?? null, no: noOf(b.no), minutes_file: fromDisk ? b.minutes_file ?? null : null } };
 }
 
-/** The slate's latest build (a list of one), or none when there is no file. A file written before a slate kept one build holds up to
- *  ten, newest first: only the newest is answered, and the next write leaves only one. An unreadable or wrongly shaped file throws
+/** The slate's latest build of each mode (a list of at most two, newest first), or none when there is no file. An older file may hold
+ *  more: only the newest of each mode is answered, and the next write leaves only those. An unreadable or wrongly shaped file throws
  *  (the request becomes a 500): a list that cannot be read is unknown, never empty. */
 export function readBuilds(slate) {
   const file = buildsFile(slate);
   if (!fs.existsSync(file)) return { slate, builds: [] };
   const saved = JSON.parse(fs.readFileSync(file, "utf8"));
   if (!plain(saved) || !Array.isArray(saved.builds)) throw new Error(`cache/builds/${slate}.json has no builds list`);
-  const builds = keepRecent(saved.builds).map((b) => { const c = checkBuild(b, true); if (!c.ok) throw new Error(`cache/builds/${slate}.json: ${c.message}`); return c.build; }); // checked, so an old build answers minutes_file: null
+  const builds = keepRecent(saved.builds.map((b) => { const c = checkBuild(b, true); if (!c.ok) throw new Error(`cache/builds/${slate}.json: ${c.message}`); return c.build; })); // every build checked before the newest of each mode is kept (a build of no known mode throws, never vanishes), so an old build answers minutes_file: null
   return { slate, builds };
 }
 
@@ -94,17 +96,17 @@ export function checkBuildsBody(body) {
   return c.ok ? { ok: true, kind: "put", build: c.build } : c;
 }
 
-/** The builds after one change: the newest only (a new build of either mode replaces the last). A put whose id is
- *  held replaces that build where it stands (a discard or a swap on it). A put of a build older than the one held is refused, so a
- *  swap made on an old build in another window never brings it back over the newer one. Returns { ok, builds } or
- *  { ok: false, status, code, message }. */
+/** The builds after one change: the newest of each mode (recent-builds.js keepRecent; Adam 11-07, 11-12 and 11-14: a new build replaces
+ *  only the last build of its own mode). A put whose id is held replaces that build where it stands (a discard or a swap on it). A put of
+ *  a build older than the one held of its mode is refused, so a swap made on an old build in another window never brings it back over the
+ *  newer one; a build of the other mode never blocks it. Returns { ok, builds } or { ok: false, status, code, message }. */
 export function applyBuilds(current, checked) {
   if (checked.kind === "remove") {
     if (!current.some((b) => b.id === checked.id)) return { ok: false, status: 404, code: "NO_BUILD", message: "No such build." };
     return { ok: true, builds: current.filter((b) => b.id !== checked.id) };
   }
   const held = current.some((b) => b.id === checked.build.id);
-  if (!held && current.some((b) => b.built_at > checked.build.built_at)) return { ok: false, status: 409, code: "NEWER_BUILD", message: "A newer build has replaced this one." };
+  if (!held && current.some((b) => b.mode === checked.build.mode && b.built_at > checked.build.built_at)) return { ok: false, status: 409, code: "NEWER_BUILD", message: "A newer build has replaced this one." };
   const next = held ? current.map((b) => (b.id === checked.build.id ? checked.build : b)) : [checked.build, ...current];
   return { ok: true, builds: keepRecent(next) };
 }

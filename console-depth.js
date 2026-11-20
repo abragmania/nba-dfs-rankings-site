@@ -6,7 +6,9 @@ import { oursUse } from "./console-ours.js";
 import { valuePer1k } from "./figures.js";
 import { recentOf, RECENT_GAMES } from "./tiers.js";
 import { esc, logo, nameOpen, consoleNameOpen, mrChip } from "./board-util.js";
-import { calc } from "./console-model.js";
+import { calc, outPinsNote } from "./console-model.js";
+import { stepHtml, wholeText } from "./min-step.js";
+import { whatifLoadHtml } from "./console-whatif.js";
 import { keyOf, outsOf, RATE_USAGE_SHARE } from "./console-engine.js";
 import { marksOf, liveText } from "./console-marks.js";
 import { MINUTE_SOURCES, SOURCE_LABEL, defaultSourceOf } from "./depth-chart.js";
@@ -49,10 +51,10 @@ export function shortBasis(l) {
   const words = {
     starts: () => `Starts avg ${v}${g}`, blend: () => `Blend ${v}${g}`, paired: () => `${poss(lastName(l.name))} starts (${l.pos}) ${v}`, median: () => `Team starter avg ${v}`, spot: () => `Bench ${l.spot}: ${v}`, off_chart: () => `Off chart: ${v}`,
     own: () => `${l.returning ? "Returning" : ROLE_SHORT[l.role] ?? "Own"} avg ${v}${g}`, chart: () => `Chart usual ${v}`, twogun: () => (v === null ? "TwoGun: none" : `TwoGun ${v}`), override: () => `Your usual ${v}`,
-    ov_minutes: () => `Your override ${v}`, typed: () => "Yours", none: () => "No figure",
+    ov_minutes: () => `Your override ${v}`, typed: () => "Yours", none: () => "No figure", std: () => `B+ standard ${v}`, // std: Q14's standard Bench+ figure (tiers.js stdFigure)
   }[l.kind];
   if (!words) return null;
-  const delta = [l.fill > 0 ? `+${f1(l.fill)} fill` : "", l.trim > 0 ? `${MINUS}${f1(l.trim)} trim` : "", l.capped > 0 ? `${MINUS}${f1(l.capped)} cap` : ""].filter(Boolean).join(" ");
+  const delta = [l.bench_floor > 0 ? `floor ${f1(l.bench_floor)} off the bench` : "", l.fill > 0 ? `+${f1(l.fill)} fill` : "", l.trim > 0 ? `${MINUS}${f1(l.trim)} trim` : "", l.capped > 0 ? `${MINUS}${f1(l.capped)} cap` : ""].filter(Boolean).join(" ");
   return { text: words(), delta: l.kind === "typed" ? "" : delta, ceil: l.ceil_words ?? "" }; // Adam 3:03 PM 11-18: his ceiling and its basis, said in the row's tooltip
 }
 
@@ -101,10 +103,11 @@ export function usageText(r) {
 
 /** A typed number box (minutes or DK/min) with its undo chip slot. */
 function numBox(team, r, k, mark) {
-  const v = k === "m" ? r.min : r.rate, shown = k === "m" ? f1(v) : f2(v);
+  const v = k === "m" ? r.min : r.rate, shown = k === "m" ? wholeText(v) : f2(v); // minutes show as the nearest whole minute, with the - and + buttons (min-step.js)
   const label = k === "m" ? "minutes" : "DK points per minute", usage = k === "d" ? `\n${usageText(r)}` : "";
-  const box = `<input class="fin${mark ? " pin" : ""}" data-k="${k}" data-id="${esc(r.id)}" data-team="${esc(team)}" value="${shown ?? ""}" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="${esc(r.p.name)} ${label}" title="${esc(`${mark ? "Your number. " : ""}Type his ${label}; Enter keeps it. Projection = minutes x DK/min${usage}`)}"${shown === null ? ` placeholder="—"` : ""}>`;
-  return `<span class="nb nb-${k}">${box}<span class="cs">${mark ? chip(team, r.id, k, mark, k === "m" ? f1(mark.live) ?? "—" : f2(mark.live) ?? "—") : ""}</span></span>`;
+  const box = `<input class="fin${k === "m" ? " mfin" : ""}${mark && !(k === "m" && r.min_aside) ? " pin" : ""}" data-k="${k}" data-id="${esc(r.id)}" data-team="${esc(team)}" value="${shown ?? ""}"${k === "m" && isNum(v) ? ` data-exact="${Math.round(v * 1000) / 1000}"` : ""} inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="${esc(r.p.name)} ${label}" title="${esc(`${mark ? "Your number. " : ""}Type his ${label}; Enter keeps it. Projection = minutes x DK/min${usage}`)}"${shown === null ? ` placeholder="—"` : ""}>`;
+  const aside = k === "m" && r.min_aside ? `<button class="rv" type="button" data-restore="${esc(r.id)}" data-team="${esc(team)}" title="${esc(`${r.min_aside.words.charAt(0).toUpperCase()}${r.min_aside.words.slice(1)}. Click to use it again`)}">&#8617; ${esc(wholeText(r.min_aside.value) ?? "")}</button>` : ""; // Adam 9:46 AM 11-20 (typed-aside.js)
+  return `<span class="nb nb-${k}">${k === "m" ? stepHtml(box, r.id, team, r.out || shown === null) : box}<span class="cs">${aside || (mark ? chip(team, r.id, k, mark, k === "m" ? wholeText(mark.live) ?? "—" : f2(mark.live) ?? "—") : "")}</span></span>`;
 }
 
 /** Salary and Value: read-only plain text (Adam 10:17 AM 11-18, never a box). A missing salary or projection is a dash with the reason, never 0. */
@@ -161,7 +164,7 @@ function outRow(team, r, T, mk, N, pos = null) {
   const p = r.p, theirs = T.tonight.includes(r.id), st = STATUS(p.status);
   const page = theirs && (T.tier?.minutes_page?.out ?? []).includes(r.id); // his Minutes-page Out (console-inputs.js withMinutesPage), not a feed's
   void st; // TwoGun's status word is not a source of Tonight's Outs (Adam 11-19)
-  const src = page ? `<span class="stag k-you">Yours</span>you marked him Out on the Minutes page` : theirs ? `<span class="stag k-ch">News</span>out on our own injury feeds (TwoGun's board has him Out too)` : mk?.out?.news ? `<span class="stag k-ch">News</span>${esc(mk.out.news)}` : `<span class="stag k-you">Yours</span>you marked him Out`; // an Out the lineup news made is the news's, not his
+  const src = page ? `<span class="stag k-you">Yours</span>you marked him Out on the Minutes page` : theirs ? `<span class="stag k-ch">News</span>out on our own injury feeds` : mk?.out?.news ? `<span class="stag k-ch">News</span>${esc(mk.out.news)}` : `<span class="stag k-you">Yours</span>you marked him Out`; // an Out the lineup news made is the news's, not his
   const omark = mk?.out ? chip(team, r.id, "out", mk.out, "in") : "";
   return `<div class="oline" data-row="${esc(r.id)}"><span class="ps">${esc(pos ?? (pos0(p) || "—"))}</span>${consoleNameOpen(p, p.name, "span", "onm")}
 <span class="tgl"><button class="tg o on" type="button" data-out="${esc(r.id)}" data-team="${esc(team)}" title="Out. Click to bring him back in">Out</button><span class="cs">${omark}</span></span>
@@ -225,6 +228,8 @@ function teamBody(model, code, news, view = {}) {
   if (noLast.length) notes.push(`${noLast.length} ${noLast.length === 1 ? "man shows" : "men show"} a dash for Avg Min (Last 10), no game in the team's last ${Math.min(RECENT_GAMES, T.tier?.team_games ?? RECENT_GAMES)}: ${noLast.map((x) => x.r.p.name).join(", ")}`);
   if (res.chart_note) notes.push(res.chart_note); // one note per team (G68), added whole
   if (res.handout_note) notes.push(res.handout_note); // one note per team, added whole (G68)
+  const outPins = outPinsNote(T, S); // his typed numbers on a man Tonight has Out: kept, not used (G62, round 2 item 3)
+  if (outPins) notes.push(outPins);
   if (res.injured_note) notes.push(res.injured_note); // one note per team, added whole (G68)
   if (cm) { for (const n of cm.notes) notes.push(n); const sn = sourcesNote(cm, view.when ?? (() => null)); if (sn) notes.push(sn); } // the chart's sources and what they could not place, at the foot (G64)
   const auto = calc(T, { ...S, pins: {} }, T.tonight).totals;
@@ -268,7 +273,7 @@ export function depthHtml(model, code, opts) {
   const words = syncWords(opts.sync), syncText = `<span class="sync ${words.cls}" title="${esc([words.text, ...words.lines].join(" · "))}"><i></i>${esc(words.text)}</span>`;
   const held = words.lines.length ? `<ul class="heldline">${words.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : "";
   const head = `<header class="thead" style="--tc:${opts.colourOf(code)}">${logo(code, "xl")}<div class="tn"><h1>${esc(TEAM_NAMES[code] ?? code)}</h1><div class="vs">${T.home ? "vs" : "@"} ${logo(opp, "xs")}<b>${esc(TEAM_NAMES[opp] ?? opp)}</b>${g?.tip ? ` &middot; ${esc(opts.when(g.tip) ?? g.tip)}` : ""}</div></div>
-<div class="grow"></div><div class="acts">${syncText}<button class="ub" type="button" data-hist="-1"${opts.canUndo ? "" : " disabled"} title="Undo (Ctrl+Z)">&#8630; Undo</button><button class="ub" type="button" data-hist="1"${opts.canRedo ? "" : " disabled"} title="Redo (Ctrl+Y)">Redo &#8631;</button><button class="help${opts.help ? " on" : ""}" type="button" data-help="1" aria-expanded="${opts.help ? "true" : "false"}" title="${esc(HELP)}">?</button></div></header>`;
+<div class="grow"></div><div class="acts">${whatifLoadHtml(code, opts.whatifs ?? [], opts.whatifsErr ?? null)}${syncText}<button class="ub" type="button" data-hist="-1"${opts.canUndo ? "" : " disabled"} title="Undo (Ctrl+Z)">&#8630; Undo</button><button class="ub" type="button" data-hist="1"${opts.canRedo ? "" : " disabled"} title="Redo (Ctrl+Y)">Redo &#8631;</button><button class="help${opts.help ? " on" : ""}" type="button" data-help="1" aria-expanded="${opts.help ? "true" : "false"}" title="${esc(HELP)}">?</button></div></header>`;
   const err = opts.saveErr ? `<div class="errline">${esc(opts.saveErr)}</div>` : "";
   return `${switcherHtml(model, code, opts.games, opts.colourOf)}${head}${held}${err}${opts.help ? `<p class="note">${esc(HELP)}</p>` : ""}${stripHtml(opts.news, starterIds)}<div class="wrap${chipCols}"><div class="mainc">${main}</div><aside>${side}</aside></div>`;
 }

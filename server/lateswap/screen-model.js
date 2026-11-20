@@ -24,7 +24,7 @@ export function manView(ctx, id, entries = []) {
   return {
     dk_id: id, name: p.name, team: p.team ?? null, game: p.game ?? null, positions: p.positions ?? p.roster_positions ?? [], roster_positions: p.roster_positions ?? [],
     salary: p.salary ?? null, proj: p.projection ?? null, own: p.proj_own ?? null, tip: p.tip ?? null,
-    started: ctx.started.has(id), untimed: ctx.untimed.has(id), gone: ctx.departedById.has(id), injury: p.injury_status ?? null, out: isBoardOut(p),
+    started: ctx.started.has(id), untimed: ctx.untimed.has(id), gone: ctx.departedById.has(id), injury: null, out: isBoardOut(p),
   };
 }
 

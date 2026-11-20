@@ -5,10 +5,11 @@ import { esc, keepFocus, remScale } from "./board-util.js";
 
 // The player column is always on: a row with no name cannot be read.
 export const COLUMNS = [
-  // The five row controls sit together at the far left (Adam, 11-13): star, thumbs, lock, exclude, then Player.
+  // The row controls sit together at the far left (Adam, 11-13): star, thumbs, lock, NO (Adam 11-19, between the lock and the exclude), exclude, then Player.
   { key: "star", label: "Star" },
   { key: "thumbs", label: "Thumbs" },
   { key: "lock", label: "Lock" },
+  { key: "no", label: "NO" },
   { key: "exclude", label: "Exclude" },
   { key: "name", label: "Player", required: true },
   { key: "pos", label: "Pos" },

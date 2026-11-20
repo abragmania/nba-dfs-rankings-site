@@ -7,10 +7,12 @@
 import { startState, reuploadEntries, moveEntries, settleRows, dropRows, spotNames, lineupOf, sameLineup, restoreUsable, confirmOutMan, unusableIn } from "./maps.js";
 import { removeAndReoptimize, removeAndLockBackup, handSwap, resetSpots, assignLineup } from "./actions.js";
 import { spotOptions, pickOption, reoptimizeSpots } from "./reopt.js";
-import { contextFor, nameOf, outAlert } from "./entry-state.js";
+import { contextFor, nameOf, outAlert, frozenWhy, spotPins } from "./entry-state.js";
 import { exportChanged, exportAll } from "./export.js";
 import { mapFp } from "./screen-model.js";
 import { suggestShell, shellSummary } from "./shell.js";
+import { LS_MODES, boardExcludes, excludesGap } from "./board-excludes.js";
+const REFILLS = ["remove", "reoptimize", "options"]; // the ops that fill slots on their own and so need the board's excludes
 
 const refused = (saved, error) => ({ saved, outcomes: [], error });
 
@@ -63,6 +65,7 @@ function appliedNote(spot, row, o) {
  * Nothing is confirmed here. A lineup holding a man who is Out or gone, or a man taken out of that spot earlier, is left unapplied and comes
  * back in pending [{ spot, lineupId, alert, back }] with its stamp unconsumed, so the screen asks and asks again. A stamp is consumed only by a
  * lineup applied or one the engine really refused; a slate that cannot be read (no players, a bad name) changes nothing and consumes nothing.
+ * After an export later than the entries file every lineup that would be applied waits instead, its pending entry marked afterExport.
  * Every applied lineup returns a note naming spot, lineup and who changed.
  */
 export function syncSpots(saved, spotsFile, { slate, nowMs, dry = false }) {
@@ -71,6 +74,9 @@ export function syncSpots(saved, spotsFile, { slate, nowMs, dry = false }) {
   const names = new Set(spotNames(saved.state));
   let cur = saved;
   const spotSync = { ...saved.spotSync }, pendingSync = { ...(saved.pendingSync ?? {}) }, notes = [], pending = [];
+  // After an export later than the entries file (review 11-19 F1) a started man is judged from that old file, so no Lineups-tab lineup is
+  // applied unasked: each waits (afterExport) for Use anyway, whose syncConfirm is guarded like every lineup change (exportRefusal).
+  const late = lateExport(saved) != null;
   // dry: only look. After an action nothing from the Lineups tab is applied in the same answer (an action may have changed what waits there),
   // and no stamp is used up; the next read applies what can be applied.
   // A stamp that has once waited (pendingSync) keeps waiting, even if what held it back has gone: only Use anyway, or an action on that spot,
@@ -87,9 +93,9 @@ export function syncSpots(saved, spotsFile, { slate, nowMs, dry = false }) {
     const held = pendingSync[spot] === row.assigned_at;
     const it = inspect(cur, spot, row, { slate, nowMs, ctx: probe.ctx });
     if (it.kind === "error") { notes.push(`${spot}: the Lineups tab's lineup could not be checked (${it.why}); it will be looked at again.`); continue; }
-    if (it.kind === "pending" || (held && it.kind === "apply")) {
+    if (it.kind === "pending" || ((held || late) && it.kind === "apply")) {
       if (!dry) pendingSync[spot] = row.assigned_at;
-      pending.push({ spot, lineupId: String(row.lineup_id), alert: it.alert ?? null, back: (it.back ?? []).map((id) => ({ dk_id: id, name: nameFor(cur, id, probe.ctx) })), held: it.kind === "apply" });
+      pending.push({ spot, lineupId: String(row.lineup_id), alert: it.alert ?? null, back: (it.back ?? []).map((id) => ({ dk_id: id, name: nameFor(cur, id, probe.ctx) })), held: held && it.kind === "apply", afterExport: late });
       continue;
     }
     if (dry) continue;
@@ -182,15 +188,81 @@ function applyPairs(saved, pairs, body, allowedNew) {
 }
 
 /**
- * One action of the screen. body.op: assign, acceptProposals, setLineup, syncConfirm, confirmMan, remove, swap, reset, undoSpot, undoAll,
- * allow, dismissNotes, options (nothing saved; the answer's options), pickOption, reoptimize, excludeGames, keepMen. args: { slate, nowMs, lineups, spotsFile }. confirmOut with confirmMen goes ahead for men the engine asked about.
+ * One action of the screen. body.op: assign, mapSet, autoFill, resetEntries, reassignAll, acceptProposals, setLineup, syncConfirm, confirmMan,
+ * remove, swap, reset, undoSpot, undoAll, allow, dismissNotes, options (nothing saved; the answer's options), pickOption, reoptimize,
+ * excludeGames, keepMen. resetEntries and reassignAll (resetEntries then autoFill, one saved change) are refused after an export unless
+ * body.afterExport is that export's stamp, saved.exportedAt (resetRefusal); so is every op in LINEUP_OPS (exportRefusal). args: { slate, nowMs, lineups, spotsFile }. confirmOut with confirmMen goes ahead for men the engine asked about.
  * Returns { saved, outcomes, error, confirms, overMax, spotWrite }: error is the engine's refusal in words (nothing changed); confirms lists
  * the spots waiting on a go-ahead, each with the alert.
  */
 export function applyOp(saved, body, args) {
+  const late = exportRefusal(saved, body);
+  if (late) return refused(saved, late);
+  if (body.op === "reassignAll") return reassignAll(saved, body, args);
   const out = applyOpInner(saved, body, args);
   if (out.error || out.saved === saved) return out;
   return { ...out, saved: settleStamps(saved, out.saved, body, out.outcomes, args.spotsFile ?? {}) };
+}
+
+const etTime = (iso) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET";
+
+/** The server's one copy of the after-export test (the page's is lsw-export-guard.js): the last export came later than the entries file,
+ *  so what DraftKings holds may no longer be that file. { exported, file } as ET times ("an unknown time" for a file with no stamp), or null. */
+function lateExport(saved) {
+  const ex = Date.parse(saved.exportedAt ?? ""), up = Date.parse(saved.uploadedAt ?? "");
+  if (!Number.isFinite(ex) || (Number.isFinite(up) && ex <= up)) return null;
+  return { exported: etTime(saved.exportedAt), file: Number.isFinite(up) ? etTime(saved.uploadedAt) : "an unknown time", known: Number.isFinite(up) };
+}
+
+/** His go-ahead after such an export (review 11-19 F3): body.afterExport is the export stamp the page showed, and counts only for that
+ *  export, so a newer one asks again even when the page had not refreshed. Nothing else (true, another stamp) is a go-ahead. */
+const goAheadFor = (saved, body) => typeof body?.afterExport === "string" && body.afterExport === saved.exportedAt;
+
+/** The refusal of a reset when the last export came after the entries file (Adam 6:30 PM 11-19 review F2): the file's lineups may no
+ *  longer be what DraftKings holds, so a reset goes ahead only with that export's stamp in body.afterExport. null when it may go ahead. */
+export function resetRefusal(saved, body) {
+  const late = lateExport(saved);
+  if (!late || goAheadFor(saved, body)) return null;
+  return `You exported at ${late.exported}, after the entries file from ${late.file}. If that export went to DraftKings, drop a fresh entries file first, or this puts back the ${late.file} lineups. Nothing was reset.`;
+}
+
+/** The ops that change a spot's lineup through the engine, each judging started men against the uploaded entries file; the map ops are here
+ *  too (review 11-19 F2): an entry given a spot, or a spot row made from the file, takes a lineup judged from that file. */
+export const LINEUP_OPS = ["remove", "reoptimize", "pickOption", "swap", "reset", "undoSpot", "undoAll", "setLineup", "syncConfirm", "assign", "mapSet", "autoFill", "acceptProposals"];
+
+/** The same refusal for every op that changes lineups (review F1 11-19, the short-term fix): after an export later than the entries file,
+ *  a started man is still judged from that file, so a change could move a man DraftKings has locked or put back one from the old file. It
+ *  goes ahead only with that export's stamp in body.afterExport (goAheadFor). null when it may go ahead. */
+export function exportRefusal(saved, body) {
+  const late = LINEUP_OPS.includes(body?.op) ? lateExport(saved) : null;
+  if (!late || goAheadFor(saved, body)) return null;
+  return `You exported at ${late.exported}, after the entries file from ${late.file}. If that export went to DraftKings, drop a fresh entries file first: men who have started since are judged from the ${late.known ? late.file : "entries"} file. Nothing was changed.`;
+}
+
+/**
+ * Reset entries (Adam 6:30 PM 11-19: "there needs to be a way to just reset it"): the state goes back to the shape a first upload of the
+ * same file makes (maps.js startState with empty), every entry without a spot, no spot rows, suggestions, take-outs from single spots or
+ * Lineups-tab stamps, and his locked men (keptMen, by spot name) dropped, so Auto-fill offers itself again and builds each row from the
+ * file's lineups. The slate-wide take-out list, at-least list and excluded games stay. mapResult.reset counts what went, for the answer.
+ */
+function resetEntries(saved, body) {
+  const why = resetRefusal(saved, body);
+  if (why) return refused(saved, why);
+  const s = saved.state, n = (o) => Object.values(o ?? {}).reduce((t, ids) => t + (Array.isArray(ids) ? ids.length : 0), 0);
+  const reset = { entries: s.entries.length, rows: Object.keys(s.spots).length, locks: n(saved.keptMen), letBack: n(s.unusable) };
+  const st = { ...s, entrySpots: Object.fromEntries(s.entries.map((e) => [e.entryId, null])), spots: {}, proposals: {}, unusable: {}, gone: [] };
+  return { saved: { ...saved, state: st, spotSync: {}, pendingSync: {}, keptMen: {} }, outcomes: [], error: null, mapResult: { reset } };
+}
+
+/** Re-assign all: exactly resetEntries then autoFill (a fresh upload and its first Auto-fill), saved as one change; refused whole when
+ *  either step refuses. body.mapFp is checked against the map the screen drew. The answer carries Auto-fill's counts and the reset's. */
+function reassignAll(saved, body, args) {
+  if (typeof body.mapFp !== "string" || body.mapFp !== mapFp(saved.state)) return refused(saved, "The entries' spots changed since this screen drew them, so nothing was re-assigned. Look them over and try again.");
+  const r = applyOp(saved, { ...body, op: "resetEntries" }, args);
+  if (r.error) return r;
+  const f = applyOp(r.saved, { ...body, op: "autoFill", mapFp: mapFp(r.saved.state) }, args);
+  if (f.error) return refused(saved, f.error);
+  return { ...f, mapResult: { ...f.mapResult, reset: r.mapResult.reset } };
 }
 
 const MODES = ["Cash", "GPP"];
@@ -198,16 +270,21 @@ const MODES = ["Cash", "GPP"];
 const NOT_FOR_REFILL = ["count", "minUnique", "pinned", "exposure", "variancePct"]; // variance is random: a repeated action must give the same lineup
 
 /**
- * What the board holds that a re-optimize must honour (RULES R4): the excluded men (the saved picks, args.picks), the settings of each mode
+ * What the board holds that a re-optimize must honour (RULES R4): the excluded men per mode (the saved picks, args.picks), the settings of each mode
  * (body.settings = { Cash: {...}, GPP: {...} }, the optimizer panel's team and game limits, ownership rules, max total ownership) and the
- * Max % across the set (body.exposure). Returns the engine's { excluded, settingsByMode, exposure, notes }; whatever it cannot apply or was not
+ * Max % across the set (body.exposure). Returns the engine's { excluded: { Cash, GPP } (each spot reads its mode's), settingsByMode, exposure, notes }; whatever it cannot apply or was not
  * given is named in notes, which the engine puts on every spot it re-fills. A Min % does not apply across a set of entries (actions.js refuses it), so it is dropped and named.
  */
-function boardState(body, picks, state, slate, nowMs, gamesOff = []) {
+function boardState(body, picks, state, slate, nowMs, gamesOff = [], lateNo = null, keptMen = {}) {
   const notes = [];
-  const excluded = Array.isArray(picks?.excluded) ? picks.excluded.map(String) : [];
-  if (!Array.isArray(picks?.excluded)) notes.push("The board's excluded men were not available to this re-fill, so none were left out for that reason.");
+  // His excludes per mode (board-excludes.js, Adam 11-20): each spot's re-fill honours its own mode's; the late swap NO men join both.
+  const fromBoard = boardExcludes(picks), missing = LS_MODES.filter((m) => fromBoard[m] === null);
+  if (missing.length === LS_MODES.length) notes.push("The board's excluded men were not available to this re-fill, so none were left out for that reason.");
+  else for (const m of missing) notes.push(`The board's ${m} excluded men were not available to this re-fill, so none were left out for that reason in ${m} spots.`);
   const ctx = contextFor(state, slate, nowMs).ctx; // the slate's teams, games and men: a stored limit on one that is not on it is dropped and named
+  const no = lateNoState(lateNo, ctx, keptMen, state);
+  const excluded = Object.fromEntries(LS_MODES.map((m) => [m, [...new Set([...(fromBoard[m] ?? []), ...no.ids])]]));
+  notes.push(...no.notes);
   const teams = new Set(ctx?.players.map((p) => p.team)), games = new Set(ctx?.players.map((p) => p.game));
   const given = body.settings;
   // The screen names the stored fields it could not read (settings-panel.js refillState); they were left out of what it sent.
@@ -249,7 +326,41 @@ function boardState(body, picks, state, slate, nowMs, gamesOff = []) {
   // The games excluded on this screen (saved with its state); one no longer on the slate is named and dropped, never a refusal of the run.
   const offSlate = ctx ? gamesOff.filter((g) => !games.has(g)) : [];
   if (offSlate.length) notes.push(`Excluded ${offSlate.join(", ")} is not on this slate now, so it was not applied.`);
-  return { excluded, settingsByMode, exposure, excludedGames: gamesOff.filter((g) => !offSlate.includes(g)), notes };
+  return { excluded, settingsByMode, exposure, excludedGames: gamesOff.filter((g) => !offSlate.includes(g)), notes, noIds: no.ids, lateNo: no.summary };
+}
+
+/**
+ * The late swap NO list on this screen (lineup/no-list.js, Adam 5:28 PM 11-19: late swap has its own NO, never the build's): its men are
+ * left out of every open slot a re-fill fills, and nothing else (Adam 6:16 and 6:19 PM 11-19: no notes, tags or flags where he chose a man
+ * himself). A NO man frozen by his game (started, or a tip that cannot be read) stays where he is; one locked in the DraftKings file in a
+ * spot, or kept in a spot on this screen, stays in that spot. lateNo: { ids, dropped } as read, or null when the route read none.
+ * Returns { ids (to leave out), notes (the men left out, and any no longer on the slate, G62), summary: { applied: [name],
+ * pinned: ["Name (why)"] (data only, never shown), ignored: [words] } }. Pure.
+ * It applies nothing when ctx is missing: contextFor failed (another slate's entries), and every engine action this feeds then refuses on
+ * that same contextFor, so no re-fill runs without the list (review F8).
+ */
+export function lateNoState(lateNo, ctx, keptMen = {}, state = null) {
+  const none = { ids: [], notes: [], summary: { applied: [], pinned: [], ignored: [] } };
+  if (!lateNo || !ctx) return none;
+  const name = (id) => nameOf(id, ctx);
+  const on = (lateNo.ids ?? []).map(String).filter((id) => ctx.man(id));
+  const why = new Map();
+  for (const id of on) { const f = frozenWhy(id, ctx); if (f) why.set(id, f); }
+  const frozen = on.filter((id) => why.has(id));
+  for (const spot of state ? spotNames(state) : []) {
+    const pins = spotPins(state, spot, ctx);
+    for (const id of on) if (!why.has(id) && id in pins) why.set(id, `locked in the DraftKings file in ${spot}`);
+  }
+  for (const [spot, ids] of Object.entries(keptMen ?? {})) for (const id of ids ?? []) if (on.includes(String(id)) && !why.has(String(id))) why.set(String(id), `kept in ${spot}`);
+  const ids = on.filter((id) => !frozen.includes(id)); // a man held in one spot stays there (the engine keeps him) and is left out of every other
+  const stay = on.filter((id) => why.has(id));
+  const ignored = [...(lateNo.dropped ?? []).map((d) => `${d.name ?? `DraftKings id ${d.id}`} (no longer on this slate)`), ...(lateNo.ids ?? []).map(String).filter((id) => !ctx.man(id)).map((id) => `DraftKings id ${id} (not on this slate)`)];
+  const applied = ids.filter((id) => !why.has(id));
+  const pinned = stay.map((id) => `${name(id)} (${why.get(id)})`);
+  const notes = [];
+  if (applied.length) notes.push(`Late swap NO, left out of the open slots: ${applied.map(name).join(", ")}.`);
+  if (ignored.length) notes.push(`Late swap NO ignored: ${ignored.join(", ")}.`);
+  return { ids, notes, summary: { applied: applied.map(name), pinned, ignored } };
 }
 
 /** The games excluded on this screen, set whole from body.games: { saved } or { error }. A game not on the slate is refused by name; so is
@@ -305,8 +416,39 @@ function setLists(saved, body, slate, nowMs) {
   return { saved: { ...saved, state: st, takeOut: [...new Set(takeOut)], atLeast: { ...atLeast } } };
 }
 
-function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {}, picks = null }) {
+/** A picked option (review F2 to F5 11-19). body.current is the lineup the options were worked out from; one that is not the spot's lineup
+ *  now is refused (a stale screen). The pick is checked again against what Adam set, never trusted as sent: the board's excludes and NO men,
+ *  excluded games, kept men, the saved take-out list and each spot's own take-outs; a man it carries past his Max % is named; the board's
+ *  notes ride on every outcome. b: applyOpInner's board(); done: its answer maker. */
+function pickCase(saved, body, b, done, { slate, nowMs }) {
   const s = saved.state;
+  if (spotNames(s).includes(body.spot) && !(Array.isArray(body.current) && body.current.length === 8 && sameLineup(lineupOf(s, body.spot), body.current))) return refused(saved, "This lineup changed since these options were shown; open the options again.");
+  const args = { spot: body.spot, lineup: body.lineup, proven: body.proven ?? null, remove: body.remove ?? [], excluded: b.excluded, noIds: b.noIds, excludedGames: b.excludedGames, keep: b.keep, takeOut: saved.takeOut ?? [], exposure: b.exposure, notes: b.notes, slate, nowMs };
+  return done(confirmable((ok) => pickOption(s, { ...args, confirmOut: ok }), body), { lateNo: b.lateNo });
+}
+
+function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {}, picks = null, lateNo = null }) {
+  const s = saved.state;
+  const gap = REFILLS.includes(body.op) ? excludesGap(picks) : null; // who is excluded unknown: a re-fill refuses (board-excludes.js, review 11-20)
+  if (gap) return refused(saved, gap);
+  // What a re-fill honours: the board's state (boardState) and his kept men as he set them. chosen: the men he put in himself in this
+  // action (the backup he picked, each man he put in at least N%): a NO man among them is used as he chose, with no note and no refusal
+  // (Adam 6:16 and 6:19 PM 11-19: NO keeps a man out of what the optimizer picks on its own, nothing else).
+  const board = (chosen = []) => {
+    const keep = saved.keptMen ?? {};
+    const b = boardState(body, picks, s, slate, nowMs, saved.excludedGames ?? [], lateNo, keep);
+    const mine = chosen.filter((id) => b.noIds.includes(id));
+    if (!mine.length) return { ...b, keep };
+    const fromBoard = boardExcludes(picks); // his board exclude (of that mode) still stands; only the NO is set aside
+    const ctx0 = contextFor(s, slate, nowMs).ctx, names = new Set(mine.map((id) => (ctx0 ? nameOf(id, ctx0) : id)));
+    const applied = b.lateNo.applied.filter((n) => !names.has(n)); // the "left out" line names only the men the re-fill left out
+    const notes = [...b.notes.filter((n) => !/^Late swap NO, left out/.test(n)), ...(applied.length ? [`Late swap NO, left out of the open slots: ${applied.join(", ")}.`] : [])];
+    const excluded = Object.fromEntries(LS_MODES.map((m) => [m, b.excluded[m].filter((id) => !mine.includes(id) || (fromBoard[m] ?? []).includes(id))]));
+    // noHeld: the same men, still kept out of every slot a re-fill picks on its own (reopt.js outOf); only where his Min % or his backup lock puts them are they in (review F1 11-19)
+    return { ...b, keep, excluded, noIds: b.noIds.filter((id) => !mine.includes(id)), noHeld: mine, notes, lateNo: { ...b.lateNo, applied } };
+  };
+  /** The men a remove or re-optimize puts in by his own choice: the backup he picked, and each man he gave a Min % above 0 ("Put in at least"). */
+  const chosenIn = () => [...Object.entries(body.atLeast && typeof body.atLeast === "object" && !Array.isArray(body.atLeast) ? body.atLeast : {}).filter(([, pct]) => Number(pct) > 0).map(([id]) => id), ...(body.backup != null ? [body.backup] : [])].map(String);
   const done = (r, extra = {}) => {
     if (r.error) return refused(saved, r.error);
     const confirms = (r.outcomes ?? []).filter((o) => o.status === "confirm").map((o) => ({ spot: o.spot, alert: o.alert }));
@@ -326,6 +468,7 @@ function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {},
       const r = applyPairs(saved, plan.pairs, body, plan.created);
       return r.error ? r : { ...r, mapResult: { ...r.mapResult, created: plan.created, summary: shellSummary(plan.counts) } };
     }
+    case "resetEntries": return resetEntries(saved, body);
     case "acceptProposals": {
       let st = s;
       for (const spot of new Set(Object.values(s.proposals))) {
@@ -370,29 +513,28 @@ function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {},
       return r.error ? refused(saved, r.error) : { saved: { ...saved, state: r.state }, outcomes: [], error: null };
     }
     case "remove": {
-      const base = { man: body.man, backup: body.backup ?? undefined, scope: spotsIn(s, body.scope), slate, nowMs, keep: saved.keptMen ?? {}, ...boardState(body, picks, s, slate, nowMs, saved.excludedGames ?? []) };
+      const { lateNo: no, ...b } = board(chosenIn()); // a NO backup he picked, or a NO man he put in at least N%, is used as he chose (Adam 6:16 and 6:19 PM 11-19)
+      const base = { man: body.man, backup: body.backup ?? undefined, scope: spotsIn(s, body.scope), slate, nowMs, ...b };
       if (body.atLeast != null) { // with a Min %: the removal re-fills only the spots holding him, the Min % plan may change other spots in scope (each says so), and a backup is a Min 100% held to his Max
         const { man, backup, ...rest } = base;
         const atLeast = typeof body.atLeast === "object" && !Array.isArray(body.atLeast) && backup ? { ...body.atLeast, [backup]: 100 } : body.atLeast;
-        return done(confirmable((ok) => reoptimizeSpots(s, { ...rest, remove: typeof man === "string" && man ? [man] : [], atLeast, onlyHolding: true, confirmOut: ok }), body));
+        return done(confirmable((ok) => reoptimizeSpots(s, { ...rest, remove: typeof man === "string" && man ? [man] : [], atLeast, onlyHolding: true, confirmOut: ok }), body), { lateNo: no });
       }
-      return done(confirmable((ok) => (body.backup ? removeAndLockBackup(s, { ...base, confirmOut: ok }) : removeAndReoptimize(s, base)), body));
+      return done(confirmable((ok) => (body.backup ? removeAndLockBackup(s, { ...base, confirmOut: ok }) : removeAndReoptimize(s, base)), body), { lateNo: no });
     }
     case "reoptimize": {
-      const base = { scope: spotsIn(s, body.scope), remove: body.remove ?? [], atLeast: body.atLeast ?? null, keep: saved.keptMen ?? {}, slate, nowMs, ...boardState(body, picks, s, slate, nowMs, saved.excludedGames ?? []) };
-      return done(confirmable((ok) => reoptimizeSpots(s, { ...base, confirmOut: ok }), body));
+      const { lateNo: no, ...b } = board(chosenIn()); // a NO man he put in at least N% is used as he chose
+      const base = { scope: spotsIn(s, body.scope), remove: body.remove ?? [], atLeast: body.atLeast ?? null, slate, nowMs, ...b };
+      return done(confirmable((ok) => reoptimizeSpots(s, { ...base, confirmOut: ok }), body), { lateNo: no });
     }
     case "options": {
-      const b = boardState(body, picks, s, slate, nowMs, saved.excludedGames ?? []);
-      const keep = Object.hasOwn(saved.keptMen ?? {}, body.spot) ? saved.keptMen[body.spot] : [];
-      const r = spotOptions(s, { spot: body.spot, count: body.count ?? 5, remove: body.remove ?? [], keep, excluded: b.excluded, excludedGames: b.excludedGames, settingsByMode: b.settingsByMode, slate, nowMs });
+      const b = board();
+      const keep = Object.hasOwn(b.keep, body.spot) ? b.keep[body.spot] : [];
+      const r = spotOptions(s, { spot: body.spot, count: body.count ?? 5, remove: body.remove ?? [], keep, excluded: b.excluded, excludedGames: b.excludedGames, settingsByMode: b.settingsByMode, exposure: b.exposure, slate, nowMs });
       if (r.error) return refused(saved, r.error);
-      return { saved, outcomes: [], error: null, options: { ...r, notes: [...b.notes, ...r.notes] } };
+      return { saved, outcomes: [], error: null, options: { ...r, notes: [...b.notes, ...r.notes] }, lateNo: b.lateNo };
     }
-    case "pickOption": {
-      const b = boardState(body, picks, s, slate, nowMs, saved.excludedGames ?? []); // the pick is checked again against what Adam set, never trusted as sent
-      return done(confirmable((ok) => pickOption(s, { spot: body.spot, lineup: body.lineup, proven: body.proven ?? null, remove: body.remove ?? [], excluded: b.excluded, excludedGames: b.excludedGames, keep: saved.keptMen ?? {}, confirmOut: ok, slate, nowMs }), body));
-    }
+    case "pickOption": return pickCase(saved, body, board(), done, { slate, nowMs });
     case "excludeGames": {
       const r = setExcludedGames(saved, body, slate, nowMs);
       return r.error ? refused(saved, r.error) : { saved: r.saved, outcomes: [], error: null };
@@ -410,7 +552,7 @@ function applyOpInner(saved, body, { slate, nowMs, lineups = [], spotsFile = {},
       const r = setLists(saved, body, slate, nowMs);
       return r.error ? refused(saved, r.error) : { saved: r.saved, outcomes: [], error: null };
     }
-    case "swap": return done(confirmable((ok) => handSwap(s, { spot: body.spot, slot: body.slot, inId: body.inId, confirmOut: ok, slate, nowMs }), body));
+    case "swap": return done(confirmable((ok) => handSwap(s, { spot: body.spot, slot: body.slot, inId: body.inId, confirmOut: ok, slate, nowMs }), body)); // his own swap: NO never touches it
     case "reset": return done(confirmable((ok) => resetSpots(s, { scope: spotsIn(s, body.scope), man: body.man ?? null, confirmOut: ok, slate, nowMs }), body));
     case "undoSpot": {
       const r = confirmable((ok) => resetSpots(s, { scope: { type: "one", spot: body.spot }, confirmOut: ok, slate, nowMs }), body);

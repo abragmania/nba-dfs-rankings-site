@@ -65,7 +65,7 @@ export const typedText = (a) => (a && typeof a.value === "string" && a.value !==
 
 /**
  * Who is out on a Tonight (Adam, 11-07): its outs, plus the men he or the news put Out, minus the men he put back in. `mine` is the explicit record of those
- * ({ out: [ids], in: [ids] }, kept by noteOuts as each change is made), so a later pull can never undo his Out. A man newly Out on TwoGun's list is Out, never "back in". Pure.
+ * ({ out: [ids], in: [ids] }, kept by noteOuts as each change is made), so a later pull can never undo his Out. A man newly Out on Tonight (our feeds) is Out, never "back in". Pure.
  */
 export function rebaseOuts(tonight, mine) {
   const next = new Set(outsOf(tonight));
@@ -77,7 +77,7 @@ export function rebaseOuts(tonight, mine) {
 /** The record seeded from a scenario and the Tonight it was made on, for work saved before `mine` was kept. */
 const seedMine = (outs, old) => { const t = new Set(outsOf(old)), now = new Set(outs); return { out: outs.filter((id) => !t.has(id)), in: [...t].filter((id) => !now.has(id)) }; };
 
-/** A change of who is out goes in the record: a man put Out beyond Tonight is his Out (a man TwoGun already has Out is only no longer his back-in, so browsing scenarios marks nobody); a man taken off the list is no longer his Out, and if TwoGun has him Out he is his back-in. `wasKey`: the scenario before the change. */
+/** A change of who is out goes in the record: a man put Out beyond Tonight is his Out (a man Tonight already has Out is only no longer his back-in, so browsing scenarios marks nobody); a man taken off the list is no longer his Out, and if Tonight has him Out he is his back-in. `wasKey`: the scenario before the change. */
 export function noteOuts(T, S, wasKey) {
   const was = new Set(outsOf(wasKey)), now = new Set(S.outs), tonight = new Set(outsOf(T.tonightKey)), mine = (S.mine ??= { out: [], in: [] });
   for (const id of now) if (!was.has(id)) { if (!tonight.has(id) && !mine.out.includes(id)) mine.out.push(id); mine.in = mine.in.filter((x) => x !== id); }
@@ -95,6 +95,7 @@ export function moveTo(T, S, outs, old) {
   if (from === to || !hasPins(S.pins[from])) return;
   const moved = S.saved.includes(from) ? structuredClone(S.pins[from]) : S.pins[from], there = S.pins[to] ?? {};
   S.pins[to] = Object.fromEntries([...new Set([...Object.keys(there), ...Object.keys(moved)])].map((k) => [k, { ...there[k], ...moved[k] }]));
+  moveStamps(S, from, to); // each moved pin keeps its own stamp (typed-aside.js)
   if (!S.saved.includes(from)) delete S.pins[from];
   S.shown = (S.shown ?? []).filter((k) => k !== from && k !== to);
 }
@@ -111,7 +112,7 @@ function stateFor(T, rec) {
   for (const [key, p] of Object.entries(rec?.pins ?? {})) {
     if (key !== "" && key !== T.tonightKey && !saved.includes(key) && hasPins(p)) shown.push(key);
   }
-  return { outs: outsOf(T.tonightKey), tonight: T.tonightKey, source: sourceSet ? rec.source : T.source_default, sourceSet, saved, shown, pins:structuredClone(rec?.pins ?? {}), handouts: structuredClone(rec?.handouts ?? {}), combos: structuredClone(rec?.combos ?? {}), news: structuredClone(rec?.news ?? {}), ...(rec?.mine ? { mine: structuredClone(rec.mine) } : {}), ...depthOf(T), ...rolesOf(T) };
+  return { outs: outsOf(T.tonightKey), tonight: T.tonightKey, source: sourceSet ? rec.source : T.source_default, sourceSet, saved, shown, pins:structuredClone(rec?.pins ?? {}), handouts: structuredClone(rec?.handouts ?? {}), combos: structuredClone(rec?.combos ?? {}), news: structuredClone(rec?.news ?? {}), stamps: structuredClone(rec?.stamps ?? {}), ...(rec?.mine ? { mine: structuredClone(rec.mine) } : {}), ...(rec?.whatif_used ? { whatif_used: structuredClone(rec.whatif_used) } : {}), ...depthOf(T), ...rolesOf(T) }; // whatif_used rides with his work so every save keeps it beside the pins it wrote (scenarios.js badWhatifUsed)
 }
 
 /** His depth-chart moves as the page starts them (Adam 11-17): the standing chart's saved list from the inputs. Kept in his work so Undo and Redo carry them; never in the scenarios file (recordOf leaves them
@@ -232,7 +233,52 @@ export function recordOf(S) {
   const offTonight = S.tonight !== undefined && keyOf(S.outs) !== S.tonight;
   const where = (Object.keys(pins).length || offTonight || S.sticky) && S.tonight !== undefined ? { tonight: S.tonight, on: keyOf(S.outs) } : {};
   const mine = S.mine?.out.length || S.mine?.in.length ? { mine: S.mine } : {};
-  return { saved: S.saved, pins, handouts: S.handouts, combos: S.combos, ...where, ...mine, ...(S.sourceSet && MINUTE_SOURCES.includes(S.source) ? { source: S.source } : {}), ...(Object.keys(S.news ?? {}).length ? { news: S.news } : {}) };
+  const stamps = stampsKept(S.stamps, pins);
+  return { saved: S.saved, pins, handouts: S.handouts, combos: S.combos, ...where, ...mine, ...(S.sourceSet && MINUTE_SOURCES.includes(S.source) ? { source: S.source } : {}), ...(Object.keys(S.news ?? {}).length ? { news: S.news } : {}), ...(stamps ? { stamps } : {}), ...(S.whatif_used ? { whatif_used: S.whatif_used } : {}) };
+}
+
+/** His stamps (scenarios.js badStamps: { m: { scenario key: { id: { at, role } } }, r: { scenario key: { id: at } } }) kept only where a kept pin of that kind in that scenario still names the man; null when none is left. */
+function stampsKept(st, pins) {
+  const out = {};
+  for (const k of ["m", "r"]) {
+    const sec = {};
+    for (const [key, byId] of Object.entries(st?.[k] ?? {})) {
+      const kept = Object.fromEntries(Object.entries(byId ?? {}).filter(([id]) => Object.hasOwn(pins[key]?.[k] ?? {}, id)));
+      if (Object.keys(kept).length) sec[key] = kept;
+    }
+    if (Object.keys(sec).length) out[k] = sec;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/**
+ * The stamps of a scenario's pins go with them to another scenario (moveTo, console-moves.js carryPins): the moved ones win, as the pins do, and a man whose moved pin carries no stamp loses the one the target
+ * held for its own older pin, so his moved number is judged unstamped, never by another number's stamp. Call after the pins have moved. Mutates S.
+ */
+export function moveStamps(S, from, to) {
+  if (from === to || !S.stamps) return;
+  for (const k of ["m", "r"]) {
+    const moved = Object.keys(S.pins?.[from]?.[k] ?? {}), src = S.stamps[k]?.[from] ?? {}, dst = { ...(S.stamps[k]?.[to] ?? {}) };
+    for (const id of moved) if (Object.hasOwn(src, id)) dst[id] = structuredClone(src[id]); else delete dst[id];
+    if (Object.keys(dst).length) (S.stamps[k] ??= {})[to] = dst; else if (S.stamps[k]) delete S.stamps[k][to];
+  }
+}
+
+const PIN_KIND_WORD = { m: "minutes", d: "DK/min", u: "usage", p: "projection" };
+/**
+ * G62 (the money review of 11-20, round 2, item 3): the numbers and role flips he typed on a man the Console's Tonight has Out (our feeds, or his Minutes page) in the scenario on show are kept (moveTo
+ * carried them; they come back when he plays) but not used (console-engine.js pinsOnPlaying): one team-foot sentence per man naming what and why, joined, or null. His own Outs beyond Tonight are not named. Pure.
+ */
+export function outPinsNote(T, S) {
+  const pins = S.pins?.[keyOf(S.outs)] ?? {}, tonight = new Set(T.tonight ?? []), lines = [];
+  for (const id of S.outs ?? []) {
+    if (!tonight.has(id) || !T.byId?.[id]) continue;
+    const what = [...Object.keys(PIN_KIND_WORD).filter((k) => Object.hasOwn(pins[k] ?? {}, id)).map((k) => PIN_KIND_WORD[k]), ...(Object.hasOwn(pins.r ?? {}, id) ? [pins.r[id] === "starter" ? "S" : "role flip"] : [])];
+    if (!what.length) continue;
+    const words = what.length === 1 ? what[0] : `${what.slice(0, -1).join(", ")} and ${what.at(-1)}`;
+    lines.push(`Your typed ${words} on ${T.byId[id].name} ${what.length === 1 ? "is" : "are"} kept, not used: he is Out on Tonight (${T.feed_why?.[id] ?? "your Out on the Minutes page"}).`);
+  }
+  return lines.length ? lines.join(" ") : null;
 }
 
 /** His usual minutes: min_healthy where the pull has it, else Tonight's. */

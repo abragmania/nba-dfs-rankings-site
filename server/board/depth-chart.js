@@ -8,10 +8,11 @@
 //   chart = { schema, team, updated_at, sources, men: { key: { name, positions: [..], role, usual, usual_basis, history, role_unconfirmed,
 //     note, last_season_team, bbr_id, fields: { role|usual|positions: { source, as_of } } } }, starters: [{ key, backup, backup_source }],
 //     bench: [keys], oor: [keys], injured: [keys], positions: { PG: [keys], SG, SF, PF, C } }
-// Starters (chartFive) are a set: the chart's five who are playing and not flipped away, plus every man marked S; marking never moves
-// anyone else. An Out starter's named backup starts only while fewer than five are marked. Six or more marked all start, with a note.
+// Starters (chartFive) are a set: the chart's five who are playing and not flipped away, plus every man marked S. An Out starter's named backup
+// starts only while fewer than five are marked. Never more than five (Adam 3:52 PM 11-20, Q13): an S mark on a full five takes a starter's place, named (role-marks.js trimToFive).
 // Minutes: none are worked here any more (Adam 11-12, one minutes model): the minutes engine's three-tier model (server/board/tiers.js) gives every figure. Usual stays on the chart as information and feeds no minutes figure.
 import { isNum } from "./figures.js";
+import { trimToFive } from "./role-marks.js";
 
 export const DEPTH_SCHEMA = 1;
 export const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
@@ -118,25 +119,37 @@ export function badChart(chart) {
   return null;
 }
 
+/** A chart man's own column (role-marks.js trimToFive posOf): the position list he stands highest on, the first in PG to C order on a tie; null for a man not on the chart. */
+export function chartColumn(chart, key) {
+  let best = null, at = Infinity;
+  for (const p of POSITIONS) { const i = (chart.positions?.[p] ?? []).indexOf(key); if (i >= 0 && i < at) { best = p; at = i; } }
+  return best;
+}
+
 /**
- * The men who start, as a set (Adam, 11-07): { five: [keys, any count], why: { key: { for, how } }, notes }. The chart's named starters who are playing and
+ * The men who start, as a set (Adam, 11-07): { five: [keys, at most five], why: { key: { for, how } }, notes }. The chart's named starters who are playing and
  * not flipped away; every man marked S, on the chart (`flips`) or off it (`extraIns`: [{ key }], a key of the caller's own); then, while fewer than five,
  * the named backup of each starter who is not playing (out, not on the board, or on the injured list), unless Adam flipped that backup himself.
- * Positions play no part. Marking a man never moves anyone else; six or more marked all start (fiveNotes says so).
+ * Positions play no part in who is in. Marking a man S on a full five (Adam 3:52 PM 11-20, Q13: "there should only EVER be 5 starters") takes the place of the starter in his own
+ * column, else of the starter with the lowest figure (figOf(key): the caller's, else the chart's usual), by the one rule (role-marks.js trimToFive); notes name each man it benched.
+ * The caller's look, by key: nameOf (a name off the chart), whoseOf (whose Starter call: his or the lineup news's), orderOf (tonight's order, for equal figures), atOf (when the call was made, ms).
  */
-export function chartFive(chart, active, flips, extraIns = []) {
-  const five = [], why = {}, notes = [];
+export function chartFive(chart, active, flips, extraIns = [], { figOf = (k) => chart.men[k]?.usual ?? 0, nameOf = (k) => k, whoseOf, orderOf, atOf } = {}) {
+  const five = [], why = {}, named = new Set(chart.starters.map((s) => s.key));
   for (const s of chart.starters) if (active(s.key) && (flips[s.key] === undefined || flips[s.key] === "starter")) five.push(s.key);
   const mark = (k) => { five.push(k); why[k] = { for: null, how: "you marked him S" }; };
   for (const k of Object.keys(flips)) if (flips[k] === "starter" && chart.men[k] && active(k) && !five.includes(k)) mark(k);
   for (const e of extraIns) if (!five.includes(e.key)) mark(e.key);
+  const want = five.filter((k) => flips[k] === "starter" || Object.hasOwn(why, k)); // the men his marks added claim a place before his S on a named starter
+  const cut = trimToFive(five, want, { first: want.filter((k) => !named.has(k)), posOf: (k) => chartColumn(chart, k), figOf, orderOf, atOf, whoseOf, nameOf: (k) => chart.men[k]?.name ?? nameOf(k) });
+  for (const k of cut.benched) { five.splice(five.indexOf(k), 1); delete why[k]; }
   for (const s of chart.starters) { // an Out starter's named backup starts only while fewer than five are marked (Adam, 11-07)
     if (five.length >= 5) break;
     const b = s.backup;
     if (active(s.key) || !b || !active(b) || flips[b] !== undefined || five.includes(b)) continue;
     five.push(b); why[b] = { for: s.key, how: `named backup, ${s.backup_source ?? SEED_SOURCE}` };
   }
-  return { five, why, notes };
+  return { five, why, notes: cut.notes, benched: cut.benched };
 }
 
 /**
@@ -160,10 +173,9 @@ export function settleTyped(typed, minutesWith) {
   return typed;
 }
 
-/** The roles note when the starters are not five: six or more marked, or fewer than five, naming each starter out and why nobody stepped in: no named backup playing, or a backup he flipped (`flips`: { key: role }). */
+/** The roles note when fewer than five start (chartFive never gives more), naming each starter out and why nobody stepped in: no named backup playing, or a backup he flipped (`flips`: { key: role }). */
 export function fiveNotes(chart, five, active, why = {}, flips = {}) {
-  if (five.length > 5) return [`${five.length} starters marked: unmark one.`];
-  if (five.length === 5) return [];
+  if (five.length >= 5) return [];
   const missed = chart.starters.filter((s) => !active(s.key) && !Object.values(why).some((w) => w.for === s.key));
   const flipped = (s) => s.backup && active(s.backup) && flips[s.backup] !== undefined;
   const bare = missed.filter((s) => !flipped(s)).map((s) => chart.men[s.key].name);

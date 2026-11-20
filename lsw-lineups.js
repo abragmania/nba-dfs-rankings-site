@@ -5,6 +5,7 @@
 import { esc, money, f1, signed, outChip, ICON_LOCK, nameOpen } from "./lsw-common.js";
 import { logo } from "./board-util.js";
 import { SLOTS } from "./slots.js";
+import { noChipHtml, noTagHtml, LATE } from "./no-picks.js";
 
 const sameIds = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -22,6 +23,8 @@ export function lineupGroups(M) {
 }
 
 const poolOf = (M) => new Map(M.pool.map((p) => [p.dk_id, p]));
+/** The late swap NO men as a Set, or null when this page has no NO list (L.no, lsw-main.js). */
+const noSet = (L) => (L.no ? new Set(L.no.ids) : null);
 const nameIn = (M, id) => poolOf(M).get(id)?.name ?? id;
 const entriesHolding = (M, id) => M.spots.filter((s) => s.slots.some((x) => x.dk_id === id)).reduce((t, s) => t + s.nEntries, 0);
 
@@ -42,20 +45,36 @@ function listsHtml(M, L) {
 <section class="lbbox"><h4>Put in at least</h4><div class="lbrow">${min}<input class="lbadd" data-lsw-in="min" list="lbInList" placeholder="+ add a player" autocomplete="off"><datalist id="lbInList">${inChoices.map((p) => `<option value="${esc(label(p))}" data-id="${esc(p.dk_id)}"></option>`).join("")}</datalist></div></section></div>`;
 }
 
-/** One row of a lineup: slot, logo, name, lock, salary, projection. keep: { spots, kept } for the lock box, or null (an option card). */
-function rowHtml(M, slot, id, { keep = null, fresh = false, outIds = [] } = {}) {
+/** One row of a lineup: slot, logo, name, lock, NO, salary, projection. keep: { spots, kept } for the lock box, or null (an option card).
+ *  no: the late swap NO list (a Set, no-picks.js; Adam 5:28 PM 11-19): a NO man's row is pink with the NO tag; his NO button is on the
+ *  lineup cards, off for a man whose game has started (he stays where he is). */
+function rowHtml(M, slot, id, { keep = null, fresh = false, outIds = [], no = null } = {}) {
   const p = id == null ? null : poolOf(M).get(id);
   if (!p) return `<div class="lbr"><span class="ls">${slot}</span><span class="ln dim">${id == null ? "open" : esc(id)}</span><span class="la">—</span><span class="lp">—</span></div>`;
-  const out = outIds.includes(id);
-  let lock = "";
-  if (p.started || p.untimed) lock = `<span class="lbl fixed" title="His game has started: he stays">${ICON_LOCK}</span>`;
+  const out = outIds.includes(id), fixed = p.started || p.untimed, isNo = Boolean(no?.has(id));
+  let lock = "", noBtn = "";
+  if (fixed) lock = `<span class="lbl fixed" title="His game has started: he stays">${ICON_LOCK}</span>`;
   else if (keep) {
     const on = keep.kept.includes(id);
     lock = `<button class="lbl${on ? " on" : ""}" data-lsw="lbKeep" data-spots="${esc(keep.spots.join("|"))}" data-id="${esc(id)}" title="${on ? "Kept in every option and re-optimize of this lineup. Click to let him go." : "Keep him in this lineup through every re-optimize"}">${ICON_LOCK}</button>`;
   }
-  const cls = ["lbr", p.started || p.untimed ? "stl" : "", fresh ? "new" : "", out ? "outr" : ""].filter(Boolean).join(" ");
-  return `<div class="${cls}"><span class="ls">${slot}</span><span class="ln">${p.team ? logo(p.team, "xs") : ""}${nameOpen(p.name, p.dk_id, "span", "mn")}${lock}${out ? '<i class="outchip">OUT</i>' : outChip(p)}</span><span class="la">${money(p.salary)}</span><span class="lp">${f1(p.proj)}</span></div>`;
+  if (keep && no) noBtn = fixed ? `<button class="nob${isNo ? " on" : ""}" disabled title="His game has started: he stays">NO</button>`
+    : `<button class="nob${isNo ? " on" : ""}" data-lsw="lbNo" data-id="${esc(id)}" aria-pressed="${isNo}" title="${isNo ? `Clear NO: late swap may use ${esc(p.name)} again` : `NO: late swap re-fills leave ${esc(p.name)} out of every open slot (a man kept here stays)`}">NO</button>`;
+  const cls = ["lbr", fixed ? "stl" : "", fresh ? "new" : "", out ? "outr" : "", isNo ? "isno" : ""].filter(Boolean).join(" ");
+  return `<div class="${cls}"><span class="ls">${slot}</span><span class="ln">${p.team ? logo(p.team, "xs") : ""}${nameOpen(p.name, p.dk_id, "span", "mn")}${noTagHtml(isNo, true)}${lock}${noBtn}${out ? '<i class="outchip">OUT</i>' : outChip(p)}</span><span class="la">${money(p.salary)}</span><span class="lp">${f1(p.proj)}</span></div>`;
 }
+
+/** A re-fill answer's late swap NO summary (screen-ops.js lateNoState) in one banner line: "Late swap NO: left out A, B; ignored D (no
+ *  longer on this slate)."; "" when it did nothing. */
+export function lateNoLine(n) {
+  if (!n) return "";
+  // Only what the re-fill left out, and any NO man no longer on the slate (G62): where he chose a man himself nothing is said (Adam 6:19 PM 11-19).
+  const parts = [n.applied?.length ? `left out ${n.applied.join(", ")}` : "", n.ignored?.length ? `ignored ${n.ignored.join(", ")}` : ""].filter(Boolean);
+  return parts.length ? `Late swap NO: ${parts.join("; ")}.` : "";
+}
+
+/** The late swap NO chip over the lineups (no-picks.js noChipHtml, "🚫 NO · late swap"); "" with nobody on it, or with no NO list on this page. */
+const noRowHtml = (M, L) => (L.no ? `<div class="lbno">${noChipHtml({ mode: LATE, ids: L.no.ids, nameOf: (id) => nameIn(M, id), error: L.no.error, lsw: true })}</div>` : "");
 
 const sumOf = (M, ids, k) => { const pool = poolOf(M); const v = ids.map((id) => pool.get(id)?.[k]); return v.every(Number.isFinite) ? v.reduce((a, b) => a + b, 0) : null; };
 
@@ -69,14 +88,14 @@ function cardHtml(g, M, L) {
   const kept = M.keptMen?.[g.spots[0].name] ?? [], spotNames = g.spots.map((s) => s.name);
   const locked = g.lineup.filter((id) => { const p = poolOf(M).get(id); return p && (p.started || p.untimed); }).length;
   return `<article class="lbcard${(M.takeOut ?? []).some((id) => g.lineup.includes(id)) ? " hasout" : ""}">${headHtml(g, M, `<button class="go sm" data-lsw="lbOpen" data-spot="${esc(spotNames[0])}"${L.busy ? " disabled" : ""}>Re-optimize</button>`)}
-${SLOTS.map((slot, i) => rowHtml(M, slot, g.lineup[i], { keep: { spots: spotNames, kept }, outIds: M.takeOut ?? [] })).join("")}
+${SLOTS.map((slot, i) => rowHtml(M, slot, g.lineup[i], { keep: { spots: spotNames, kept }, outIds: M.takeOut ?? [], no: noSet(L) })).join("")}
 <footer class="lbf"><span class="lp">${f1(sumOf(M, g.lineup, "proj"))}</span><span>salary <b>${money(sumOf(M, g.lineup, "salary"))}</b></span><span class="muted">${locked} locked</span><span class="grow"></span><button class="lnk" data-lsw="openSpot" data-spot="${esc(spotNames[0])}">Edit one slot</button></footer></article>`;
 }
 
 function openHtml(g, M, L) {
   const o = L.lbOpts, now = g.lineup, nowProj = sumOf(M, now, "proj"), spotNames = g.spots.map((s) => s.name);
   const kept = M.keptMen?.[spotNames[0]] ?? [];
-  const nowCard = `<div class="lbopt now"><div class="loh"><b>NOW</b><span class="muted">${now.filter((id) => poolOf(M).get(id)?.started).length} locked</span></div>${SLOTS.map((slot, i) => rowHtml(M, slot, now[i], { keep: { spots: spotNames, kept }, outIds: M.takeOut ?? [] })).join("")}<div class="lbf"><span class="lp">${f1(nowProj)}</span><span>${money(sumOf(M, now, "salary"))}</span></div></div>`;
+  const nowCard = `<div class="lbopt now"><div class="loh"><b>NOW</b><span class="muted">${now.filter((id) => poolOf(M).get(id)?.started).length} locked</span></div>${SLOTS.map((slot, i) => rowHtml(M, slot, now[i], { keep: { spots: spotNames, kept }, outIds: M.takeOut ?? [], no: noSet(L) })).join("")}<div class="lbf"><span class="lp">${f1(nowProj)}</span><span>${money(sumOf(M, now, "salary"))}</span></div></div>`;
   const opts = !o ? '<div class="rs">Finding the best options…</div>' : o.options.map((x, n) => {
     const k = SLOTS.filter((_, i) => x.lineup[i] !== now[i]).length;
     return `<div class="lbopt"><div class="loh"><b>OPTION ${n + 1}</b><span class="muted">${k ? plural(k, "change", "changes") : "same as now"}</span><span class="grow"></span><button class="go sm" data-lsw="lbUse" data-n="${n}"${L.busy || !k ? " disabled" : ""}>Use this</button></div>${SLOTS.map((slot, i) => rowHtml(M, slot, x.lineup[i], { fresh: x.lineup[i] !== now[i] })).join("")}<div class="lbf"><span class="lp">${f1(x.proj)}</span><span class="${(x.proj ?? 0) >= (nowProj ?? 0) ? "gr" : "red"}">${Number.isFinite(x.proj) && Number.isFinite(nowProj) ? signed(x.proj - nowProj, f1) : "—"}</span><span>${money(x.salary)}</span></div></div>`;
@@ -92,18 +111,26 @@ export function byLineupHtml(M, L) {
   const open = L.openLu ? groups.find((g) => g.spots.some((s) => s.name === L.openLu)) : null;
   const rest = groups.filter((g) => g !== open);
   const chg = M.exports.changed, nSpots = M.spots.filter((s) => s.changed).length;
-  return `${listsHtml(M, L)}
+  return `${listsHtml(M, L)}${noRowHtml(M, L)}
 <div class="lbtitle"><b>Your lineups</b><span class="muted">each lineup once, however many entries hold it</span><span class="grow"></span><button class="go" data-lsw="lbAll"${L.busy ? " disabled" : ""}>Re-optimize every lineup</button></div>
 ${open ? openHtml(open, M, L) : ""}
 <div class="lbgrid">${rest.map((g) => cardHtml(g, M, L)).join("")}</div>
 <div class="lbfoot"><b>${plural(nSpots, "lineup", "lineups")} changed · ${plural(chg.changed.length, "entry", "entries")}</b><span class="muted">changes stay here until you export</span><span class="grow"></span><button class="go" data-lsw="exportChanged"${chg.written ? "" : " disabled"}>Export changed entries (${chg.written})</button><button class="go ol2" data-lsw="exportAll"${M.exports.all.written ? "" : " disabled"}>Export all assigned entries (${M.exports.all.written})</button></div>`;
 }
 
-/** The clicks of this view; true when handled. c = { L, M, act, render, boardState }. */
+/** The clicks of this view; true when handled. c = { L, M, act, render, boardState, noApi } (noApi: the page's NO lists, no-picks.js). */
 export async function byLineupClick(a, d, c) {
-  const { L, M, act, render, boardState } = c;
-  const lists = (takeOut, atLeast) => act({ op: "lists", takeOut, atLeast });
+  const { L, M, act, render, boardState, noApi = null } = c;
+  const lists = async (takeOut, atLeast) => afterLists(c, await act({ op: "lists", takeOut, atLeast }));
   switch (a) {
+    // The late swap NO list (Adam 5:28 PM 11-19): the same list the Player list's late swap mode shows; an open lineup's options are asked again.
+    case "lbNo": case "lbNoX": case "lbNoClear": case "lbNoRetry": {
+      if (!noApi) return true;
+      if (a === "lbNo") noApi.toggleIn(LATE, d.id); else if (a === "lbNoX") noApi.dropIn(LATE, d.id); else if (a === "lbNoClear") noApi.clearIn(LATE); else await noApi.load();
+      await noApi.settled();
+      if (L.openLu) await loadOptions(c, L.openLu); else render();
+      return true;
+    }
     case "lbOutRm": await lists((M.takeOut ?? []).filter((id) => id !== d.id), M.atLeast ?? {}); return true;
     case "lbMinRm": { const { [d.id]: _gone, ...rest } = M.atLeast ?? {}; await lists(M.takeOut ?? [], rest); return true; }
     case "lbKeep": {
@@ -117,12 +144,14 @@ export async function byLineupClick(a, d, c) {
     case "lbUse": {
       const x = L.lbOpts?.options?.[Number(d.n)];
       if (!x || !L.openLu) return true;
-      const j = await act({ op: "pickOption", spot: L.openLu, lineup: x.lineup, proven: x.proven, remove: M.takeOut ?? [] }, { label: `Lineup ${L.openLu}` });
+      // current: the lineup these options were worked out from (a pick on a changed lineup is refused, review F5); boardState: the Max % it is held to (F3)
+      const j = await act({ op: "pickOption", spot: L.openLu, lineup: x.lineup, proven: x.proven, remove: M.takeOut ?? [], current: L.lbOpts.current?.lineup ?? null, ...boardState() }, { label: `Lineup ${L.openLu}` });
       if (j && !j.refused && !j.confirms?.length) { L.openLu = null; L.lbOpts = null; render(); }
       return true;
     }
     case "lbAll": {
       const spots = M.spots.filter((s) => !s.blank).map((s) => s.name);
+      L.openLu = null; L.lbOpts = null; // an open lineup's options are worked out from what this run replaces (review F5)
       const j = await act({ op: "reoptimize", scope: { type: "chosen", spots }, remove: M.takeOut ?? [], atLeast: M.atLeast ?? {}, ...boardState() }, { label: "Re-optimize every lineup" });
       if (j?.minResults) L.lbMin = j.minResults;
       if (L.banner) { // one line for the run; only the spots that need a look are listed (the cards show the rest)
@@ -137,23 +166,34 @@ export async function byLineupClick(a, d, c) {
 }
 
 async function loadOptions({ L, M, act, render, boardState }, spot) {
-  const j = await act({ op: "options", spot, count: 5, remove: M.takeOut ?? [], ...boardState() });
+  const j = await act({ op: "options", spot, count: 5, remove: (L.M ?? M).takeOut ?? [], ...boardState() }); // L.M: the lists as the last answer left them
   if (L.openLu !== spot) return;
   L.lbOpts = j?.options ?? { options: [], notes: [j?.refused ?? "The options could not be found."] };
   render();
 }
 
-/** A player picked in one of the two "+ add a player" boxes; true when handled. */
-export async function byLineupChange(t, { L, M, act }) {
+/** After a change to the two lists (review F2 11-19): an open lineup's options were worked out from the old lists, so they are asked
+ *  again; with no way to ask here (render or boardState not given) they are closed. j: the lists answer. */
+async function afterLists(c, j) {
+  const { L } = c;
+  if (!j || j.refused || !L.openLu) return;
+  L.lbOpts = null; // the old options leave the screen at once
+  if (c.render && c.boardState) return void (await loadOptions(c, L.openLu));
+  L.openLu = null;
+}
+
+/** A player picked in one of the two "+ add a player" boxes; true when handled. c = { L, M, act, render?, boardState? }. */
+export async function byLineupChange(t, c) {
+  const { L, M, act } = c;
   const kind = t.dataset.lswIn;
   if (!kind) return false;
   const opt = [...(t.list?.options ?? [])].find((o) => o.value === t.value);
   if (!opt) return true; // still typing: nothing picked yet
   const id = opt.dataset.id;
   t.value = ""; // picked once: the input and change events that follow find nothing
-  if (kind === "out") { await act({ op: "lists", takeOut: [...new Set([...(M.takeOut ?? []), id])], atLeast: M.atLeast ?? {} }); return true; }
+  if (kind === "out") { await afterLists(c, await act({ op: "lists", takeOut: [...new Set([...(M.takeOut ?? []), id])], atLeast: M.atLeast ?? {} })); return true; }
   const pct = Number(window.prompt(`Put ${opt.value} in at least what percent of entries?`, "40"));
   if (!Number.isFinite(pct) || pct <= 0 || pct > 100) { L.msg = { kind: "warn", text: "A percent from 1 to 100, please." }; return true; }
-  await act({ op: "lists", takeOut: M.takeOut ?? [], atLeast: { ...(M.atLeast ?? {}), [id]: pct } });
+  await afterLists(c, await act({ op: "lists", takeOut: M.takeOut ?? [], atLeast: { ...(M.atLeast ?? {}), [id]: pct } }));
   return true;
 }

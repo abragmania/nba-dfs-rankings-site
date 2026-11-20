@@ -10,6 +10,7 @@ import { PIN_MAX, SHARE_MAX, COMBO_MAX } from "../board/override-limits.js";
 import { EMPTY_RECORD, isNum, isPlain } from "../board/figures.js";
 import { FLIP_ROLES, STARTERS } from "../board/console-roles.js";
 import { MINUTE_SOURCES } from "../board/depth-chart.js";
+import { badTypedStamp } from "../board/typed-aside.js";
 
 export const SCENARIOS_SCHEMA = 1;
 const MAX_SAVED_SCENARIOS = 40;
@@ -18,10 +19,31 @@ const ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
 const TEAM = /^[A-Z]{2,4}$/;
 const PIN_KINDS = ["m", "u", "d", "p", "r"]; // r: his role flips (console-roles.js), the others numbers
 const SHARE_KINDS = ["m", "u"];
-const RECORD_KEYS = ["saved", "pins", "handouts", "combos", "source", "news", "tonight", "on", "mine", "his_at"]; // his_at: when he last saved this team's work; only his clicks move it (writeScenarios), so a machine rewrite never makes a stale copy look newer // on: the scenario on show when last saved; mine: the men he or the news put Out and the men he put back in // tonight: the Tonight key his work was made on (console-model.js rebases on a newer one) // source: which minutes feed the optimizer (depth-chart.js MINUTE_SOURCES); absent is the default the console inputs name (source_default, from the projection setting). news: below
+const RECORD_KEYS = ["saved", "pins", "handouts", "combos", "source", "news", "tonight", "on", "mine", "his_at", "stamps", "whatif_used"]; // whatif_used: the saved what-if whose numbers the news pass put on this team (badWhatifUsed), kept with the pins it wrote so the two are written, put back and merged together (the money review of the Scenario tab, 11-20, finding 2) // his_at: when he last saved this team's work; only his clicks move it (writeScenarios), so a machine rewrite never makes a stale copy look newer // on: the scenario on show when last saved; mine: the men he or the news put Out and the men he put back in // tonight: the Tonight key his work was made on (console-model.js rebases on a newer one) // source: which minutes feed the optimizer (depth-chart.js MINUTE_SOURCES); absent is the default the console inputs name (source_default, from the projection setting). news: below
 const NEWS_STATES = ["applied", "undone", "failed", "reverted", "reversed"]; // reverted: taken back with Ctrl+Z (never applied again; applied once more on Ctrl+Y). reversed: a news Out put back by a pressed pull when no source claimed it any more (news-reverse.js); it applies again if a source rules him Out again
 const NEWS_KINDS = ["out", "r"];
 const NEWS_FIELDS = ["sig", "state", "at", "text", "men", "why"];
+
+/**
+ * His stamps on a team (Adam 9:46 AM 11-20, typed-aside.js), kept per scenario as his pins are: { m: { scenario key: { id: { at, role } } } (when he typed a man's minutes there, and the man's role then),
+ * r: { scenario key: { id: at } } (when a role flip there was made) }. A record carries them as `stamps`; on disk they sit in the file's top-level `stamps` block by team (writeScenarios), which a copy of
+ * the app from before them passes over, so a newer file never fails an older reader; an older file has none and every typed number in it stands (counted). Null when good, else the reason.
+ */
+function badStamps(st) {
+  if (!isPlain(st) || Object.keys(st).some((k) => k !== "m" && k !== "r")) return '"stamps" holds only m and r';
+  for (const [k, byKey] of Object.entries(st)) {
+    if (!isPlain(byKey) || Object.keys(byKey).length > MAX_SAVED_SCENARIOS * 2) return `The ${k} stamps must be an object keyed by scenario`;
+    for (const [key, sec] of Object.entries(byKey)) {
+      if (!validKey(key) || !isPlain(sec) || Object.keys(sec).length > MAX_KEYS) return `The ${k} stamps of a scenario must be an object keyed by player id`;
+      for (const [id, v] of Object.entries(sec)) {
+        if (!ID.test(id)) return `The ${k} stamps have a bad player id`;
+        const why = k === "m" ? badTypedStamp(v) : typeof v === "string" && Number.isFinite(Date.parse(v)) ? null : "a flip's stamp is not a time";
+        if (why) return `${id}: ${why}`;
+      }
+    }
+  }
+  return null;
+}
 
 export class ScenariosError extends Error {
   constructor(code, message) { super(message); this.code = code; }
@@ -84,6 +106,20 @@ function badNews(news, team) {
   return null;
 }
 
+/**
+ * The what-if in use on a team (server/board/whatif-rule.js putOnPins): { id (the what-if's id), name, at (when it went on, ISO), key (the scenario its pins were last seen on), pins: { m, u, d } (each as
+ * written) }, or null. Null when good, else the reason.
+ */
+function badWhatifUsed(u) {
+  if (u === null) return null;
+  if (!isPlain(u) || Object.keys(u).some((k) => !["id", "name", "at", "key", "pins"].includes(k))) return '"whatif_used" holds only id, name, at, key and pins';
+  if (typeof u.id !== "string" || !u.id.length || u.id.length > 820 || typeof u.name !== "string" || u.name.length > 160) return '"whatif_used" needs its id and name';
+  if (typeof u.at !== "string" || !ISO.test(u.at) || !validKey(u.key ?? null)) return '"whatif_used" needs a time and a scenario key';
+  if (!isPlain(u.pins) || Object.keys(u.pins).some((k) => !["m", "u", "d"].includes(k))) return '"whatif_used" pins hold only m, u and d';
+  for (const [k, sec] of Object.entries(u.pins)) { const why = badMap(sec, PIN_MAX[k], `The what-if's ${k} pin`); if (why) return why; }
+  return null;
+}
+
 /** Null when `rec` is a well-formed team record (filed under `team`, when given), else the reason. Ids need not be on the team now: a pin outlives a new pull. */
 export function badRecord(rec, team = null) {
   if (!isPlain(rec)) return "A team record must be an object.";
@@ -95,6 +131,8 @@ export function badRecord(rec, team = null) {
   if (rec.on !== undefined && !validKey(rec.on)) return '"on" must be a scenario key.';
   if (rec.mine !== undefined && !(isPlain(rec.mine) && Object.keys(rec.mine).every((k) => k === "out" || k === "in") && ["out", "in"].every((k) => Array.isArray(rec.mine[k]) && rec.mine[k].length <= MAX_KEYS && rec.mine[k].every((id) => typeof id === "string" && ID.test(id))))) return '"mine" must list the men out and in by id.';
   if (rec.news !== undefined) { const why = badNews(rec.news, team); if (why) return `${why}.`; }
+  if (rec.stamps !== undefined) { const why = badStamps(rec.stamps); if (why) return `${why}.`; }
+  if (rec.whatif_used !== undefined) { const why = badWhatifUsed(rec.whatif_used); if (why) return `${why}.`; }
   const saved = rec.saved ?? [];
   if (!Array.isArray(saved) || saved.length > MAX_SAVED_SCENARIOS || !saved.every(validKey)) return `"saved" must be up to ${MAX_SAVED_SCENARIOS} scenario keys.`;
   const pins = rec.pins ?? {};
@@ -153,6 +191,10 @@ function badFile(obj) {
     const why = badRecord(rec, t);
     if (why) return `team ${t}: ${why}`;
   }
+  if (obj.stamps !== undefined) {
+    if (!isPlain(obj.stamps)) return "its stamps block is not an object";
+    for (const [t, st] of Object.entries(obj.stamps)) { const why = TEAM.test(t) ? badStamps(st) : "a bad team code"; if (why) return `team ${t}'s stamps: ${why}`; }
+  }
   return badApplied(obj.applied);
 }
 
@@ -173,7 +215,9 @@ export function readScenarios(slate) {
   }
   const why = badFile(parsed);
   if (why) throw new ScenariosError("SCENARIOS_UNREADABLE", `This slate's scenarios file is not well formed: ${why}.`);
-  return { ...parsed, applied: parsed.applied ?? null };
+  const { stamps, ...rest } = parsed; // each team's stamps go back on its record (badStamps)
+  const teams = Object.fromEntries(Object.entries(rest.teams).map(([t, rec]) => [t, isPlain(rec) && isPlain(stamps?.[t]) ? { ...rec, stamps: stamps[t] } : rec]));
+  return { ...rest, teams, applied: parsed.applied ?? null };
 }
 
 /** The teams the board is held for (R4): those with an Apply recorded (applied.keys) or a lineup-news entry applied. Their stored send numbers come from the console's scenario maths, which only a resend can refresh; the one definition the resend, the board's stale guard and the self-check share. */
@@ -192,13 +236,15 @@ function hisStampsOnDisk(slate) {
  * (the server's resend and news apply) carries the his_at stamps unchanged (the record's own, else the ones on disk), so only his clicks move them. The stamp is what the sync judges two computers' copies by (pullnow/resolve.js).
  */
 export function writeScenarios(slate, doc, { his = null, team = null } = {}) {
-  const was = hisStampsOnDisk(slate), teams = {};
-  for (const [t, rec] of Object.entries(doc.teams)) {
-    const at = his && t === team ? his : rec?.his_at ?? was.teams[t];
-    teams[t] = at && rec && typeof rec === "object" ? { ...rec, his_at: at } : rec;
+  const was = hisStampsOnDisk(slate), teams = {}, stamps = {};
+  for (const [t, rec0] of Object.entries(doc.teams)) {
+    const { stamps: st, ...rest } = isPlain(rec0) ? rec0 : {}, base = isPlain(rec0) ? rest : rec0; // a record's stamps go to the top-level block (badStamps)
+    if (isPlain(st) && Object.values(st).some((sec) => Object.keys(sec ?? {}).length)) stamps[t] = st;
+    const at = his && t === team ? his : base?.his_at ?? was.teams[t];
+    teams[t] = at && base && typeof base === "object" ? { ...base, his_at: at } : base;
   }
   const hisAt = his ?? doc.his_at ?? was.file;
-  const out = { schema: SCENARIOS_SCHEMA, slate, teams, applied: doc.applied ?? null, ...(hisAt ? { his_at: hisAt } : {}), updated_at: new Date().toISOString() };
+  const out = { schema: SCENARIOS_SCHEMA, slate, teams, applied: doc.applied ?? null, ...(hisAt ? { his_at: hisAt } : {}), ...(Object.keys(stamps).length ? { stamps } : {}), updated_at: new Date().toISOString() };
   const why = badFile(out);
   if (why) throw new ScenariosError("SCENARIOS_INVALID", `The scenarios could not be saved: ${why}.`);
   keepSlatePrelock(slate, "scenarios.json"); // the Apply record as it stood at lock, for the back-tests (R5, Adam 11-18)
