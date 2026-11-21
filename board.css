@@ -824,6 +824,8 @@ body.fs-list #thead th:last-child,body.fs-list #tbody td:last-child{width:auto} 
 /* On a phone the bar is too tall to stay on screen: it scrolls away and the table's own box takes the screen. */
 @media (max-width:599px){
   .top .lsw,.top .vtabs button,.top .themes button,.tabs button{min-height:2.25rem}
+  .games{grid-template-columns:repeat(auto-fill,minmax(10.5rem,1fr))!important;justify-content:stretch} /* Adam 11-21: games-fit.js sets an inline column width that outranks a plain rule, so !important; fixed 14.75rem cards ran off an iPhone */
+  .top .vtabs{flex-wrap:wrap}.top .vtabs button{flex:1 1 auto}
   .fbar{position:static}
   .tbl{top:0;max-height:calc(100dvh - 0.75rem)}
   /* The sticky Player column was 348px in a 333px box and covered every figure. On a phone it holds only the logo and a shortened name (the star column beside it is sticky too), about 130px; the position tag and game line are left off here. */

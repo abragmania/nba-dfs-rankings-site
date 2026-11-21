@@ -21,7 +21,7 @@ import { renderTab, tabClick, tabInput, readSpotsFor, retrySpots, readBuildsFor,
 import { newBuild } from "./recent-builds.js";
 import { freshLt, entriesOf } from "./lineups-tab.js";
 import { DEFAULT_EXPOSURE_SORT } from "./view-memory.js";
-import { watchBuild, endWatch, stopBuild, abandonBuild, buildButtonsHtml } from "./build-progress.js";
+import { watchBuild, endWatch, stopBuild, abandonBuild, buildButtonsHtml, showWait, waitToBuild } from "./build-progress.js";
 import { askConfirm } from "./confirm.js";
 import { pressSettle } from "./press-settle.js";
 
@@ -231,10 +231,19 @@ function markBad(X) {
   el.querySelectorAll(".setmsg, .cntmsg").forEach((m) => { m.textContent = msg; m.title = msg; m.hidden = !msg || (m.classList.contains("cntmsg") && P.setOpen === true); });
 }
 
-/** Waits until the picks save queue stops changing: a lock clicked while an earlier save is out adds a new link. */
-async function picksSettled(X) {
-  let q;
-  do { q = X.ctx().settled(); await q; } while (q !== X.ctx().settled());
+/** Waits for the save queues to stop changing (the picks, overrides and NO saves and, on the board, his typed minutes and the console's send:
+ *  board.js settled), then for the console's send to carry his change, at most WAIT_CAP_MS (build-progress.js waitToBuild; review 11-21 F3 and
+ *  round 2, items 1 and 5). The Build button says it is saving meanwhile. True when the build may go: a save not landed refuses with its name;
+ *  his change not on the board asks first, Cancel the default. Never builds without his word on a change that has not landed. */
+async function readyToBuild(X, watch) {
+  const c = X.ctx();
+  const r = await waitToBuild({ settled: () => X.ctx().settled(), open: () => X.ctx().unsettled?.() ?? [], hold: () => X.ctx().sendHold?.() ?? { state: "ok" }, onWait: (on) => showWait(X, watch, on) });
+  if (!r) return true;
+  if (c.name !== X.ctx().name || X.P.build !== watch) return false;
+  if (r.refuse) { X.toast(r.refuse, "err"); return false; }
+  const yes = await X.confirm(r.words, { ok: "Build without it", cancelFirst: true });
+  if (!yes) X.toast("Nothing was built: your change has not reached the board yet.", "err");
+  return yes === true;
 }
 
 async function build(X) {
@@ -252,7 +261,7 @@ async function build(X) {
   render(X);
   if (P.ls) return buildLateSwap(X, settings, watch);
   try {
-    await picksSettled(X);
+    if (!(await readyToBuild(X, watch))) return;
     if (name !== X.ctx().name || P.build !== watch) return; // moved slate during the wait: nothing is sent, so no build runs unseen
     // Everything this build sends or is stamped with is the CLICKED mode's (review 11-20, money: Cash and GPP keep separate picks and
     // lineups, Adam 11-14/11-20), never the mode on show after the wait: its locks, its NO list and its working lineup.
@@ -301,7 +310,7 @@ async function buildLateSwap(X, settings, watch) {
   const name = X.ctx().name, mode = X.P.mode;
   X.onLateSwap(); // the table's pickers turn off while the build runs (P.running)
   try {
-    await picksSettled(X);
+    if (!(await readyToBuild(X, watch))) return;
     if (name !== X.ctx().name || X.P.build !== watch) return; // moved slate during the wait: nothing is sent, so no build runs unseen
     const c = modeCtx(X.ctx(), mode); // the clicked mode's locks, never the mode on show after the wait (review 11-20, money)
     const ovAt = c.ovKey, picksAt = picksKeyOf(c), pullAt = c.pull, res0 = X.P.ls?.res;
@@ -509,7 +518,8 @@ async function toggleLateSwap(X, idx = null, from = null) {
 /**
  * The panel's wiring. deps: el, api, toast, tryStore, dash, ctx() → { name, byId, players, picks, settled() }, and
  * onLateSwap() (redraws the header and table after the mode or its working lineup changes).
- * settled() returns one promise for the picks and overrides save queues (the server reads locks and overrides from disk).
+ * settled() returns one promise for the picks and overrides save queues (the server reads locks and overrides from disk); unsettled() names
+ * the queues not landed and sendHold() says where the console's send stands (build-progress.js), both optional.
  * lateSwap() is null outside late swap mode, else what the board table needs (lsView); pin(id, idx) is a slot picker's choice.
  * onWork() redraws the table's rows after the lineup on show changes (their in-lineup mark); inLineup() is the set of
  * dk_ids on show (null in late swap mode); rowClick(id) is a click on a player row; dropMan(id) follows an exclude.
@@ -548,6 +558,7 @@ export function createPanel({ el, lineupsEl = null, onView = () => {}, onTabs = 
     toggleLateSwap: () => toggleLateSwap(X),
     lateSwap: () => (P.ls && ctx().name ? lsView(P, ctx()) : null),
     running: () => P.running, // the header's Late swap switch is off while a build runs
+    swapOpen: () => Boolean(P.swap), // a swap panel is open on the Lineups tab (board.js redraws it when a guess starts or ends)
     workFoot: () => P.workFoot ?? null, // the working lineup's foot facts (carried from before the split, unreadable, replaced; store.js readWorking), for the page foot
     // Before a new pull replaces the rows: each late swap slot man's last row, so a man it drops is still known by name.
     beforeRoster: () => { if (P.ls) P.ls.last = rememberSlots(P.ls.slots, ctx().byId, lsView(P, ctx()).started, P.ls.last); },

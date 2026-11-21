@@ -11,8 +11,8 @@ export const CONFIRM = {
 
 let dismiss = null; // answers the box on show, so a second ask never leaves two
 
-/** Shows `text`; the promise answers true for the `ok` button, false for anything else. */
-export function askConfirm(text, { ok = "OK" } = {}) {
+/** Shows `text`; the promise answers true for the `ok` button, false for anything else. cancelFirst: Cancel takes the keyboard, so Enter cancels (a money question, review 11-21 round 2). */
+export function askConfirm(text, { ok = "OK", cancelFirst = false } = {}) {
   dismiss?.(false);
   return new Promise((resolve) => {
     const back = document.activeElement;
@@ -59,6 +59,6 @@ export function askConfirm(text, { ok = "OK" } = {}) {
     });
     dismiss = answer;
     document.body.append(wrap);
-    yes.focus();
+    (cancelFirst ? no : yes).focus();
   });
 }

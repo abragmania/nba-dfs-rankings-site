@@ -8,8 +8,17 @@ import { SLOTS, SALARY_CAP, checkLineup } from "./slots.js";
 import { slateRefMs, startedSplit } from "./lateswap.js";
 import { outFor } from "./figures.js";
 import { isPending } from "./instant-pins.js";
+import { isGuessed } from "./board-saves.js";
 
 export const SWAP_COUNT = 5;
+/** A man whose figures on show are a guess not yet answered: his typed minutes (instant-pins.js) or an override on its way (board-saves.js) (review 11-21 F6). */
+export const guessedNow = (id) => isPending(id) || isGuessed(id);
+const PEND_TITLE = "A typed number or change of yours is on its way to the board; this figure is the instant one until the board answers";
+/** Why Use waits, or null: either man's figures are still a guess, so the swap would be ranked and made on a number the server has not answered. */
+export function useWait(out, p) {
+  const who = [out, p].filter((m) => m && guessedNow(m.dk_id)).map((m) => m.name ?? m.dk_id);
+  return who.length ? `Wait a moment: your change to ${who.join(" and ")} is still on its way to the board, so this swap is ranked on instant figures. Use comes back once the board answers.` : null;
+}
 
 /** The page's view of who may be swapped in or out now: started men (from the clock) plus the board's picks. */
 export function swapContext(c, seat, nowMs = Date.now()) {
@@ -100,10 +109,15 @@ export function swapPanelHtml(o, i, dash) {
   const head = `<div class="swh">Swap ${nameOpen(o.out.name, o.out.dk_id, "b")} (${esc(o.slot)}): ${o.options.length ? `${o.options.length} best` : "none"} at ${money(o.room)} or less<span>Left = salary left after</span></div>`;
   const noNote = ""; // a NO man is simply not offered, with no line about it (Adam 6:19 PM 11-19: "just don't have that guy shown"); o.noSkipped keeps who, as data
   if (!o.options.length) return `<div class="swp">${head}<div class="swn">No legal replacement for ${esc(o.out.name)}: nobody who fits the ${esc(o.slot)} slot, is not already in the lineup, not excluded, not on the NO list, not Out, not started and keeps the lineup under ${money(SALARY_CAP)}.</div>${noNote}</div>`;
-  const rows = o.options.map(({ p, diff, left }) => `<tr><td class="swl">${nameOpen(p.name, p.dk_id)} <span class="pos">${esc((p.positions ?? []).join("/"))}</span> <small>${esc(p.team)}</small></td>`
-    + `<td>${money(p.salary)}</td><td class="swpj${isPending(p.dk_id) ? " pend" : ""}"${isPending(p.dk_id) ? ' title="His typed number is on its way to the board; this projection is the instant figure until the board answers"' : ""}>${dec1(p.projection)}</td><td>${sgn(diff, dash)}</td>`
-    + `<td>${typeof p.value === "number" ? p.value.toFixed(2) : dash("no value in this pull")}</td>`
-    + `<td class="swo">${typeof p.proj_own === "number" ? p.proj_own.toFixed(1) + "%" : dash("no projected ownership in this pull")}</td>`
-    + `<td>${money(left)}</td><td><button class="xf" data-op="swapuse" data-k="${esc(i)}" data-in="${esc(p.dk_id)}" title="Put ${esc(p.name)} in this lineup">Use</button></td></tr>`).join("");
+  const outPend = guessedNow(o.out.dk_id);
+  const at = (cls, on) => { const c = [cls, on ? "pend" : ""].filter(Boolean).join(" "); return `${c ? ` class="${c}"` : ""}${on ? ` title="${esc(PEND_TITLE)}"` : ""}`; }; // a guessed figure is drawn pending, with why in its hover
+  const rows = o.options.map(({ p, diff, left }) => {
+    const mine = guessedNow(p.dk_id), wait = useWait(o.out, p);
+    return `<tr><td class="swl">${nameOpen(p.name, p.dk_id)} <span class="pos">${esc((p.positions ?? []).join("/"))}</span> <small>${esc(p.team)}</small></td>`
+    + `<td>${money(p.salary)}</td><td${at("swpj", mine)}>${dec1(p.projection)}</td><td${at("", mine || outPend)}>${sgn(diff, dash)}</td>`
+    + `<td${at("", mine)}>${typeof p.value === "number" ? p.value.toFixed(2) : dash("no value in this pull")}</td>`
+    + `<td${at("swo", mine)}>${typeof p.proj_own === "number" ? p.proj_own.toFixed(1) + "%" : dash("no projected ownership in this pull")}</td>`
+    + `<td>${money(left)}</td><td><button class="xf" data-op="swapuse" data-k="${esc(i)}" data-in="${esc(p.dk_id)}"${wait ? ` disabled title="${esc(wait)}"` : ` title="Put ${esc(p.name)} in this lineup"`}>Use</button></td></tr>`;
+  }).join("");
   return `<div class="swp">${head}<table class="swt"><thead><tr><th class="swl">Player</th><th>Sal</th><th>Proj</th><th>Diff</th><th>Val</th><th>Own</th><th>Left</th><th></th></tr></thead><tbody>${rows}</tbody></table>${noNote}</div>`;
 }

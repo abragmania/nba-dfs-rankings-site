@@ -101,6 +101,24 @@ export function resendChanged(c, before) {
   return moved;
 }
 
+/** A send the slate switch dropped (review 11-21 round 2, item 2): its teams are kept by slate, so his saved change still reaches that slate's board when it is opened again. */
+export function keepDropped(c, slate, teams) {
+  if (!slate || !teams?.size && !teams?.length) return;
+  const kept = (c.droppedSends ??= new Map()).get(slate) ?? new Set();
+  for (const t of teams) kept.add(t);
+  c.droppedSends.set(slate, kept);
+}
+/** After a load: the teams a switch dropped on this slate are marked changed and to go again. True when any (his clicks: the send is his, never auto). */
+export function requeueDropped(c) {
+  const kept = c.droppedSends?.get(c.slate);
+  if (!kept?.size) return false;
+  c.droppedSends.delete(c.slate);
+  c.touched ??= new Set(); c.pending ??= new Set();
+  let any = false;
+  for (const t of kept) if (c.model?.ST?.[t]) { c.touched.add(t); c.pending.add(t); any = true; }
+  return any;
+}
+
 /** After a load: every team the board holds an Apply for is checked against the board once, because a pull may have landed since it was sent. True when any. */
 export function requeueApplied(c) {
   if (!mayAutoSend(c.inputs)) return false;
@@ -145,13 +163,14 @@ export async function previewAndSend(c, teams, check = null, auto = false) {
 
 /**
  * The background sender: { kick() (a change was made: send it), run(fn) (fn runs in the same line, after what is queued), direct(team, check),
- * idle() }. c.sync is what the console's header and the board show: { state: "ok" | "partial" | "sending" | "error" | "waiting", at, msg,
+ * idle() }. c.sync is what the console's header and the board show: { state: "ok" | "partial" | "sending" | "error" | "waiting", at, seq, msg,
  * notes (what the last send held back), unsent (teams with old work not sent), pending (teams changed since the last send) }.
+ * seq: the count of sends started on this page (c.sendSeq, never reset), so the board tells a send begun after his typed number from one begun before (instant-pins.js settleOf, review 11-21 F8).
  */
 export function createAutoApply(c, { refreshInputs, onState }) {
   let chain = Promise.resolve(), queued = false, queuedAuto = true;
   c.pending ??= new Set();
-  const set = (state, extra = {}) => { c.sync = { state, at: Date.now(), msg: null, notes: [], unsent: [], ...extra, pending: [...c.pending].sort() }; onState(); };
+  const set = (state, extra = {}) => { c.sync = { state, at: Date.now(), msg: null, notes: [], unsent: [], ...extra, seq: c.sendSeq ?? 0, pending: [...c.pending].sort() }; onState(); };
   /** After a send: the teams it covered are no longer pending; what it held back is "partial". */
   const settle = (res, teams, was) => {
     for (const t of was) if (teams.includes(t)) c.pending.delete(t);
@@ -163,17 +182,24 @@ export function createAutoApply(c, { refreshInputs, onState }) {
     const slate = c.slate, was = new Set(c.pending);
     let teams = teamsOf();
     if (!teams.length) { settle(null, teams, was); return null; }
+    c.sendSeq = (c.sendSeq ?? 0) + 1; // this send starts now: it carries every mark written before this line (previewAndSend saves them first)
     set("sending");
     let res;
     try {
-      res = await previewAndSend(c, teams, check, auto);
+      try {
+        res = await previewAndSend(c, teams, check, auto);
+      } catch (e) {
+        if (e.code !== "CONSOLE_OLD_PULL" && e.code !== "CHANGED_ELSEWHERE") throw e; // a pull landed, or the disk's work moved (the other computer's came down): read again, which takes that work, and send once more from it
+        await refreshInputs();
+        teams = teamsOf();
+        res = await previewAndSend(c, teams, check, auto);
+      }
     } catch (e) {
-      if (e.code !== "CONSOLE_OLD_PULL" && e.code !== "CHANGED_ELSEWHERE") throw e; // a pull landed, or the disk's work moved (the other computer's came down): read again, which takes that work, and send once more from it
-      await refreshInputs();
-      teams = teamsOf();
-      res = await previewAndSend(c, teams, check, auto);
+      if (slate !== c.slate) keepDropped(c, slate, teams); // the slate changed under it: kept to go again on that slate (round 2, item 2)
+      throw e;
     }
     if (slate === c.slate) settle(res, teams, was);
+    else keepDropped(c, slate, teams); // dropped by the switch (previewAndSend answers null): kept, never lost without a word
     return res;
   }
   async function send() {
@@ -200,7 +226,11 @@ export function createAutoApply(c, { refreshInputs, onState }) {
       queuedAuto = queuedAuto && auto === true;
       if (queued) return chain;
       queued = true;
-      chain = chain.then(send);
+      chain = chain.then(send).catch((e) => { // one throw never stops every later send (round 2, item 4), as run() does
+        queued = false;
+        try { set("error", { msg: `Your last change has not reached the board: ${e.message}` }); } catch (e2) { console.warn("console send state:", e2.message); }
+        c.toast?.(`The board was not updated: ${e.message}`, "err");
+      });
       return chain;
     },
     run(fn) {

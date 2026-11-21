@@ -1,6 +1,7 @@
 // The board's saves to the server: the picks and the overrides. Moved out of board.js unchanged (file split, 11-17).
 // Saves go out one at a time, in order, so quick clicks cannot reach the server out of order. After a failed save the
-// page reloads the picks from the server (the saved file is the truth) instead of restoring an older local copy.
+// page reloads the picks from the server (the saved file is the truth) instead of restoring an older local copy; after the last
+// save of a mode is answered, that mode's lists are the server's answer (review 11-21 F2).
 // The picks are kept per mode (Adam 11-14; his yes 5:14 PM ET 11-19 and "yes go" 12:42 PM ET 11-20): S.picks is { Cash: { locked, excluded },
 // GPP: { ... } }, a save sends the open mode's lists with its mode, and the server replaces only that mode's (store.js savePicks).
 import { overlayRows, mergeBodies, isChanges } from "./instant-overrides.js";
@@ -27,10 +28,81 @@ export function troubleLine(a, noun) {
 /** The page's foot facts from a picks or working answer: { carried, unreadable, replaced }. Pure. */
 export const footOf = (a) => ({ carried: a?.carried ?? null, unreadable: a?.unreadable ?? null, replaced: a?.replaced ?? null });
 
-/** `S` is the board's state object; mode() is the optimizer's mode now (the picks a click changes); the rest are the page's own functions,
- *  called as the page defines them. */
-export function createSaves({ S, api, toast, mode: modeNow, renderRows, renderPick, renderDropNote, renderCarried = () => {}, applyPlayers, reread = async () => { throw new Error("no way to read the slate again on this page"); } }) { // reread(name): the slate's rows from the server, taken onto the board
+/** The page's one store of server rows (one board per page): id -> the server's row, for each man shown with a guess of either instant layer. */
+let shownGuess = () => null;
+/** Whether a man's row on show carries a guess not yet answered: an override on its way (instant-overrides.js) or his typed minutes (instant-pins.js).
+ *  The swap list marks him and holds its Use (review 11-21 F6). */
+export const isGuessed = (id) => shownGuess()?.has(String(id)) === true;
+
+/** The picks save line (createSaves' deps). Returns { savePicks(next), queue() -> the line's newest link }. */
+function createPicksLine({ S, api, toast, modeNow, renderRows, renderPick, renderDropNote, renderCarried }) {
   let saveQueue = Promise.resolve();
+  // Picks saves not yet finished, per slate and mode (review 11-21 F2): a save's answer or a read-back is taken onto a mode only when no later save
+  // of that mode is queued, so it never draws over a newer click; Cash and GPP are counted apart, so neither clobbers the other.
+  const picksQueued = new Map();
+  const countPicks = (name, mode, by) => { const k = `${name}|${mode}`, n = (picksQueued.get(k) ?? 0) + by; if (n > 0) picksQueued.set(k, n); else picksQueued.delete(k); };
+  /** Whether a save of mode `m` other than the one finishing now (of mode `self`) is still queued for the slate. */
+  const laterPicks = (name, m, self) => (picksQueued.get(`${name}|${m}`) ?? 0) - (m === self ? 1 : 0) > 0;
+  /** One mode's lists taken onto the page, redrawn only when they changed. */
+  function takePicks(m, lists) {
+    if (JSON.stringify(S.picks?.[m]) === JSON.stringify(lists)) return false;
+    S.picks = { ...S.picks, [m]: lists };
+    return true;
+  }
+  /** The saved picks read again: `modes` the modes to take, each only with no later save of it queued. Never rejects. */
+  async function readPicksBack(name, self, modes) {
+    try {
+      const saved = await api(`/api/slate/${encodeURIComponent(name)}/picks`);
+      if (name !== S.name) return;
+      const by = picksByMode(saved);
+      let moved = false;
+      for (const m of modes) if (!laterPicks(name, m, self)) moved = takePicks(m, by[m]) || moved;
+      S.picksFoot = footOf(saved); renderCarried();
+      if (moved) { renderRows(); renderPick(); }
+    } catch (e2) { toast(`Could not reload picks: ${e2.message}`, "err"); }
+  }
+  /** One picks save. Answered: the mode's lists are the server's (its answer holds both modes as saved, server.js handlePicks), once it is the last save of that mode queued.
+   *  Failed: the saved picks are read back, each mode only when no later save of it is queued. */
+  async function sendPicks(name, mode, body) {
+    let out;
+    try {
+      out = await api(`/api/slate/${encodeURIComponent(name)}/picks`, { method: "POST", headers: { "content-type": "application/json" }, body });
+    } catch (e) {
+      toast(`Could not save picks: ${e.message}`, "err");
+      await readPicksBack(name, mode, PICK_MODES);
+      return;
+    }
+    if (out?.replaced_unreadable) toast(out.replaced_unreadable, "err");
+    if (name !== S.name) return;
+    const left = Array.isArray(out?.dropped) ? out.dropped : []; // men off the slate the other mode's saved lists still hold
+    if (S.dropped.length || S.rosterDropped.length || left.length) { S.dropped = left; S.rosterDropped = []; renderDropNote(); }
+    S.picksFoot = footOf(out); renderCarried();
+    if (laterPicks(name, mode, mode)) return; // a newer click of this mode is on its way: its answer is the one taken
+    let lists = null;
+    try { lists = picksByMode(out)[mode]; } catch (e) { console.warn("the picks answer held no lists; they are read again:", e.message); }
+    if (!lists) { await readPicksBack(name, mode, [mode]); return; }
+    if (takePicks(mode, lists)) { renderRows(); renderPick(); }
+  }
+  /** Saves the open mode's lists; the other mode's are never sent, so they cannot be changed from here. The mode is taken at the click. */
+  function savePicks(next) {
+    const mode = modeNow();
+    S.picks = { ...S.picks, [mode]: next }; renderRows(); renderPick();
+    const name = S.name, body = JSON.stringify({ mode, locked: next.locked, excluded: next.excluded });
+    countPicks(name, mode, 1);
+    saveQueue = saveQueue.then(async () => {
+      try { await sendPicks(name, mode, body); } finally { countPicks(name, mode, -1); }
+    }).catch((e) => toast(`Your lock or exclude could not be finished: ${e.message}`, "err")); // the line goes on after any throw
+  }
+  /** A load's read of the picks (picksByMode's answer) for slate `name`: each mode with a save still on its way keeps `current` (the page's lists, null on another slate), so a Lock
+   *  clicked during the read is never drawn over; its own answer then sets the mode (review 11-21 round 2, item 9). */
+  const fromRead = (name, read, current) => Object.fromEntries(PICK_MODES.map((m) => [m, current?.[m] && (picksQueued.get(`${name}|${m}`) ?? 0) > 0 ? current[m] : read[m]]));
+  return { savePicks, queue: () => saveQueue, fromRead };
+}
+
+/** `S` is the board's state object; mode() is the optimizer's mode now (the picks a click changes); the rest are the page's own functions,
+ *  called as the page defines them. over(row): the typed-minutes layer's copy of a row with his numbers on it (board-marks.js over), the row itself with none. */
+export function createSaves({ S, api, toast, mode: modeNow, renderRows, renderPick, renderDropNote, renderCarried = () => {}, applyPlayers, over = (row) => row, reread = async () => { throw new Error("no way to read the slate again on this page"); } }) { // reread(name): the slate's rows from the server, taken onto the board
+  const picks = createPicksLine({ S, api, toast, modeNow, renderRows, renderPick, renderDropNote, renderCarried });
   // ---------- overrides (Adam, 5:20 PM ET 2026-10-29; server/slate/overrides.js) ----------
   // Every write goes to the server, one request at a time and in order, and the page takes the players it answers (the saved
   // file is the truth). A refused write shows its sentence and puts the rows back as the server last gave them.
@@ -40,50 +112,47 @@ export function createSaves({ S, api, toast, mode: modeNow, renderRows, renderPi
    *  panel's until-unchanged wait (picksSettled) covers both: a build reads the saved locks and the saved overrides. */
   let settledOf = [], settledP = Promise.resolve();
   function settled() {
-    if (settledOf[0] !== saveQueue || settledOf[1] !== ovQueue) { settledOf = [saveQueue, ovQueue]; settledP = Promise.all(settledOf); }
+    if (settledOf[0] !== picks.queue() || settledOf[1] !== ovQueue) { settledOf = [picks.queue(), ovQueue]; settledP = Promise.all(settledOf); }
     return settledP;
   }
-  /** Saves the open mode's lists; the other mode's are never sent, so they cannot be changed from here. The mode is taken at the click. */
-  function savePicks(next) {
-    const mode = modeNow();
-    S.picks = { ...S.picks, [mode]: next }; renderRows(); renderPick();
-    const name = S.name, body = JSON.stringify({ mode, locked: next.locked, excluded: next.excluded });
-    saveQueue = saveQueue.then(async () => {
-      try {
-        const out = await api(`/api/slate/${encodeURIComponent(name)}/picks`, { method: "POST", headers: { "content-type": "application/json" }, body });
-        if (out?.replaced_unreadable) toast(out.replaced_unreadable, "err");
-        if (name !== S.name) return;
-        const left = Array.isArray(out?.dropped) ? out.dropped : []; // men off the slate the other mode's saved lists still hold
-        if (S.dropped.length || S.rosterDropped.length || left.length) { S.dropped = left; S.rosterDropped = []; renderDropNote(); }
-        S.picksFoot = footOf(out); renderCarried();
-      } catch (e) {
-        toast(`Could not save picks: ${e.message}`, "err");
-        try {
-          const saved = await api(`/api/slate/${encodeURIComponent(name)}/picks`);
-          if (name === S.name) { S.picks = picksByMode(saved); S.picksFoot = footOf(saved); renderRows(); renderPick(); renderCarried(); }
-        } catch (e2) { toast(`Could not reload picks: ${e2.message}`, "err"); }
-      }
-    });
-  }
   // Show then settle (Adam 1:35 PM 11-20, instant-overrides.js): a change is put on his row at the click, then sent. `pend` holds every change not yet
-  // answered, in click order ({ name, body, what, sent, done }); `server` holds the server's own row for each man shown with a guess, so a refusal puts
-  // exactly that back. Plain changes waiting together go as one request (a reset alone); a request the server refuses as a bad value (400) is sent
+  // answered, in click order ({ name, body, what, sent, done }); `server` is the one store of server rows (review 11-21 F4): the server's own row for each
+  // man shown with a guess of either layer (an override here, his typed minutes in instant-pins.js), so a refusal puts exactly that back and no guess is
+  // ever taken as the server's. Plain changes waiting together go as one request (a reset alone); a request the server refuses as a bad value (400) is sent
   // again one change at a time, so only the refused change is put back.
   let pend = [], server = new Map();
+  shownGuess = () => server;
   const mine = () => pend.filter((e) => e.name === S.name).map((e) => e.body);
-  /** The rows with his changes still on their way put on them. rows: the server's (an answer, a new pull, a load). */
+  /** The rows with his changes still on their way put on them, overrides first, then his typed minutes. rows: the server's (an answer, a new pull, a load). */
   function overlay(rows) {
-    const out = overlayRows(rows, mine());
-    server = out.server;
-    return out.rows;
+    const out = overlayRows(rows, mine()), store = out.server;
+    const shown = out.rows.map((p, i) => {
+      const q = over(p);
+      if (q !== p && p && !store.has(String(p.dk_id))) store.set(String(p.dk_id), rows[i]); // overlayRows keeps the order of `rows`
+      return q;
+    });
+    server = store;
+    return shown;
   }
   /** The rows with every guess taken off: each guessed man's server row. */
   const bare = (rows) => rows.map((p) => server.get(String(p.dk_id)) ?? p);
-  /** The rows shown again from the server's rows and what is still pending; a man with nothing pending shows the server's row. */
-  function reshow() {
+  /** The rows on show built again from the server's rows and what is still pending, with no draw; a man with nothing pending shows the server's row. */
+  function restack() {
     S.players = overlay(bare(S.players));
     S.byId = new Map(S.players.map((p) => [p.dk_id, p]));
+  }
+  function reshow() {
+    restack();
     renderRows(); renderPick();
+  }
+  /** A server answer's players for the rows on show (board.js applyPlayers), with take(row, answer) its taking of one man's figures (slate-refresh.js takeAnswer):
+   *  { kind: "unknown" } with no list or an empty one, an unknown outcome to read again, never "nobody" (review 11-21 F11); { kind: "reload", fresh } when the
+   *  server's men are not the board's; else { kind: "rows", fresh, rows }: the SERVER rows with the answer taken (never a guess), then every guess laid on again. */
+  function answerRows(players, take) {
+    if (!Array.isArray(players) || !players.length) return { kind: "unknown" };
+    const fresh = new Map(players.map((p) => [p.dk_id, p]));
+    if (fresh.size !== S.byId.size || [...fresh.keys()].some((id) => !S.byId.has(id))) return { kind: "reload", fresh };
+    return { kind: "rows", fresh, rows: overlay(bare(S.players).map((p) => (fresh.has(p.dk_id) ? take(p, fresh.get(p.dk_id)) : p))) };
   }
   async function post(name, body) {
     // GitHub's data is being brought down (the server answers 409 SYNC_RUNNING): his change is kept as it is and sent again after a few seconds, up to three times, never redrawn away.
@@ -148,5 +217,5 @@ export function createSaves({ S, api, toast, mode: modeNow, renderRows, renderPi
     ovQueue = ovQueue.then(sendNext).catch((err) => toast(`Your change could not be finished: ${err.message}`, "err")); // the line goes on after any throw
     return kept;
   }
-  return { settled, savePicks, saveOverride, overlay, bare, pending: () => pend.length, saveCount: () => ovSaves, countSave: () => { ovSaves++; } };
+  return { settled, savePicks: picks.savePicks, picksFromRead: picks.fromRead, saveOverride, overlay, bare, restack, answerRows, pending: () => pend.length, saveCount: () => ovSaves, countSave: () => { ovSaves++; } };
 }

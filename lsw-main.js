@@ -102,7 +102,7 @@ async function actOnce(body, { label = null } = {}) {
   const mine = epoch;
   L.busy = true; render();
   try {
-    if (noApi && REFILLS.includes(body?.op)) await noApi.settled(); // a re-fill reads the saved late swap NO list: a NO click still on its way lands first
+    if (noApi && REFILLS.includes(body?.op)) await noApi.settled({ check: true }); // a re-fill reads the saved late swap NO list: a NO click still on its way lands first; on the board, his typed minutes and the console's send too, or it refuses (board.js allSettled)
     const j = await request(body);
     if (mine !== epoch) return null; // another slate is on show now: nothing here is its business, and its busy flag is not ours to touch
     if (j.discarded) { L.busy = false; render(); return null; }

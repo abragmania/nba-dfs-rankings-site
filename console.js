@@ -9,7 +9,7 @@ import { readWhatifs, loadPicked } from "./console-whatif.js";
 import { clearStanding, dropMark, firstPlaying, jumpTeam, pushHist, redo, restoreTyped, saveDirty, setPin, setSource, toggleOut, toggleStarter, undo } from "./console-moves.js";
 import { roleMarksFootHtml } from "./console-role-foot.js";
 import { cardApi, lineupViewOf } from "./console-card.js";
-import { createAutoApply, createPullReads, mayAutoSend, requeueApplied, requeueNews, resendChanged, resultSigs } from "./console-auto.js";
+import { createAutoApply, createPullReads, keepDropped, mayAutoSend, requeueApplied, requeueDropped, requeueNews, resendChanged, resultSigs } from "./console-auto.js";
 import { PIN_MAX } from "./override-limits.js";
 import { stepMinutes } from "./min-step.js";
 import { keyOf } from "./console-engine.js";
@@ -18,6 +18,15 @@ import { teamNews, newsView } from "./console-news.js";
 import { landingHtml, teamBarOf, withAllChip } from "./console-all.js";
 import { statusLine } from "./lineup-bar.js";
 import { chartClick, chartChange, wireChartDrag, showInjured } from "./console-chart-ui.js";
+import { clearQueued } from "./instant-pins.js";
+
+/** A console write of his minutes or DK/min on a man: a board number for the same man and kind not yet sent is older and dropped first, and one being
+ *  written now lands before this one (instant-pins.js clearQueued), so the console's is the last word (review 11-21 F10, as card-role.js does). */
+export function afterBoard(c, id, k, fn) {
+  const going = clearQueued(id, k), slate = c.slate;
+  if (!going) return fn();
+  return going.then(() => { if (c.slate === slate && c.model) return fn(); c.toast("Your number was not kept: the slate changed before it could be written.", "err"); }).catch((e) => c.toast(`Your number was not kept: ${e.message}`, "err"));
+}
 
 /** His depth-chart moves as the server holds them, per team (console-moves.js saveDepth compares against it). */
 const depthTexts = (model) => Object.fromEntries(Object.entries(model.TEAMS).map(([code, T]) => [code, JSON.stringify(T.tier?.depth?.moves ?? null)]));
@@ -165,7 +174,8 @@ async function load(c, name) {
   clearTimeout(c.usageTimer);
   clearTimeout(c.retryTimer);
   clearTimeout(c.readTimer);
-  Object.assign(c, { slate: name, loadError: null, model: null, newsRead: null, usageTries: 0, saveErrs: {}, saveNotes: {}, sync: { state: "ok", at: null }, touched: new Set(), pending: new Set(), readFail: null, inputsAt: null }); // another slate: nothing changed on it yet
+  if (c.slate !== name) keepDropped(c, c.slate, c.pending); // his changes on the slate left that have not reached its board go when it is opened again (round 2, item 2)
+  Object.assign(c, { slate: name, loadError: null, model: null, newsRead: null, usageTries: 0, saveErrs: {}, saveNotes: {}, sync: { state: "ok", at: null, seq: c.sendSeq ?? 0 }, touched: new Set(), pending: new Set(), readFail: null, inputsAt: null }); // another slate: nothing changed on it yet; the send count goes on (console-auto.js)
   c.E("app").innerHTML = `<div class="fatalc dimc">Loading ${esc(name)}...</div>`;
   try {
     const out = await c.api(`/api/slate/${encodeURIComponent(name)}/console`);
@@ -188,8 +198,8 @@ async function load(c, name) {
     render(c);
     readNews(c).then(() => { if (c.on && name === c.slate) render(c); }); // the strip says "reading..." until the read lands; readNews never rejects
     readWhatifs(c).then(() => { if (c.on && name === c.slate) render(c); }); // the Load what-if picker (console-whatif.js, Adam 1:37 PM 11-20); never rejects
-    const news = requeueNews(c), applied = requeueApplied(c);
-    if (news || applied) c.auto.kick(true); // (no click of his started it: his_at is carried) // a news change whose send never landed, or a pull since the last send, reaches the board now
+    const news = requeueNews(c), applied = requeueApplied(c), dropped = requeueDropped(c);
+    if (news || applied || dropped) c.auto.kick(!dropped); // (no click of his started it: his_at is carried, unless a send of his a switch dropped goes too) // a news change whose send never landed, or a pull since the last send, reaches the board now
     else c.auto.settleNow(); // old work this page does not send (a locked or older slate, a mark nothing moved) is said in the header, not "up to date"
     watchUsage(c);
   } catch (e) {
@@ -294,12 +304,12 @@ function commitBox(c, inp) {
   const T = c.model.TEAMS[team];
   if (!T) return;
   const S = c.model.ST[team], had = S.pins[keyOf(S.outs)]?.[k]?.[id];
-  if (text === "") { if (had !== undefined) dropMark(c, team, id, k); else render(c); return; }
+  if (text === "") { if (had !== undefined) afterBoard(c, id, k, () => dropMark(c, team, id, k)); else render(c); return; }
   const v = /^(\d+\.?\d*|\.\d+)$/.test(text) ? Number(text) : NaN;
   if (!(v >= 0 && v <= PIN_MAX[k])) { c.toast(`${k === "m" ? "Minutes" : "DK/min"} must be a number from 0 to ${PIN_MAX[k]}.`, "err"); render(c); return; }
   const exact = inp.dataset.exact; // minutes show rounded, so the stored figure is the one compared: typing the shown 31 over 31.4 is a change
   if (shown !== "" && (exact !== undefined && exact !== "" ? Number(exact) : Number(shown)) === v) { delete inp.dataset.done; return; } // unchanged as shown
-  setPin(c, team, id, k, v);
+  afterBoard(c, id, k, () => setPin(c, team, id, k, v));
 }
 
 /** His set-aside typed minutes back in use (Adam 9:46 AM 11-20, typed-aside.js): a Console number is stamped again (restoreTyped); a Minutes-page number is typed again as it was on the Minutes route, then the inputs are read again. */
@@ -315,10 +325,19 @@ async function restoreRow(c, team, id) {
 }
 /** A - or + press beside a Min box: the shown whole minute moved by one, kept as his typed minutes exactly as a typed number is. */
 function stepBox(c, btn) {
-  const { team, id, mstep } = btn.dataset, inp = btn.closest(".mstep")?.querySelector("input.fin");
-  const v = stepMinutes(parseFloat(inp?.defaultValue), Number(mstep));
-  if (v === null) { c.toast("There is no minutes figure to step from; type his minutes.", "err"); return; }
-  setPin(c, team, id, "m", v);
+  const { team, id, mstep } = btn.dataset;
+  return stepPin(c, team, id, Number(mstep));
+}
+/** His minutes on the console now (the scenario on show), or null. */
+const minNow = (c, team, id) => { const T = c.model?.TEAMS?.[team], S = c.model?.ST?.[team]; return T && S ? calc(T, S, S.outs).rows.find((r) => r.id === id)?.min ?? null : null; };
+/** One step, worked out when it is written, from the console's figure then (review 11-21 round 2, item 6): two presses while a board number lands are two
+ *  minutes, never one from a stale box. minOf and set stand in for the model's figure and setPin in tests. */
+export function stepPin(c, team, id, dir, { minOf = minNow, set = (v) => setPin(c, team, id, "m", v) } = {}) {
+  return afterBoard(c, id, "m", () => {
+    const v = stepMinutes(minOf(c, team, id), dir);
+    if (v === null) { c.toast("There is no minutes figure to step from; type his minutes.", "err"); return false; }
+    return set(v);
+  });
 }
 
 function onClick(c, e) {
@@ -332,7 +351,7 @@ function onClick(c, e) {
   else if (d.caDismiss) { writeStore(dismissKey(c.slate), JSON.stringify({ ...readDismissed(c.slate), [d.caDismiss]: d.caSig ?? "" })); render(c); }
   else if (d.help) { c.G.help = !c.G.help; render(c); }
   else if (d.mstep) stepBox(c, t); // the - and + beside a Min box (min-step.js)
-  else if (d.undo) dropMark(c, d.team, d.id, d.undo);
+  else if (d.undo) { if (d.undo === "m" || d.undo === "d") afterBoard(c, d.id, d.undo, () => dropMark(c, d.team, d.id, d.undo)); else dropMark(c, d.team, d.id, d.undo); } // a typed number's undo: after a board number of the same kind (F10)
   else if (d.restore) restoreRow(c, d.team, d.restore); // his typed minutes a role change set aside, back in use (Adam 9:46 AM 11-20)
   else if (d.clearMark) clearStanding(c, d.team, d.clearMark); // a standing role mark off, back to the rule (Undo brings it back)
   else if (d.s) toggleStarter(c, d.team, d.s);
@@ -380,7 +399,8 @@ export function createConsole({ el, api, toast, colourOf, onPlayers, onWork, new
     /** The slate on show changed. Nothing loads until the console is opened or the board asks. */
     setSlate(name) {
       if (name === c.slate) return;
-      Object.assign(c, { slate: name, model: null, inputs: null, loadError: null, newsRead: null, readFail: null, inputsAt: null });
+      keepDropped(c, c.slate, c.pending); // the slate left keeps its changes not yet on its board, to go when it is opened again (round 2, item 2)
+      Object.assign(c, { slate: name, model: null, inputs: null, loadError: null, newsRead: null, readFail: null, inputsAt: null, pending: new Set(), touched: new Set() });
       clearTimeout(c.usageTimer);
       clearTimeout(c.retryTimer);
       clearTimeout(c.readTimer);
@@ -400,6 +420,8 @@ export function createConsole({ el, api, toast, colourOf, onPlayers, onWork, new
     },
     hide() { c.on = false; el.hidden = true; },
     isOn: () => c.on,
+    /** The console's send line, idle once every send queued now has ended (console-auto.js): a build waits on it (board.js settled, review 11-21 F3). */
+    idle: () => c.auto.idle(),
     /** An in-place pull refresh landed on the open page (board.js applyFresh: a new pull, position read or Ours minutes record moves the board's stamp), console open or not: the work loads if it has not
      *  (a load re-checks every team the board holds), else its inputs are read again and each team whose result moved is sent by the console's own send line, one at a time after any send in flight.
      *  One read at a time; teams with nothing held send nothing. */

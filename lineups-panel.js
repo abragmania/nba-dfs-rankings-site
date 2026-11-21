@@ -4,7 +4,7 @@
 import { keepFocus, remScale } from "./board-util.js";
 import { lineupRefusals, isOutNow } from "./card-row.js";
 import { lineupsTabHtml, viewModel, builtAtText, viewOf, entriesOf, unavailableMen, unavailableLabel, savedLabel, heldSpots, outNamesOfCtx, SORTS, nextLtSort, nextManFilter } from "./lineups-tab.js";
-import { swapContext, swapContextFor, swapOptions, swapIds, startedByTip } from "./swap-list.js";
+import { swapContext, swapContextFor, swapOptions, swapIds, startedByTip, useWait } from "./swap-list.js";
 import { savedCall, saveBatch, savedClick, savedNameInput } from "./saved-panel.js";
 import { cleanSpotName } from "./spot-name.js";
 import { planInOrder, orderSummary } from "./assign-order.js";
@@ -179,6 +179,8 @@ function download(X, entries, own) {
 function swapUse(X, key, inId, own) {
   const { P } = X, open = P.swap, ids = idsOf(P, key);
   const o = ids && open?.key === key ? swapOptions(ids, open.id, swapContextFor(X.ctx(), own.lateSwapSeat, modeOfKey(P, key))) : null; // the card's own mode's excludes, locks and NO (review 11-20)
+  const wait = o ? useWait(o.out, X.ctx().byId.get(inId)) : null; // checked again at the click: a guess may have started since the panel drew (review 11-21 round 2, item 3)
+  if (wait) { X.toast(wait, "err"); return own.render(X); } // the panel stays open, Use held
   P.swap = null;
   if (!o?.options.some((x) => x.p.dk_id === inId)) { X.toast("That swap is no longer legal; pick again."); return own.render(X); }
   const next = swapIds(o, inId);

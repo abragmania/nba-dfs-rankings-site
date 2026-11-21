@@ -54,3 +54,9 @@ body.light #console .ca-k-P,body.light #console .ca-k-IN,body.light #console .ca
 #console .cn .ca-c.ca-conf .ca-who{grid-column:3 / -1}
 #console .cn .ca-fold{margin-top:0.25rem;padding-top:0.25rem;color:var(--mu);font-size:0.75rem}
 #console .cn .ca-feed h3{white-space:nowrap}
+
+/* Phone (Adam 11-21): the 7-column All-teams row is wider than an iPhone; the list scrolls sideways inside its own box instead of widening the page. */
+@media (max-width:599px){
+  #console .ca-list{overflow-x:auto}
+  #console .ca-list .ca-row:not(.ca-c){min-width:62rem}
+}

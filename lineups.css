@@ -220,9 +220,15 @@ body.light .top .lswnav button.on{color:#fff}
 #lineups .spfull{white-space:normal}
 /* Phone: the summary tiles wrap two or three to a row and the download button takes its own row. */
 @media (max-width:599px){
+  #lineups .lt-body{grid-template-columns:minmax(0,1fr)} /* Adam 11-21: the 30rem exposure column ran past an iPhone's edge; one column, the exposure table scrolls inside its own box */
+  #lineups .lt-ex{overflow-x:auto}
+  #lineups .lt-cards,#lineups .lt-ocards{grid-template-columns:minmax(0,1fr)}
+  #lineups .lt-bh{flex-wrap:wrap;gap:0.25rem 0.875rem}
+  #lineups .lt-bh>*{white-space:normal}
   #lineups .lt-top{flex-direction:column;align-items:stretch}
   #lineups .lt-sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
-  #lineups .lt-sum div{border-bottom:1px solid var(--ln)}
+  #lineups .lt-sum div{border-bottom:1px solid var(--ln);min-width:0}
+  #lineups .lt-sum b{white-space:normal;overflow-wrap:anywhere}
   #lineups .lt-acts{flex-direction:column;align-items:stretch}
   #lineups .lt-dl{width:100%;min-height:2.25rem}
 }

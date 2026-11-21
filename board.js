@@ -41,6 +41,7 @@ import { workCarriedLine } from "./work-panel.js";
 import { createFullScreen } from "./board-fullscreen.js";
 import { topHtml, gamesHtml, headTitle as viewHeadTitle, chipsHtml } from "./board-views.js";
 import { createNoPicks, noChipHtml, combineSettled, LATE } from "./no-picks.js";
+import { createWaitParts, sendHold, waitToBuild } from "./build-progress.js";
 
 const $ = (id) => document.getElementById(id);
 const TABS = ["ALL", "PG", "SG", "SF", "PF", "C", "G", "F"];
@@ -74,11 +75,20 @@ const dash = (title) => `<span class="miss" title="${esc(title)}">—</span>`;
 /** A slate stamp in Eastern time; the slate's own date (from its name) settles the year TwoGun's stamps leave out. */
 const when = (s) => tipWhen(S.name)(s);
 // The picks and override saves (board-saves.js); settled() lets a build wait for picks and override saves in flight, since the server reads the saved locks and the saved overrides.
-const saves = createSaves({ S, api, toast, mode: () => panel.mode(), renderRows: () => renderRows(), renderPick: () => renderPick(), renderDropNote: () => renderDropNote(), renderCarried: () => renderSources(), applyPlayers: (p) => applyPlayers(p), reread: async (n) => { const s = await api(`/api/slate/${encodeURIComponent(n)}`); if (n === S.name) applyPlayers(s.players); } });
+const saves = createSaves({ S, api, toast, mode: () => panel.mode(), renderRows: () => renderRows(), renderPick: () => renderPick(), renderDropNote: () => renderDropNote(), renderCarried: () => renderSources(), applyPlayers: (p) => applyPlayers(p), over: (row) => boardMarks.over(row) /* his typed minutes on their way, on a copy (instant-pins.js) */, reread: async (n) => { const s = await api(`/api/slate/${encodeURIComponent(n)}`); if (n === S.name) applyPlayers(s.players); } });
 const { savePicks, saveOverride } = saves;
 // The NO list (no-picks.js, Adam 11-19): per mode, apart from his picks; a build waits for its saves too, since the server reads the saved list.
 const noPicks = createNoPicks({ api, toast, slate: () => S.name, mode: () => (panel.lateSwap() ? LATE : panel.mode()), onChange: () => { if (S.slate) renderRows(); lateSwapNoChanged(); }, nameOf: (id) => nameOf(id) });
-const settled = combineSettled(saves.settled, noPicks.settled);
+// A build waits for his typed minutes too (review 11-21 F3): the line hands off what is waiting at once (boardMarks.flush), then the console's send carries it (scenarioConsole.idle). Each part is named, so a wait that runs out says what has not landed (build-progress.js).
+const waitParts = createWaitParts([["your locks, excludes and board changes", saves.settled], ["the NO list", noPicks.settled], ["your typed minutes", () => boardMarks.flush()], ["the console's send to the board", () => scenarioConsole.idle()]]);
+const settled = waitParts.settled, sendHoldNow = () => sendHold(scenarioConsole.syncState());
+/** The late swap screens' wait (lsw-main.js): every save lands first; check (a re-optimize) also waits for the console's send as a build does, and throws the refusal or his No. */
+async function allSettled({ check = false } = {}) {
+  const r = await waitToBuild({ settled, open: waitParts.open, hold: check ? sendHoldNow : undefined });
+  if (!r || !check) return;
+  if (r.refuse) throw new Error(r.refuse.replace("Nothing was built", "Nothing was re-optimized"));
+  if (!(await askConfirm(r.words.replace("Build without it?", "Re-optimize without it?"), { ok: "Re-optimize without it", cancelFirst: true }))) throw new Error("Nothing was re-optimized: your change has not reached the board yet.");
+}
 // The player panel (card.js), docked on the right; it closes itself on Esc. A man's figures follow the board's copy of him (a man from the
 // Out list has none and stays as he was opened).
 const card = initCard({ root: document.body, dash, colourOf, picks: () => shown(),
@@ -89,7 +99,7 @@ createOptStrip({ el: $("optstrip"), opt: $("opt"), onWorking: () => card.close()
 // The optimizer panel (panel.js).
 // Late swap mode lives in the panel; onLateSwap redraws the header switch and the table's slot pickers when it changes.
 // onWork redraws the rows when the lineup on show changes (their in-lineup mark); onMode swaps in that mode's columns.
-const panel = createPanel({ el: $("opt"), lineupsEl: $("lineups"), onView: (v) => setView(v), onTabs: () => renderTop(), isLineupsView: () => S.view === "lineups", api, toast, tryStore, dash, ctx: () => ({ name: S.name, byId: S.byId, outList: [], outNames: S.outNames, knownName: (id) => S.known.get(id)?.name ?? null, knownRow: (id) => S.known.get(id) ?? null, pull: pullOf(S.slate), refreshGen: S.refreshGen, players: S.players, picks: livePicks(), settled, ovKey: ovKeyOf(), colourOf, no: noPicks.ids(panel.mode()) /* the open build mode's list, never the late swap list */, noMode: panel.mode(), picksOf: (m) => picksOnBoard(S.picks[m], S.byId), noOf: (m) => noPicks.ids(m) /* one mode's own: a build and an other-mode card read these (review 11-20) */ }), onLateSwap: () => { drawTop(); applyFullScreen(); renderHead(); renderRows(); }, onWork: () => { renderRows(); if (JSON.stringify(carriedRows()) !== S.carriedShown) renderSources(); }, onMode: (m) => { columns.setMode(m); if (S.slate) { renderRows(); card.refresh(); } } /* the mode's own locks and excludes show (livePicks) */, onClearLocks: () => savePicks({ locked: [], excluded: livePicks().excluded }), onMemory: () => rememberView() });
+const panel = createPanel({ el: $("opt"), lineupsEl: $("lineups"), onView: (v) => setView(v), onTabs: () => renderTop(), isLineupsView: () => S.view === "lineups", api, toast, tryStore, dash, ctx: () => ({ name: S.name, byId: S.byId, outList: [], outNames: S.outNames, knownName: (id) => S.known.get(id)?.name ?? null, knownRow: (id) => S.known.get(id) ?? null, pull: pullOf(S.slate), refreshGen: S.refreshGen, players: S.players, picks: livePicks(), settled, unsettled: waitParts.open, sendHold: sendHoldNow, ovKey: ovKeyOf(), colourOf, no: noPicks.ids(panel.mode()) /* the open build mode's list, never the late swap list */, noMode: panel.mode(), picksOf: (m) => picksOnBoard(S.picks[m], S.byId), noOf: (m) => noPicks.ids(m) /* one mode's own: a build and an other-mode card read these (review 11-20) */ }), onLateSwap: () => { drawTop(); applyFullScreen(); renderHead(); renderRows(); }, onWork: () => { renderRows(); if (JSON.stringify(carriedRows()) !== S.carriedShown) renderSources(); }, onMode: (m) => { columns.setMode(m); if (S.slate) { renderRows(); card.refresh(); } } /* the mode's own locks and excludes show (livePicks) */, onClearLocks: () => savePicks({ locked: [], excluded: livePicks().excluded }), onMemory: () => rememberView() });
 // The table's own columns, ticked and ordered by Adam per mode (columns.js); the list's and the table's redraws keep each other.
 const columns = columnsControl({ btn: $("colsBtn"), pop: $("colPop"), mode: panel.mode, tryStore, onChange: () => { if (S.slate) { renderHead(); fixTableWidth(); } } });
 const shownCols = () => columns.keys({ lateSwap: Boolean(panel.lateSwap()) });
@@ -98,7 +108,7 @@ const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: 
   news: { slateData: () => (S.slate ? { ...S.slate, players: S.players } : null), tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; } }, // the lineup news strip and Status column (same inputs as the News tab)
   onWork: () => { boardMarks.refresh({ news: false }); lineupBar.newsOnly(); } });
 // The console's word on each row (board-marks.js): the S chip, and his typed Min and DK/m TON with their undo chips; those cells write through the console.
-const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, reload: () => loadSlate(S.name), pullAt: () => pullOf(S.slate).label, players: () => S.players, onChange: () => { if (!S.slate) return; card.badge(); if (formHasFocus()) { S.rowsLater = true; return; } renderRows(); }, noteEl: $("updline").insertAdjacentElement("beforebegin", Object.assign(document.createElement("div"), { hidden: true })) });
+const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, reload: () => loadSlate(S.name), pullAt: () => pullOf(S.slate).label, players: () => S.players, restack: () => saves.restack(), onChange: () => { if (!S.slate) return; card.badge(); if (formHasFocus()) { S.rowsLater = true; return; } renderRows(); if (panel.swapOpen()) panel.render(); /* an open swap panel's marks and Use follow a guess starting or ending (round 2, item 3) */ }, noteEl: $("updline").insertAdjacentElement("beforebegin", Object.assign(document.createElement("div"), { hidden: true })) });
 // The lineup bar above the list (lineup-bar.js): an Out or a confirmed start from the Monster, RotoWire and RotoGrinders pages applies itself through the console, with an undo X; a projected start is words only.
 const lineupBar = createLineupBar({ api, slate: () => S.name, players: () => S.players, slateData: () => S.slate, tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; }, console: scenarioConsole, toast, tryStore, tick: true, onLabel: (l) => { S.news = l; renderTop(); }, onModel: (m) => { const f = confirmedByGame(m); if (JSON.stringify(f) !== JSON.stringify(S.fives)) { S.fives = f; if (S.slate) renderGames(); } }, applyInPage: Boolean(globalThis.nbadfsSitePull) });
 const applyFullScreen = createFullScreen({ panel, tryStore, stickyHeights: () => stickyHeights(), fixTableWidth: () => fixTableWidth() }); // Full screen button (board-fullscreen.js)
@@ -148,7 +158,7 @@ function rememberView() {
   saveView(tryStore, S.name, { tab: S.tab, q: S.q, game: S.game, pickFilter: S.pickFilter, teams: S.teams, minSal: S.minSal, maxSal: S.maxSal, sort: S.sort, ...panel.memory() });
 }
 
-mountLateSwap({ noPicks }); // the Late swap tab and screen (lsw-main.js); it shows and saves the same late swap NO list
+mountLateSwap({ noPicks: { ...noPicks, settled: allSettled } }); // the Late swap tab and screen (lsw-main.js); it shows and saves the same late swap NO list, and its re-optimize waits for every save and his typed minutes (review 11-21 F3)
 
 // ---------- loading ----------
 /** The slate's rows as the board holds them: each with his opponent's words. */
@@ -164,13 +174,21 @@ async function loadSlate(name, slates = null) {
 }
 async function loadSlateNow(name, slates, gen) {
   await refresher.baseline(name);
+  // The picks are read only once every picks save on its way has landed (review 11-21 F2): a read taken across one would show the lists from before his click.
+  for (let q = saves.settled(); ; q = saves.settled()) { await q; if (q === saves.settled()) break; }
   const [slate, picks] = await Promise.all([api(`/api/slate/${encodeURIComponent(name)}`), api(`/api/slate/${encodeURIComponent(name)}/picks`)]);
   if (gen !== loadGen) return; // superseded by a later pick
+  const another = name !== S.name, left = S.name; // a reload of the slate on show keeps his typed numbers on their way (review 11-21 F1)
+  if (another && left) { // his typed numbers go to the slate they were made on and its send ends there before the switch (round 2, item 2); at most the build's cap
+    const late = await waitToBuild({ settled: combineSettled(() => boardMarks.flush(), () => scenarioConsole.idle()) });
+    if (gen !== loadGen) return;
+    if (late) toast(`Your typed numbers on ${left} had not reached the board when the slate changed; they are saved, and go to the board when you open ${left} again.`, "err");
+  }
   if (slates) S.slates = slates; // the list is taken only once the slate it brings is in hand
   card.close();
   editors.drop();
-  boardMarks.reset(); // his typed numbers still on their way belong to the slate he left (instant-pins.js)
-  S.name = name; S.slate = slate; S.picks = picksByMode(picks); S.picksFoot = footOf(picks); S.dropped = picks.dropped ?? []; S.rosterDropped = [];
+  if (another) boardMarks.reset(); // his typed numbers still on their way belong to the slate he left (instant-pins.js)
+  S.name = name; S.slate = slate; S.picks = saves.picksFromRead(name, picksByMode(picks), another ? null : S.picks); /* a mode with a save still on its way keeps the page's lists (round 2, item 9) */ S.picksFoot = footOf(picks); S.dropped = picks.dropped ?? []; S.rosterDropped = [];
   S.players = saves.overlay(boardRows(slate)); // his changes still on their way show over the server's rows (board-saves.js)
   S.byId = new Map(S.players.map((p) => [p.dk_id, p]));
   S.held = new Map(); S.known = new Map(); S.outNames = outNamesOf(slate); S.refreshGen++; S.topStale = false; S.consolePull = pullOf(slate).key;
@@ -446,16 +464,13 @@ function ovKeyOf() {
 /** Takes the override fields from the server's players onto the board's (keeping the season figures and the opponent text). */
 function applyPlayers(players) {
   saves.countSave();
-  const fresh = new Map((players ?? []).map((p) => [p.dk_id, p]));
+  const a = saves.answerRows(players, takeAnswer); // the server's rows with the answer taken (never a guess), then his changes still on their way over them (board-saves.js)
+  // An answer with no player list is an unknown outcome, never "nobody" (review 11-21 F11): the slate is read again and the toast says so.
+  if (a.kind === "unknown") { toast("The server's answer held no player list, so the slate is read again to show what it holds.", "err"); if (S.name) loadSlate(S.name).catch((e) => toast(`The slate could not be read again (${e.message}); what the server holds is not shown.`, "err")); return; }
   // His In or Out call can add or drop a man from the server's pool (out-pool.js): when the server's men are not the board's, the slate is read again instead of patched.
-  if (S.name && fresh.size && (fresh.size !== S.byId.size || [...fresh.keys()].some((id) => !S.byId.has(id)))) { loadSlate(S.name); return; }
-  const withAnswer = (p) => {
-    const f = fresh.get(p.dk_id);
-    if (!f) return p;
-    return takeAnswer(p, f);
-  };
-  S.players = saves.overlay(S.players.map(withAnswer)); // the answer's figures, then his changes still on their way over them (board-saves.js)
-  S.held = new Map([...S.held].map(([id, row]) => [id, row && withAnswer(row)])); // a row waiting on his box takes the answer too
+  if (a.kind === "reload") { if (S.name) loadSlate(S.name).catch((e) => toast(`The slate could not be read again (${e.message}); what the server holds is not shown.`, "err")); return; }
+  S.players = a.rows;
+  S.held = new Map([...S.held].map(([id, row]) => [id, row && (a.fresh.has(row.dk_id) ? takeAnswer(row, a.fresh.get(row.dk_id)) : row)])); // a row waiting on his box takes the answer too
   S.byId = new Map(S.players.map((p) => [p.dk_id, p]));
   renderRows(); renderPick();
   lineupBar.redraw(); // the News tab shows his applied minutes at once (it reads S.players, which this just updated)

@@ -208,7 +208,9 @@ async function loadFor(pathname) {
 /** The app's ourProjection hook (server/server.js withOurs): our engine's figures as baked at publish; with none baked, TwoGun's numbers, marked on every man and in the slate's proj_problem. */
 const bakedOurs = (slate, slateData) => applyOursDoc(slateData, siteDoc(slate));
 
-const server = makeServer({ seasonFigures: bakedFigures, ourProjection: bakedOurs });
+// The parity check (tools/site_parity.mjs loadSite) sets this before loading, so the site and the app copy answer at one shared reference time and an age in minutes cannot tick between them; a visitor never sets it, so the site reads the real clock.
+const PARITY_NOW = Number.isFinite(globalThis.NBADFS_PARITY_NOW_MS) ? globalThis.NBADFS_PARITY_NOW_MS : null;
+const server = makeServer({ seasonFigures: bakedFigures, ourProjection: bakedOurs, nowMs: PARITY_NOW });
 
 /** A request as the app's handler reads one. The body arrives once its reader is listening. */
 function makeRequest(method, url, headers, body) {

@@ -48,10 +48,10 @@ export const undoChipHtml = (id, kind, mark) => (mark ? `<button class="cundo" t
 
 /**
  * deps: { api, slate() -> the slate on show, console (boardView, setMark, dropMark, syncState), toast, pullAt() -> the pull's time text, onChange() (redraw rows),
- * noteEl (the line above the list where the send's state shows) }.
- * Returns { refresh({ news }), of(id) -> { chip, m, d } or null, setPin(id, kind, v), drop(id, kind), reset() }. A typed number shows on his row at once (instant-pins.js).
+ * noteEl (the line above the list where the send's state shows), restack() (the rows on show built again from the server's rows with every guess, board-saves.js) }.
+ * Returns { refresh({ news }), of(id) -> { chip, m, d } or null, setPin(id, kind, v), drop(id, kind), reset(), over(row), flush() }. A typed number shows on his row at once (instant-pins.js).
  */
-export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onChange, noteEl = null, players = () => [], reload = async () => {}, timers = globalThis }) {
+export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onChange, noteEl = null, players = () => [], reload = async () => {}, restack = () => {}, timers = globalThis }) {
   let view = null, latest = null, newsState = null, newsGen = 0, gen = 0, statusCards = new Map(), byId = new Map(), byFor = null;
   /** The problem with the lineup/news read, in words, or "" (shown with the send state above the list, so it is not only in the console log). */
   const newsProblem = () => (newsState?.failed ? `Lineup news could not be read: ${newsState.why}` : newsState?.stale ? `Lineup news is ${newsState.ageMin ?? "an unknown number of"} min old, so it is not used` : "");
@@ -113,8 +113,9 @@ export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onC
       view = v;
       const team = teamOf(id);
       if (!team) { toast("He is not on the console for this slate, so his number cannot be kept.", "err"); return false; }
+      const mark = cons.syncState?.()?.seq; // the console's newest send before his number is written: only a later one carries it (review 11-21 F8)
       if (cons.setMark(team, String(id), kind, value) === false) { toast("He is Out in the console, so a typed number is not used. Bring him back in there first.", "err"); return false; }
-      return true;
+      return { ok: true, mark: Number.isFinite(mark) ? mark : null };
     } catch (e) {
       toast(`Your number was not kept: ${e.message}`, "err");
       return false;
@@ -127,13 +128,12 @@ export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onC
       if (cons.dropMark(team, String(id), kind) === false) toast("Nothing to drop: that number is no longer his on the console.", "err");
     } catch (e) { toast(`Your number was not dropped: ${e.message}`, "err"); }
   }
-  const instant = createInstantPins({ players, slate, hand: handPin, syncState: () => cons.syncState?.() ?? null, teamOf, onChange, toast, timers });
+  const instant = createInstantPins({ players, slate, hand: handPin, syncState: () => cons.syncState?.() ?? null, teamOf, restack, onChange, toast, timers });
   const api2 = {
     refresh,
     /** How the lineup/news read stands: null (not read yet), { ok }, { stale, ageMin } or { failed, why }; the player panel says so instead of "no news". */
     newsState: () => newsState,
     of(id) {
-      instant.keep(players()); // a new list from the server: his numbers still on their way are shown over it (the rows ask this before drawing a cell)
       const v = view?.[String(id)], inj = ruling(id), nc = statusCards.get(String(id));
       if (!v && !inj && !nc) return null;
       // news: his newest status card whole (label, body, at), for the player panel's News box, shown in full.
@@ -159,8 +159,12 @@ export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onC
       if (going) return going.then(() => dropNow(id, kind));
       dropNow(id, kind);
     },
-    /** A new slate on show (board.js loadSlate): his numbers still on their way belong to the slate he left (instant-pins.js reset). */
+    /** A new slate on show (board.js loadSlate, only when the slate's name changes): his numbers still on their way belong to the slate he left (instant-pins.js reset). */
     reset: () => instant.reset(),
+    /** A row with his typed numbers on their way laid on, as a copy (board-saves.js overlay asks this for every row). */
+    over: (row) => instant.over(row),
+    /** His numbers waiting in the line handed off now; resolves once the line is idle (a slate switch and a build wait on it). */
+    flush: () => instant.flush(),
     /** The send's state as the board shows it (console-auto.js syncWords): a line above the rows unless the board and optimizer are up to date. */
     syncHtml() {
       const w = syncWords(cons.syncState?.());
