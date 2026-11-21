@@ -26,6 +26,7 @@ export function manView(ctx, id, entries = [], mode = null) {
   return {
     dk_id: id, name: p.name, team: p.team ?? null, game: p.game ?? null, positions: p.positions ?? p.roster_positions ?? [], roster_positions: p.roster_positions ?? [],
     salary: p.salary ?? null, proj: p.projection ?? null, own: p.proj_own ?? null, tip: p.tip ?? null,
+    rest_b2b2nd: p.rest_b2b2nd ?? null, rest_plays_tomorrow: p.rest_plays_tomorrow ?? null, // the back-to-back dot beside his name (board-util.js restDot)
     started: ctx.started.has(id), untimed: ctx.untimed.has(id), gone: ctx.departedById.has(id), injury: null, out: isBoardOut(p),
   };
 }

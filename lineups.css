@@ -171,6 +171,7 @@ body.light .top .lswnav button.on{color:#fff}
 #lineups .swt .pos,#lineups .swt small{display:none}
 #lineups .swt td.swl{white-space:normal}
 #lineups .crow.lead .sn small,#lineups .crow.lead i,#lineups .crow.lead .pos{display:none}
+#lineups .crow.lead .b2bdot{display:inline-block} /* the back-to-back dot is an <i>: the rule above hides the others, not this (Adam 11-14) */
 #lineups .crow.lead .sl{font-size:0.6563rem;padding:0.0625rem 0}
 /* The game stamp (card-row.js gameStampHtml, Adam 11-18): the opponent and the tip, right-aligned in the name cell before the swap icon. It takes
    the salary's own face and colour (board.css .ss: Space Grotesk, --mu), so it reads with the salary and own %. A started game's time is dimmed. */

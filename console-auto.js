@@ -129,21 +129,33 @@ export function requeueApplied(c) {
   return true;
 }
 
-/**
- * One preview and send for `teams`, the keys taken once and used for both calls. A save landing between them (CONSOLE_MOVED) previews once more,
- * silently. check(plan) may throw to refuse before anything is sent. { plan, out } (out null when nothing moved), or null when the slate changed.
- */
-export async function previewAndSend(c, teams, check = null, auto = false) {
-  const slate = c.slate;
+/** How many preview-and-send rounds a send makes while the numbers move under it (CONSOLE_MOVED), and for how long at most, before it waits and goes again by itself (Adam 11-21).
+ *  MOVED_WAITS: the waits after each capped send in a row (4 s, 8 s, 16 s); past the last, nothing goes by itself and his next change is the retry. */
+export const MOVED_ROUNDS = 5, MOVED_CAP_MS = 10_000, MOVED_WAITS = [4000, 8000, 16_000];
+
+/** His changes saved before a preview: every dirty team written and waited for. Throws SYNC_RUNNING (the save waits on its own timer) or a failed save's words. */
+async function savedFirst(c, auto) {
   saveDirty(c, auto);
   await c.saveQueue;
   if (c.saveWaiting) throw Object.assign(new Error("a sync is running, so your last change is not saved yet"), { code: "SYNC_RUNNING" }); // the save is tried again by its own timer; the send waits for it the same way
   const failed = Object.values(c.saveErrs);
   if (failed.length) throw new Error(`not sent, because your last change is not saved. ${failed.join(" ")}`);
-  const keys = Object.fromEntries(teams.map((t) => [t, keyOf(c.model.ST[t].outs)]));
-  // auto: no click of his started this send (a load, a pull, the lineup bar's news), so the server carries his_at; file_base: the scenarios file's his_at as this page last saw it.
-  const body = { scenarios: keys, teams, pull: c.inputs.basis.pull, tier: c.inputs.basis.tier ?? null, source_default: c.inputs.source_default ?? null, ...(auto ? { auto: true } : {}) };
-  for (let round = 0; ; round++) {
+}
+
+/**
+ * One preview and send for `teams`, the keys taken each round (after his saves) and used for that round's preview and send. A write landing between a preview and its send (CONSOLE_MOVED: his own next click's save, the lineup news,
+ * another page's send) saves what is his, previews again on the fresh numbers and sends, silently, up to MOVED_ROUNDS rounds within MOVED_CAP_MS; past that it throws CONSOLE_MOVED with
+ * `capped` (and `rounds`), and the sender keeps the change pending and sends it again by itself. check(plan) may throw to refuse before anything is sent.
+ * { plan, out } (out null when nothing moved), or null when the slate changed. `clock`: the time in ms (tests inject one).
+ */
+export async function previewAndSend(c, teams, check = null, auto = false, clock = Date.now) {
+  const slate = c.slate, started = clock();
+  for (let round = 1; ; round++) {
+    await savedFirst(c, auto); // round 2 on: a click of his made while the last round ran is saved before the numbers are read again
+    if (slate !== c.slate) return null;
+    const keys = Object.fromEntries(teams.map((t) => [t, keyOf(c.model.ST[t].outs)])); // taken each round, after his saves: a round's preview and send carry the same keys
+    // auto: no click of his started this send (a load, a pull, the lineup bar's news), so the server carries his_at; file_base: the scenarios file's his_at as this page last saw it.
+    const body = { scenarios: keys, teams, pull: c.inputs.basis.pull, tier: c.inputs.basis.tier ?? null, source_default: c.inputs.source_default ?? null, ...(auto ? { auto: true } : {}) };
     const plan = await post(c, { ...body, preview: true });
     if (slate !== c.slate) return null;
     check?.(plan);
@@ -156,9 +168,21 @@ export async function previewAndSend(c, teams, check = null, auto = false) {
       c.onPlayers(out.players);
       return { plan, out };
     } catch (e) {
-      if (e.code !== "CONSOLE_MOVED" || round > 0) throw e;
+      if (e.code !== "CONSOLE_MOVED") throw e;
+      if (slate !== c.slate) return null;
+      if (round >= MOVED_ROUNDS || clock() - started >= MOVED_CAP_MS) throw Object.assign(new Error(`the numbers moved under the send ${round} times in a row`), { code: "CONSOLE_MOVED", capped: true, rounds: round });
     }
   }
+}
+
+/** When a send the moving numbers held back goes again (c.sync.moved), or that it is stuck and his next change is the retry. Pure. */
+export const movedAgainText = (m) => (m.again ? `Your change is kept and goes again by itself at ${etTime(m.again)}.` : `Your change is kept; after ${m.cycles} tries in a row nothing goes by itself, so it goes with your next change.`);
+
+/** The Console's foot line for a send the moving numbers held back (c.sync.moved): what is waiting and when it goes again, or that it is stuck; null otherwise. Pure. */
+export function sendFootText(sync) {
+  const m = sync?.state === "waiting" ? sync.moved : null;
+  if (!m) return null;
+  return `Not on the board yet: ${m.teams.join(", ")}. The numbers moved under the send ${m.rounds} times in a row (the lineup news, another page or your next change writing at the same moment), so nothing was sent over them. ${movedAgainText(m)}`;
 }
 
 /**
@@ -177,6 +201,40 @@ export function createAutoApply(c, { refreshInputs, onState }) {
     const notes = res ? planNotesList(res.plan) : [], unsent = unsentTeams(c, sendTeams(c));
     set(notes.length ? "partial" : "ok", { notes, unsent });
   };
+  /**
+   * The numbers kept moving under a send (previewAndSend's cap): its teams stay pending, so nothing of his is lost, and the foot says so (sendFootText), no box over the table. One timer sends
+   * again after MOVED_WAITS[n - 1] for the n-th capped send in a row on this slate; past the last nothing goes by itself and his next change is the retry. A card's send (`check`) goes again
+   * as the card's send with its check kept; the background's as a kick. Returns { teams, rounds, cycles, again (ms; null when stuck) }.
+   */
+  function movedLater(teams, e, auto, check) {
+    for (const t of teams) c.pending.add(t);
+    const n = c.movedCycles?.slate === c.slate ? c.movedCycles.n + 1 : 1;
+    c.movedCycles = { slate: c.slate, n };
+    const r = c.movedRetry?.slate === c.slate ? c.movedRetry : { slate: c.slate, kick: false, auto: true, direct: new Map() };
+    if (check) for (const t of teams) r.direct.set(t, check); else r.kick = true;
+    r.auto = r.auto && auto === true;
+    c.movedRetry = r;
+    const wait = MOVED_WAITS[n - 1] ?? null;
+    const moved = { teams: [...new Set([...teams, ...r.direct.keys()])].sort(), rounds: e.rounds ?? MOVED_ROUNDS, cycles: n, again: wait === null ? null : Date.now() + wait };
+    set("waiting", { msg: wait === null ? "Not on the board yet; it goes with your next change" : "Not on the board yet; sending again in a moment", moved });
+    clearTimeout(c.retryTimer);
+    if (wait !== null) c.retryTimer = setTimeout(retryMoved, wait); // one retry timer, as the sync and usage waits; cleared with the slate (console.js load)
+    return moved;
+  }
+  /** The timer's retry of what movedLater kept: each card team as the card's send with its check, the rest as a kick. A refusal then is said as the card says one. */
+  function retryMoved() {
+    const r = c.movedRetry;
+    c.movedRetry = null;
+    if (!r || r.slate !== c.slate) return;
+    for (const [team, check] of r.direct) {
+      api.run(() => sendWith(() => sendTeams(c, [team]), check, r.auto)).catch((e) => {
+        if (r.slate !== c.slate) return;
+        set("error", { msg: `Your last change on ${team} has not reached the board: ${e.message}` });
+        c.toast?.(`Not sent: ${e.message}`, "err");
+      });
+    }
+    if (r.kick) api.kick(r.auto);
+  }
   /** One send; a pull that landed since the console read its inputs reads them again (his work rebased on the new Tonight) and sends once more. */
   async function sendWith(teamsOf, check, auto = false) {
     const slate = c.slate, was = new Set(c.pending);
@@ -196,7 +254,12 @@ export function createAutoApply(c, { refreshInputs, onState }) {
       }
     } catch (e) {
       if (slate !== c.slate) keepDropped(c, slate, teams); // the slate changed under it: kept to go again on that slate (round 2, item 2)
+      else if (e.code === "CONSOLE_MOVED" && e.capped) return { plan: null, out: null, moved: movedLater(teams, e, auto, check) }; // kept, never an error: the card and the foot say when it goes again
       throw e;
+    }
+    if (slate === c.slate) {
+      if (c.movedCycles?.slate === slate) c.movedCycles = null; // a send went through: the next capped one waits the first wait again
+      if (c.movedRetry?.slate === slate) for (const t of teams) c.movedRetry.direct.delete(t); // this send carried a card team the timer was to send
     }
     if (slate === c.slate) settle(res, teams, was);
     else keepDropped(c, slate, teams); // dropped by the switch (previewAndSend answers null): kept, never lost without a word

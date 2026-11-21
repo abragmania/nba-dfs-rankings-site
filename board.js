@@ -24,7 +24,7 @@ import { boxNote, absenceNote, freshBoxes } from "./box-note.js";
 import { CHECK_MS, takeAnswer, applyHeld, createRefresher, followNewest, mergeFresh, outNamesOf, pickSlate, slateQuery, overrideKey, picksOnBoard, pullOf, rememberRows, rosterCleanup, statusLine } from "./slate-refresh.js";
 import { pressSettle } from "./press-settle.js";
 import { createPullNow, firstTipOf } from "./pull-now.js";
-import { noFilters, filtersOn, filterPlayers, salaryRange, teamsOf } from "./filters.js";
+import { noFilters, filtersOn, filterPlayers, salaryRange, teamsOf, actsOnMan, clearSearch } from "./filters.js";
 import { limitPatch } from "./row-limits.js";
 import { loadView, saveView, DEFAULT_SORT } from "./view-memory.js";
 import { loadTheme, saveTheme, themeClasses } from "./theme.js";
@@ -501,7 +501,7 @@ const editors = createEditors({
   save: (kind, id, v, settle) => (kind === "min" || kind === "max" ? (limitPatch($("tbody"), kind, id, v), rowPatch.forget(id), panel.setLimit(kind, id, v, settle)) : kind === "cmin" || kind === "crate" ? boardMarks.setPin(id, kind === "cmin" ? "m" : "d", v) : saveOverride({ [kind]: { [id]: v } }, kind === "proj" ? "the projection" : "the ownership")),
 });
 // The thumbs pairs: one listener on the table body serves them all. A press works its steps out from the row as shown and shows them at once (instant-overrides.js bumpOf), so quick presses stack.
-$("tbody").addEventListener("click", (e) => { const btn = e.target.closest?.(".bump-ctl .bump-btn"); const b = btn && !btn.disabled ? bumpOf(btn.dataset.action, S.byId.get(btn.dataset.id)) : null; if (b) saveOverride(bumpPatch(b.id, b.steps), "the projection bump"); });
+$("tbody").addEventListener("click", (e) => { const btn = e.target.closest?.(".bump-ctl .bump-btn"); const b = btn && !btn.disabled ? bumpOf(btn.dataset.action, S.byId.get(btn.dataset.id)) : null; if (b) { dropSearch(); saveOverride(bumpPatch(b.id, b.steps), "the projection bump"); } });
 $("tbody").addEventListener("change", (e) => rowPatch.forget(e.target.closest?.("tr[data-row]")?.dataset.row)); // a slot picker changed by hand is drawn fresh next time
 
 // A click on a player row (Adam, 5:34 PM ET 2026-10-29): the man goes into the working lineup, or out when he is in it.
@@ -512,7 +512,7 @@ const ROW_CONTROLS = "td.ctl, td.bmp, td.lim, button, input, select, a, [data-ed
 $("tbody").addEventListener("click", (e) => {
   if (panel.lateSwap() || e.target.closest(ROW_CONTROLS) || editors.closedByPress()) return;
   const tr = e.target.closest("tr[data-row]");
-  if (tr && !tr.classList.contains("blk") && getSelection?.().isCollapsed !== false) panel.rowClick(tr.dataset.row); // a drag to select text is not a pick
+  if (tr && !tr.classList.contains("blk") && getSelection?.().isCollapsed !== false) { const id = tr.dataset.row; dropSearch(); panel.rowClick(id); } // a drag to select text is not a pick
 });
 
 // ---------- events ----------
@@ -520,6 +520,7 @@ document.addEventListener("click", (e) => {
   const t = e.target.closest("[data-sort],[data-tab],[data-game],[data-dk-id],[data-out-i],[data-out-name],[data-lock],[data-excl],[data-unpick],[data-chip],[data-view],[data-theme],[data-star],[data-reset],[data-edit],[data-unmark],[data-mrestore],[data-mstep],[data-fteam],[data-shade],[data-no],[data-nox],[data-noclear],[data-noretry],[data-pview],#ovReset,#clearF,#notesBtn,#lsBtn,#csBtn,#snBtn,#outTog");
   if (!t) { const l = $("notesList"); if (l && !e.target.closest(".notes")) l.hidden = true; return; }
   const d = t.dataset;
+  if (actsOnMan(d)) dropSearch(); // lock, NO, exclude, star: the search box empties (Adam 11-14)
   if (t.id === "notesBtn") { const l = $("notesList"); l.hidden = !l.hidden; }
   else if (d.view) { card.close(); if (scenarioConsole.isOn()) setConsole(false); if (scenarioTab.isOn()) setScenario(false); setView(d.view); } // a tab leaves the console, so the bar shows where you are
   else if (t.id === "lsBtn") { if (scenarioTab.isOn()) setScenario(false); setView("list"); panel.toggleLateSwap().then(fixTableWidth); }
@@ -568,6 +569,8 @@ document.addEventListener("change", (e) => {
   // A slot picker (table row or panel slot) in late swap mode: pin that man to the chosen slot.
   else if (e.target.dataset?.lspin) { const { lspin } = e.target.dataset, to = e.target.value === "" ? null : +e.target.value; e.target.blur(); panel.pin(lspin, to); } // "—" unpins; the choice made, the picker lets go, so it cannot hold off new numbers
 });
+/** An act on a man empties the search box and shows the full list (Adam 11-14; filters.js clearSearch). */
+function dropSearch() { clearSearch(S, $("search"), renderRows); }
 $("search").addEventListener("input", (e) => { S.q = e.target.value; renderRows(); });
 $("minSal").addEventListener("input", (e) => { S.minSal = e.target.value; renderRows(); });
 $("maxSal").addEventListener("input", (e) => { S.maxSal = e.target.value; renderRows(); });

@@ -9,7 +9,7 @@ import { readWhatifs, loadPicked } from "./console-whatif.js";
 import { clearStanding, dropMark, firstPlaying, jumpTeam, pushHist, redo, restoreTyped, saveDirty, setPin, setSource, toggleOut, toggleStarter, undo } from "./console-moves.js";
 import { roleMarksFootHtml } from "./console-role-foot.js";
 import { cardApi, lineupViewOf } from "./console-card.js";
-import { createAutoApply, createPullReads, keepDropped, mayAutoSend, requeueApplied, requeueDropped, requeueNews, resendChanged, resultSigs } from "./console-auto.js";
+import { createAutoApply, createPullReads, keepDropped, mayAutoSend, requeueApplied, requeueDropped, requeueNews, resendChanged, resultSigs, sendFootText } from "./console-auto.js";
 import { PIN_MAX } from "./override-limits.js";
 import { stepMinutes } from "./min-step.js";
 import { keyOf } from "./console-engine.js";
@@ -132,7 +132,7 @@ export const saveNotesFootHtml = (lines) => (lines?.length ? `<div class="cfoot"
 function pageHtml(c, news) {
   const G = c.G;
   const team = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr: Object.values(c.saveErrs).join(" ") || null, news, help: G.help, chartSel: G.chartSel ?? null, showInj: showInjured(c), readOnly: c.readOnly, whatifs: c.whatifs?.teams?.[G.cur]?.whatifs ?? [], whatifsErr: c.whatifsErr ?? null });
-  const foot = readFootHtml(c.readFail, c.inputsAt); // a failed refresh: at the page's foot, under either view
+  const held = sendFootText(c.sync), foot = `${held ? `<p class="cfoot">${esc(held)}</p>` : ""}${readFootHtml(c.readFail, c.inputsAt)}`; // a send the moving numbers held back, and a failed refresh: at the page's foot, under either view (G64)
   if (G.view !== "all") return `${withAllChip(team, false)}${roleMarksFootHtml(c.model.TEAMS[G.cur], c.model.ST[G.cur], G.cur, c.readOnly === true)}${saveNotesFootHtml(c.saveNotes[G.cur])}${foot}`; // his standing role marks, at the foot (G64)
   const words = !news ? "No lineup news is wired on this page." : news.state === "loading" ? "Reading the lineup news..." : news.state !== "ok" ? `Lineup news not read: ${news.why}` : null;
   const body = words ? `<section class="ca"><header class="ca-h"><h1>Tonight's lineup news</h1></header><div class="ca-empty">${esc(words)}</div></section>` : landingHtml(news.V, G.newsTeam ?? "", c.inputs.games.flatMap((g) => [g.away, g.home]));

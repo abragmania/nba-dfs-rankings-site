@@ -48,6 +48,7 @@ export function roleBoxHtml(v, state = {}) {
 
 /** What one send from the card made, in words: the teams, then the counts. */
 export function sentText(out) {
+  if (out.kept) return out.kept; // the moving numbers held it back: kept, and when it goes again (console-applybox.js)
   if (!out.changed && !out.min_changed) return "Nothing to send: the board already has it.";
   return `Sent ${out.teams.join(", ")}: ${out.changed} projection${out.changed === 1 ? "" : "s"}, ${out.min_changed} minutes.`;
 }

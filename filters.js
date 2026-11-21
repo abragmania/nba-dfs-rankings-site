@@ -8,6 +8,19 @@ const plain = (s) => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerC
 /** Every filter off. */
 export const noFilters = () => ({ tab: "ALL", q: "", game: null, pickFilter: null, teams: [], minSal: "", maxSal: "" });
 
+/** The data-attributes of a click that acts on a man (Adam 11-14: lock, NO, exclude, star): such an act empties the search box. Typing, a card, sorting and filters are not acts. */
+const ACT_KEYS = ["lock", "excl", "star", "no"];
+export const actsOnMan = (dataset) => ACT_KEYS.some((k) => dataset?.[k] != null);
+
+/** Empties the search box after an act on a man (Adam 11-14): `state.q` resets, the input empties and `redraw` shows the full list. Nothing happens, and nothing redraws, when no search is typed. Returns whether it cleared. */
+export function clearSearch(state, input, redraw) {
+  if (state.q === "") return false;
+  state.q = "";
+  if (input) input.value = "";
+  redraw();
+  return true;
+}
+
 /** True when any filter narrows the table. */
 export const filtersOn = (f) => f.tab !== "ALL" || f.q !== "" || f.game != null || f.pickFilter != null || f.teams.length > 0 || f.minSal !== "" || f.maxSal !== "";
 

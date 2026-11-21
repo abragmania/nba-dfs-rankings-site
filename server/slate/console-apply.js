@@ -450,11 +450,24 @@ export function planApply(inputs, file, overrides, players, keys, only = null) {
   plan.changes.sort((a, b) => Math.abs(b.move ?? Infinity) - Math.abs(a.move ?? Infinity) || a.name.localeCompare(b.name));
   plan.rows = changedRows(plan, ctx);
   plan.orphaned_pins = orphanedPins(inputs, file, keys).filter((o) => !only || only.has(o.team));
-  const sent = Object.entries(plan.typed).sort().map(([id, to]) => [id, to, bumpIn(overrides, "GPP", id)]); // GPP's thumbs: the console is not per mode
-  plan.basis = crypto.createHash("sha256").update(JSON.stringify({ sent, min: Object.entries(plan.min).sort(), keys: Object.entries(keys).sort(), orphans: plan.orphaned_pins, refused: plan.refused, ...(plan.flag_ids.size ? { flags: [...plan.flag_ids].sort() } : {}) })).digest("hex").slice(0, 16);
+  plan.basis = planBasis(plan, overrides, keys);
   plan.pull = inputs.basis?.pull ?? null;
   plan.base = baseOf(plan, ctx);
   return plan;
+}
+
+/**
+ * The send's basis (the CONSOLE_MOVED check, console-route.js): a hash of only what the send writes, so a preview and a send with nothing real moved between them always match (Adam 11-21).
+ * In it: each sent projection with the number it replaces and its GPP thumbs bump, each minutes figure, the posted keys, each his-or-news mark the send writes (plan.auto) and
+ * those that move, and each team's applied-key outcome with its Tonight. Never a stamp, a clock or a note (pins held on a scenario not on show are said in the preview, never written).
+ * Pure and deterministic: entries sorted.
+ */
+export function planBasis(plan, overrides, keys) {
+  const sent = Object.entries(plan.typed).sort().map(([id, to]) => [id, to, overrides.proj?.[id] ?? null, bumpIn(overrides, "GPP", id)]); // GPP's thumbs: the console is not per mode
+  const teams = plan.teams.map((t) => [t.team, t.key, t.tonight ?? null, Boolean(t.held), Boolean(t.undone), Boolean(t.blank)]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const auto = ["proj", "min"].map((s) => [s, Object.entries(plan.auto?.[s] ?? {}).sort()]);
+  const body = { sent, min: Object.entries(plan.min).sort(), keys: Object.entries(keys).sort(), teams, auto, ...(plan.flag_ids.size ? { flags: [...plan.flag_ids].sort() } : {}) };
+  return crypto.createHash("sha256").update(JSON.stringify(body)).digest("hex").slice(0, 16);
 }
 
 /** What TwoGun had under each man this Apply sends a number for: { id: { min, out } }, his minutes and out flag in the pull the console read.
