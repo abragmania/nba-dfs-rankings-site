@@ -182,8 +182,8 @@ export function noForBuild({ slate, slateData, players, mode, lateSwap, locked, 
 export function applyNo({ noIds = [], mode = "GPP", lateSwap = false, locked = [], excluded = [], handPicked = [], exposure = null, byId, count = DEFAULT_COUNT }) {
   if (lateSwap || !noIds.length) return { excluded, exposure, applied: null, note: null };
   const lim = exposure && typeof exposure === "object" && !Array.isArray(exposure) ? exposure : null;
-  // A Min % binds only in GPP (a Cash run ignores Min % and Max %, optimize.js), so only there does it put a NO man in.
-  const minOnly = (id) => mode === "GPP" && Number(lim?.[id]?.min) > 0 && !locked.includes(id) && !handPicked.includes(id);
+  // A Min % binds in either mode (Cash obeys its own, question Q9 yes, optimize.js), so in either it puts a NO man in.
+  const minOnly = (id) => Number(lim?.[id]?.min) > 0 && !locked.includes(id) && !handPicked.includes(id);
   const his = (id) => locked.includes(id) || handPicked.includes(id) || minOnly(id);
   const out = noIds.filter((id) => !his(id)), drop = new Set(out);
   let nextExposure = exposure;

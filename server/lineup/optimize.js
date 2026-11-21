@@ -107,8 +107,7 @@ function readSettings(mode, settings, slateTeams, slateGames) {
   // A man's Min % and Max % (exposure.js). Late swap fills open slots around one entry, so they do not apply there.
   const limits = readExposure(st.exposure);
   if (limits.error) return { error: limits.error };
-  s.exposureIgnored = mode !== "GPP" && Object.keys(limits.exposure).length > 0; // Min % and Max % are GPP settings (the server holds the rule too): a Cash run ignores them and says so
-  s.exposure = s.exposureIgnored ? {} : limits.exposure;
+  s.exposure = limits.exposure; // Cash obeys its own Min % and Max % as GPP does (question Q9, yes; Adam 1:22 PM 11-20: kept per mode, the page sends the build's mode's)
   if (pinIds.length && Object.keys(s.exposure).length) return { error: "Min % and Max % do not apply in late swap." };
   return { s };
 }
@@ -624,7 +623,6 @@ export function optimize({ players, mode, settings, locked = [], excluded = [], 
   // A man he put In from the Out list has no projected ownership of his own (TwoGun's was made while he was Out and is not used): GPP names him, since its ownership totals count him as 0.
   const noOwn = mode === "GPP" ? [...new Set(result.lineups.flatMap((l) => l.slots ?? []).filter((p) => p.his === "in" && p.out_pool && !isNum(p.proj_own)).map((p) => p.name ?? p.dk_id))] : [];
   if (noOwn.length) result.note = [result.note, `${noOwn.join(", ")} ${noOwn.length === 1 ? "has" : "have"} no projected ownership (TwoGun's was made while ${noOwn.length === 1 ? "he was" : "they were"} Out and is not used), so the ownership totals count ${noOwn.length === 1 ? "him" : "them"} as 0%; type one to change that.`].filter(Boolean).join(" ");
-  if (s.exposureIgnored && !result.error) result.note = [result.note, "Min % and Max % are GPP settings; this Cash run ignored them."].filter(Boolean).join(" ");
   if (s.usable && !result.error) result.note = [result.note, s.liftNote, noFigureNote(s.usable, s.ownRules)].filter(Boolean).join(" ") || null; // last: the foot of the result
   return result;
 }

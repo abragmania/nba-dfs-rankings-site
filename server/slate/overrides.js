@@ -21,8 +21,13 @@ import { writeFileAtomic } from "../../site/shim/atomic.js";
 import { keepSlatePrelock } from "./prelock-copy.js";
 import { BUMP_STEP_PCT, BUMP_MAX_STEPS, PROJ_MAX, OWN_MAX } from "../board/override-limits.js";
 import { isNum, isPlain, round2, projAside, outFor } from "../board/figures.js";
+import { MARK_MODES, badModes, readModes, modesFile, copyModes, marksOf, marksOrNone, marksHolder } from "./mode-marks.js";
 
-export { BUMP_STEP_PCT, BUMP_MAX_STEPS, PROJ_MAX, OWN_MAX };
+// Thumbs (bump) and stars are kept per mode, the rest shared (Adam 1:24 PM 11-20; mode-marks.js holds the shape, the carry-over and the
+// unreadable-mode rule): the top-level bump and stars are GPP's, `modes.Cash` Cash's own. Every reader of a bump or a star names its mode:
+// mergeOverrides and hisNumbers default to GPP, the mode a reader that cannot know one (the console, news, the nightly checks) works on; a
+// change (applyChanges, the resets) takes the mode it was made in.
+export { BUMP_STEP_PCT, BUMP_MAX_STEPS, PROJ_MAX, OWN_MAX, MARK_MODES };
 const SECTIONS = ["proj", "own", "bump", "stars"];
 // Typed per-player notes were retired (Adam, 2026-11-09). A file's `notes` key is kept on disk exactly as found through every
 // read, save and reset, but is never checked, shown, sent to the page or accepted from it.
@@ -88,11 +93,13 @@ export function validateOverrides(obj) {
   const stars = obj.stars ?? [];
   if (!Array.isArray(stars) || stars.some((id) => typeof id !== "string" || id === "")) invalid('"stars" must be a list of DraftKings ids.');
   if (new Set(stars).size !== stars.length) invalid('"stars" repeats an id.');
+  const modesWhy = badModes(obj.modes); // each mode's own entry is judged apart (mode-marks.js readModes / modesFile): only a `modes` that is not a Cash and GPP map fails the whole record
+  if (modesWhy) invalid(`${modesWhy}.`);
   // A typed projection and a bump for one man is well formed: the bump scales the typed number (Adam, 2026-10-29 5:41 PM ET).
 }
 
-/** The record as the page may see it: everything but the retired `notes` kept on disk. */
-export const publicOverrides = ({ notes, ...rest }) => rest;
+/** The record as the page may see it and as the public site seeds its file: everything but the retired `notes` kept on disk, each mode's thumbs and stars as stored. */
+export const publicOverrides = ({ notes, ...rest }) => (rest.modes ? { ...rest, modes: modesFile(rest.modes) } : rest);
 
 /**
  * The slate's overrides, always the full shape. No file (or an empty one) is the empty shape; a file that cannot be read,
@@ -121,7 +128,7 @@ export function readOverrides(slate) {
   }
   return {
     proj: { ...(parsed.proj ?? {}) }, own: { ...(parsed.own ?? {}) }, bump: { ...(parsed.bump ?? {}) }, min: { ...(parsed.min ?? {}) }, ...autoPart(parsed.auto, parsed),
-    stars: [...(parsed.stars ?? [])], notes: { ...(parsed.notes ?? {}) }, updated_at: parsed.updated_at ?? null,
+    stars: [...(parsed.stars ?? [])], ...(parsed.modes !== undefined ? { modes: readModes(parsed.modes) } : {}), notes: { ...(parsed.notes ?? {}) }, updated_at: parsed.updated_at ?? null,
   };
 }
 
@@ -134,13 +141,14 @@ export function writeOverrides(slate, obj, { his = null } = {}) {
   let onDisk;
   try { onDisk = JSON.parse(fs.readFileSync(overridesFile(slate), "utf8"))?.his_at; } catch { onDisk = undefined; }
   const hisAt = his ?? obj.his_at ?? onDisk;
+  const modes = modesFile(obj.modes); // a readable mode checked again, an unreadable one written back exactly as it was stored (mode-marks.js)
   const record = {
     slate, proj: { ...(obj.proj ?? {}) }, own: { ...(obj.own ?? {}) }, bump: { ...(obj.bump ?? {}) }, min: { ...(obj.min ?? {}) }, ...autoPart(obj.auto, obj),
-    stars: [...(obj.stars ?? [])], notes: { ...(obj.notes ?? {}) }, ...(hisAt ? { his_at: hisAt } : {}), updated_at: new Date().toISOString(),
+    stars: [...(obj.stars ?? [])], ...(Object.keys(modes).length ? { modes } : {}), notes: { ...(obj.notes ?? {}) }, ...(hisAt ? { his_at: hisAt } : {}), updated_at: new Date().toISOString(),
   };
   keepSlatePrelock(slate, "overrides.json"); // the overrides as they stood at lock, for the back-tests (R5, Adam 11-18)
   writeFileAtomic(overridesFile(slate), JSON.stringify(record, null, 1) + "\n");
-  return record;
+  return record.modes ? { ...record, modes: readModes(record.modes) } : record; // as readOverrides gives it
 }
 
 /**
@@ -149,18 +157,21 @@ export function writeOverrides(slate, obj, { his = null } = {}) {
  *   { proj?, own?, bump?, stars? } -> { ok, kind: "changes", changes }, each section keyed by a DraftKings id on the
  *   slate: proj and own a number or null (null removes), bump a whole number of steps -10..10 (0 or null removes),
  *   stars true or false.
+ * Each shape may carry mode ("Cash" or "GPP", answered as `mode`, left out when absent): the mode the page was on, whose thumbs and stars a bump, a
+ * star or a reset changes (Adam 1:24 PM 11-20; the route refuses one of those without it, needsMode). Typed numbers are shared and need none.
  * Anything else is { ok: false, message }.
  */
 export function checkChanges(body, slateData) {
   const bad = (message) => ({ ok: false, message });
   if (!isPlain(body)) return bad("Body must be a JSON object.");
   const known = new Set((slateData?.players ?? []).map((p) => String(p.dk_id)));
-  const keys = Object.keys(body);
+  if ("mode" in body && !MARK_MODES.includes(body.mode)) return bad('"mode" must be "Cash" or "GPP".');
+  const mode = body.mode ? { mode: body.mode } : {}, keys = Object.keys(body).filter((k) => k !== "mode");
   if ("resetAll" in body || "reset" in body) {
     if (keys.length !== 1) return bad("A reset is sent on its own.");
-    if ("resetAll" in body) return body.resetAll === true ? { ok: true, kind: "resetAll" } : bad('"resetAll" must be true.');
+    if ("resetAll" in body) return body.resetAll === true ? { ok: true, kind: "resetAll", ...mode } : bad('"resetAll" must be true.');
     if (typeof body.reset !== "string" || !known.has(body.reset)) return bad(`"reset" must be a DraftKings id on this slate.`);
-    return { ok: true, kind: "reset", id: body.reset };
+    return { ok: true, kind: "reset", id: body.reset, ...mode };
   }
   const unknown = keys.filter((k) => !SECTIONS.includes(k));
   if (unknown.length) return bad(`Unknown override field: ${unknown.map((k) => k.slice(0, 20)).join(", ")}.`);
@@ -188,17 +199,37 @@ export function checkChanges(body, slateData) {
     }
   }
   if (!count) return bad("The change names no player.");
-  return { ok: true, kind: "changes", changes };
+  return { ok: true, kind: "changes", changes, ...mode };
+}
+
+/** Whether a checked change touches a mode's thumbs or stars (a bump, a star, a reset): the route then needs its mode, and replaces an unreadable one first. */
+export const touchesMarks = (checked) => checked.kind !== "changes" || "bump" in checked.changes || "stars" in checked.changes;
+/** The route's refusal for such a change without a mode (a page from before the split). */
+export const NEEDS_MODE = 'Thumbs, stars and resets are kept per mode, so the change must say "mode" ("Cash" or "GPP"). Reload the page if it is older than that.';
+
+/** Where a thumb or star change of `mode` is made in the fresh record `next` (mode-marks.js marksHolder: the record for GPP, Cash's own entry for Cash;
+ *  throws OVERRIDES_UNREADABLE while Cash's cannot be read), or, with no mode, the top level of a record from before the split (the tests' and tools' records). */
+function marksTarget(next, mode) {
+  if (mode != null) return marksHolder(next, mode);
+  if (Object.keys(next.modes ?? {}).length) throw new OverridesError("OVERRIDES_INVALID", "A thumb or star change must name its mode (Cash or GPP): they are kept per mode.");
+  return next;
+}
+
+/** A man's bump taken off in every mode (GPP's top-level set and a readable Cash entry): with no number left to scale he has nothing in any mode. In place on a fresh record. */
+function dropBumpEverywhere(next, id) {
+  delete next.bump[id];
+  for (const [m, e] of Object.entries(next.modes ?? {})) if (!e?.unreadable && has(e.bump ?? {}, id)) { const bump = { ...e.bump }; delete bump[id]; next.modes[m] = { ...e, bump }; }
 }
 
 /**
  * Pure: `current` with checked `changes` applied, as a new record. As the NFL app's applyOverrideChanges does, a typed
  * projection never touches the man's bump: typing a new number keeps the steps, which then scale the new number. A bump
  * sent for a man with no number to scale (no typed projection after this change, and a base in `players` that is not a
- * number) throws BUMP_NO_PROJECTION. `players`: the slate's players (dk_id, projection).
+ * number) throws BUMP_NO_PROJECTION. `players`: the slate's players (dk_id, projection). `mode`: the mode whose thumbs and stars a bump or a
+ * star changes (marksTarget; the other mode's stay as they are); typed numbers, ownership and minutes are shared and need none.
  */
-export function applyChanges(current, changes, players = []) {
-  const next = { proj: { ...current.proj }, own: { ...current.own }, bump: { ...current.bump }, min: { ...current.min }, stars: [...current.stars], notes: { ...current.notes }, updated_at: current.updated_at };
+export function applyChanges(current, changes, players = [], mode = null) {
+  const next = { proj: { ...current.proj }, own: { ...current.own }, bump: { ...current.bump }, min: { ...current.min }, stars: [...current.stars], ...(current.modes ? { modes: copyModes(current.modes) } : {}), notes: { ...current.notes }, updated_at: current.updated_at };
   const held = cleanAuto(current.auto, current), auto = { proj: new Set(held.proj), min: new Set(held.min), pin: new Set(held.pin) };
   const baseOf = new Map((players ?? []).map((p) => [String(p.dk_id), p.projection]));
   for (const [id, v] of Object.entries(changes.proj ?? {})) {
@@ -207,7 +238,7 @@ export function applyChanges(current, changes, players = []) {
     delete next.proj[id];
     // With the typed number gone, a man whose base is not a number has nothing left for his steps to scale: they go too
     // (review round 2), so no bump is ever stored on nothing.
-    if (baseOf.has(id) && !isNum(baseOf.get(id))) delete next.bump[id];
+    if (baseOf.has(id) && !isNum(baseOf.get(id))) dropBumpEverywhere(next, id);
   }
   for (const [id, v] of Object.entries(changes.own ?? {})) {
     if (v === null) delete next.own[id];
@@ -218,15 +249,16 @@ export function applyChanges(current, changes, players = []) {
     if (v === null) delete next.min[id];
     else next.min[id] = v;
   }
+  const marks = changes.bump || changes.stars ? marksTarget(next, mode) : null; // the mode's own thumbs and stars (or a pre-split record's top level)
   for (const [id, v] of Object.entries(changes.bump ?? {})) {
-    if (v === null) { delete next.bump[id]; continue; }
+    if (v === null) { delete marks.bump[id]; continue; }
     if (!has(next.proj, id) && !isNum(baseOf.get(id))) throw new OverridesError("BUMP_NO_PROJECTION", `Player ${id.slice(0, 40)} has no projection to raise or lower; type one first.`);
-    next.bump[id] = v;
+    marks.bump[id] = v;
   }
   for (const [id, v] of Object.entries(changes.stars ?? {})) {
-    const on = next.stars.includes(id);
-    if (v && !on) next.stars.push(id);
-    else if (!v && on) next.stars = next.stars.filter((s) => s !== id);
+    const on = marks.stars.includes(id);
+    if (v && !on) marks.stars.push(id);
+    else if (!v && on) marks.stars = marks.stars.filter((s) => s !== id);
   }
   // changes.auto { proj|min: { id: true (news or engine) | false (his console marks) } } re-marks men holding a number, after the numbers, so a number left as it was is marked too.
   // A projection the console wrote for his marks is also listed in `pin`: it is his, but not typed on the board, so a board reset leaves it.
@@ -243,31 +275,38 @@ export function applyChanges(current, changes, players = []) {
 
 /**
  * What a board reset clears, by section: a projection typed on the board (one no send wrote: not news's or the engine's, not from his console marks), every
- * typed ownership and every bump. Never a number the console or news wrote, minutes included: those are changed in the console. The one definition Reset all, the row reset and the count use.
+ * typed ownership and every bump of `mode` (GPP when not named; a mode that cannot be read has none a reset could clear). Never a number the console or news wrote, minutes included:
+ * those are changed in the console. The one definition Reset all, the row reset and the count use.
  */
-export function hisNumbers(o) {
+export function hisNumbers(o, mode = "GPP") {
   const auto = cleanAuto(o.auto, o), sent = new Set([...auto.proj, ...auto.pin]);
-  return { proj: Object.keys(o.proj).filter((id) => !sent.has(id)), own: Object.keys(o.own), bump: Object.keys(o.bump) };
+  return { proj: Object.keys(o.proj).filter((id) => !sent.has(id)), own: Object.keys(o.own), bump: Object.keys(marksOrNone(o, mode).bump) };
 }
 
-/** True when the record holds a number a board reset would clear. */
-export const hasNumbers = (o) => Object.values(hisNumbers(o)).some((ids) => ids.length > 0);
+/** True when the record holds a number a board reset in `mode` would clear. */
+export const hasNumbers = (o, mode = "GPP") => Object.values(hisNumbers(o, mode)).some((ids) => ids.length > 0);
 
-/** Pure: one man's projection, ownership and bump typed on the board removed; his star and every number the console or news wrote stay (NFL D72). */
-export function resetPlayer(current, id) {
-  const his = hisNumbers(current);
-  const next = { ...current, proj: { ...current.proj }, own: { ...current.own }, bump: { ...current.bump }, min: { ...current.min }, stars: [...current.stars], notes: { ...current.notes } };
+/** A fresh copy of the record for a reset, with each mode's entry copied too. */
+const resetCopy = (current) => ({ ...current, proj: { ...current.proj }, own: { ...current.own }, bump: { ...current.bump }, min: { ...current.min }, stars: [...current.stars], ...(current.modes ? { modes: copyModes(current.modes) } : {}), notes: { ...current.notes } });
+
+/** Pure: one man's projection and ownership typed on the board removed, and his bump in `mode` (the mode on show; the other mode's stays, as does a mode
+ *  that cannot be read). No mode: a record from before the split, its one bump. His star and every number the console or news wrote stay (NFL D72). */
+export function resetPlayer(current, id, mode = null) {
+  const his = hisNumbers(current, mode ?? "GPP");
+  const next = resetCopy(current);
   if (his.proj.includes(id)) delete next.proj[id];
   delete next.own[id];
-  delete next.bump[id];
+  if (mode == null || his.bump.includes(id)) delete marksTarget(next, mode).bump[id];
   return next;
 }
 
-/** Pure: every projection, ownership and bump typed on the board cleared; stars stay (NFL D72); the retired notes are carried through untouched. The console's and news's numbers, minutes included, stay. */
-export function resetAll(current) {
-  const his = hisNumbers(current);
-  const next = { ...current, proj: { ...current.proj }, own: {}, bump: {}, min: { ...current.min }, stars: [...current.stars], notes: { ...current.notes } };
+/** Pure: every projection and ownership typed on the board cleared, and every bump of `mode` (as resetPlayer); stars stay (NFL D72); the retired notes are carried
+ *  through untouched. The console's and news's numbers, minutes included, stay. */
+export function resetAll(current, mode = null) {
+  const his = hisNumbers(current, mode ?? "GPP");
+  const next = { ...resetCopy(current), own: {} };
   for (const id of his.proj) delete next.proj[id];
+  if (mode == null || his.bump.length) marksTarget(next, mode).bump = {};
   return next;
 }
 
@@ -323,17 +362,20 @@ export function staleSendOf(p, o, held = null) {
  * ovr: { steps (0 when none), projection (typed or null), proj_own (typed or null) }. The ceiling is never changed. A man with applied minutes
  * gets minutes as those and base_minutes as the slate's own; they alone leave his projection, value, ownership and ovr as they are, except under our minutes engine
  * (proj_source "ours" with a rate), where his projection becomes those minutes x our DK/min and the typed number and bump work on that.
+ * `mode`: whose thumbs and stars are applied (mode-marks.js marksOf; it throws OVERRIDES_UNREADABLE for a mode that cannot be read). GPP when not
+ * named: the console, news, the self-check and the back-tests cannot know a mode and work on GPP's; a build and the board name theirs.
  */
-export function mergeOverrides(players, overrides, { held = null } = {}) {
+export function mergeOverrides(players, overrides, { held = null, mode = "GPP" } = {}) {
   const o = overrides ?? EMPTY();
-  const stars = new Set(o.stars ?? []);
+  const marks = marksOf(o, mode);
+  const stars = new Set(marks.stars);
   return (players ?? []).map((p) => {
     const id = String(p.dk_id);
     const stale = staleSendOf(p, o, held); // a send's number the engine's figure has moved off (a team not held), or one the engine has no figure for: not used, and said (stale_auto)
     const typedProj = has(o.proj ?? {}, id) && !stale.proj ? o.proj[id] : null;
     const storedMin = has(o.min ?? {}, id) && !stale.min;
     const typedOwn = has(o.own ?? {}, id) ? o.own[id] : null;
-    const steps = has(o.bump ?? {}, id) ? o.bump[id] : 0; // the real steps, on a typed row too
+    const steps = has(marks.bump, id) ? marks.bump[id] : 0; // the real steps, on a typed row too
     const out = { ...p, starred: stars.has(id), ...(stale.proj || stale.min ? { stale_auto: stale } : {}) };
     const note = (text) => { out.proj_note = [out.proj_note, text].filter(Boolean).join("; "); }; // round 2 item 5: each note joins the ones already on him (applyOurs' "excluded at 0" included), none is lost
     if (stale.no_figure) note(`A ${stale.proj ? `projection (${o.proj[id]})` : "minutes number"} a send wrote is not used: ${p.ours_changed === true ? (p.ours?.missing ?? "our figure for him is carried from an earlier pull and no longer stands") : "the engine has no figure for him"}`);

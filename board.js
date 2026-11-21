@@ -36,7 +36,7 @@ import { confirmedByGame } from "./game-borders.js";
 import { mountLateSwap, lateSwapNoChanged } from "./lsw-main.js";
 import { createOptStrip } from "./opt-strip.js";
 import { createToast } from "./toast.js";
-import { createSaves, picksByMode, carriedLine, troubleLine, footOf, PICK_MODES } from "./board-saves.js";
+import { createSaves, picksByMode, carriedLine, troubleLine, footOf, PICK_MODES, marksLines } from "./board-saves.js";
 import { workCarriedLine } from "./work-panel.js";
 import { createFullScreen } from "./board-fullscreen.js";
 import { topHtml, gamesHtml, headTitle as viewHeadTitle, chipsHtml } from "./board-views.js";
@@ -53,7 +53,7 @@ const S = { slates: [], name: null, slate: null, players: [], byId: new Map(), p
  *  GPP keep separate locks and excludes), so the Player list, the card, the panel and every click show and change that mode's only. */
 const livePicks = () => picksOnBoard(S.picks[panel.mode()], S.byId);
 /** The foot rows for what is still carried from before Cash and GPP were kept apart: picks and the working lineup (none once each mode has saved its own). */
-const carriedRows = () => [["Picks", [carriedLine(S.picksFoot?.carried), troubleLine(S.picksFoot, "locks and excludes")]], ["Working lineup", [workCarriedLine(panel.workFoot()?.carried), troubleLine(panel.workFoot(), "working lineup")]]].map(([k, v]) => [k, v.filter(Boolean).join(" "), v[1] !== ""]).filter(([, v]) => v); // an unreadable or emptied mode in red (review 11-20)
+const carriedRows = () => [["Picks", [carriedLine(S.picksFoot?.carried), troubleLine(S.picksFoot, "locks and excludes")]], ["Working lineup", [workCarriedLine(panel.workFoot()?.carried), troubleLine(panel.workFoot(), "working lineup")]], ["Thumbs and stars", marksLines(S.slate?.marks)]].map(([k, v]) => [k, v.filter(Boolean).join(" "), v[1] !== ""]).filter(([, v]) => v); // an unreadable or emptied mode in red (review 11-20)
 /** Both modes' saved lists in one, for naming the men a new pull took off the slate (settleRoster). */
 const allSaved = () => ({ locked: [...new Set(PICK_MODES.flatMap((m) => S.picks[m].locked))], excluded: [...new Set(PICK_MODES.flatMap((m) => S.picks[m].excluded))] });
 /** What the Player list shows: his saved picks plus the men not playing tonight, excluded as a derived state (excluded.js, Adam 11-19: nobody leaves the pool). Saves always send livePicks. */
@@ -99,7 +99,7 @@ createOptStrip({ el: $("optstrip"), opt: $("opt"), onWorking: () => card.close()
 // The optimizer panel (panel.js).
 // Late swap mode lives in the panel; onLateSwap redraws the header switch and the table's slot pickers when it changes.
 // onWork redraws the rows when the lineup on show changes (their in-lineup mark); onMode swaps in that mode's columns.
-const panel = createPanel({ el: $("opt"), lineupsEl: $("lineups"), onView: (v) => setView(v), onTabs: () => renderTop(), isLineupsView: () => S.view === "lineups", api, toast, tryStore, dash, ctx: () => ({ name: S.name, byId: S.byId, outList: [], outNames: S.outNames, knownName: (id) => S.known.get(id)?.name ?? null, knownRow: (id) => S.known.get(id) ?? null, pull: pullOf(S.slate), refreshGen: S.refreshGen, players: S.players, picks: livePicks(), settled, unsettled: waitParts.open, sendHold: sendHoldNow, ovKey: ovKeyOf(), colourOf, no: noPicks.ids(panel.mode()) /* the open build mode's list, never the late swap list */, noMode: panel.mode(), picksOf: (m) => picksOnBoard(S.picks[m], S.byId), noOf: (m) => noPicks.ids(m) /* one mode's own: a build and an other-mode card read these (review 11-20) */ }), onLateSwap: () => { drawTop(); applyFullScreen(); renderHead(); renderRows(); }, onWork: () => { renderRows(); if (JSON.stringify(carriedRows()) !== S.carriedShown) renderSources(); }, onMode: (m) => { columns.setMode(m); if (S.slate) { renderRows(); card.refresh(); } } /* the mode's own locks and excludes show (livePicks) */, onClearLocks: () => savePicks({ locked: [], excluded: livePicks().excluded }), onMemory: () => rememberView() });
+const panel = createPanel({ el: $("opt"), lineupsEl: $("lineups"), onView: (v) => setView(v), onTabs: () => renderTop(), isLineupsView: () => S.view === "lineups", api, toast, tryStore, dash, ctx: () => ({ name: S.name, byId: S.byId, outList: [], outNames: S.outNames, knownName: (id) => S.known.get(id)?.name ?? null, knownRow: (id) => S.known.get(id) ?? null, pull: pullOf(S.slate), refreshGen: S.refreshGen, players: S.players, picks: livePicks(), settled, unsettled: waitParts.open, sendHold: sendHoldNow, ovKey: ovKeyOf(), colourOf, no: noPicks.ids(panel.mode()) /* the open build mode's list, never the late swap list */, noMode: panel.mode(), picksOf: (m) => picksOnBoard(S.picks[m], S.byId), noOf: (m) => noPicks.ids(m) /* one mode's own: a build and an other-mode card read these (review 11-20) */ }), onLateSwap: () => { drawTop(); applyFullScreen(); renderHead(); renderRows(); }, onWork: () => { renderRows(); if (JSON.stringify(carriedRows()) !== S.carriedShown) renderSources(); }, onMode: (m) => { columns.setMode(m); if (S.slate) { saves.restack(); renderRows(); renderPick(); renderSources(); panel.render(); card.refresh(); } } /* the mode's own locks and excludes show (livePicks), and its own thumbs and stars (board-saves.js overlay; Adam 1:24 PM 11-20): the rows, the chips' Starred count and the Lineups tab's star strip */, onClearLocks: () => savePicks({ locked: [], excluded: livePicks().excluded }), onMemory: () => rememberView() });
 // The table's own columns, ticked and ordered by Adam per mode (columns.js); the list's and the table's redraws keep each other.
 const columns = columnsControl({ btn: $("colsBtn"), pop: $("colPop"), mode: panel.mode, tryStore, onChange: () => { if (S.slate) { renderHead(); fixTableWidth(); } } });
 const shownCols = () => columns.keys({ lateSwap: Boolean(panel.lateSwap()) });
@@ -550,7 +550,7 @@ document.addEventListener("click", (e) => {
   else if (d.unmark) boardMarks.drop(d.id, d.unmark);
   else if (d.mrestore) boardMarks.restore(d.mrestore); // his typed minutes a role change set aside, back in use (Adam 9:46 AM 11-20)
   else if (d.edit) editors.openNumber(t);
-  else if (t.id === "ovReset") askConfirm(CONFIRM.resetAll, { ok: "Reset" }).then((yes) => { if (yes) saveOverride({ resetAll: true }, "the reset"); });
+  else if (t.id === "ovReset") { const mode = panel.mode(); askConfirm(CONFIRM.resetAll, { ok: "Reset" }).then((yes) => { if (yes) saveOverride({ resetAll: true }, "the reset", mode); }); } // the mode at the click: its thumbs are the ones cleared, whatever is on show once he answers
 });
 // A name that opens a card is a tab stop (role button); Enter or Space on it is the same click.
 document.addEventListener("keydown", (e) => {

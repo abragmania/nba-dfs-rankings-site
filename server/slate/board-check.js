@@ -11,6 +11,7 @@
 //  5. team_240: each team's playing minutes, as shown, add to TEAM_MINUTES within TEAM_TOL.
 import { isNum, round2 } from "../board/figures.js";
 import { effectiveProjection, PROJ_TOL, MIN_TOL } from "./overrides.js";
+import { marksOrNone } from "./mode-marks.js";
 import { checkHiddenByLowerSource } from "./board-check-sources.js";
 
 export { PROJ_TOL, MIN_TOL }; // one copy, in overrides.js (the board's own stale test uses them too)
@@ -157,7 +158,7 @@ export const exemptLine = (u) => `${u.count} left out of ${u.check.replace(/_/g,
  */
 export function checkBoard({ slate, overrides = null, overridesProblem = null, lineups = null, resend = null, depth = null, nowMs = Date.now() }) {
   const players = Array.isArray(slate?.players) ? slate.players : [], un = makeGroups(), ex = makeGroups(), bad = [], conflicts = [];
-  const o = { proj: {}, min: {}, bump: {}, ...(overrides ?? {}) };
+  const o = { proj: {}, min: {}, ...(overrides ?? {}), bump: marksOrNone(overrides, "GPP").bump }; // the board's shared rows carry GPP's thumbs (none while they cannot be read: effective-players.js mergedFor), so the check uses the same
   const known = new Map(players.map((p) => [String(p.dk_id), p.name]));
   const c = { o, bad, un, ex, flagged: o.auto !== undefined, auto: { proj: new Set(o.auto?.proj ?? []), min: new Set(o.auto?.min ?? []), pin: new Set(o.auto?.pin ?? []) }, held: new Set(resend?.held ?? []), nameOf: (id) => known.get(String(id)) ?? `id ${id} (no longer on the board)` };
   if (!overrides) un.add("stored_override", overridesProblem ?? "the slate's overrides were not given to the check");

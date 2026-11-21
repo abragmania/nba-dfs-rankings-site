@@ -3,9 +3,9 @@
 // here: every action is a request to the engine through the route, and the screen draws what comes back. The server reads the slate fresh on
 // every request, so a refreshed board shows here on the next one (the screen asks again every 20 seconds while it is open). A reply that
 // belongs to another slate, or is older than one already drawn, is thrown away.
-import { esc, money, outcomeLine, chipTime, replyVerdict, tidyReasons, livePicks, nameOpen } from "./lsw-common.js";
+import { esc, money, outcomeLine, chipTime, replyVerdict, tidyReasons, livePicks, nameOpen, marksFootHtml } from "./lsw-common.js";
 import { uploadHtml } from "./lsw-upload.js";
-import { allHtml, backupLabels, scopeFor } from "./lsw-all.js";
+import { allHtml, backupLabels, backupMode, scopeFor } from "./lsw-all.js";
 import { spotHtml } from "./lsw-spot.js";
 import { lineupName, entrySpotOptions, lineupOptions, entriesHtml, lineupsHtml, tabStatus, rangeBetween, numberInOrder, screenOrder, emptyRowIds, contestGroups } from "./lsw-maps.js";
 import { exportHtml } from "./lsw-export.js";
@@ -217,7 +217,7 @@ function render() {
   const y = window.scrollY;
   const sub = L.has && ["all", "spot", "export"].includes(L.screen) ? `<div class="subtabs"><button class="${L.screen === "export" ? "" : "on"}" data-lsw="go" data-s="all">Swap</button><button class="${L.screen === "export" ? "on" : ""}" data-lsw="go" data-s="export">Export</button></div>` : "";
   const kept = drawnScreen === L.screen ? [...root.querySelectorAll(HELD_BOXES)].map((b) => b.scrollTop) : null;
-  keepFocus(root, () => { root.innerHTML = `${barHtml()}<div class="body${L.busy ? " busy" : ""}">${bannerHtml()}${sub}${body}</div>`; });
+  keepFocus(root, () => { root.innerHTML = `${barHtml()}<div class="body${L.busy ? " busy" : ""}">${bannerHtml()}${sub}${body}${L.loaded && L.has ? marksFootHtml(L.M) : ""}</div>`; }); // the foot: a mode whose thumbs and stars could not be read (G62, G64)
   root.querySelectorAll(HELD_BOXES).forEach((b, i) => { if (!kept) showActive(b); else if (kept[i]) b.scrollTop = kept[i]; });
   drawnScreen = L.screen;
   window.scrollTo(0, y);
@@ -482,7 +482,7 @@ async function onClick(e) {
     case "remove": case "removeBackup": {
       const scope = scopeOf(L.blunt, M);
       if (!scope) { L.msg = { kind: "warn", text: "No spot on the screen holds that man now; pick him again." }; return render(); }
-      const lab = a === "removeBackup" ? backupLabels(M).find((x) => x.label === L.backupText) : null;
+      const lab = a === "removeBackup" ? backupLabels(M, backupMode(M, L.blunt)).find((x) => x.label === L.backupText) : null;
       if (a === "removeBackup" && !lab) { L.msg = { kind: "warn", text: "Pick the backup from the list." }; return render(); }
       return void (await act({ op: "remove", man: L.blunt.man, ...(lab ? { backup: lab.id } : {}), scope, ...boardState() }, { label: lab ? `Remove ${manName(L.blunt.man)}, lock ${lab.label}` : `Remove ${manName(L.blunt.man)}` }));
     }
@@ -531,7 +531,7 @@ function onInput(e) {
   if (e.target.dataset?.lswIn) return void byLineupChange(e.target, { L, M: L.M, act, render, boardState });
   if (e.target.id !== "lswBackup") return;
   L.backupText = e.target.value;
-  const lab = backupLabels(L.M).find((x) => x.label === L.backupText);
+  const lab = backupLabels(L.M, backupMode(L.M, L.blunt)).find((x) => x.label === L.backupText);
   L.blunt.backup = lab?.id ?? "";
   const b = root.querySelector('[data-lsw="removeBackup"]'); // the button's state follows the box without a redraw, which would lose the caret
   if (b) b.disabled = !(lab && L.blunt.man && !L.busy);

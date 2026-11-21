@@ -4,7 +4,7 @@
 
 /** The standard's wordings. */
 export const CONFIRM = {
-  resetAll: "Clear every projection, ownership and bump you typed on the board? Stars, console figures and news stay.",
+  resetAll: "Clear every projection and ownership you typed on the board, and this mode's thumbs? Stars, the other mode's thumbs, console figures and news stay.", // thumbs are per mode (Adam 1:24 PM 11-20)
   deleteSaved: "Delete this saved lineup?",
   clearLineup: "Clear the lineup?",
 };

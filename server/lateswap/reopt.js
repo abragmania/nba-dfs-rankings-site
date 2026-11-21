@@ -6,23 +6,25 @@ import { lineupOf, spotEntries, spotNames, sameLineup, unusableIn, modeFromName 
 import { contextFor, nameOf, spotBlocks, movesBetween, frozenWhy, frozenProblems, lineupProblems, holdsMen, notAddableWhy, outAlert, spotPins, isBoardOut } from "./entry-state.js";
 import { refused, keptFill, runFill, menKey, readGames, readKeep, assignLineup, readScope, readLimits, atLimit, overMax, noteOverMax, maxNotes, refill, flagged, moved, confirmFirst, holds, fillScore } from "./actions.js";
 import { planMinimum, PLAN_MAX_MS, minEntries } from "./min-pct.js";
-import { excludedOk, excludedFor, spotModeOf } from "./board-excludes.js";
+import { excludedOk, excludedFor, spotModeOf, manFor, marksGap } from "./board-excludes.js";
 
 export const MAX_OPTIONS = 10;
 const isIds = (a) => Array.isArray(a) && a.every((id) => typeof id === "string");
 
-/** A lineup's totals from the newest pull: { proj, salary, own }, each null when any man's figure is missing (never a partial sum or zero). */
-export function totalsOf(lineup, ctx) {
-  const men = lineup.map((id) => (id == null ? null : ctx.man(id)));
+/** A lineup's totals from the newest pull: { proj, salary, own }, each null when any man's figure is missing (never a partial sum or zero).
+ *  mode: the spot's, whose thumbs the projection carries (board-excludes.js manFor); none reads the shared rows (GPP's thumbs). */
+export function totalsOf(lineup, ctx, mode = null) {
+  const men = lineup.map((id) => (id == null ? null : mode ? manFor(ctx, id, mode) : ctx.man(id)));
   const sum = (k) => (men.length === SLOTS.length && men.every((p) => Number.isFinite(p?.[k])) ? Math.round(men.reduce((t, p) => t + p[k], 0) * 100) / 100 : null);
   return { proj: sum("projection"), salary: sum("salary"), own: sum("proj_own") };
 }
 
-/** The other spots holding exactly this spot's lineup (same 8 men, same slots): Adam thinks of it as one lineup. A blank lineup is shared by none. */
+/** The other spots of the same mode holding exactly this spot's lineup (same 8 men, same slots): Adam thinks of it as one lineup. A blank
+ *  lineup is shared by none; a spot of the other mode never is (its thumbs, stars, excludes and limits are its own, Adam 11-20). */
 export function sharingSpots(state, spot) {
-  const mine = lineupOf(state, spot);
+  const mine = lineupOf(state, spot), mode = spotModeOf(state, spot);
   if (mine.some((id) => id == null)) return [];
-  return spotNames(state).filter((s) => s !== spot && sameLineup(lineupOf(state, s), mine));
+  return spotNames(state).filter((s) => s !== spot && spotModeOf(state, s) === mode && sameLineup(lineupOf(state, s), mine));
 }
 
 /** A spot's mode test for the Max % (a GPP rule): the run's mode, else the spot row's, else its name's. */
@@ -56,6 +58,8 @@ export function spotOptions(state, args) {
   if (gm.error) return fail(gm.error);
   const blocks = spotBlocks(state, spot, ctx);
   if (blocks.length) return fail(blocks.join(" "));
+  const sm = spotModeOf(state, spot, mode), gap = marksGap(ctx, sm);
+  if (gap) return fail(gap);
   const kept = readKeep(keep == null ? null : { [spot]: keep }, [spot], remove, ctx);
   if (kept.error) return fail(kept.error);
   const lim = pickLimits(state, spot, [spot, ...sharingSpots(state, spot)], ctx, exposure, gppTest(state, mode));
@@ -77,9 +81,9 @@ export function spotOptions(state, args) {
   if (good.length < r.lineups.length) notes.push(`${r.lineups.length - good.length} of the ${r.lineups.length} fills found would move a started man or break a rule, so they are not offered.`);
   if (good.length < count) notes.push(`Only ${good.length} different legal ${good.length === 1 ? "lineup" : "lineups"} came back of the ${count} asked for.`);
   const nowKey = menKey(before.filter((id) => id != null));
-  const options = good.map((l) => ({ lineup: l.ids, ...totalsOf(l.ids, ctx), proven: l.proven, moves: movesBetween(before, l.ids, ctx, entries), current: menKey(l.ids) === nowKey, sameSlots: sameLineup(before, l.ids) }));
+  const options = good.map((l) => ({ lineup: l.ids, ...totalsOf(l.ids, ctx, sm), proven: l.proven, moves: movesBetween(before, l.ids, ctx, entries), current: menKey(l.ids) === nowKey, sameSlots: sameLineup(before, l.ids) }));
   if (options[0]?.current) notes.push("The best fill holds the men this lineup already has.");
-  return { spot, current: { lineup: before, ...totalsOf(before, ctx) }, options, sharedWith: sharingSpots(state, spot), notes, error: null };
+  return { spot, current: { lineup: before, ...totalsOf(before, ctx, sm) }, options, sharedWith: sharingSpots(state, spot), notes, error: null };
 }
 
 /**
@@ -266,22 +270,25 @@ export function reoptimizeSpots(state, args) {
 function planFor(state, ctx, { names, wants, kept, gm, fillOpts, exOf, noIds = [], limits, isGpp, outOfTime }) {
   if (!wants.length) return { forced: new Map(), plans: [] };
   const seen = new Map();
+  const modeOf = (spot) => spotModeOf(state, spot, fillOpts(spot).mode ?? null);
   const best = (spot, lock) => {
     const key = `${spot}|${[...lock].sort().join(",")}`;
     if (!seen.has(key)) {
       const f = keptFill(state, spot, ctx, { ...fillOpts(spot), lock }, (a) => runFill({ ...a, settings: { ...a.settings, count: 1 } }), (x) => x.lineups?.[0]?.ids ?? null);
-      seen.set(key, f.fill.lineups ? { ids: f.fill.lineups[0].ids, score: fillScore(f.fill.lineups[0].ids, ctx) } : { why: f.fill.why });
+      seen.set(key, f.fill.lineups ? { ids: f.fill.lineups[0].ids, score: fillScore(f.fill.lineups[0].ids, ctx, modeOf(spot)) } : { why: f.fill.why }); // costed on the spot's own mode's figures
     }
     return seen.get(key);
   };
   const whyNot = (id, spot) => {
+    const gap = marksGap(ctx, modeOf(spot)); // the spot's mode's thumbs and stars unreadable: the plan places nobody there
+    if (gap) return gap.replace(/\.$/, "");
     const cannot = notAddableWhy(id, ctx);
     if (cannot) return cannot.replace(/^.*?cannot be added: /, "").replace(/\.$/, "");
     if (gm.games.has(ctx.man(id).game)) return "his game is excluded on this screen";
     if (noIds.includes(id)) return "on the late swap NO list"; // named as NO before the board's excludes it is merged into (screen-ops.js lateNoState)
     if (exOf(spot).includes(id)) return "excluded on the board"; // in this spot's mode
     if (unusableIn(state, spot).includes(id)) return "he was taken out of that spot earlier";
-    if (!Number.isFinite(ctx.man(id).projection)) return "he has no projection, so what holding him costs cannot be weighed";
+    if (!Number.isFinite(manFor(ctx, id, modeOf(spot))?.projection)) return "he has no projection, so what holding him costs cannot be weighed";
     const blocks = spotBlocks(state, spot, ctx);
     return blocks.length ? `the spot cannot be changed: ${blocks.join(" ")}` : null;
   };

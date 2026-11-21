@@ -13,6 +13,10 @@ export const feeText = (n) => (Number.isFinite(n) ? `$${Number.isInteger(n) ? n 
 
 const LOCK = '<svg class="lkic" viewBox="0 0 12 14" style="width:0.6875rem;height:0.8125rem"><rect x="1" y="6" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M3.5 6V4a2.5 2.5 0 015 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 export const ICON_LOCK = LOCK;
+/** The men as a spot of `mode` shows them (screen-model.js pools: thumbs and stars per mode, Adam 1:24 PM 11-20); the shared pool for no mode or an older answer. */
+export const poolFor = (M, mode) => (mode && M?.pools?.[mode]) || M?.pool || [];
+/** The screen's foot lines for a mode whose thumbs and stars could not be read (screen-model.js marksNotes); "" with none. */
+export const marksFootHtml = (M) => (M?.marksNotes ?? []).map((n) => `<div class="rs">${esc(n)}</div>`).join("");
 
 /** A spot's colour by its place in the list: Cash green, then amber, violet, pink, blue, orange, repeating. */
 const SPOT_PALETTE = ["#39e58c", "#ffb000", "#c78bff", "#ff6fa8", "#6aa8ff", "#ff8a1f", "#3fe0d0", "#9bd14b"];

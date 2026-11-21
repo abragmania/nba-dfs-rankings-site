@@ -2,7 +2,7 @@
 // here are the two lists (Take out of every lineup, Put in at least), one card per lineup, a lineup opened full width with its five best
 // options, and the export foot. Nothing is decided here: every click is a request to the engine through the route (ops lists, keepMen,
 // options, pickOption, reoptimize), and the cards draw what comes back.
-import { esc, money, f1, signed, outChip, ICON_LOCK, nameOpen } from "./lsw-common.js";
+import { esc, money, f1, signed, outChip, ICON_LOCK, nameOpen, poolFor } from "./lsw-common.js";
 import { logo } from "./board-util.js";
 import { SLOTS } from "./slots.js";
 import { noChipHtml, noTagHtml, LATE } from "./no-picks.js";
@@ -10,19 +10,22 @@ import { noChipHtml, noTagHtml, LATE } from "./no-picks.js";
 const sameIds = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
-/** Spots holding the same lineup drawn once: [{ spots: [spot], lineup }], in screen order. Blank spots are left out. */
+/** Spots of one mode holding the same lineup drawn once: [{ spots: [spot], lineup, mode }], in screen order. Blank spots are left out; a Cash
+ *  and a GPP spot holding the same men are two cards, each with its own thumbs, excludes and limits (Adam 11-20; reopt.js sharingSpots). */
 export function lineupGroups(M) {
   const groups = [];
   for (const s of M.spots) {
     if (s.blank) continue;
     const ids = s.slots.map((x) => x.dk_id);
-    const g = groups.find((x) => sameIds(x.lineup, ids));
-    if (g) g.spots.push(s); else groups.push({ spots: [s], lineup: ids });
+    const g = groups.find((x) => x.mode === s.mode && sameIds(x.lineup, ids));
+    if (g) g.spots.push(s); else groups.push({ spots: [s], lineup: ids, mode: s.mode });
   }
   return groups;
 }
 
-const poolOf = (M) => new Map(M.pool.map((p) => [p.dk_id, p]));
+const pools = new WeakMap(); // one id map per pool list the page holds
+/** The men by id as a spot of `mode` shows them (lsw-common.js poolFor); the shared pool with no mode. */
+const poolOf = (M, mode = null) => { const list = poolFor(M, mode); if (!pools.has(list)) pools.set(list, new Map(list.map((p) => [p.dk_id, p]))); return pools.get(list); };
 /** The late swap NO men as a Set, or null when this page has no NO list (L.no, lsw-main.js). */
 const noSet = (L) => (L.no ? new Set(L.no.ids) : null);
 const nameIn = (M, id) => poolOf(M).get(id)?.name ?? id;
@@ -48,8 +51,8 @@ function listsHtml(M, L) {
 /** One row of a lineup: slot, logo, name, lock, NO, salary, projection. keep: { spots, kept } for the lock box, or null (an option card).
  *  no: the late swap NO list (a Set, no-picks.js; Adam 5:28 PM 11-19): a NO man's row is pink with the NO tag; his NO button is on the
  *  lineup cards, off for a man whose game has started (he stays where he is). */
-function rowHtml(M, slot, id, { keep = null, fresh = false, outIds = [], no = null } = {}) {
-  const p = id == null ? null : poolOf(M).get(id);
+function rowHtml(M, slot, id, { keep = null, fresh = false, outIds = [], no = null, mode = null } = {}) {
+  const p = id == null ? null : poolOf(M, mode).get(id); // the card's own mode's figures
   if (!p) return `<div class="lbr"><span class="ls">${slot}</span><span class="ln dim">${id == null ? "open" : esc(id)}</span><span class="la">—</span><span class="lp">—</span></div>`;
   const out = outIds.includes(id), fixed = p.started || p.untimed, isNo = Boolean(no?.has(id));
   let lock = "", noBtn = "";
@@ -76,7 +79,7 @@ export function lateNoLine(n) {
 /** The late swap NO chip over the lineups (no-picks.js noChipHtml, "🚫 NO · late swap"); "" with nobody on it, or with no NO list on this page. */
 const noRowHtml = (M, L) => (L.no ? `<div class="lbno">${noChipHtml({ mode: LATE, ids: L.no.ids, nameOf: (id) => nameIn(M, id), error: L.no.error, lsw: true })}</div>` : "");
 
-const sumOf = (M, ids, k) => { const pool = poolOf(M); const v = ids.map((id) => pool.get(id)?.[k]); return v.every(Number.isFinite) ? v.reduce((a, b) => a + b, 0) : null; };
+const sumOf = (M, ids, k, mode = null) => { const pool = poolOf(M, mode); const v = ids.map((id) => pool.get(id)?.[k]); return v.every(Number.isFinite) ? v.reduce((a, b) => a + b, 0) : null; };
 
 function headHtml(g, M, extra = "") {
   const n = g.spots.reduce((t, s) => t + s.nEntries, 0), contests = [...new Set(g.spots.flatMap((s) => s.contests))];
@@ -88,17 +91,19 @@ function cardHtml(g, M, L) {
   const kept = M.keptMen?.[g.spots[0].name] ?? [], spotNames = g.spots.map((s) => s.name);
   const locked = g.lineup.filter((id) => { const p = poolOf(M).get(id); return p && (p.started || p.untimed); }).length;
   return `<article class="lbcard${(M.takeOut ?? []).some((id) => g.lineup.includes(id)) ? " hasout" : ""}">${headHtml(g, M, `<button class="go sm" data-lsw="lbOpen" data-spot="${esc(spotNames[0])}"${L.busy ? " disabled" : ""}>Re-optimize</button>`)}
-${SLOTS.map((slot, i) => rowHtml(M, slot, g.lineup[i], { keep: { spots: spotNames, kept }, outIds: M.takeOut ?? [], no: noSet(L) })).join("")}
-<footer class="lbf"><span class="lp">${f1(sumOf(M, g.lineup, "proj"))}</span><span>salary <b>${money(sumOf(M, g.lineup, "salary"))}</b></span><span class="muted">${locked} locked</span><span class="grow"></span><button class="lnk" data-lsw="openSpot" data-spot="${esc(spotNames[0])}">Edit one slot</button></footer></article>`;
+${SLOTS.map((slot, i) => rowHtml(M, slot, g.lineup[i], { keep: { spots: spotNames, kept }, outIds: M.takeOut ?? [], no: noSet(L), mode: g.mode })).join("")}
+<footer class="lbf"><span class="lp">${f1(sumOf(M, g.lineup, "proj", g.mode))}</span><span>salary <b>${money(sumOf(M, g.lineup, "salary", g.mode))}</b></span><span class="muted">${locked} locked</span><span class="grow"></span><button class="lnk" data-lsw="openSpot" data-spot="${esc(spotNames[0])}">Edit one slot</button></footer></article>`;
 }
 
 function openHtml(g, M, L) {
-  const o = L.lbOpts, now = g.lineup, nowProj = sumOf(M, now, "proj"), spotNames = g.spots.map((s) => s.name);
+  const o = L.lbOpts, now = g.lineup, spotNames = g.spots.map((s) => s.name);
+  // NOW's total is the engine's own for this spot once the options are back (reopt.js spotOptions current.proj, in the spot's mode), so it compares with each option's.
+  const nowProj = o?.current && Object.hasOwn(o.current, "proj") ? o.current.proj : sumOf(M, now, "proj", g.mode);
   const kept = M.keptMen?.[spotNames[0]] ?? [];
-  const nowCard = `<div class="lbopt now"><div class="loh"><b>NOW</b><span class="muted">${now.filter((id) => poolOf(M).get(id)?.started).length} locked</span></div>${SLOTS.map((slot, i) => rowHtml(M, slot, now[i], { keep: { spots: spotNames, kept }, outIds: M.takeOut ?? [], no: noSet(L) })).join("")}<div class="lbf"><span class="lp">${f1(nowProj)}</span><span>${money(sumOf(M, now, "salary"))}</span></div></div>`;
+  const nowCard = `<div class="lbopt now"><div class="loh"><b>NOW</b><span class="muted">${now.filter((id) => poolOf(M).get(id)?.started).length} locked</span></div>${SLOTS.map((slot, i) => rowHtml(M, slot, now[i], { keep: { spots: spotNames, kept }, outIds: M.takeOut ?? [], no: noSet(L), mode: g.mode })).join("")}<div class="lbf"><span class="lp">${f1(nowProj)}</span><span>${money(sumOf(M, now, "salary", g.mode))}</span></div></div>`;
   const opts = !o ? '<div class="rs">Finding the best options…</div>' : o.options.map((x, n) => {
     const k = SLOTS.filter((_, i) => x.lineup[i] !== now[i]).length;
-    return `<div class="lbopt"><div class="loh"><b>OPTION ${n + 1}</b><span class="muted">${k ? plural(k, "change", "changes") : "same as now"}</span><span class="grow"></span><button class="go sm" data-lsw="lbUse" data-n="${n}"${L.busy || !k ? " disabled" : ""}>Use this</button></div>${SLOTS.map((slot, i) => rowHtml(M, slot, x.lineup[i], { fresh: x.lineup[i] !== now[i] })).join("")}<div class="lbf"><span class="lp">${f1(x.proj)}</span><span class="${(x.proj ?? 0) >= (nowProj ?? 0) ? "gr" : "red"}">${Number.isFinite(x.proj) && Number.isFinite(nowProj) ? signed(x.proj - nowProj, f1) : "—"}</span><span>${money(x.salary)}</span></div></div>`;
+    return `<div class="lbopt"><div class="loh"><b>OPTION ${n + 1}</b><span class="muted">${k ? plural(k, "change", "changes") : "same as now"}</span><span class="grow"></span><button class="go sm" data-lsw="lbUse" data-n="${n}"${L.busy || !k ? " disabled" : ""}>Use this</button></div>${SLOTS.map((slot, i) => rowHtml(M, slot, x.lineup[i], { fresh: x.lineup[i] !== now[i], mode: g.mode })).join("")}<div class="lbf"><span class="lp">${f1(x.proj)}</span><span class="${(x.proj ?? 0) >= (nowProj ?? 0) ? "gr" : "red"}">${Number.isFinite(x.proj) && Number.isFinite(nowProj) ? signed(x.proj - nowProj, f1) : "—"}</span><span>${money(x.salary)}</span></div></div>`;
   }).join("");
   const notes = o?.notes?.length ? `<div class="lbnotes">${o.notes.map((n) => `<div>${esc(n)}</div>`).join("")}</div>` : "";
   return `<article class="lbcard open">${headHtml(g, M, `<button class="ol sm" data-lsw="lbClose">Close</button>`)}<div class="lbopts">${nowCard}${opts}</div>${notes}</article>`;

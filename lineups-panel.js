@@ -10,6 +10,7 @@ import { cleanSpotName } from "./spot-name.js";
 import { planInOrder, orderSummary } from "./assign-order.js";
 import { compareClick, freshCompare } from "./lineups-compare.js";
 import { keepRecent, compactRow, toRecord, fromRecord, mergeBuilds, withoutLineup } from "./recent-builds.js";
+import { byIdInMode } from "./mode-rows.js";
 
 /** Draws the tab (nothing when the page has no tab element, as in the panel's own tests). */
 export function renderTab(X, c, own) {
@@ -188,7 +189,8 @@ function swapUse(X, key, inId, own) {
     // The lineup's frozen men are rebuilt with it: the men who stay keep the rows the build answered with, the man swapped in is
     // his row on the board now (frozen from here), so the card, the totals and the DK file check all follow the new men. The
     // build is kept again with the swap.
-    const [, bid, idx] = key.split(":"), i = +idx, b = buildOf(P, bid), live = X.ctx().byId;
+    const [, bid, idx] = key.split(":"), i = +idx, b = buildOf(P, bid), km = modeOfKey(P, key), c0 = X.ctx();
+    const live = (km === "Cash" || km === "GPP") && km !== c0.noMode ? byIdInMode(c0.byId, km) : c0.byId; // the man swapped in is frozen on the card's own mode's figures (thumbs per mode, Adam 1:24 PM 11-20)
     const frozen = new Map((b.lineups[i].men ?? []).map((m) => [m.dk_id, m]));
     updateBuild(X, { ...b, lineups: b.lineups.map((l, j) => (j === i ? { ids: next, men: next.map((id) => frozen.get(id) ?? compactRow(live.get(id))) } : l)) }, own);
   } else P.saved = P.saved.map((l) => (String(l.id) === key.slice(2) ? { ...l, orig: l.orig ?? l.slots, slots: next, swapped: true } : l));

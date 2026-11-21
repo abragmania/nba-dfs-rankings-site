@@ -52,10 +52,11 @@ export async function handleOptimize(req, res, slate, opts) {
   if (opts.build) return fail(res, 409, "BUSY", "Lineups are already being made; try again when that finishes.");
   const picks = picksForBuild(res, slate, slateData, body.mode);
   if (!picks) return;
-  // Adam's overrides (typed numbers and bumps) are what the build scores, late swap included.
+  // Adam's overrides (typed numbers and bumps) are what the build scores, late swap included: the shared numbers and the BUILD's mode's own
+  // thumbs and stars (Adam 1:24 PM 11-20); a mode whose thumbs and stars cannot be read builds nothing (500, slate/mode-marks.js).
   const unknownMarks = hisProblem(slateData); // his In and Out calls unreadable: who is Out is unknown, so nothing is built (fail closed)
   if (unknownMarks) return fail(res, 409, "HIS_MARKS_UNREADABLE", unknownMarks);
-  const players = effectivePlayers(res, slate, slateData, opts);
+  const players = effectivePlayers(res, slate, slateData, opts, body.mode);
   if (!players) return;
   let { locked, excluded } = picks, lateOut = null;
   if (lateSwap) {

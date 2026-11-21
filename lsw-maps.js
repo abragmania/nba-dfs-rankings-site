@@ -3,7 +3,7 @@
 // with Fill and Number in order, one-step undo, and the single-row picker for single changes. Lineups: one row per spot with its lineup, its
 // eight men on one line, a picker of saved lineups and the Out alert. An entry with no spot is red: "No lineup assigned"; it is never edited
 // or exported.
-import { esc, money, f1, spotColour, outFlag, outChip, nameOpen } from "./lsw-common.js";
+import { esc, money, f1, spotColour, outFlag, outChip, nameOpen, poolFor } from "./lsw-common.js";
 import { logo } from "./board-util.js";
 import { savedLabel } from "./lineups-tab.js";
 
@@ -111,10 +111,10 @@ const sumOfLineup = (l, byId, k) => (l.slots.every((id) => Number.isFinite(byId.
 
 /** The options of one spot's saved-lineup menu; `all` false: only the lineup it holds now (filled in on opening, as entrySpotOptions). */
 export function lineupOptions(s, M, L, all = true) {
-  const byId = new Map(M.pool.map((p) => [p.dk_id, p]));
+  const byMode = new Map(), byId = (mode) => { if (!byMode.has(mode)) byMode.set(mode, new Map(poolFor(M, mode).map((p) => [p.dk_id, p]))); return byMode.get(mode); }; // each saved lineup's totals on its own mode's figures
   const held = s.source?.lineupId;
   const saved = (L.saved ?? []).slice().reverse().filter((l) => all || (held != null && String(l.id) === String(held)));
-  return `<option value="">${s.blank ? "Pick a saved lineup…" : "Change lineup…"}</option>` + saved.map((l) => `<option value="${esc(l.id)}"${held === String(l.id) ? " selected" : ""}>${esc(lineupName(l, L))} · ${esc(l.mode)} · ${f1(sumOfLineup(l, byId, "proj"))} · ${money(sumOfLineup(l, byId, "salary"))}</option>`).join("");
+  return `<option value="">${s.blank ? "Pick a saved lineup…" : "Change lineup…"}</option>` + saved.map((l) => `<option value="${esc(l.id)}"${held === String(l.id) ? " selected" : ""}>${esc(lineupName(l, L))} · ${esc(l.mode)} · ${f1(sumOfLineup(l, byId(l.mode), "proj"))} · ${money(sumOfLineup(l, byId(l.mode), "salary"))}</option>`).join("");
 }
 
 /** What a spot lineup is, in words: a saved one by its Lineups tab name, the uploaded one as such. */

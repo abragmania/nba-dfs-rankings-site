@@ -1,7 +1,7 @@
 // Screen 2, All entries (entries late swap): the blunt bar (pick a man, scope one spot or every spot holding him, Remove and re-optimize,
 // Remove and lock a backup, Undo all, restore a man removed by mistake), the spot filter, every spot's card, exposure by spot and
 // entries by spot. The bar only collects the request; the engine decides and the cards show its answer.
-import { esc, money, f1, spotColour, tint, feeText, outChip, ICON_LOCK, nameOpen } from "./lsw-common.js";
+import { esc, money, f1, spotColour, tint, feeText, outChip, ICON_LOCK, nameOpen, poolFor } from "./lsw-common.js";
 import { spotCardHtml } from "./lsw-cards.js";
 import { logo } from "./board-util.js";
 
@@ -26,16 +26,23 @@ export function scopeFor(M, b) {
 }
 
 /** Backup candidates: men on the slate whose game has not started and who are not Out, best projection first. A late swap NO man is
- *  offered like anyone (a backup is his own pick; Adam 6:16 and 6:19 PM 11-19). */
-export function backupLabels(M) {
-  return M.pool.filter((p) => !p.missing && !p.started && !p.untimed && !p.out).sort((a, b) => (b.proj ?? 0) - (a.proj ?? 0))
+ *  offered like anyone (a backup is his own pick; Adam 6:16 and 6:19 PM 11-19). mode: the removal's spots' mode (backupMode), whose
+ *  thumbs order the list; none (spots of both modes, or none picked) orders by the shared figures. */
+export function backupLabels(M, mode = null) {
+  return poolFor(M, mode).filter((p) => !p.missing && !p.started && !p.untimed && !p.out).sort((a, b) => (b.proj ?? 0) - (a.proj ?? 0))
     .map((p) => ({ id: p.dk_id, label: `${p.name} (${p.team} ${money(p.salary)})` }));
+}
+/** The one mode of the spots a removal would change (b: the page's blunt bar), or null when they are of both modes or none is known. */
+export function backupMode(M, b) {
+  const names = b?.scope === "one" ? [b.spot] : menInSpots(M).find((m) => m.man.dk_id === b?.man)?.spots ?? [];
+  const modes = new Set(M.spots.filter((s) => names.includes(s.name)).map((s) => s.mode));
+  return modes.size === 1 ? [...modes][0] : null;
 }
 
 function bluntBar(M, L) {
   const men = menInSpots(M), b = L.blunt;
   const sel = men.find((m) => m.man.dk_id === b.man);
-  const lab = backupLabels(M);
+  const lab = backupLabels(M, backupMode(M, b));
   const backup = lab.find((x) => x.id === b.backup);
   const holding = sel?.spots.length ?? 0;
   const can = Boolean(sel) && (b.scope === "holding" ? holding > 0 : Boolean(b.spot));

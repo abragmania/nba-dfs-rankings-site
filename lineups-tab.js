@@ -16,6 +16,7 @@ import { compareHtml, freshCompare } from "./lineups-compare.js";
 import { NAME_MAX, savedLetterOf } from "./saved-panel.js";
 import { HINT } from "./cell-editor.js";
 import { MAX_SPOTS } from "./spot-name.js";
+import { byIdInMode } from "./mode-rows.js";
 
 export const SORTS = [["proj", "Projection", "Most projected points first"], ["sal", "Salary", "Most salary used first"], ["own", "Ownership", "Lowest total ownership first"], ["new", "Newest", "Newest first (a build's own order)"]];
 /** The arrow on the sort in force: up is low to high, down is high to low (Projection and Salary start down, Ownership starts up). */
@@ -404,7 +405,11 @@ export function lineupsTabHtml(P, c, { dash, seat, swapCtx, swapCtxOf = null, no
   const noted = notes ? `<div class="lt-notes"><em>The last ${esc(P.mode)} build made on this page:</em>${notes}</div>` : "";
   const otherBase = { byId: c.byId, live: c.byId, tagOf: (kind, p) => (isOutNow(p) ? "now Out" : lineupTag(p, c.byId, c.outNames)), spotText: P.spotText ?? null, dash, colourOf: c.colourOf, chipWhen, savedSet, names: P.svNames, edit: P.svEdit, spots: P.spots ?? {}, spotMenu: P.spotMenu ?? null, saved: P.saved ?? [], spotWarn: P.spotWarn ?? null, spotsReady: P.spotsReady === true, held: null };
   // Each other-mode group swaps and marks locks with its own mode's picks and NO (review 11-20, money; Adam 11-14/11-20: Cash and GPP keep separate picks).
-  const otherCtx = (key) => { const m = key === "Cash" || key === "GPP" ? key : null; return { ...otherBase, swap: { ctx: m && swapCtxOf ? swapCtxOf(m) : swapCtx, open: P.swap ?? null }, locked: new Set(m && c.picksOf ? c.picksOf(m).locked : c.picks.locked) }; };
+  // And each is drawn on its own mode's figures (thumbs and stars per mode, Adam 1:24 PM 11-20; mode-rows.js): its totals, its stars, its swaps.
+  const otherCtx = (key) => {
+    const m = key === "Cash" || key === "GPP" ? key : null, by = m && m !== c.noMode ? byIdInMode(c.byId, m) : c.byId;
+    return { ...otherBase, byId: by, live: by, tagOf: (kind, p) => (isOutNow(p) ? "now Out" : lineupTag(p, by, c.outNames)), swap: { ctx: m && swapCtxOf ? swapCtxOf(m) : swapCtx, open: P.swap ?? null }, locked: new Set(m && c.picksOf ? c.picksOf(m).locked : c.picks.locked) };
+  };
   const otherHtml = others.length && !readErr ? otherSavedHtml(others, otherCtx, P.lt.openOther ?? []) : "";
   const away = lists.buildOther ? `<div class="lt-away">The ${esc(lists.buildOther.mode)} build (${lists.buildOther.n} lineup${lists.buildOther.n === 1 ? "" : "s"}) is under ${esc(lists.buildOther.mode)}.</div>` : "";
   const stars = starStripHtml(starredCounts(inMode.map((e) => e.ids), c.byId)); // every starred man and how many of these lineups hold him

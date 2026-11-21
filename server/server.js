@@ -20,7 +20,7 @@ import { OPTIMIZE_CEILING_MS, ANSWER_START_MS, ANSWER_KEEPALIVE_MS } from "./lin
 import { handleOptimize, handleBuildProgress, handleBuildStop } from "./lineup/build-route.js";
 import { handleNo } from "./lineup/no-list.js";
 import { send, fail, readJson, openSlate } from "./slate/http-helpers.js";
-import { mergedFor, effectivePlayers, withOurs } from "./slate/effective-players.js";
+import { mergedFor, effectivePlayers, withOurs, marksFoot } from "./slate/effective-players.js";
 
 export { LATE_ONE_GAME_NOTE } from "./lineup/build-route.js";
 export { mergedFor } from "./slate/effective-players.js";
@@ -33,7 +33,8 @@ import { readSpots, readSpotsShown, writeSpots, checkSpotsBody, applySpots, vaca
 import { readSaved } from "./slate/lateswap-store.js";
 import { heldSpotNames } from "./lateswap/maps.js";
 import { readBuilds, writeBuilds, checkBuildsBody, applyBuilds } from "./slate/builds.js";
-import { readOverrides, writeOverrides, checkChanges, applyChanges, resetPlayer, resetAll, minutesBase, publicOverrides } from "./slate/overrides.js";
+import { readOverrides, writeOverrides, checkChanges, applyChanges, resetPlayer, resetAll, minutesBase, publicOverrides, touchesMarks, NEEDS_MODE, overridesFile } from "./slate/overrides.js";
+import { copyAside, replaceUnreadable, markReplaced, replacedMarksWords, marksTrouble } from "./slate/mode-marks.js";
 import { consoleHandler } from "./slate/console-route.js";
 import { whatifHandler } from "./slate/whatif-route.js";
 import { handleResend } from "./slate/resend-route.js";
@@ -150,22 +151,33 @@ async function handleOverrides(req, res, slate, opts) {
   if (!read) return;
   const checked = checkChanges(read.body, slateData);
   if (!checked.ok) return fail(res, 400, "BAD_OVERRIDE", checked.message);
+  const mode = checked.mode, marks = touchesMarks(checked); // a thumb, a star or a reset changes the thumbs and stars of the mode he was on only (Adam 1:24 PM 11-20)
+  if (marks && !mode) return fail(res, 400, "BAD_OVERRIDE", NEEDS_MODE);
   const busy = await syncBusyNow(opts); // GitHub's data is coming down: his write waits (409) so it never lands between the set-aside and the put-back; asked before the read, so nothing awaits between the read and the write
   if (busy) return fail(res, 409, "SYNC_RUNNING", busy);
   // Read the file only now, after the body has arrived: from here to the write nothing awaits, so two overlapping POSTs
   // each apply onto the other's saved result and neither change is lost.
   const current = readCurrent();
   if (!current) return;
+  // His mode's thumbs and stars could not be read: a reset leaves them as stored; a thumb or star change starts the mode from this change (slate/mode-marks.js).
+  // The change is worked out first on the mode started empty, so a change refused (a bad value, nothing to scale) copies nothing aside; only then is the old file copied, then written.
+  const why = current.modes?.[mode]?.unreadable, replacing = Boolean(why) && checked.kind === "changes" && marks;
+  const from = replacing ? replaceUnreadable(current, mode) : current;
   const base = withOurs(slate, slateData, opts); // the projections a bump scales and the answer shows: ours or TwoGun's, as the board reads them
   let next;
   try {
-    next = checked.kind === "resetAll" ? resetAll(current) : checked.kind === "reset" ? resetPlayer(current, checked.id) : applyChanges(current, checked.changes, minutesBase(base.players ?? [], current));
+    next = checked.kind === "resetAll" ? resetAll(from, mode) : checked.kind === "reset" ? resetPlayer(from, checked.id, mode) : applyChanges(from, checked.changes, minutesBase(base.players ?? [], from), mode);
   } catch (e) {
-    if (e?.code !== "BUMP_NO_PROJECTION") throw e;
+    if (e?.code !== "BUMP_NO_PROJECTION" && e?.code !== "OVERRIDES_INVALID") throw e;
     return fail(res, 400, e.code, e.message);
   }
+  const replaced = replacing ? saveOr500(res, () => copyAside(overridesFile(slate), slate, why)) : null; // a failed copy answers 500 and writes nothing
+  if (replacing && !replaced) return;
+  if (replaced) { error("overrides held an unreadable mode; copied aside and replaced by a change", { slate, mode, ...replaced }); next = markReplaced(next, mode, replaced); }
+  // A write that fails after the copy aside leaves that copy in the history folder and answers 500 (the request's own error path): the file on disk is still the
+  // old one, whole, so nothing is lost; the next change in that mode copies it aside again.
   const written = writeOverrides(slate, next, { his: new Date().toISOString() }); // his click: sets his_at
-  send(res, 200, { overrides: publicOverrides(written), players: mergedFor(slate, base.players ?? [], written) });
+  send(res, 200, { overrides: publicOverrides(written), players: mergedFor(slate, base.players ?? [], written), marks: marksTrouble(written), ...(replaced ? { replaced_unreadable: replacedMarksWords(mode, replaced) } : {}) });
 }
 
 /** GET the slate's saved lineups; POST { slots, mode } saves one, POST { batch: [{ slots, mode }] } saves many (Save all), each checked
@@ -299,7 +311,7 @@ function builtSlate(res, slate, opts) {
   const ours = withOurs(slate, data, opts); // our projections, or TwoGun's, per the minutes setting
   const players = effectivePlayers(res, slate, ours); // the board shows the effective figures, each with its base
   if (!players) return null;
-  const usual = withUsualMinutes(slate, { ...ours, players }, { nowMs: opts.now() }); // each man's usual minutes, the console's figure
+  const usual = withUsualMinutes(slate, { ...ours, players, marks: marksFoot(slate) }, { nowMs: opts.now() }); // each man's usual minutes, the console's figure; marks: each mode's thumbs and stars carried, unreadable or replaced, for the page foot (slate/mode-marks.js)
   return withBoxFreshness(withAbsence(slate, withRest(slate, withPullMoves(slate, withOurMinutes(slate, usual), { nowMs: opts.now() })), { nowMs: opts.now() }), { nowMs: opts.now() }); /* TwoGun status-change times are never stamped (Adam 11-19) */ // who the newest pull moved against the one before it; absence: how many games each injured man has missed (server/boxes/absence.js); box_freshness: whether the stored box scores are behind the schedule
 }
 

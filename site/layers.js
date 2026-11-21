@@ -26,11 +26,46 @@ export function splitOverrides(W, B, version) {
     }
     if (Object.keys(e).length) edits[sec] = e;
   }
-  const ws = new Set(W.stars ?? []), bs = new Set(B?.stars ?? []), st = {};
+  const st = starEdits(W.stars, B?.stars);
+  if (Object.keys(st).length) edits.stars = st;
+  if (W.modes && Object.hasOwn(W.modes, "Cash")) edits.cash = cashEdits(W.modes.Cash, cashOf(B)); // present (even empty) once his file is split: a layer without it is from before
+  return { site_layer: MARK, kind: "overrides", base_version: version ?? null, edits, ...(W.auto !== undefined ? { auto: W.auto } : {}), updated_at: W.updated_at ?? null };
+}
+
+// Thumbs and stars per mode (server/slate/mode-marks.js): the top-level bump and stars are GPP's, modes.Cash Cash's own; a file with no Cash
+// entry is from before the split and Cash reads the top-level set. A visitor's Cash differences are kept per man as GPP's are.
+const marksShape = (e) => e !== null && typeof e === "object" && !Array.isArray(e) && (e.bump == null || (typeof e.bump === "object" && !Array.isArray(e.bump))) && (e.stars == null || Array.isArray(e.stars));
+/** Cash's thumbs and stars in a file: its own entry (its replaced mark too: the foot says so on the site as in the app), else the top-level set it carries; null for an entry that cannot be read. */
+const cashOf = (X) => (X?.modes && Object.hasOwn(X.modes, "Cash") ? (marksShape(X.modes.Cash) ? { bump: X.modes.Cash.bump ?? {}, stars: X.modes.Cash.stars ?? [], ...(X.modes.Cash.replaced ? { replaced: X.modes.Cash.replaced } : {}) } : null) : { bump: X?.bump ?? {}, stars: X?.stars ?? [] });
+function starEdits(w, b) {
+  const ws = new Set(w ?? []), bs = new Set(b ?? []), st = {};
   for (const id of ws) if (!bs.has(id)) st[id] = true;
   for (const id of bs) if (!ws.has(id)) st[id] = false;
-  if (Object.keys(st).length) edits.stars = st;
-  return { site_layer: MARK, kind: "overrides", base_version: version ?? null, edits, ...(W.auto !== undefined ? { auto: W.auto } : {}), updated_at: W.updated_at ?? null };
+  return st;
+}
+/** His Cash entry against the baseline's Cash set: { bump, stars } per man, or { kept } (his entry as stored) when either cannot be read. */
+function cashEdits(w, b) {
+  if (!marksShape(w) || !b) return { kept: w };
+  const bump = {}, wb = w.bump ?? {}, bb = b.bump ?? {};
+  for (const id of new Set([...Object.keys(wb), ...Object.keys(bb)])) { if (!has(wb, id)) bump[id] = null; else if (!has(bb, id) || !same(wb[id], bb[id])) bump[id] = wb[id]; }
+  return { bump, stars: starEdits(w.stars, b.stars) };
+}
+/** Edits on a { bump, stars, replaced? } set: a new set, the set's replaced mark carried through. */
+function applyMarks(set, bumpEdits = {}, starEditsOf = {}) {
+  const bump = { ...(set?.bump ?? {}) }, stars = new Set(set?.stars ?? []);
+  for (const [id, v] of Object.entries(bumpEdits ?? {})) { if (v === null) delete bump[id]; else bump[id] = v; }
+  for (const [id, on] of Object.entries(starEditsOf ?? {})) { if (on) stars.add(id); else stars.delete(id); }
+  return { bump, stars: [...stars], ...(set?.replaced ? { replaced: set.replaced } : {}) };
+}
+/** The Cash entry the merged file holds, or undefined for none (a baseline from before the split and a layer from before it too: Cash carries the top-level set). */
+function mergedCash(B, layer) {
+  const cash = layer.edits?.cash;
+  if (cash?.kept !== undefined) return cash.kept;
+  if (cash === undefined && !(B?.modes && Object.hasOwn(B.modes, "Cash"))) return undefined;
+  const base = cashOf(B);
+  if (!base) return cash ? applyMarks({}, cash.bump, cash.stars) : B.modes.Cash; // the baseline's own Cash entry cannot be read: kept as published unless he made one
+  // A layer from before the split was made on the one set both modes read: its thumbs and stars go to Cash too.
+  return cash ? applyMarks(base, cash.bump, cash.stars) : applyMarks(base, layer.edits?.bump, layer.edits?.stars);
 }
 
 export function mergeOverrides(B, layer) {
@@ -41,6 +76,8 @@ export function mergeOverrides(B, layer) {
   const stars = new Set(B?.stars ?? []);
   for (const [id, on] of Object.entries(layer.edits?.stars ?? {})) { if (on) stars.add(id); else stars.delete(id); }
   out.stars = [...stars];
+  const cash = mergedCash(B, layer);
+  if (cash !== undefined) out.modes = { Cash: cash };
   if (B?.auto !== undefined || layer.auto !== undefined) {
     const lists = {};
     for (const list of ["proj", "min", "pin"]) {

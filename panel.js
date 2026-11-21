@@ -15,7 +15,7 @@ import { rememberSlots } from "./lateswap.js";
 import { startedByTip } from "./swap-list.js";
 import { limitsMoved, oversMoved, picksMoved } from "./slate-refresh.js";
 import { workKey } from "./worklineup.js";
-import { limitOutcome, withLimit, readLimits, saveLimits, sentLimits, limitCountHtml } from "./row-limits.js";
+import { limitOutcome, withLimit, readLimitsByMode, perModeLimits, limitsRefusal, limitsSaved, saveLimits, sentLimits, limitCountHtml } from "./row-limits.js";
 import { nextExposureSort, frozenMen } from "./lineups-list.js";
 import { renderTab, tabClick, tabInput, readSpotsFor, retrySpots, readBuildsFor, retryBuilds, keepBuild, refit } from "./lineups-panel.js";
 import { newBuild } from "./recent-builds.js";
@@ -146,7 +146,7 @@ const noKeyOf = (c) => JSON.stringify([c.no ?? []]);
 const noStaleHtml = (res, c) => (res?.lineups.length && res.noAt != null && picksMoved(res.noAt, noKeyOf(c), c.byId) ? `<div class="actnote">Built before your last NO change; build again.</div>` : "");
 
 /** The Min % and Max % a build would send, as one string: compared to say a result is out of date. */
-const limitsKey = (P, c) => JSON.stringify(P.mode === "GPP" ? sentLimits(P.limits, c.byId) : null); // a Cash build sends none
+const limitsKey = (P, c) => JSON.stringify(sentLimits(P.limits, c.byId)); // the mode on show's own set, as its build sends it
 
 function notesHtml(P, c) {
   const res = P.results[P.mode];
@@ -196,7 +196,7 @@ function render(X) {
   keepFocus(el, () => {
     el.innerHTML = `<div class="oh"><h3>Optimizer</h3><div class="seg">${MODES.map((m) => `<button data-op="mode" data-m="${m}" class="${m === P.mode ? "on" : ""}"${P.running ? ' disabled title="A build is running; switch after it finishes."' : ""}>${m}</button>`).join("")}</div></div>
 ${settings}<div class="lu${v ? "" : " wk"}">${lineup}</div>
-<div class="act">${buildButtonsHtml(P, ICON.bolt, "Build")}${v || !built ? "" : `<button class="ol opentab" data-op="opentab">${built} lineup${built === 1 ? "" : "s"} built: open Lineups</button>`}${v ? "" : limitCountHtml(P.mode === "GPP" ? sentLimits(P.limits, c.byId) : null)}
+<div class="act">${buildButtonsHtml(P, ICON.bolt, "Build")}${v || !built ? "" : `<button class="ol opentab" data-op="opentab">${built} lineup${built === 1 ? "" : "s"} built: open Lineups</button>`}${v ? "" : limitCountHtml(sentLimits(P.limits, c.byId))}
 <div class="two"><button class="ol" data-op="save"${canSave ? "" : " disabled"}>Save working lineup</button>${v ? `<button class="ol" data-op="csv"${n ? "" : " disabled"}>Download DK CSV${n ? ` (${n})` : ""}</button>` : ""}</div></div>
 ${v ? lsNotesHtml(P, c, v) + ovStaleHtml(lsRes, c) + picksStaleHtml(lsRes, c) + pullStaleHtml(lsRes, c) : notesHtml(P, c)}`;
   });
@@ -256,6 +256,9 @@ async function build(X) {
   // This mode's saved working lineup could not be read: its hand-picked men are unknown, so nothing is built in it until a click saves a new one (review 11-20, money).
   const unread = P.ls ? null : workUnreadableWhy(P, mode);
   if (unread) { X.toast(`The ${mode} working lineup could not be read (${unread}), so nothing was built. Click a row or a slot in it to save a new one, then build.`, "err"); return; }
+  // This mode's stored Min % and Max % are there but cannot be read: who is held to what is unknown, so nothing is built in it until a box saves a new set (fails closed). Late swap sends none.
+  const limNo = P.ls ? null : limitsRefusal(P, mode);
+  if (limNo) { X.toast(limNo, "err"); return; }
   P.running = true;
   const watch = watchBuild(X);
   render(X);
@@ -270,7 +273,7 @@ async function build(X) {
     // The working lineup's hand-picked men are held in every lineup of this build only, and may take any slot their
     // positions allow (work-panel.js; the server sends optimize only their ids).
     const hand = buildHand(P, P.workByMode[mode]), wk = workKey(P.workByMode[mode]);
-    const exposure = mode === "GPP" ? sentLimits(P.limits, X.ctx().byId) : null, limAt = JSON.stringify(exposure); // a man's Min % and Max % (B10): GPP builds only; never sent in late swap, where they do not apply
+    const exposure = sentLimits(P.limByMode[mode] ?? {}, X.ctx().byId), limAt = JSON.stringify(exposure); // a man's Min % and Max % (B10): the CLICKED mode's own set, Cash obeying its own (question Q9, yes; Adam 1:22 PM 11-20); never sent in late swap, where they do not apply
     const out = await postBuild(X, { mode, settings: exposure ? { ...settings, exposure } : settings, ...(hand ? { handPicks: hand } : {}) }, watch);
     if (P.build !== watch) return; // an abandoned build's answer, even if the panel is back on its slate
     const prev = P.results[mode];
@@ -485,9 +488,10 @@ function setSlate(X, name, view = null) {
   abandonBuild(X);
   if (X.P.ls) { X.P.ls = { ...X.P.ls, slots: new Array(N).fill(null), userPins: [], res: null, msg: null }; refresh(X); }
   if (view) Object.assign(X.P, { mode: view.mode ?? X.P.mode, expSort: view.expSort, expPos: view.expPos });
-  const ovRead = readOverridesByMode(X.tryStore, name), limRead = readLimits(X.tryStore, name), rawBad = MODES.filter((m) => readRaw(X.tryStore, m, name).unreadable);
+  const ovRead = readOverridesByMode(X.tryStore, name), limRead = readLimitsByMode(X.tryStore, name), rawBad = MODES.filter((m) => readRaw(X.tryStore, m, name).unreadable);
+  perModeLimits(X.P, limRead.byMode, limRead.bad, limRead.damaged); // P.limits: the Min % and Max % of the mode in force; Cash and GPP each keep their own (Adam 1:22 PM 11-20)
   X.P.rulesDropped = readRaw(X.tryStore, "GPP", name).rulesDropped; // saved ownership rules that could not be used: said under the Ownership line
-  Object.assign(X.P, { raw: Object.fromEntries(MODES.map((m) => [m, pinRaw(X.tryStore, m, name)])), svNames: loadSavedNames(X.tryStore, name), svEdit: null, ovByMode: ovRead.byMode, ovBad: ovRead.bad, limits: limRead.limits, limBad: limRead.unreadable, rawBad, results: {}, swap: null, lt: freshLt(), spots: {}, spotsReady: false, spotsError: null, spotsReading: null, spotQueue: null, spotPending: 0, spotGen: (X.P.spotGen ?? 0) + 1, spotMenu: null, spotWarn: null, spotMove: null, spotUndo: null, orderWarn: null, builds: [], buildsReady: false, buildsError: null, buildsReading: null, buildQueue: null, buildGen: (X.P.buildGen ?? 0) + 1, cmp: null, loaded: null, saved: [], savedPick: new Set(), savedError: null, savedReady: false, savedReading: null, running: false, showSkipped: false, ovOpen: false, ovMsg: null, lrOpen: false, lrMsg: null, ...freshWork() });
+  Object.assign(X.P, { raw: Object.fromEntries(MODES.map((m) => [m, pinRaw(X.tryStore, m, name)])), svNames: loadSavedNames(X.tryStore, name), svEdit: null, ovByMode: ovRead.byMode, ovBad: ovRead.bad, rawBad, results: {}, swap: null, lt: freshLt(), spots: {}, spotsReady: false, spotsError: null, spotsReading: null, spotQueue: null, spotPending: 0, spotGen: (X.P.spotGen ?? 0) + 1, spotMenu: null, spotWarn: null, spotMove: null, spotUndo: null, orderWarn: null, builds: [], buildsReady: false, buildsError: null, buildsReading: null, buildQueue: null, buildGen: (X.P.buildGen ?? 0) + 1, cmp: null, loaded: null, saved: [], savedPick: new Set(), savedError: null, savedReady: false, savedReading: null, running: false, showSkipped: false, ovOpen: false, ovMsg: null, lrOpen: false, lrMsg: null, ...freshWork() });
   render(X);
   readSaved(X, name, own);
   readSpotsFor(X, name, own); // the slate's spots (lineups-panel.js)
@@ -530,8 +534,9 @@ async function toggleLateSwap(X, idx = null, from = null) {
  * memory() is what the panel adds to the page's remembered view, and onMemory() says it has changed (view-memory.js).
  */
 export function createPanel({ el, lineupsEl = null, onView = () => {}, onTabs = () => {}, isLineupsView = () => false, api, toast, tryStore, dash, ctx, onLateSwap = () => {}, onWork = () => {}, onMode = () => {}, onClearLocks = () => {}, onMemory = () => {}, confirm = askConfirm }) {
-  const P = { mode: "GPP", raw: Object.fromEntries(MODES.map((m) => [m, loadRaw(tryStore, m)])), limits: {}, results: {}, swap: null, lt: freshLt(), spots: {}, spotsReady: false, spotsError: null, spotsReading: null, spotQueue: null, spotPending: 0, spotGen: 0, spotMenu: null, spotWarn: null, spotMove: null, builds: [], buildsReady: false, buildsError: null, buildsReading: null, buildQueue: null, buildGen: 0, setOpen: false, loaded: null, saved: [], savedPick: new Set(), savedError: null, savedReady: false, savedReading: null, running: false, showSkipped: false, ovOpen: false, ovMsg: null, lrOpen: false, lrMsg: null, ls: null, expSort: { ...DEFAULT_EXPOSURE_SORT }, expPos: "All", svNames: {}, svEdit: null, ...freshWork() };
+  const P = { mode: "GPP", raw: Object.fromEntries(MODES.map((m) => [m, loadRaw(tryStore, m)])), results: {}, swap: null, lt: freshLt(), spots: {}, spotsReady: false, spotsError: null, spotsReading: null, spotQueue: null, spotPending: 0, spotGen: 0, spotMenu: null, spotWarn: null, spotMove: null, builds: [], buildsReady: false, buildsError: null, buildsReading: null, buildQueue: null, buildGen: 0, setOpen: false, loaded: null, saved: [], savedPick: new Set(), savedError: null, savedReady: false, savedReading: null, running: false, showSkipped: false, ovOpen: false, ovMsg: null, lrOpen: false, lrMsg: null, ls: null, expSort: { ...DEFAULT_EXPOSURE_SORT }, expPos: "All", svNames: {}, svEdit: null, ...freshWork() };
   perModeOverrides(P); // P.overrides: the team and game limits of the mode in force; Cash and GPP each keep their own
+  perModeLimits(P); // P.limits: the Min % and Max % of the mode in force (row-limits.js)
   perModeWork(P); // P.work and P.loaded: the working lineup of the mode in force; Cash and GPP each keep their own (work-panel.js)
   const X = { P, el, lel: lineupsEl, onView, onTabs, isLineupsView, onMode, api, toast, tryStore, dash, ctx, onLateSwap, onWork, onClearLocks, onMemory, confirm, settle: pressSettle() };
   X.redraw = () => render(X);
@@ -576,8 +581,8 @@ export function createPanel({ el, lineupsEl = null, onView = () => {}, onTabs = 
     },
     // settle(fn) runs the redraw: a box closed by a press waits for the press to end, as a redraw now would swallow its click.
     setLimit: (kind, id, value, settle = (fn) => fn()) => {
-      P.limits = withLimit(P.limits, id, kind, value);
-      saveLimits(tryStore, ctx().name, P.limits);
+      P.limits = withLimit(P.limits, id, kind, value); // the mode in force's own set
+      if (saveLimits(tryStore, ctx().name, P.limits, P.mode)) limitsSaved(P, P.mode); // a set saved whole replaces one that could not be read
       settle(() => { render(X); onWork(); });
     },
     // idx null unpins the man (the picker's "—").

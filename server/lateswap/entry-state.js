@@ -5,6 +5,7 @@ import { slateRefMs, startedSplit, pinsOf } from "../board/lateswap.js";
 import { lineupOf, spotEntries, modeFromName } from "./maps.js";
 import { departedFrom } from "./salary-table.js";
 import { outFor } from "../board/figures.js";
+import { manFor } from "./board-excludes.js";
 
 /**
  * The slate read at nowMs; { ctx } or { error }. slate = { name: "2026-11-04-main", players, departed? }. players is the newest
@@ -226,12 +227,13 @@ export function spotView(state, spot, ctx) {
     ...present.filter((id) => ctx.untimed.has(id)).map((id) => `${nameOf(id, ctx, entries)}'s tip time is unreadable: he is held in his slot, and cannot be added elsewhere.`),
     ...entries.flatMap((e) => frozenProblems(e, lineup, ctx, confirmed)),
   ])];
-  const men = lineup.map((id) => (id == null ? null : ctx.man(id)));
+  const mode = row?.mode ?? modeFromName(spot);
+  const men = lineup.map((id) => (id == null ? null : manFor(ctx, id, mode))); // the spot's own mode's thumbs (Adam 1:24 PM 11-20; board-excludes.js)
   const rows = entries.map((e) => {
     const { status, changedSlots, reasons } = entryStatus(e, lineup, ctx, confirmed);
     return { entryId: e.entryId, contestName: e.contestName, status, changed: changedSlots.length > 0, changedSlots, amber: status === "held", reasons };
   });
-  return { spot, mode: row?.mode ?? modeFromName(spot), proven: row?.proven ?? null, notes: row?.notes ?? [], duplicate: row?.duplicate ?? null, atUploadWhy: row?.atUploadWhy ?? null, confirmedOut: confirmed, alert, unusable: Object.hasOwn(state.unusable, spot) ? state.unusable[spot] : [], slots, flags, amber: blocks.length > 0 || alert != null || rows.some((r) => r.amber), salary: sumOf(men, "salary"), projection: sumOf(men, "projection"), entries: rows };
+  return { spot, mode, proven: row?.proven ?? null, notes: row?.notes ?? [], duplicate: row?.duplicate ?? null, atUploadWhy: row?.atUploadWhy ?? null, confirmedOut: confirmed, alert, unusable: Object.hasOwn(state.unusable, spot) ? state.unusable[spot] : [], slots, flags, amber: blocks.length > 0 || alert != null || rows.some((r) => r.amber), salary: sumOf(men, "salary"), projection: sumOf(men, "projection"), entries: rows };
 }
 
 /** The entries-to-spots table for the screen: one row per entry in file order, { entryId, contestName, contestId, entryFee, spot,

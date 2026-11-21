@@ -5,6 +5,16 @@
 // The picks are kept per mode (Adam 11-14; his yes 5:14 PM ET 11-19 and "yes go" 12:42 PM ET 11-20): S.picks is { Cash: { locked, excluded },
 // GPP: { ... } }, a save sends the open mode's lists with its mode, and the server replaces only that mode's (store.js savePicks).
 import { overlayRows, mergeBodies, isChanges } from "./instant-overrides.js";
+import { inMode } from "./mode-rows.js";
+
+/** A pending change's body as the mode on show takes it (thumbs and stars per mode, Adam 1:24 PM 11-20): whole in its own mode; from the other mode only its
+ *  shared typed numbers (proj, own), and a reset of the other mode not at all (its answer brings the shared part). null when nothing is left to show. Pure. */
+export function bodyForShown(body, made, shown) {
+  if (!made || made === shown) return body;
+  if (!isChanges(body)) return null;
+  const { bump, stars, ...shared } = body;
+  return Object.keys(shared).length ? shared : null;
+}
 
 export const PICK_MODES = Object.freeze(["Cash", "GPP"]);
 /** The page's picks from a picks answer (store.js readPicks): each mode's own lists. An answer without both modes' lists throws: who is
@@ -24,6 +34,14 @@ export function troubleLine(a, noun) {
   for (const [m, why] of Object.entries(a?.unreadable ?? {})) out.push(`The ${m} ${noun} could not be read (${why}); ${noun === "working lineup" ? "it shows empty" : `${m} builds refuse`} until a change in ${m} saves new ones, the old file kept beside it.`);
   for (const [m, r] of Object.entries(a?.replaced ?? {})) out.push(`The ${m} ${noun} could not be read and ${noun.endsWith("s") ? "were" : "was"} emptied${r?.at ? ` at ${new Date(r.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })} ET` : ""}; the old file is kept at ${r?.copy ?? "an unknown place"}.`);
   return out.join(" ");
+}
+/** The foot words for each mode's thumbs and stars (server/slate/mode-marks.js marksTrouble, on the slate and every overrides answer as `marks`): ["", trouble], "" with none.
+ *  Only what is wrong is said (lead's call, no clutter): a damaged part, a set started again; a normal carry-over from before the split shows nothing. Pure. */
+export function marksLines(marks) {
+  const out = [];
+  for (const [m, why] of Object.entries(marks?.unreadable ?? {})) out.push(`The ${m} thumbs and stars could not be read (${why}); ${m} shows none and ${m} builds refuse until a thumb or star change in ${m} starts them again, the old file kept in the slate's history folder first.`);
+  for (const [m, r] of Object.entries(marks?.replaced ?? {})) out.push(`The ${m} thumbs and stars could not be read and were started again${r?.at ? ` at ${new Date(r.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })} ET` : ""}; the old file is kept at ${r?.copy ?? "an unknown place"}.`);
+  return ["", out.join(" ")];
 }
 /** The page's foot facts from a picks or working answer: { carried, unreadable, replaced }. Pure. */
 export const footOf = (a) => ({ carried: a?.carried ?? null, unreadable: a?.unreadable ?? null, replaced: a?.replaced ?? null });
@@ -122,9 +140,11 @@ export function createSaves({ S, api, toast, mode: modeNow, renderRows, renderPi
   // again one change at a time, so only the refused change is put back.
   let pend = [], server = new Map();
   shownGuess = () => server;
-  const mine = () => pend.filter((e) => e.name === S.name).map((e) => e.body);
-  /** The rows with his changes still on their way put on them, overrides first, then his typed minutes. rows: the server's (an answer, a new pull, a load). */
-  function overlay(rows) {
+  const mine = () => pend.filter((e) => e.name === S.name).map((e) => bodyForShown(e.body, e.mode, modeNow())).filter(Boolean);
+  /** The rows with his changes still on their way put on them, overrides first, then his typed minutes. rows: the server's (an answer, a new pull, a load),
+   *  each first shown in the mode on show (mode-rows.js inMode: that mode's thumbs and stars), so a Cash/GPP switch is restack() alone. */
+  function overlay(given) {
+    const now = modeNow(), rows = given.map((p) => inMode(p, now));
     const out = overlayRows(rows, mine()), store = out.server;
     const shown = out.rows.map((p, i) => {
       const q = over(p);
@@ -154,11 +174,11 @@ export function createSaves({ S, api, toast, mode: modeNow, renderRows, renderPi
     if (fresh.size !== S.byId.size || [...fresh.keys()].some((id) => !S.byId.has(id))) return { kind: "reload", fresh };
     return { kind: "rows", fresh, rows: overlay(bare(S.players).map((p) => (fresh.has(p.dk_id) ? take(p, fresh.get(p.dk_id)) : p))) };
   }
-  async function post(name, body) {
+  async function post(name, body, mode) {
     // GitHub's data is being brought down (the server answers 409 SYNC_RUNNING): his change is kept as it is and sent again after a few seconds, up to three times, never redrawn away.
     for (let tries = 0; ; tries++) {
       try {
-        return await api(`/api/slate/${encodeURIComponent(name)}/overrides`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+        return await api(`/api/slate/${encodeURIComponent(name)}/overrides`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, mode }) }); // mode: whose thumbs and stars the change is (server.js handleOverrides)
       } catch (e) {
         if (e.code !== "SYNC_RUNNING" || tries >= 2) throw e;
         toast("A sync is running; your change is sent again in a few seconds.");
@@ -171,11 +191,13 @@ export function createSaves({ S, api, toast, mode: modeNow, renderRows, renderPi
     const name = batch[0].name, what = [...new Set(batch.map((x) => x.what))].join(" and ");
     let out;
     try {
-      out = await post(name, batch.length === 1 ? batch[0].body : mergeBodies(batch.map((e) => e.body)));
+      out = await post(name, batch.length === 1 ? batch[0].body : mergeBodies(batch.map((e) => e.body)), batch[0].mode);
     } catch (e) {
       await failed(batch, e, name, what);
       return;
     }
+    if (out?.replaced_unreadable) toast(out.replaced_unreadable, "err"); // his mode's thumbs and stars could not be read: the old file is kept aside and the mode starts from this change
+    if (out?.marks && name === S.name && S.slate) { S.slate = { ...S.slate, marks: out.marks }; renderCarried(); } // the foot's carried and unreadable lines follow the saved file
     pend = pend.filter((e) => !batch.includes(e));
     for (const e of batch) e.done(true);
     if (name !== S.name) return;
@@ -202,15 +224,15 @@ export function createSaves({ S, api, toast, mode: modeNow, renderRows, renderPi
     const i = pend.findIndex((e) => !e.sent);
     if (i < 0) return;
     const batch = [pend[i]];
-    if (isChanges(pend[i].body)) for (const e of pend.slice(i + 1)) { if (e.sent) continue; if (e.name !== pend[i].name || !isChanges(e.body)) break; batch.push(e); }
+    if (isChanges(pend[i].body)) for (const e of pend.slice(i + 1)) { if (e.sent) continue; if (e.name !== pend[i].name || e.mode !== pend[i].mode || !isChanges(e.body)) break; batch.push(e); } // one request is one mode's
     for (const e of batch) e.sent = true;
     await sendBatch(batch);
   }
   /** His change: on the rows at once (the slate on show), to the server in click order. `body` is plain ({ own }, { bump }, { stars }, { proj }, { reset }, { resetAll }),
    *  worked out from the row as shown. Resolves true when the server kept it, false when it refused, null when not known. A change made on a slate no longer on show still goes to the slate it was made on. */
-  function saveOverride(body, what) {
+  function saveOverride(body, what, mode = modeNow()) {
     ovSaves++;
-    const e = { name: S.name, body, what, sent: false, done: null };
+    const e = { name: S.name, mode, body, what, sent: false, done: null }; // the mode is taken at the click (a caller that waits first, as Reset all's confirm does, passes the one it took): a thumb or star is that mode's
     const kept = new Promise((r) => { e.done = r; });
     pend.push(e);
     if (e.name === S.name) reshow();

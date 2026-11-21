@@ -272,7 +272,7 @@ export function settingsHtml(P, teams, games = [], { count = true } = {}) {
   const gone = staleGames(P.overrides, games).sort().flatMap((g) => ["min", "max"].filter((b) => P.overrides[g][b] != null).map((b) => `<div class="teams"><span class="ovs"><span class="ovc">${esc(g)} ${b} ${P.overrides[g][b]} ignored: that game is no longer on this slate<button data-op="ovdel" data-team="${esc(g)}" data-b="${b}" title="Remove ${esc(g)} ${b} ${P.overrides[g][b]}">×</button></span></span></div>`)).join("");
   const unreadable = (P.ovBad ?? []).includes(P.mode) ? `<div class="teams"><span class="ovc" title="The saved limits could not be read from this browser, so none are applied">Your saved ${esc(P.mode)} team and game limits could not be read; none are applied.</span></div>` : "";
   const line = (text) => `<div class="teams"><span class="ovc" title="The saved entry could not be read from this browser">${esc(text)}</span></div>`;
-  const unreadableAll = unreadable + ((P.rawBad ?? []).includes(P.mode) ? line(`Your typed ${P.mode} settings could not be read; the defaults are shown.`) : "") + (P.limBad && gpp ? line("Your saved Min % and Max % could not be read; none are applied.") : "");
+  const unreadableAll = unreadable + ((P.rawBad ?? []).includes(P.mode) ? line(`Your typed ${P.mode} settings could not be read; the defaults are shown.`) : "") + ((P.limBad ?? []).includes(P.mode) ? line(`Your saved ${P.mode} Min % and Max % could not be read; ${(P.limDamaged ?? []).includes(P.mode) ? `${P.mode} builds refuse until you set or clear one` : "none are applied"}.`) : ""); // per mode (row-limits.js): Cash obeys its own
   const varOn = raw.varOn === "1";
   const variance = `<div class="teams"><span class="tl" title="Each lineup is searched on every player's projection varied at random; the numbers shown stay the real ones">Variance:</span><div class="seg">${[["", "Off"], ["1", "On"]].map(([v, w]) => `<button data-op="varsw" data-v="${v}" class="${(raw.varOn ?? "") === v ? "on" : ""}">${w}</button>`).join("")}</div><span class="tl">± <input data-f="varPct" value="${esc(raw.varPct ?? "")}" inputmode="decimal" autocomplete="off"${varOn ? "" : " disabled"}${varOn && bad.varPct ? ` class="bad" title="${esc(bad.varPct)}"` : ""}> % on all players</span></div>`;
   return `<div class="sec sethd">Settings</div><div class="set${count ? "" : " two"}">${count ? `<label>Lineups${input("count")}</label>` : ""}<label>Min unique${input("minUnique")}</label>`
@@ -284,7 +284,7 @@ export function settingsHtml(P, teams, games = [], { count = true } = {}) {
 
 /**
  * What a Late swap screen re-optimize sends of the board's own state, read from the same browser storage the optimizer panel uses: each mode's
- * typed settings with its own team and game limits ({ Cash, GPP }), and the men's Min % and Max % (applied server-side to GPP spots only).
+ * typed settings with its own team and game limits ({ Cash, GPP }), and GPP's own Min % and Max % (applied server-side to GPP spots only).
  * A field that cannot be read is left out and named in settingsBad ({ Cash: [names], GPP: [names] }) so the server can say so. { settings, settingsBad, exposure } (exposure null with none).
  */
 export function refillState(tryStore, slate) {
@@ -296,7 +296,7 @@ export function refillState(tryStore, slate) {
       ...(typed.unreadable ? ["typed settings"] : []), ...(ov.unreadable ? ["team and game limits"] : []), ...(typed.rulesDropped > 0 ? ["ownership rules"] : [])];
     settings[mode] = s;
   }
-  const lim = readLimits(tryStore, slate);
+  const lim = readLimits(tryStore, slate, "GPP"); // GPP's own set (row-limits.js, per mode since 11-20): the Entries screen's Max % binds GPP spots only
   if (lim.unreadable) settingsBad.GPP.push("Max %"); // a Max % binds GPP spots only
   return { settings, settingsBad, exposure: sentLimits(lim.limits, { has: () => true }) };
 }

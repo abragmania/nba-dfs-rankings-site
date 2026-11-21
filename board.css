@@ -401,9 +401,8 @@ tr.excl td{opacity:.3}tr.excl .name{text-decoration:line-through}
 .opt input,.opt select{color:var(--tx);letter-spacing:0;text-transform:none}
 .opt input:focus,.opt select:focus{outline:none;border-color:var(--am)}
 .opt input.bad{border-color:var(--rd);color:var(--rd)}
-.opt .gpp,.opt .teams{display:flex;align-items:center;gap:0.5rem;padding:0.25rem 1rem;border-bottom:1px solid var(--ln);font-size:0.6875rem;color:var(--dim);white-space:nowrap}
-.opt .gpp{text-transform:uppercase;letter-spacing:0.05rem}
-.opt .gpp input,.opt .teams input,.opt .ovf input{width:2.75rem;background:var(--p2);border:1px solid var(--ln);padding:0.1875rem 0.375rem;font-size:0.8125rem;text-align:right}
+.opt .teams{display:flex;align-items:center;gap:0.5rem;padding:0.25rem 1rem;border-bottom:1px solid var(--ln);font-size:0.6875rem;color:var(--dim);white-space:nowrap}
+.opt .teams input,.opt .ovf input{width:2.75rem;background:var(--p2);border:1px solid var(--ln);padding:0.1875rem 0.375rem;font-size:0.8125rem;text-align:right}
 .opt .teams{color:var(--mu);font-size:0.7188rem}
 .opt .tl{display:flex;align-items:center;gap:0.375rem}
 .opt .ovs{display:flex;flex-wrap:wrap;gap:0.375rem}

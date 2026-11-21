@@ -10,7 +10,8 @@ import { optimize } from "../lineup/optimize.js";
 import { readExposure, countLimits } from "../lineup/exposure.js";
 import { lineupOf, spotEntries, spotNames, sameLineup, cleanName, unusableIn, modeFromName } from "./maps.js";
 import { contextFor, nameOf, frozenWhy, notAddableWhy, holdsMen, spotBlocks, spotPins, lineupProblems, partLineupProblems, frozenProblems, movesBetween, outAlert, isBoardOut } from "./entry-state.js";
-import { excludedOk, excludedFor, spotModeOf } from "./board-excludes.js";
+import { excludedOk, excludedFor, spotModeOf, manFor, marksGap } from "./board-excludes.js";
+import { inMode } from "../board/mode-rows.js";
 
 export const refused = (state, error) => ({ state, outcomes: [], error });
 const idsOf = (state, spot) => spotEntries(state, spot).map((e) => e.entryId);
@@ -177,15 +178,17 @@ export function fillArgs(state, spot, ctx, { out, lock: given = [], keep = [], k
   // A pin with no projection still counts his salary, team, game and slot. The stand-in 0 goes only to this search, where every lineup
   // carries it alike, so it cannot change the pick; it is never stored, and spotView's total for him is missing, never zero (RULES R1).
   // A backup locked in on Adam's go-ahead is the same: he is in every lineup of the run.
-  const scoreless = [...Object.keys(pinned), ...lock].filter((id) => !Number.isFinite(ctx.man(id)?.projection));
-  const searchMen = [...ctx.players.filter((p) => !scoreless.includes(p.dk_id)), ...scoreless.map((id) => ({ ...ctx.man(id), projection: 0 }))];
+  const runMode = spotModeOf(state, spot, mode);
+  // The spot is scored on its own mode's thumbs and stars (Adam 1:24 PM 11-20; board-excludes.js manFor), as its totals are shown.
+  const inRun = (p) => inMode(p, runMode);
+  const scoreless = [...Object.keys(pinned), ...lock].filter((id) => !Number.isFinite(manFor(ctx, id, runMode)?.projection));
+  const searchMen = [...ctx.players.filter((p) => !scoreless.includes(p.dk_id)).map(inRun), ...scoreless.map((id) => ({ ...manFor(ctx, id, runMode), projection: 0 }))];
   const stays = new Set([...Object.keys(pinned), ...lock]);
   const notAddable = new Set([...ctx.started, ...ctx.untimed]);
   const excluded = new Set(leftOut({ players: ctx.players, started: notAddable, pinned }).excluded);
   for (const id of [...out, ...overLimit]) excluded.add(id); // a man Out is left to optimize() itself, which skips him and says so
   for (const p of ctx.players) if (games.has(p.game)) excluded.add(p.dk_id);
   const excludedList = [...excluded].filter((id) => typeof id === "string" && ctx.byId.has(id) && !stays.has(id));
-  const runMode = mode ?? (Object.hasOwn(state.spots, spot) ? state.spots[spot].mode : modeFromName(spot));
   return { pinned, lock, scoreless, stays, notAddable, args: { players: searchMen, mode: runMode, settings: { ...(settingsByMode?.[runMode] ?? settings ?? {}), pinned }, locked: lock, excluded: excludedList, refMs: ctx.refMs } };
 }
 
@@ -195,6 +198,8 @@ export function fillArgs(state, spot, ctx, { out, lock: given = [], keep = [], k
  * who moved slot, and one who could not be held because his game started or his tip is unreadable and no entry holds him.
  */
 export function keptFill(state, spot, ctx, opts, run, lineupOf1) {
+  const gap = marksGap(ctx, spotModeOf(state, spot, opts.mode ?? null)); // that mode's thumbs and stars unreadable: no search at all (fails closed); callers say so in words first
+  if (gap) return { ...fillArgs(state, spot, ctx, opts), fill: { why: gap, proven: null }, keptNotes: [] };
   let f = fillArgs(state, spot, ctx, opts), fill = run(f.args);
   const frozen = spotPins(state, spot, ctx);
   const slotted = (opts.keep ?? []).filter((id) => id in f.pinned && !(id in frozen));
@@ -206,8 +211,8 @@ export function keptFill(state, spot, ctx, opts, run, lineupOf1) {
   return { ...f, fill, keptNotes };
 }
 
-/** A fill's score as the search sees it: its men's projections, a man with none counting 0 (fillArgs). */
-export const fillScore = (ids, ctx) => ids.reduce((t, id) => t + (Number.isFinite(ctx.man(id)?.projection) ? ctx.man(id).projection : 0), 0);
+/** A fill's score as the search sees it: its men's projections in the spot's mode (manFor), a man with none counting 0 (fillArgs). */
+export const fillScore = (ids, ctx, mode) => ids.reduce((t, id) => { const v = manFor(ctx, id, mode)?.projection; return t + (Number.isFinite(v) ? v : 0); }, 0);
 
 /**
  * Re-fills one spot: frozen men stay in the slots their entries hold them in, every other slot reopens on the newest figures, without
@@ -215,6 +220,8 @@ export const fillScore = (ids, ctx) => ids.reduce((t, id) => t + (Number.isFinit
  */
 export function refill(state, spot, ctx, { out, lock, keep = [], mode, settings, settingsByMode = null, overLimit, limit = null, taken, extra = [], games = new Set() }) {
   const before = lineupOf(state, spot), entries = spotEntries(state, spot);
+  const gap = marksGap(ctx, spotModeOf(state, spot, mode ?? null));
+  if (gap) return { outcome: flagged(state, spot, gap, { amber: true, notes: extra }) };
   const { fill, scoreless, stays, notAddable, keptNotes } = keptFill(state, spot, ctx, { out, lock, keep, mode, settings, settingsByMode, overLimit, games }, (args) => fillAvoiding(args, taken), (f) => f.lineup);
   if (!fill.lineup) return { outcome: flagged(state, spot, `No legal fill: ${fill.why}`, { amber: true, proven: fill.proven, notes: extra }) };
   const bad = [...entries.filter(holdsMen).flatMap((e) => frozenProblems(e, fill.lineup, ctx, lock)), ...lineupProblems(fill.lineup, ctx)];

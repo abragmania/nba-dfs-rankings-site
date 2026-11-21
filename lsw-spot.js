@@ -1,19 +1,20 @@
 // Screen 3, One spot (entries late swap): hand swaps in one spot, five replacements per slot, Reset per slot and for the whole spot, with the
 // before and after figures. A started man is dimmed and locked in his exact slot. A swap is only a request: the engine accepts or refuses it.
-import { esc, money, f1, signed, tint, feeText, spotColour, stacksOf, tipHtml, ICON_LOCK, outFlag, outChip, nameOpen } from "./lsw-common.js";
+import { esc, money, f1, signed, tint, feeText, spotColour, stacksOf, tipHtml, ICON_LOCK, outFlag, outChip, nameOpen, poolFor } from "./lsw-common.js";
 import { slotRowHtml, stackChips, delta } from "./lsw-cards.js";
 import { logo, shortTime } from "./board-util.js";
 import { SALARY_CAP } from "./slots.js";
 
 const SORTS = [["proj", "Projection"], ["salary", "Salary"], ["own", "Ownership"]];
 
-/** The five best replacements for a slot, by the chosen sort: men who fit the slot, the cap and are not started or already in the lineup. */
+/** The five best replacements for a slot, by the chosen sort: men who fit the slot, the cap and are not started or already in the lineup.
+ *  Sorted and shown on the spot's own mode's figures (lsw-common.js poolFor), as the man in the slot is, so the difference compares like with like. */
 export function replacements(spot, slot, M, sort) {
   const cur = spot.slots.find((s) => s.slot === slot);
   const inLineup = new Set(spot.slots.map((s) => s.dk_id));
   // The room under the cap is known only when the spot's salary and the man coming out are both known: never worked out from a missing figure.
   const room = Number.isFinite(spot.salary) && (!cur?.man || Number.isFinite(cur.man.salary)) ? SALARY_CAP - spot.salary + (cur?.man?.salary ?? 0) : null;
-  const all = M.pool.filter((p) => !p.missing && !p.started && !p.untimed && !p.gone && !inLineup.has(p.dk_id) && (p.roster_positions ?? []).includes(slot));
+  const all = poolFor(M, spot.mode).filter((p) => !p.missing && !p.started && !p.untimed && !p.gone && !inLineup.has(p.dk_id) && (p.roster_positions ?? []).includes(slot));
   const fit = room == null ? all : all.filter((p) => p.salary <= room);
   const key = (p) => (sort === "own" ? p.own ?? -1 : p[sort] ?? -1);
   return { room, total: all.length, list: fit.sort((a, b) => key(b) - key(a)).slice(0, 5) };

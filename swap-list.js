@@ -9,6 +9,7 @@ import { slateRefMs, startedSplit } from "./lateswap.js";
 import { outFor } from "./figures.js";
 import { isPending } from "./instant-pins.js";
 import { isGuessed } from "./board-saves.js";
+import { inMode, byIdInMode, marksUnknownIn } from "./mode-rows.js";
 
 export const SWAP_COUNT = 5;
 /** A man whose figures on show are a guess not yet answered: his typed minutes (instant-pins.js) or an override on its way (board-saves.js) (review 11-21 F6). */
@@ -23,16 +24,22 @@ export function useWait(out, p) {
 /** The page's view of who may be swapped in or out now: started men (from the clock) plus the board's picks. */
 export function swapContext(c, seat, nowMs = Date.now()) {
   const { started, untimed } = startedSplit(c.players, { nowMs, refMs: slateRefMs(c.name) });
-  return { byId: c.byId, players: c.players, excludedIds: new Set(c.picks.excluded), lockedIds: new Set(c.picks.locked), started, untimed: new Set(untimed.map((p) => p.dk_id)), seat, noIds: new Set(c.no ?? []), noMode: c.noMode ?? null, picksOff: picksOffWords(c) };
+  return { byId: c.byId, players: c.players, excludedIds: new Set(c.picks.excluded), lockedIds: new Set(c.picks.locked), started, untimed: new Set(untimed.map((p) => p.dk_id)), seat, noIds: new Set(c.no ?? []), noMode: c.noMode ?? null, picksOff: picksOffWords(c) ?? marksOffWords(c) };
 }
 /** Swaps are off for a mode whose locks and excludes the server could not read (review 11-20, money): who is excluded is unknown. */
 const picksOffWords = (c) => (c.picks?.unreadable ? `The ${c.noMode ?? "board's"} locks and excludes could not be read; swaps are off until a lock or exclude change in ${c.noMode ?? "that mode"} saves new ones.` : null);
+/** And for a mode whose thumbs and stars could not be read (mode-rows.js marks_unknown): its figures are unknown, so nothing is ranked on them. */
+const marksOffWords = (c) => (c.noMode && marksUnknownIn(c.players, c.noMode) ? `The ${c.noMode} thumbs and stars could not be read; swaps on ${c.noMode} lineups are off until a ${c.noMode} thumb or star change starts them again.` : null);
 
 /** The swap context of one mode's card (review 11-20, money: Cash and GPP keep separate picks, Adam 11-14/11-20): that mode's excludes,
- *  locks and NO list (c.picksOf / c.noOf, board.js), never the mode on show. A card of no known mode uses the board's on show. */
+ *  locks and NO list (c.picksOf / c.noOf, board.js), never the mode on show; and that mode's thumbs and stars (Adam 1:24 PM 11-20): a card of
+ *  the other mode ranks on its own mode's figures (mode-rows.js), the rows on show (with his instant guesses) being the mode on show's. Swaps
+ *  are off, in words, while that mode's thumbs and stars cannot be read. A card of no known mode uses the board's on show. */
 export function swapContextFor(c, seat, mode, nowMs = Date.now()) {
   const known = (mode === "Cash" || mode === "GPP") && c.picksOf && c.noOf;
-  return swapContext(known ? { ...c, picks: c.picksOf(mode), no: c.noOf(mode), noMode: mode } : c, seat, nowMs);
+  if (!known) return swapContext(c, seat, nowMs);
+  const other = mode !== c.noMode;
+  return swapContext({ ...c, byId: other ? byIdInMode(c.byId, mode) : c.byId, players: other ? c.players.map((p) => inMode(p, mode)) : c.players, picks: c.picksOf(mode), no: c.noOf(mode), noMode: mode }, seat, nowMs);
 }
 
 /** The men whose game has started by the tip times (a man with an unreadable tip is not in it: for a DK file he is treated as not started). */

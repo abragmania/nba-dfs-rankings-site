@@ -4,6 +4,7 @@ import crypto from "../../site/shim/crypto.js";
 import { keyOf, outsOf, scenario, teamFor, emptyPins } from "../board/console-engine.js";
 import { hasPins, label, pinsSame, tableName } from "../board/console-model.js";
 import { effectiveProjection, mergeOverrides, MIN_TOL } from "./overrides.js";
+import { bumpIn } from "./mode-marks.js";
 import { PROJ_MAX } from "../board/override-limits.js";
 import { isNum, isPlain, round2, tonightRate } from "../board/figures.js";
 import { validKey, heldTeams } from "./scenarios.js";
@@ -161,7 +162,7 @@ function planProj(plan, ctx, t, man, r, his, hasPin) {
     // showed, never an older typed number from before an Apply (Adam, 11-07: one undo-chip rule).
     return restoreProj(plan, man, t, { ...earlier, prev: null }, ctx);
   }
-  const after = effectiveProjection(baseProj, to, ctx.overrides.bump?.[r.id] ?? 0);
+  const after = effectiveProjection(baseProj, to, bumpIn(ctx.overrides, "GPP", r.id)); // the console is not per mode: GPP's thumbs, as its board (ctx.board) is merged
   if (isNum(from) && Math.abs(after - from) < MOVE_FLOOR) { if (typedNow !== undefined && fromApply) setAuto(plan, ctx, "proj", r.id, his, true); plan.unchanged++; return; }
   if (typedNow !== undefined && !fromApply && !hasPin && !r.out) { plan.kept.push({ id: r.id, name: man.name, team: t.code, typed: typedNow, would: to }); return; }
   plan.typed[r.id] = to;
@@ -320,7 +321,7 @@ function engineBlank(t, ctx) {
 
 /** An earlier Apply's projection on a man comes off: he goes back to what he had (his typed number, or the board's own). */
 function restoreProj(plan, man, t, set, ctx) {
-  const after = effectiveProjection(ctx.base.get(man.id).projection, set.prev, ctx.overrides.bump?.[man.id] ?? 0);
+  const after = effectiveProjection(ctx.base.get(man.id).projection, set.prev, bumpIn(ctx.overrides, "GPP", man.id)); // GPP's thumbs, as planApply's board
   const from = ctx.board.get(man.id).projection;
   plan.typed[man.id] = set.prev;
   plan.restoring.add(man.id);
@@ -405,7 +406,7 @@ export function planApply(inputs, file, overrides, players, keys, only = null) {
   if (sourceRefusal(inputs)) throw new Error(`Nothing can be planned: ${SOURCE_UNKNOWN_WHY}.`); // the route and the resend refuse before this; a caller that did not is stopped here
   const ctx = {
     overrides, applied: file.applied, men: new Map(), dflt: defaultSourceOf(inputs),
-    board: new Map(mergeOverrides(players, overrides, { held: heldTeams(file) }).map((p) => [String(p.dk_id), p])),
+    board: new Map(mergeOverrides(players, overrides, { held: heldTeams(file), mode: "GPP" }).map((p) => [String(p.dk_id), p])), // the console cannot know a build mode: the board as GPP shows it (Adam 1:24 PM 11-20, thumbs per mode)
     base: new Map(players.map((p) => [String(p.dk_id), p])),
   };
   const plan = { changes: [], typed: {}, min: {}, auto: { proj: {}, min: {} }, flag_ids: new Set(), restoring: new Set(), teams: [], refused: [], kept: [], missing: [], his_notes: [], dropped: 0, clamped: [], back_on_zero: [], not_on_board: [], back_in: [], unchanged: 0 };
@@ -449,7 +450,7 @@ export function planApply(inputs, file, overrides, players, keys, only = null) {
   plan.changes.sort((a, b) => Math.abs(b.move ?? Infinity) - Math.abs(a.move ?? Infinity) || a.name.localeCompare(b.name));
   plan.rows = changedRows(plan, ctx);
   plan.orphaned_pins = orphanedPins(inputs, file, keys).filter((o) => !only || only.has(o.team));
-  const sent = Object.entries(plan.typed).sort().map(([id, to]) => [id, to, overrides.bump?.[id] ?? 0]);
+  const sent = Object.entries(plan.typed).sort().map(([id, to]) => [id, to, bumpIn(overrides, "GPP", id)]); // GPP's thumbs: the console is not per mode
   plan.basis = crypto.createHash("sha256").update(JSON.stringify({ sent, min: Object.entries(plan.min).sort(), keys: Object.entries(keys).sort(), orphans: plan.orphaned_pins, refused: plan.refused, ...(plan.flag_ids.size ? { flags: [...plan.flag_ids].sort() } : {}) })).digest("hex").slice(0, 16);
   plan.pull = inputs.basis?.pull ?? null;
   plan.base = baseOf(plan, ctx);
