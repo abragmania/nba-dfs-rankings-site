@@ -1,8 +1,8 @@
 // The scenario console's routes, called from server.js with its shared helpers:
 //   GET  /api/slate/<slate>/console          the inputs and his saved work
-//   POST /api/slate/<slate>/scenarios        { team, record } saves one team's work
+//   POST /api/slate/<slate>/scenarios        { team, record, base?, seen? } saves one team's work; a base (his_at) or seen (the record's sig) that no longer matches the disk is refused
 //   POST /api/slate/<slate>/console/apply    { scenarios, teams?, preview: true } what Apply would change, nothing written (teams: only those are planned);
-//                                            { scenarios, basis } sends each team's on-screen scenario; a basis that no longer matches is refused
+//                                            { scenarios, basis, file_base?, seen? } sends each team's on-screen scenario; a basis, file_base or seen that no longer matches is refused
 //   POST /api/slate/<slate>/console/reverse  { preview: true } what a reverse would restore; {} restores only what Apply set
 // Writes go through openSlate (origin and content type, as the overrides route) and read the files only after the body has arrived,
 // so overlapping POSTs each apply onto the other's saved result. Like the overrides route they carry no lock check: late swap builds
@@ -15,6 +15,7 @@ import { readScenarios, writeScenarios, checkTeamBody } from "./scenarios.js";
 import { planApply, applyRecord, reverseChanges, checkKeys, checkTeams, sourceRefusal } from "./console-apply.js";
 import { readOverrides, writeOverrides, applyChanges, mergeOverrides } from "./overrides.js";
 import { basePlayers } from "./base-players.js";
+import { recordSig } from "../board/console-model.js";
 
 export const USAGE_OFF = { state: "off", message: "The usage table is not connected on this server." };
 
@@ -31,6 +32,18 @@ const syncRefusal = async (res, ctx) => { const busy = (await ctx.syncBusy?.()) 
 const hisNow = (ctx) => new Date(ctx.now()).toISOString(); // the time of his click: it becomes his_at on what he writes (scenarios.js, overrides.js)
 
 const usageState = async (ctx) => (ctx.usageTable ? ctx.usageTable() : USAGE_OFF);
+
+const SIG = /^[0-9a-f]{1,32}$/;
+/** A body's `seen` ({ TEAM: sig } on a send, one sig on a save; console-model.js recordSig): null when absent or well formed, else why. Outside input, checked before any file is read. */
+export function badSeen(seen, one) {
+  if (seen === undefined) return null;
+  if (one) return typeof seen === "string" && SIG.test(seen) ? null : '"seen" must be the record\'s sig as the page last saw it.';
+  const ok = seen && typeof seen === "object" && !Array.isArray(seen) && Object.keys(seen).length <= 60 && Object.entries(seen).every(([t, s]) => /^[A-Z]{2,4}$/.test(t) && typeof s === "string" && SIG.test(s));
+  return ok ? null : '"seen" must name each team\'s record sig as the page last saw it.';
+}
+/** The teams whose record on disk is not the one the page last saw (11-13 audit, state 1): any write since its read, the server's own (news, what-if, resend) included. */
+const movedTeams = (seen, file) => Object.entries(seen ?? {}).filter(([t, s]) => s !== recordSig(file.teams[t])).map(([t]) => t).sort();
+const movedWords = (teams, did) => `${teams.join(", ")}'s saved work changed since this page read it (the lineup news, a pull or another page wrote it), so nothing was ${did} over it.`;
 
 /** Inputs for a request, or null after answering 500 for a row that cannot be read (never older figures in its place). */
 async function inputsFor(res, ctx, slate, slateData) {
@@ -74,14 +87,18 @@ async function handleSave(req, res, slate, ctx) {
   if (!read) return;
   const checked = checkTeamBody(read.body, slateData);
   if (!checked.ok) return ctx.fail(res, 400, "BAD_SCENARIOS", checked.message);
+  const seenWhy = badSeen(read.body.seen, true);
+  if (seenWhy) return ctx.fail(res, 400, "BAD_SCENARIOS", seenWhy);
   if (await syncRefusal(res, ctx)) return;
   try {
     const file = readScenarios(slate); // only after the body has arrived: nothing awaits from here to the write
     // A page that saw an older record than the disk holds (GitHub's data came down since, or another page wrote) must not write over it: it is told, takes the disk's work and says so.
     if (Object.hasOwn(read.body, "base") && (read.body.base ?? null) !== (file.teams[checked.team]?.his_at ?? null)) return ctx.fail(res, 409, "CHANGED_ELSEWHERE", `${checked.team}'s saved work changed since this page read it (another page, or the other computer's work came down), so nothing was written over it.`);
+    // `seen`: the record as the page last read or wrote it, so a write that carried his_at (the news pass, a what-if, a resend) is seen too (11-13 audit, state 1).
+    if (read.body.seen !== undefined && movedTeams({ [checked.team]: read.body.seen }, file).length) return ctx.fail(res, 409, "CHANGED_ELSEWHERE", movedWords([checked.team], "written"));
     // `auto`: no click of his started this save (a load, a pull, the lineup bar's news), so his_at is carried and only a click moves it.
     const written = writeScenarios(slate, { ...file, teams: { ...file.teams, [checked.team]: checked.record } }, { his: read.body.auto === true ? null : hisNow(ctx), team: checked.team });
-    ctx.send(res, 200, { saved: checked.team, his_at: written.teams[checked.team]?.his_at ?? null, file_his_at: written.his_at ?? null });
+    ctx.send(res, 200, { saved: checked.team, his_at: written.teams[checked.team]?.his_at ?? null, file_his_at: written.his_at ?? null, seen: recordSig(readScenarios(slate).teams[checked.team]) }); // seen: as read back, the stamps block rejoined
   } catch (e) {
     if (!answerFileError(res, ctx, slate, e)) throw e;
   }
@@ -115,6 +132,8 @@ async function handleApply(req, res, slate, ctx) {
   const checked = checkKeys(read.body?.scenarios, inputs), teams = checkTeams(read.body?.teams, inputs);
   if (!checked.ok) return ctx.fail(res, 400, "BAD_SCENARIO", checked.message);
   if (!teams.ok) return ctx.fail(res, 400, "BAD_SCENARIO", teams.message);
+  const seenWhy = badSeen(read.body.seen, false);
+  if (seenWhy) return ctx.fail(res, 400, "BAD_SCENARIO", seenWhy);
   const players = basePlayers(slate, slateData, ctx.now(), ctx.ourPlayers).players; // the board's own figures (the engine's on), the same base the server's resend plans against
   const shown = () => (ctx.effectivePlayers ? ctx.effectivePlayers(res, slate, slateData) : mergeOverrides(players, readOverrides(slate))); // the answer's players are built as the board builds them (null after a 500)
   if (read.body?.preview !== true && await syncRefusal(res, ctx)) return; // asked before the files are read: a send waits while GitHub's data comes down
@@ -127,6 +146,8 @@ async function handleApply(req, res, slate, ctx) {
     if (read.body.basis !== plan.basis) return ctx.fail(res, 409, "CONSOLE_MOVED", "The numbers moved since the preview, so nothing was sent. Look again.");
     // A page that read the scenarios file before GitHub's data came down (or another page wrote) must not send over what is there now.
     if (Object.hasOwn(read.body, "file_base") && (read.body.file_base ?? null) !== (file.his_at ?? null)) return ctx.fail(res, 409, "CHANGED_ELSEWHERE", "Your saved work changed since this page read it (another page, or the other computer's work came down), so nothing was sent.");
+    const moved = movedTeams(read.body.seen, file); // a team record the server wrote since the page's read (news, what-if, resend: his_at carried); the page reads again and sends once more (console-auto.js sendWith)
+    if (moved.length) return ctx.fail(res, 409, "CHANGED_ELSEWHERE", movedWords(moved, "sent"));
     if (!plan.changes.length && !plan.min_moves && !plan.flag_moves && !plan.dropped) {
       if (plan.holds) writeScenarios(slate, { ...file, applied: applyRecord(plan, overrides, file.applied, new Date(ctx.now()).toISOString()).applied }, { his }); // no number moved, but the mark is held: only the record is written
       const held = plan.holds ? readScenarios(slate).applied : file.applied;

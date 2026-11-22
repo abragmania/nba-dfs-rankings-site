@@ -5,6 +5,7 @@
 // the button, tint and chip ("NO · late swap") work on it, and the build lists stay apart. The lists are the server's (lineup/no-list.js,
 // beside his picks); saves go one at a time, in order, as the picks do. The markup helpers are pure and tested in node; createNoPicks wires the saves.
 import { esc } from "./board-util.js";
+import { listDiff, applyListDiff, SAVE_ROUNDS } from "./merge-saves.js";
 
 export const NO_MODES = Object.freeze(["Cash", "GPP"]);
 export const LATE = "Late";
@@ -61,6 +62,11 @@ export function createNoPicks({ api, toast, slate, mode, onChange, nameOf = (id)
   const none = () => ({ Cash: [], GPP: [], [LATE]: [] });
   let lists = none(), errors = {}, queue = Promise.resolve(); // errors: kind ("build" | "late") -> why its list could not be read
   const url = (name) => `/api/slate/${encodeURIComponent(name)}/no`;
+  const saved = new Map(), notes = new Map(); // saved: per slate and kind, the lists and saved_at the server last gave (an answer without `bases` leaves it unknown); notes: a change that could not be saved, for the foot
+  const takeKnown = (name, out) => {
+    for (const kind of Object.keys(out?.unreadable ?? {})) saved.delete(`${name}|${kind}`); // an unreadable file has no base: "reset it" replaces it as before (review of 11-21, finding 7)
+    for (const [kind, base] of Object.entries(out?.bases ?? {})) if (!out.unreadable?.[kind]) saved.set(`${name}|${kind}`, { base, lists: Object.fromEntries(Object.keys(none()).map((m) => [m, Array.isArray(out[m]) ? out[m] : []])) });
+  };
   const take = (out) => {
     lists = Object.fromEntries(Object.keys(none()).map((m) => [m, Array.isArray(out?.[m]) ? out[m] : []]));
     errors = out?.unreadable && typeof out.unreadable === "object" ? { ...out.unreadable } : {};
@@ -68,6 +74,7 @@ export function createNoPicks({ api, toast, slate, mode, onChange, nameOf = (id)
   async function load(name = slate()) {
     try {
       const out = await api(url(name));
+      takeKnown(name, out);
       if (name !== slate()) return;
       take(out);
       if (out.dropped?.length) toast(`${out.dropped.length} NO ${out.dropped.length === 1 ? "man is" : "men are"} no longer on this slate and ignored: ${out.dropped.map((d) => `${d.name ?? `DraftKings id ${d.id}`} (${listWord(d.mode)})`).join(", ")}. The saved list keeps ${out.dropped.length === 1 ? "him" : "them"} until your next NO change.`);
@@ -81,21 +88,33 @@ export function createNoPicks({ api, toast, slate, mode, onChange, nameOf = (id)
   }
   const error = (m = mode()) => errors[kindOf(modeOk(m))] ?? null;
   let pending = 0; // saves not yet answered: only the last one's answer is drawn, so a quick second click never flickers back
+  /** One NO save: his one change laid on the list the server last gave and sent with its kind's saved_at (`base`); another page's save since is read and the change laid on it again,
+   *  silently, up to SAVE_ROUNDS rounds; past that it is said at the page's foot (11-13 audit, state 3; merge-saves.js). Answers the server's lists, or throws as before. */
+  async function post(name, md, diff, ids) {
+    const kind = kindOf(md), key = `${name}|${kind}`;
+    for (let round = 1; ; round++) {
+      const k = saved.get(key), body = JSON.stringify(k ? { mode: md, ids: applyListDiff(k.lists[md], diff), base: k.base } : { mode: md, ids });
+      try { const out = await api(url(name), { method: "POST", headers: { "content-type": "application/json" }, body }); takeKnown(name, out); notes.delete(key); return out; } catch (e) {
+        if (e.code !== "NO_CHANGED_ELSEWHERE") throw e;
+        if (round > SAVE_ROUNDS) { notes.set(key, `NO (${listWord(md)}): your change on ${[...diff.add, ...diff.remove].map(nameOf).join(", ")} could not be saved, because the saved NO list kept changing on another page; the saved one is shown, so click it again.`); throw Object.assign(e, { said: true }); }
+        try { takeKnown(name, await api(url(name))); } catch (e2) { notes.set(key, `NO (${listWord(md)}): your change on ${[...diff.add, ...diff.remove].map(nameOf).join(", ")} could not be saved: the saved NO list could not be read to lay it on (${e2.message}).`); throw Object.assign(e2, { said: true }); } // review of 11-21, finding 8
+      }
+    }
+  }
   function set(m, ids) {
-    const name = slate(), md = modeOk(m);
+    const name = slate(), md = modeOk(m), diff = listDiff(lists[md], ids); // his one change, from the list on show
     lists = { ...lists, [md]: ids };
     onChange();
-    const body = JSON.stringify({ mode: md, ids });
     pending++;
     queue = queue.then(async () => {
       try {
-        const out = await api(url(name), { method: "POST", headers: { "content-type": "application/json" }, body });
+        const out = await post(name, md, diff, ids);
         if (out.replaced_unreadable) toast(out.replaced_unreadable, "err");
         if (out.ignored?.length) toast(`${out.ignored.map(nameOf).join(", ")} ${out.ignored.length === 1 ? "is" : "are"} no longer on this slate, so not kept on the NO list; the others are saved.`, "err");
         if (--pending === 0 && name === slate()) { take(out); onChange(); }
       } catch (e) {
         pending--;
-        toast(`Could not save the NO list: ${e.message}`, "err");
+        if (!e.said) toast(`Could not save the NO list: ${e.message}`, "err"); // said: at the page's foot (post)
         if (name === slate()) await load(name); // the saved file is the truth
       }
     });
@@ -109,6 +128,8 @@ export function createNoPicks({ api, toast, slate, mode, onChange, nameOf = (id)
   const dropIn = (m, id) => { if (known(m)) set(m, ids(m).filter((x) => x !== id)); };
   return {
     load, ids, error,
+    /** The foot lines for the slate on show: a NO change that could not be saved after the rounds (post). */
+    notes: () => [...notes].filter(([k]) => k.startsWith(`${slate()}|`)).map(([, line]) => line),
     has: (id, m) => ids(m).includes(id),
     toggle: (id) => toggleIn(mode(), id),
     drop: (id) => dropIn(mode(), id),

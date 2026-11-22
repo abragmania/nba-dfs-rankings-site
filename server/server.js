@@ -120,7 +120,11 @@ async function handlePicks(req, res, slate) {
   const checked = checkPicks(read.body, slateData);
   if (!checked.ok) return fail(res, 400, "BAD_PICKS", checked.message);
   // Read only now, after the body has arrived, and written in the same step: only this mode's lists change (store.js savePicks).
-  const saved = saveOr500(res, () => savePicks(slate, checked.mode, checked.locked, checked.excluded)); // an unreadable mode: the old file copied aside, only that mode emptied (slate/mode-file.js)
+  let saved;
+  try { saved = saveOr500(res, () => savePicks(slate, checked.mode, checked.locked, checked.excluded, checked.base)); } catch (e) { // an unreadable mode: the old file copied aside, only that mode emptied (slate/mode-file.js)
+    if (e?.code !== "CHANGED_ELSEWHERE") throw e;
+    return fail(res, 409, "PICKS_CHANGED_ELSEWHERE", `Your ${checked.mode} locks and excludes were saved from another page since this one read them, so this change was not saved over them. The saved ones are shown.`); // base (11-13 audit, state 3): nothing written
+  }
   if (!saved) return;
   const { replaced } = saved;
   if (replaced) error("picks file held an unreadable mode; copied aside and replaced by a save", { slate, mode: checked.mode, ...replaced });
@@ -273,7 +277,11 @@ async function handleWorking(req, res, slate) {
   if (!PICK_MODES.includes(read.body?.mode)) return fail(res, 400, "BAD_WORKING", '"mode" must be "Cash" or "GPP": the working lineup is kept per mode. Reload the page if it is older than that.');
   const checked = checkWorking(read.body, slateData);
   if (!checked.ok) return fail(res, 400, "BAD_WORKING", checked.message);
-  const saved = saveOr500(res, () => saveWorking(slate, read.body.mode, checked.slots)); // read and written in one step: only this mode's lineup changes
+  let saved;
+  try { saved = saveOr500(res, () => saveWorking(slate, read.body.mode, checked.slots, checked.base)); } catch (e) { // read and written in one step: only this mode's lineup changes
+    if (e?.code !== "CHANGED_ELSEWHERE") throw e;
+    return fail(res, 409, "WORKING_CHANGED_ELSEWHERE", `Your ${read.body.mode} working lineup was saved from another page since this one read it, so nothing was written; the page lays its change on the saved one and sends again.`); // base (11-13 audit, state 3)
+  }
   if (!saved) return;
   const { replaced } = saved;
   if (replaced) error("working lineup file held an unreadable mode; copied aside and replaced by a save", { slate, mode: read.body.mode, ...replaced });

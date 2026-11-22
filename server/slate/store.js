@@ -8,10 +8,11 @@ import { SLOTS, checkLineup, setKey, arrangeForLateSwap } from "../board/slots.j
 import { slateRefMs } from "../board/board-util.js";
 import { noNamesOk, noOf, NO_NAMES_RULE } from "../board/recent-builds.js";
 import { applyHis, joinRowMen, statusFree } from "./out-pool.js";
-import { MODES as SPLIT_MODES, readModeFile, saveModeFile, modeTrouble } from "./mode-file.js";
+import { MODES as SPLIT_MODES, readModeFile, saveModeFile, modeTrouble, badBase } from "./mode-file.js";
 
 export const SLATE_NAME = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+$/;
-export const MAX_LOCKED = 8; // DraftKings classic has eight roster slots
+export { MAX_LOCKED } from "../board/merge-saves.js"; // one copy: the page caps a merged save with it too
+import { MAX_LOCKED } from "../board/merge-saves.js";
 
 export const dataRoot = dataDir;
 
@@ -109,7 +110,7 @@ export function modePicks(slate, slateData, mode) {
 }
 
 /**
- * Checks a picks body { mode, locked, excluded } against the slate's players. Returns { ok: true, mode, locked, excluded } or
+ * Checks a picks body { mode, locked, excluded, base? } against the slate's players. Returns { ok: true, mode, locked, excluded, base? } or
  * { ok: false, message }. Rule: mode is Cash or GPP (the lists are that mode's only); ids are strings found in the slate's players;
  * no repeats; nobody both locked and excluded.
  */
@@ -131,7 +132,9 @@ export function checkPicks(body, slateData) {
   if (lists.locked.length > MAX_LOCKED) return { ok: false, message: `At most ${MAX_LOCKED} players can be locked.` };
   const both = lists.locked.filter((id) => lists.excluded.includes(id));
   if (both.length) return { ok: false, message: `A player cannot be both locked and excluded: ${both[0]}` };
-  return { ok: true, mode: body.mode, locked: lists.locked, excluded: lists.excluded };
+  // base: the mode's saved_at as the page last read or saved it (null: none saved), so a page with an older copy cannot save over newer picks (11-13 audit, state 3); absent: no check
+  if (badBase(body)) return { ok: false, message: '"base" must be the time the picks were last saved, or null.' };
+  return { ok: true, mode: body.mode, locked: lists.locked, excluded: lists.excluded, ...(Object.hasOwn(body, "base") ? { base: body.base } : {}) };
 }
 
 /**
@@ -140,9 +143,9 @@ export function checkPicks(body, slateData) {
  * wins"). A file in the old shared shape is split here: the other mode keeps the carried copy. A file holding an unreadable mode is copied
  * aside first and only that mode is emptied, marked replaced (mode-file.js saveModeFile). Returns { replaced: null | { copy, emptied, why } }.
  */
-export function savePicks(slate, mode, locked, excluded) {
+export function savePicks(slate, mode, locked, excluded, base = undefined) { // base: the mode's saved_at as the page last saw it (mode-file.js saveModeFile; 11-13 audit, state 3)
   if (!PICK_MODES.includes(mode)) throw new Error(`Picks are kept for Cash and GPP only, not ${String(mode).slice(0, 20)}.`);
-  return { replaced: saveModeFile({ file: picksFile(slate), rel: picksRel(slate), slate, mode, fields: { locked, excluded }, parse: parsePicksMode, empty: () => ({ locked: [], excluded: [] }) }) };
+  return { replaced: saveModeFile({ file: picksFile(slate), rel: picksRel(slate), slate, mode, fields: { locked, excluded }, parse: parsePicksMode, empty: () => ({ locked: [], excluded: [] }), base }) };
 }
 
 // ---------- the working lineup: cache/working/<slate>.json, per mode, each { slots: [8 dk_ids or null in SLOTS order], saved_at } ----------
@@ -177,7 +180,8 @@ export function checkWorking(body, slateData, what = "Working-lineup") {
   const byId = new Map((slateData.players ?? []).map((p) => [String(p.dk_id), p]));
   const off = slots.findIndex((id, i) => id !== null && !(byId.get(id).roster_positions ?? []).includes(SLOTS[i]));
   if (off >= 0) return { ok: false, message: `${byId.get(slots[off]).name} cannot play ${SLOTS[off]}.` };
-  return { ok: true, slots };
+  if (badBase(body)) return { ok: false, message: '"base" must be the time the working lineup was last saved, or null.' };
+  return { ok: true, slots, ...(Object.hasOwn(body, "base") ? { base: body.base } : {}) };
 }
 
 // Kept per mode as the picks are (Adam 11-14, 11-19 and 11-20: Cash and GPP keep fully separate player picks and lineups):
@@ -232,9 +236,9 @@ export function modeWorking(slate, slateData, mode) {
 
 /** Sets one mode's working lineup and keeps the other mode's exactly as stored, in one read and one atomic write; a file holding an
  *  unreadable mode is copied aside and only that mode emptied, marked (mode-file.js, as savePicks). Returns { replaced: null | { copy, emptied, why } }. */
-export function saveWorking(slate, mode, slots) {
+export function saveWorking(slate, mode, slots, base = undefined) { // base: the mode's saved_at as the page last saw it (mode-file.js saveModeFile; 11-13 audit, state 3)
   if (!PICK_MODES.includes(mode)) throw new Error(`Working lineups are kept for Cash and GPP only, not ${String(mode).slice(0, 20)}.`);
-  return { replaced: saveModeFile({ file: workingFile(slate), rel: workingRel(slate), slate, mode, fields: { slots }, parse: parseWorkingMode, empty: () => ({ slots: openSlots() }) }) };
+  return { replaced: saveModeFile({ file: workingFile(slate), rel: workingRel(slate), slate, mode, fields: { slots }, parse: parseWorkingMode, empty: () => ({ slots: openSlots() }), base }) };
 }
 
 // ---------- saved lineups: cache/lineups/<slate>.json, { slate, next_id, lineups: [{ id, mode, slots, names, saved_at, no? }] } ----------

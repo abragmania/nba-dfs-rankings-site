@@ -6,6 +6,7 @@
 // GPP: { ... } }, a save sends the open mode's lists with its mode, and the server replaces only that mode's (store.js savePicks).
 import { overlayRows, mergeBodies, isChanges } from "./instant-overrides.js";
 import { inMode } from "./mode-rows.js";
+import { pickDiff, applyPickDiff, pickClashes, pickClashLine, capLocks, capLine, SAVE_ROUNDS } from "./merge-saves.js";
 
 /** A pending change's body as the mode on show takes it (thumbs and stars per mode, Adam 1:24 PM 11-20): whole in its own mode; from the other mode only its
  *  shared typed numbers (proj, own), and a reset of the other mode not at all (its answer brings the shared part). null when nothing is left to show. Pure. */
@@ -33,6 +34,7 @@ export function troubleLine(a, noun) {
   const out = [];
   for (const [m, why] of Object.entries(a?.unreadable ?? {})) out.push(`The ${m} ${noun} could not be read (${why}); ${noun === "working lineup" ? "it shows empty" : `${m} builds refuse`} until a change in ${m} saves new ones, the old file kept beside it.`);
   for (const [m, r] of Object.entries(a?.replaced ?? {})) out.push(`The ${m} ${noun} could not be read and ${noun.endsWith("s") ? "were" : "was"} emptied${r?.at ? ` at ${new Date(r.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })} ET` : ""}; the old file is kept at ${r?.copy ?? "an unknown place"}.`);
+  for (const line of a?.clashes ?? []) if (line) out.push(line); // a save laid on another page's newer one, where both changed the same man or slot (merge-saves.js)
   return out.join(" ");
 }
 /** The foot words for each mode's thumbs and stars (server/slate/mode-marks.js marksTrouble, on the slate and every overrides answer as `marks`): ["", trouble], "" with none.
@@ -61,6 +63,18 @@ function createPicksLine({ S, api, toast, modeNow, renderRows, renderPick, rende
   const countPicks = (name, mode, by) => { const k = `${name}|${mode}`, n = (picksQueued.get(k) ?? 0) + by; if (n > 0) picksQueued.set(k, n); else picksQueued.delete(k); };
   /** Whether a save of mode `m` other than the one finishing now (of mode `self`) is still queued for the slate. */
   const laterPicks = (name, m, self) => (picksQueued.get(`${name}|${m}`) ?? 0) - (m === self ? 1 : 0) > 0;
+  // Each mode's lists and saved_at as the server last gave them, per slate (11-13 audit, state 3; merge-saves.js): a click is his one change, laid on these when it goes and sent with
+  // the saved_at as `base`, so a save another page made first is never written over. Every read and answer moves them; an answer without saved_at (an older server) leaves them unknown.
+  const known = new Map(), clashLines = new Map();
+  const takeKnown = (name, answer) => {
+    for (const m of PICK_MODES) {
+      if (answer?.[m]?.unreadable) known.delete(`${name}|${m}`); // a mode read unreadable has no base: the next save replaces it as before (review of 11-21, finding 7)
+      else if (answer?.[m] && Object.hasOwn(answer[m], "saved_at") && Array.isArray(answer[m].locked)) known.set(`${name}|${m}`, { base: answer[m].saved_at ?? null, lists: { locked: answer[m].locked, excluded: answer[m].excluded } });
+    }
+  };
+  /** The foot facts with the clash lines of the slate on show (troubleLine says them). */
+  const footWith = (a) => { const lines = PICK_MODES.map((m) => clashLines.get(`${S.name}|${m}`)).filter(Boolean); return { ...footOf(a), ...(lines.length ? { clashes: lines } : {}) }; };
+  const nameOf = (id) => S.byId?.get?.(id)?.name ?? `DraftKings id ${id}`;
   /** One mode's lists taken onto the page, redrawn only when they changed. */
   function takePicks(m, lists) {
     if (JSON.stringify(S.picks?.[m]) === JSON.stringify(lists)) return false;
@@ -71,30 +85,50 @@ function createPicksLine({ S, api, toast, modeNow, renderRows, renderPick, rende
   async function readPicksBack(name, self, modes) {
     try {
       const saved = await api(`/api/slate/${encodeURIComponent(name)}/picks`);
+      takeKnown(name, saved);
       if (name !== S.name) return;
       const by = picksByMode(saved);
       let moved = false;
       for (const m of modes) if (!laterPicks(name, m, self)) moved = takePicks(m, by[m]) || moved;
-      S.picksFoot = footOf(saved); renderCarried();
+      S.picksFoot = footWith(saved); renderCarried();
       if (moved) { renderRows(); renderPick(); }
     } catch (e2) { toast(`Could not reload picks: ${e2.message}`, "err"); }
   }
   /** One picks save. Answered: the mode's lists are the server's (its answer holds both modes as saved, server.js handlePicks), once it is the last save of that mode queued.
    *  Failed: the saved picks are read back, each mode only when no later save of it is queued. */
-  async function sendPicks(name, mode, body) {
+  async function sendPicks(name, mode, diff, full) {
     let out;
-    try {
-      out = await api(`/api/slate/${encodeURIComponent(name)}/picks`, { method: "POST", headers: { "content-type": "application/json" }, body });
-    } catch (e) {
-      toast(`Could not save picks: ${e.message}`, "err");
-      await readPicksBack(name, mode, PICK_MODES);
-      return;
+    const key = `${name}|${mode}`, url = `/api/slate/${encodeURIComponent(name)}/picks`;
+    let clashes = [], capped = null;
+    const his = () => Object.keys(diff).map(nameOf).join(", ");
+    for (let round = 1; ; round++) {
+      const k = known.get(key), laid = k ? capLocks(applyPickDiff(k.lists, diff), diff, k.lists) : { lists: full, dropped: [] }; // taken now, after the saves before it in the line answered
+      const lists = laid.lists;
+      capped = laid.dropped.length ? capLine(mode, laid.dropped, k.lists.locked, nameOf) : null;
+      try {
+        out = await api(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode, locked: lists.locked, excluded: lists.excluded, ...(k ? { base: k.base } : {}) }) });
+        break;
+      } catch (e) {
+        let why = null; // the foot's words when this change is not saved (G62: never dropped without a word)
+        if (e.code === "PICKS_CHANGED_ELSEWHERE" && round <= SAVE_ROUNDS) { // another page saved first: his one change goes on what it saved, silently
+          try { const fresh = await api(url); takeKnown(name, fresh); clashes = pickClashes(known.get(key)?.lists, diff); continue; } catch (e2) { why = `the saved picks could not be read to lay it on (${e2.message})`; } // review of 11-21, finding 8
+        }
+        if (!why && e.code === "PICKS_CHANGED_ELSEWHERE") why = "the saved picks kept changing on another page";
+        if (!why && round > 1 && e.status >= 400 && e.status < 500) why = `laid on another page's save it was refused (${e.message})`; // finding 5: after round 1 the refusal is the merge's, said at the foot
+        if (why) { clashLines.set(key, `Picks (${mode}): your ${his()} change could not be saved: ${why}; the saved ones are shown, so click it again.`); if (name === S.name) { S.picksFoot = footWith(S.picksFoot); renderCarried(); } } // said now, even when the read-back below fails too
+        else toast(`Could not save picks: ${e.message}`, "err");
+        await readPicksBack(name, mode, PICK_MODES);
+        return;
+      }
     }
+    takeKnown(name, out); // this save's answer: what the next one in the line goes on
+    const lines = [clashes.length ? pickClashLine(mode, clashes, nameOf) : "", capped ?? ""].filter(Boolean).join(" ");
+    if (lines) clashLines.set(key, lines); else clashLines.delete(key);
     if (out?.replaced_unreadable) toast(out.replaced_unreadable, "err");
     if (name !== S.name) return;
     const left = Array.isArray(out?.dropped) ? out.dropped : []; // men off the slate the other mode's saved lists still hold
     if (S.dropped.length || S.rosterDropped.length || left.length) { S.dropped = left; S.rosterDropped = []; renderDropNote(); }
-    S.picksFoot = footOf(out); renderCarried();
+    S.picksFoot = footWith(out); renderCarried();
     if (laterPicks(name, mode, mode)) return; // a newer click of this mode is on its way: its answer is the one taken
     let lists = null;
     try { lists = picksByMode(out)[mode]; } catch (e) { console.warn("the picks answer held no lists; they are read again:", e.message); }
@@ -103,17 +137,20 @@ function createPicksLine({ S, api, toast, modeNow, renderRows, renderPick, rende
   }
   /** Saves the open mode's lists; the other mode's are never sent, so they cannot be changed from here. The mode is taken at the click. */
   function savePicks(next) {
-    const mode = modeNow();
+    const mode = modeNow(), diff = pickDiff(S.picks?.[mode], next); // his one change, from the lists on show
     S.picks = { ...S.picks, [mode]: next }; renderRows(); renderPick();
-    const name = S.name, body = JSON.stringify({ mode, locked: next.locked, excluded: next.excluded });
+    const name = S.name, full = { locked: next.locked, excluded: next.excluded };
     countPicks(name, mode, 1);
     saveQueue = saveQueue.then(async () => {
-      try { await sendPicks(name, mode, body); } finally { countPicks(name, mode, -1); }
+      try { await sendPicks(name, mode, diff, full); } finally { countPicks(name, mode, -1); }
     }).catch((e) => toast(`Your lock or exclude could not be finished: ${e.message}`, "err")); // the line goes on after any throw
   }
   /** A load's read of the picks (picksByMode's answer) for slate `name`: each mode with a save still on its way keeps `current` (the page's lists, null on another slate), so a Lock
-   *  clicked during the read is never drawn over; its own answer then sets the mode (review 11-21 round 2, item 9). */
-  const fromRead = (name, read, current) => Object.fromEntries(PICK_MODES.map((m) => [m, current?.[m] && (picksQueued.get(`${name}|${m}`) ?? 0) > 0 ? current[m] : read[m]]));
+   *  clicked during the read is never drawn over; its own answer then sets the mode (review 11-21 round 2, item 9). `answer`: the read itself, for each taken mode's base. */
+  const fromRead = (name, read, current, answer = null) => {
+    takeKnown(name, answer); // answer: the raw picks read, the server's lists and saved_at
+    return Object.fromEntries(PICK_MODES.map((m) => [m, current?.[m] && (picksQueued.get(`${name}|${m}`) ?? 0) > 0 ? current[m] : read[m]]));
+  };
   return { savePicks, queue: () => saveQueue, fromRead };
 }
 

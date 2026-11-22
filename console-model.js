@@ -59,6 +59,17 @@ export function canonRecord(rec) {
 }
 /** Whether two saved team records differ: another page wrote one of them. */
 export const recordsDiffer = (a, b) => canonRecord(a) !== canonRecord(b);
+/** A short fixed hash of a text (cyrb53, 14 hex digits). Pure; runs in the browser too. */
+export function textSig(text) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) { const ch = text.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, "0");
+}
+/** A team record's `seen` (11-13 audit, state 1): the hash of what it holds (canonRecord, his_at aside). A page sends back the one it last read or wrote with each save and send, so the server
+ *  refuses one made on an older copy whatever wrote since, the news pass, a what-if or a resend included (they carry his_at, which the base check alone compares). */
+export const recordSig = (rec) => textSig(canonRecord(rec));
 
 /** What is in the box he is typing in (an input with a value other than its shown default), else null. A redraw puts it back (console.js keepInput). */
 export const typedText = (a) => (a && typeof a.value === "string" && a.value !== a.defaultValue ? a.value : null);

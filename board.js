@@ -54,7 +54,7 @@ const S = { slates: [], name: null, slate: null, players: [], byId: new Map(), p
  *  GPP keep separate locks and excludes), so the Player list, the card, the panel and every click show and change that mode's only. */
 const livePicks = () => picksOnBoard(S.picks[panel.mode()], S.byId);
 /** The foot rows for what is still carried from before Cash and GPP were kept apart: picks and the working lineup (none once each mode has saved its own). */
-const carriedRows = () => [["Picks", [carriedLine(S.picksFoot?.carried), troubleLine(S.picksFoot, "locks and excludes")]], ["Working lineup", [workCarriedLine(panel.workFoot()?.carried), troubleLine(panel.workFoot(), "working lineup")]], ["Thumbs and stars", marksLines(S.slate?.marks)]].map(([k, v]) => [k, v.filter(Boolean).join(" "), v[1] !== ""]).filter(([, v]) => v); // an unreadable or emptied mode in red (review 11-20)
+const carriedRows = () => [["Picks", [carriedLine(S.picksFoot?.carried), troubleLine({ ...S.picksFoot, clashes: [...(S.picksFoot?.clashes ?? []), ...noPicks.notes()] }, "locks and excludes")]], ["Working lineup", [workCarriedLine(panel.workFoot()?.carried), troubleLine(panel.workFoot(), "working lineup")]], ["Thumbs and stars", marksLines(S.slate?.marks)]].map(([k, v]) => [k, v.filter(Boolean).join(" "), v[1] !== ""]).filter(([, v]) => v); // an unreadable or emptied mode in red (review 11-20)
 /** Both modes' saved lists in one, for naming the men a new pull took off the slate (settleRoster). */
 const allSaved = () => ({ locked: [...new Set(PICK_MODES.flatMap((m) => S.picks[m].locked))], excluded: [...new Set(PICK_MODES.flatMap((m) => S.picks[m].excluded))] });
 /** What the Player list shows: his saved picks plus the men not playing tonight, excluded as a derived state (excluded.js, Adam 11-19: nobody leaves the pool). Saves always send livePicks. */
@@ -79,7 +79,7 @@ const when = (s) => tipWhen(S.name)(s);
 const saves = createSaves({ S, api, toast, mode: () => panel.mode(), renderRows: () => renderRows(), renderPick: () => renderPick(), renderDropNote: () => renderDropNote(), renderCarried: () => renderSources(), applyPlayers: (p) => applyPlayers(p), over: (row) => boardMarks.over(row) /* his typed minutes on their way, on a copy (instant-pins.js) */, reread: async (n) => { const s = await api(`/api/slate/${encodeURIComponent(n)}`); if (n === S.name) applyPlayers(s.players); } });
 const { savePicks, saveOverride } = saves;
 // The NO list (no-picks.js, Adam 11-19): per mode, apart from his picks; a build waits for its saves too, since the server reads the saved list.
-const noPicks = createNoPicks({ api, toast, slate: () => S.name, mode: () => (panel.lateSwap() ? LATE : panel.mode()), onChange: () => { if (S.slate) renderRows(); lateSwapNoChanged(); }, nameOf: (id) => nameOf(id) });
+const noPicks = createNoPicks({ api, toast, slate: () => S.name, mode: () => (panel.lateSwap() ? LATE : panel.mode()), onChange: () => { if (S.slate) { renderRows(); if (JSON.stringify(carriedRows()) !== S.carriedShown) renderSources(); } lateSwapNoChanged(); }, nameOf: (id) => nameOf(id) }); /* the foot follows a NO change that could not be saved (no-picks.js notes) */
 // A build waits for his typed minutes too (review 11-21 F3): the line hands off what is waiting at once (boardMarks.flush), then the console's send carries it (scenarioConsole.idle). Each part is named, so a wait that runs out says what has not landed (build-progress.js).
 const waitParts = createWaitParts([["your locks, excludes and board changes", saves.settled], ["the NO list", noPicks.settled], ["your typed minutes", () => boardMarks.flush()], ["the console's send to the board", () => scenarioConsole.idle()]]);
 const settled = waitParts.settled, sendHoldNow = () => sendHold(scenarioConsole.syncState());
@@ -190,7 +190,7 @@ async function loadSlateNow(name, slates, gen) {
   card.close();
   editors.drop();
   if (another) boardMarks.reset(); // his typed numbers still on their way belong to the slate he left (instant-pins.js)
-  S.name = name; S.slate = slate; S.picks = saves.picksFromRead(name, picksByMode(picks), another ? null : S.picks); /* a mode with a save still on its way keeps the page's lists (round 2, item 9) */ S.picksFoot = footOf(picks); S.dropped = picks.dropped ?? []; S.rosterDropped = [];
+  S.name = name; S.slate = slate; S.picks = saves.picksFromRead(name, picksByMode(picks), another ? null : S.picks, picks); /* a mode with a save still on its way keeps the page's lists (round 2, item 9); picks: each taken mode's base (board-saves.js) */ S.picksFoot = footOf(picks); S.dropped = picks.dropped ?? []; S.rosterDropped = [];
   S.players = saves.overlay(boardRows(slate)); // his changes still on their way show over the server's rows (board-saves.js)
   S.byId = new Map(S.players.map((p) => [p.dk_id, p]));
   S.held = new Map(); S.known = new Map(); S.outNames = outNamesOf(slate); S.refreshGen++; S.topStale = false; S.consolePull = pullOf(slate).key;

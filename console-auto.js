@@ -7,7 +7,7 @@
 import { keyOf } from "./console-engine.js";
 import { defaultSourceOf } from "./depth-chart.js";
 import { calc, hasPins } from "./console-model.js";
-import { saveDirty, SYNC_WAIT_MS } from "./console-moves.js";
+import { saveDirty, seenOf, SYNC_WAIT_MS } from "./console-moves.js";
 
 const post = (c, body) => c.api(`/api/slate/${encodeURIComponent(c.slate)}/console/apply`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 /** Each team's scenario on show: { team: key }. */
@@ -161,7 +161,7 @@ export async function previewAndSend(c, teams, check = null, auto = false, clock
     check?.(plan);
     if (!plan.changes.length && !plan.min_moves && !plan.flag_moves && !plan.holds) return { plan, out: null };
     try {
-      const out = await post(c, { ...body, basis: plan.basis, file_base: c.serverFileHisAt ?? null });
+      const out = await post(c, { ...body, basis: plan.basis, file_base: c.serverFileHisAt ?? null, ...seenOf(c, teams) }); // seen: each team's record as this page last saw it, so a server write since (news, what-if, resend) refuses this send
       if (slate !== c.slate) return null;
       if (out.his_at !== undefined) c.serverFileHisAt = out.his_at;
       c.applied = out.applied;

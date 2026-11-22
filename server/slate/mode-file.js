@@ -42,6 +42,15 @@ export function readModeFile(file, rel, parse) {
   return out;
 }
 
+/** Whether a save body's `base` is malformed: present, not null and not a time (outside input, checked before any file is read). Pure. */
+export const badBase = (body) => Object.hasOwn(body ?? {}, "base") && body.base !== null && !(typeof body.base === "string" && body.base.length <= 40 && Number.isFinite(Date.parse(body.base)));
+
+/** `now` (ISO), or 1 ms past `prev` when the clock has not moved past it (saveModeFile's base). Pure. */
+export function laterThan(now, prev) {
+  const p = Date.parse(prev ?? "");
+  return Number.isFinite(p) && Date.parse(now) <= p ? new Date(p + 1).toISOString() : now;
+}
+
 /** What the read says beyond the fields: { unreadable: { mode: why } | null, replaced: { mode: { at, copy, why } } | null }. */
 export function modeTrouble(stored) {
   const pick = (f) => { const o = Object.fromEntries(MODES.filter((m) => f(stored?.[m])).map((m) => [m, f(stored[m])])); return Object.keys(o).length ? o : null; };
@@ -55,11 +64,15 @@ export function modeTrouble(stored) {
  * mode that could not be read is emptied and marked replaced { at, copy, why }, shown at the page foot until that mode saves. A failed copy
  * throws code COPY_ASIDE_FAILED (the route answers 500, nothing written); a file that cannot be read at all throws (readModeFile).
  * Returns null, or { copy, emptied: [modes], why } when something could not be read.
+ * `base` (11-13 audit, state 3): the mode's saved_at as the page last read or saved it; when given and the file's differs (another page saved the mode since), nothing is written and
+ * it throws code CHANGED_ELSEWHERE. Undefined: no check. Each save's saved_at is later than the one it replaces, so two saves never share a base.
  */
-export function saveModeFile({ file, rel, slate, mode, fields, parse, empty }) {
+export function saveModeFile({ file, rel, slate, mode, fields, parse, empty, base }) {
   const cur = readModeFile(file, rel, parse);
+  const was = cur?.[mode] && !cur[mode].unreadable ? cur[mode].saved_at ?? null : null;
+  if (base !== undefined && base !== was) throw Object.assign(new Error(`The ${mode} ${rel} changed since this page read it.`), { code: "CHANGED_ELSEWHERE" });
   const bad = MODES.filter((m) => cur?.[m]?.unreadable);
-  const now = new Date().toISOString();
+  const now = laterThan(new Date().toISOString(), was);
   let copy = null;
   if (bad.length) {
     const name = `${slate}.unreadable-${now.replace(/[:.]/g, "-")}.json`;

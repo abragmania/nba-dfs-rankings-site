@@ -19,6 +19,7 @@ import { landingHtml, teamBarOf, withAllChip } from "./console-all.js";
 import { statusLine } from "./lineup-bar.js";
 import { chartClick, chartChange, wireChartDrag, showInjured } from "./console-chart-ui.js";
 import { clearQueued } from "./instant-pins.js";
+import { replayTeam, rebaseHistory } from "./console-replay.js";
 
 /** A console write of his minutes or DK/min on a man: a board number for the same man and kind not yet sent is older and dropped first, and one being
  *  written now lands before this one (instant-pins.js clearQueued), so the console's is the last word (review 11-21 F10, as card-role.js does). */
@@ -133,7 +134,7 @@ function pageHtml(c, news) {
   const G = c.G;
   const team = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr: Object.values(c.saveErrs).join(" ") || null, news, help: G.help, chartSel: G.chartSel ?? null, showInj: showInjured(c), readOnly: c.readOnly, whatifs: c.whatifs?.teams?.[G.cur]?.whatifs ?? [], whatifsErr: c.whatifsErr ?? null });
   const held = sendFootText(c.sync), foot = `${held ? `<p class="cfoot">${esc(held)}</p>` : ""}${readFootHtml(c.readFail, c.inputsAt)}`; // a send the moving numbers held back, and a failed refresh: at the page's foot, under either view (G64)
-  if (G.view !== "all") return `${withAllChip(team, false)}${roleMarksFootHtml(c.model.TEAMS[G.cur], c.model.ST[G.cur], G.cur, c.readOnly === true)}${saveNotesFootHtml(c.saveNotes[G.cur])}${foot}`; // his standing role marks, at the foot (G64)
+  if (G.view !== "all") return `${withAllChip(team, false)}${roleMarksFootHtml(c.model.TEAMS[G.cur], c.model.ST[G.cur], G.cur, c.readOnly === true)}${saveNotesFootHtml([...(c.saveNotes[G.cur] ?? []), ...(c.replayNotes?.[G.cur] ?? [])])}${foot}`; // his standing role marks, at the foot (G64)
   const words = !news ? "No lineup news is wired on this page." : news.state === "loading" ? "Reading the lineup news..." : news.state !== "ok" ? `Lineup news not read: ${news.why}` : null;
   const body = words ? `<section class="ca"><header class="ca-h"><h1>Tonight's lineup news</h1></header><div class="ca-empty">${esc(words)}</div></section>` : landingHtml(news.V, G.newsTeam ?? "", c.inputs.games.flatMap((g) => [g.away, g.home]));
   return `${withAllChip(teamBarOf(team), true)}${body}${foot}`;
@@ -175,7 +176,7 @@ async function load(c, name) {
   clearTimeout(c.retryTimer);
   clearTimeout(c.readTimer);
   if (c.slate !== name) keepDropped(c, c.slate, c.pending); // his changes on the slate left that have not reached its board go when it is opened again (round 2, item 2)
-  Object.assign(c, { slate: name, loadError: null, model: null, newsRead: null, usageTries: 0, saveErrs: {}, saveNotes: {}, sync: { state: "ok", at: null, seq: c.sendSeq ?? 0 }, touched: new Set(), pending: new Set(), readFail: null, inputsAt: null }); // another slate: nothing changed on it yet; the send count goes on (console-auto.js)
+  Object.assign(c, { slate: name, loadError: null, model: null, newsRead: null, usageTries: 0, saveErrs: {}, saveNotes: {}, replayNotes: {}, replays: {}, sync: { state: "ok", at: null, seq: c.sendSeq ?? 0 }, touched: new Set(), pending: new Set(), readFail: null, inputsAt: null }); // another slate: nothing changed on it yet; the send count goes on (console-auto.js)
   c.E("app").innerHTML = `<div class="fatalc dimc">Loading ${esc(name)}...</div>`;
   try {
     const out = await c.api(`/api/slate/${encodeURIComponent(name)}/console`);
@@ -243,6 +244,7 @@ async function refresh(c) {
     }
     c.serverFileHisAt = out.scenarios.his_at ?? null; // his saves have landed (saveQueue above), so the file's stamp is the base for the next send
     const others = c.saveGen === gen ? takeOthersWork(c, out) : []; // a save of his own during the read makes the comparison unsafe, so it waits for the next one
+    if (replayWaits(c, gen)) c.onConflict?.(); // a refused save still waits for its replay: read again (review of 11-21, finding 9)
     resendChanged(c, was); // a pull that moved a team the board holds is sent without a click
     render(c);
     if (others.length) c.toast(`${others.join(", ")} changed outside this page (the lineup news or another page): it took those marks and sent nothing over them.`, "notice");
@@ -267,18 +269,36 @@ function pullRead(c, name) {
   }))();
 }
 
+/** Whether a read skipped its compare (a save of his ran during it, `gen` its save count at the start) while a refused save waits for its replay: then the page reads again. Pure. */
+export const replayWaits = (c, gen) => c.saveGen !== gen && (c.conflicted?.size ?? 0) > 0;
+
+/** His moves since `seen` laid on the server's newer record for `code` (console-replay.js), the team's work replaced by the result and left unsaved, so the next save writes it on the new seen;
+ *  what no longer applies goes to the team's foot (c.replayNotes). False when he had no move to lay on (the caller takes the server's record). */
+function replayOnto(c, code, input, seen, out) {
+  const old = c.model.ST[code], r = replayTeam(input, { seen, mine: recordOf(old), theirs: out.scenarios.teams[code], applied: out.scenarios.applied?.keys?.[code], dflt: defaultSourceOf(c.inputs) });
+  if (!r.moved) return false;
+  for (const k of ["depth_moves", "role_marks", "mark_at"]) if (old[k] !== undefined) r.S[k] = old[k]; // his chart moves and role marks have their own saves; mark_at: when this page made each mark (round 2, item 8)
+  c.model.TEAMS[code] = r.T; c.model.ST[code] = r.S; rebaseHistory(c.G, code, r.S); // an undo never takes back the newer work (review of 11-21, finding 2)
+  c.lastSaved[code] = "unsaved"; c.conflicted?.delete(code); (c.replaying ??= new Set()).add(code);
+  (c.serverHisAt ??= {})[code] = out.scenarios.teams[code]?.his_at ?? null;
+  if (r.notes.length) (c.replayNotes ??= {})[code] = r.notes; else delete c.replayNotes?.[code];
+  return true;
+}
+
 /** A team whose saved record on the server is not the one this page last saved was written by another page: this page takes the server's record for it (marks, scenario, source) and does not send its own copy. The teams taken. */
 export function takeOthersWork(c, out) {
   const taken = [];
   for (const [code, input] of Object.entries(c.inputs.teams)) {
     const seen = c.serverSeen?.[code], now = canonRecord(out.scenarios.teams[code]), conflicted = c.conflicted?.has(code) === true; // conflicted: the server refused this page's save of the team (CHANGED_ELSEWHERE)
+    const mineToCome = c.lastSaved[code] === "unsaved" && !conflicted;
     (c.serverSeen ??= {})[code] = now;
-    if (seen === undefined || seen === now || (c.lastSaved[code] === "unsaved" && !conflicted)) { // nobody else wrote, or his own write is still to come
+    if (seen !== undefined && seen !== now && (conflicted || mineToCome) && replayOnto(c, code, input, seen, out)) continue; // his moves on an older copy: laid on the newer record and saved again (11-13 audit, state 1)
+    if (seen === undefined || seen === now || mineToCome) { // nobody else wrote, or his own write is still to come
       if (seen !== undefined && seen === now) { (c.serverHisAt ??= {})[code] = out.scenarios.teams[code]?.his_at ?? null; if (c.conflicted?.delete(code)) c.lastSaved[code] = "unsaved"; } // only the stamp moved: his work is saved again on the new base
       continue;
     }
     const { T, S } = buildTeam(input, out.scenarios.teams[code], out.scenarios.applied?.keys?.[code], defaultSourceOf(c.inputs));
-    c.model.TEAMS[code] = T; c.model.ST[code] = S;
+    c.model.TEAMS[code] = T; c.model.ST[code] = S; rebaseHistory(c.G, code, S);
     c.lastSaved[code] = savedBehind(out.scenarios.teams[code], S) ? "unsaved" : JSON.stringify(recordOf(S));
     (c.serverHisAt ??= {})[code] = out.scenarios.teams[code]?.his_at ?? null; c.conflicted?.delete(code);
     c.touched?.delete(code); c.pending?.delete(code);

@@ -2,7 +2,7 @@
 // NO never touches his exclude, projection or exposures and clearing it leaves nothing behind. Late swap has its OWN list (Adam 5:28 PM
 // 11-19: "I want the no OPTION in those scenarios, don't just carry a player 'no' over"), "Late", applied to late-swap fills and the
 // entered-lineup rebuild that runs through them; the build lists never reach late swap and the Late list never reaches a build.
-// Kept per slate beside his picks, one file per kind, each removed when its lists are empty:
+// Kept per slate beside his picks, one file per kind; a kind with every list empty keeps only its saved_at (the save's base, 11-13 audit state 3):
 //   data/cache/picks/<slate>.no.json       { slate, Cash: [dk_id], GPP: [dk_id], names: { dk_id: name }, saved_at }
 //   data/cache/picks/<slate>.no-late.json  { slate, Late: [dk_id], names, saved_at }
 // so a damaged file stops only its own kind. The route, the reads and writes, and the pure steps the build route uses are here.
@@ -10,6 +10,7 @@ import fs from "../../site/shim/fs.js";
 import path from "../../site/shim/path.js";
 import { dataRoot } from "../slate/store.js";
 import { writeFileAtomic } from "../../site/shim/atomic.js";
+import { laterThan, badBase } from "../slate/mode-file.js";
 import { refuseCrossSiteRead } from "../lib/origin.js";
 import { countLimits } from "./exposure.js";
 import { DEFAULT_COUNT } from "../board/slots.js";
@@ -49,11 +50,12 @@ export const readNo = (slate, slateData) => readNoKind(slate, slateData, "build"
 
 /** What GET answers: every list, each kind judged on its own (a damaged file empties only its lists and is named in `unreadable`). */
 export function readAllNo(slate, slateData) {
-  const out = { slate, Cash: [], GPP: [], [LATE]: [], dropped: [], saved_at: null, unreadable: {} };
+  const out = { slate, Cash: [], GPP: [], [LATE]: [], dropped: [], saved_at: null, unreadable: {}, bases: {} };
   for (const kind of Object.keys(KINDS)) {
     try {
       const r = readNoKind(slate, slateData, kind);
       for (const m of KINDS[kind].lists) out[m] = r[m];
+      out.bases[kind] = r.saved_at ?? null; // each kind file's saved_at: the page sends it back as `base` (saveNo; 11-13 audit, state 3)
       out.dropped.push(...r.dropped);
       if (r.saved_at && (!out.saved_at || r.saved_at > out.saved_at)) out.saved_at = r.saved_at;
     } catch (e) { out.unreadable[kind] = `The ${kind === "late" ? "late swap " : ""}NO list could not be read: ${e.message}`; }
@@ -75,26 +77,27 @@ export function checkNoBody(body, slateData) {
   const known = new Set((slateData.players ?? []).map((p) => String(p.dk_id)));
   const ignored = ids.filter((id) => !known.has(id));
   if (ignored.length * 2 > ids.length) return { ok: false, message: `${ignored.length} of the ${ids.length} NO men sent are not on this slate (${ignored.map((id) => id.slice(0, 40)).join(", ")}); nothing was saved.` };
-  return { ok: true, mode: body.mode, ids: ids.filter((id) => known.has(id)), ignored };
+  if (badBase(body)) return { ok: false, message: '"base" must be the time the NO list was last saved, or null.' };
+  return { ok: true, mode: body.mode, ids: ids.filter((id) => known.has(id)), ignored, ...(Object.hasOwn(body, "base") ? { base: body.base } : {}) };
 }
 
-/** Sets one list, keeping the others of its kind as saved. All of a kind empty: its file goes, so a cleared NO leaves nothing behind.
+/** Sets one list, keeping the others of its kind as saved. All of a kind empty: its file keeps only empty lists and saved_at, so a cleared NO leaves no man behind.
  *  Answers as readAllNo. An unreadable file is replaced (so the page can always clear or reset it): the other list of its kind is then
  *  taken as empty, and the answer says so in `replaced_unreadable`. Until then that kind's builds refuse (build-route.js). */
-export function saveNo(slate, slateData, mode, ids) {
+export function saveNo(slate, slateData, mode, ids, base = undefined) { // base: the kind file's saved_at as the page last saw it; another page's save since throws CHANGED_ELSEWHERE, nothing written (11-13 audit, state 3)
   const kind = kindOf(mode), lists = KINDS[kind].lists;
   let cur, replaced = null;
   try { cur = readNoKind(slate, slateData, kind); } catch (e) { cur = emptyOf(kind); replaced = e.message; }
+  if (base !== undefined && replaced) throw Object.assign(new Error(`The NO list could not be read (${replaced}), so a change made on a copy of it was not written; reset it from the red chip.`), { code: "NO_UNREADABLE" }); // only a save with no base (the reset) replaces it (review of 11-21, finding 7)
+  if (base !== undefined && base !== (cur.saved_at ?? null)) throw Object.assign(new Error("The NO list was saved from another page since this one read it."), { code: "CHANGED_ELSEWHERE" });
   const next = Object.fromEntries(lists.map((m) => [m, m === mode ? ids : cur[m]]));
   const file = noFile(slate, kind);
   const others = lists.filter((m) => m !== mode);
   const said = replaced ? { replaced_unreadable: `The saved ${kind === "late" ? "late swap " : ""}NO list could not be read (${replaced}); it was replaced${others.length ? `, and the ${others.join(" and ")} list is now empty` : ""}.` } : {};
-  if (lists.every((m) => !next[m].length)) fs.rmSync(file, { force: true });
-  else {
-    const byId = new Map((slateData?.players ?? []).map((p) => [String(p.dk_id), p]));
-    const names = Object.fromEntries(lists.flatMap((m) => next[m]).map((id) => [id, cutName(byId.get(id)?.name ?? `DraftKings id ${id}`)]));
-    writeFileAtomic(file, JSON.stringify({ slate, ...next, names, saved_at: new Date().toISOString() }, null, 1) + "\n");
-  }
+  // All of a kind empty keeps a stub holding saved_at and nothing else, so a page that read the list before the clear still meets a newer base (review of 11-21, finding 11).
+  const byId = new Map((slateData?.players ?? []).map((p) => [String(p.dk_id), p]));
+  const names = Object.fromEntries(lists.flatMap((m) => next[m]).map((id) => [id, cutName(byId.get(id)?.name ?? `DraftKings id ${id}`)]));
+  writeFileAtomic(file, JSON.stringify({ slate, ...next, names, saved_at: laterThan(new Date().toISOString(), cur.saved_at) }, null, 1) + "\n"); // always later than the one it replaces, so two saves never share a base
   return { ...readAllNo(slate, slateData), ...said };
 }
 
@@ -114,10 +117,12 @@ export async function handleNo(req, res, slate, { openSlate, send, fail, readJso
       if (!read) return;
       const checked = checkNoBody(read.body, slateData);
       if (!checked.ok) return fail(res, 400, "BAD_NO", checked.message);
-      answer = saveNo(slate, slateData, checked.mode, checked.ids);
+      answer = saveNo(slate, slateData, checked.mode, checked.ids, checked.base);
       if (checked.ignored.length) answer = { ...answer, ignored: checked.ignored }; // men no longer on the slate: not saved, named back (G62)
     }
   } catch (e) {
+    if (e?.code === "CHANGED_ELSEWHERE") return fail(res, 409, "NO_CHANGED_ELSEWHERE", `${e.message} Nothing was written; the page lays its change on the saved list and sends again.`);
+    if (e?.code === "NO_UNREADABLE") return fail(res, 409, "NO_UNREADABLE", e.message);
     return fail(res, 500, "NO_UNREADABLE", `The NO list could not be read or saved: ${e.message}`);
   }
   send(res, 200, answer);

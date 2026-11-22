@@ -16,6 +16,7 @@ import { rowBlocks } from "./row-block.js";
 import { illegalTag } from "./saved-panel.js";
 import { nameLinks, totals, totalValue } from "./card-row.js";
 import { CONFIRM } from "./confirm.js";
+import { slotDiff, applySlotDiff, slotClashLine, SAVE_ROUNDS } from "./merge-saves.js";
 
 const N = SLOTS.length;
 export const NOT_LOADED = "The working lineup has not loaded yet";
@@ -71,9 +72,10 @@ function notReady(X, own) {
 
 /** A new working lineup: the panel shows it, the table's marks follow, and it is saved for the slate. */
 function setWork(X, slots, own, loaded = null) {
+  const prev = X.P.work; // the lineup on show before his change: the save sends only what he changed (merge-saves.js slotDiff)
   Object.assign(X.P, { work: slots, loaded, workLeft: [] });
   own.render(X); X.onWork();
-  saveWork(X, own);
+  saveWork(X, own, modeKey(X.P), prev);
 }
 
 /** A new pull took men off the slate: the working lineup without them, saved, and they are named. Build never reaches the server with an id it would refuse. */
@@ -95,7 +97,7 @@ export function otherModeAfterRoster(X, own) {
     const left = was.filter((id) => id != null && !next.includes(id));
     if (!left.length) continue;
     X.P.workByMode[m] = next; X.P.loadedByMode[m] = null; X.P.workLeftByMode[m] = left.map((id) => c.knownName?.(id) ?? `DraftKings id ${id}`);
-    saveWork(X, own, m);
+    saveWork(X, own, m, was);
     X.toast(`Left the ${m} working lineup, no longer on the slate: ${left.map((id) => c.knownName?.(id) ?? `DraftKings id ${id}`).join(", ")}.`);
   }
 }
@@ -183,20 +185,73 @@ export function saveIds(P, c, order) {
 // Saves go out one at a time, in order (the picks' rule in board.js): quick clicks never reach the server out of order.
 // After a failed save the panel reads the server's copy back (the saved file is the truth). Each save sends the open mode with its
 // lineup, taken at the click, and the server replaces that mode's only.
-function saveWork(X, own, mode = modeKey(X.P)) {
-  const name = X.ctx().name, body = JSON.stringify({ mode, slots: X.P.workByMode[mode] });
+function saveWork(X, own, mode, prev) {
+  const name = X.ctx().name, slots = X.P.workByMode[mode], diff = slotDiff(prev, slots), key = `${name}|${mode}`, queued = (X.P.workQueued ??= new Map());
+  queued.set(key, (queued.get(key) ?? 0) + 1);
   X.P.workQueue = (X.P.workQueue ?? Promise.resolve()).then(async () => {
     try {
-      const out = await X.api(`/api/slate/${encodeURIComponent(name)}/working`, { method: "POST", headers: { "content-type": "application/json" }, body });
+      const { out, merged } = await postWork(X, name, mode, slots, diff);
+      if (merged && queued.get(key) === 1 && name === X.ctx().name) takeSaved(X, mode, out, own); // laid on another page's save, the last of this mode in the line: the merged lineup the server holds is shown (review of 11-21, finding 6); a plain save keeps the lineup on show
       if (out?.replaced_unreadable) X.toast(out.replaced_unreadable, "err");
       if (name === X.ctx().name && X.P.workUnreadable?.[mode] && !out?.[mode]?.unreadable) { X.P.workUnreadable[mode] = null; own.render(X); } // saved a new one: Build in this mode may go
-      const foot = footFacts(out);
+      const foot = workFootOf(X, out);
       if (name === X.ctx().name && JSON.stringify(foot) !== JSON.stringify(X.P.workFoot ?? null)) { X.P.workFoot = foot; X.onWork(); }
     } catch (e) {
-      X.toast(`Could not save the working lineup: ${e.message}`, "err");
+      if (!e.said) X.toast(`Could not save the working lineup: ${e.message}`, "err"); // said: at the page's foot (postWork)
       if (name === X.ctx().name) await readWork(X, name, own);
-    }
+    } finally { queued.set(key, queued.get(key) - 1); }
   });
+}
+
+/** The server's lineup for `mode` after a save, taken onto the panel when it differs from the one on show: men off the slate or out of their slot open it (cleanWork), an excluded man is
+ *  left out and named on the mode's Left line, and that is saved; then drawn. */
+function takeSaved(X, mode, out, own) {
+  const c = X.ctx(), got = out?.[mode]?.slots;
+  if (!Array.isArray(got) || out[mode].unreadable) return;
+  const excluded = (c.picksOf?.(mode) ?? c.picks).excluded; // the excludes of the mode whose save answered, not the open mode's (round 2, item 5)
+  const clean = cleanWork(got, c.byId), ex = clean.filter((id) => id && excluded.includes(id)), next = clean.map((id) => (ex.includes(id) ? null : id));
+  if (!ex.length && JSON.stringify(next) === JSON.stringify(X.P.workByMode[mode])) return; // an excluded man the server holds is still taken out of its copy and named
+  X.P.workByMode[mode] = next;
+  if (ex.length) { X.P.workLeftByMode[mode] = ex.map((id) => c.knownName?.(id) ?? `DraftKings id ${id}`); saveWork(X, own, mode, clean); }
+  own.render(X); X.onWork();
+}
+
+/** Each mode's slots and saved_at as the server last gave them, per slate (an answer without saved_at leaves them unknown; a mode read unreadable drops its base): what his one change is laid on. */
+function takeWorkKnown(X, name, out) {
+  X.P.workKnown ??= new Map();
+  for (const m of WORK_MODES) {
+    if (out?.[m]?.unreadable) X.P.workKnown.delete(`${name}|${m}`); // review of 11-21, finding 7
+    else if (out?.[m] && Object.hasOwn(out[m], "saved_at") && Array.isArray(out[m].slots)) X.P.workKnown.set(`${name}|${m}`, { base: out[m].saved_at ?? null, slots: out[m].slots });
+  }
+}
+/** The foot facts with the slate's working-lineup clash lines (board-saves.js troubleLine says them). */
+function workFootOf(X, out) {
+  const lines = [...(X.P.workClash ?? new Map())].filter(([k]) => k.startsWith(`${X.ctx().name}|`)).map(([, l]) => l);
+  return { ...footFacts(out), ...(lines.length ? { clashes: lines } : {}) };
+}
+/**
+ * One working-lineup save (11-13 audit, state 3; merge-saves.js): his slot changes laid on the lineup the server last gave, sent with its saved_at as `base`; another page's save since is read
+ * and the change laid on it again, silently, up to SAVE_ROUNDS rounds. A slot both changed, or a man moved out of a slot to fill his, is said at the foot; past the rounds, so is the change
+ * not saved (the error then carries `said`). Answers { out: the server's answer, merged: whether it was laid on another page's save }.
+ */
+async function postWork(X, name, mode, slots, diff) {
+  const url = `/api/slate/${encodeURIComponent(name)}/working`, key = `${name}|${mode}`, nameOf = (id) => X.ctx().knownName?.(id) ?? `DraftKings id ${id}`;
+  X.P.workClash ??= new Map();
+  let clashes = [];
+  for (let round = 1; ; round++) {
+    const k = X.P.workKnown?.get(key), merged = k ? applySlotDiff(k.slots, diff) : null;
+    try {
+      const out = await X.api(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(merged ? { mode, slots: merged.slots, base: k.base } : { mode, slots }) });
+      takeWorkKnown(X, name, out);
+      if (clashes.length) X.P.workClash.set(key, slotClashLine(mode, clashes, nameOf, (i) => SLOTS[i])); else X.P.workClash.delete(key);
+      return { out, merged: round > 1 };
+    } catch (e) {
+      if (e.code !== "WORKING_CHANGED_ELSEWHERE") throw e;
+      if (round > SAVE_ROUNDS) { X.P.workClash.set(key, `Working lineup (${mode}): your change could not be saved, because the saved lineup kept changing on another page; the saved one is shown, so make it again.`); throw Object.assign(e, { said: true }); }
+      try { takeWorkKnown(X, name, await X.api(url)); } catch (e2) { X.P.workClash.set(key, `Working lineup (${mode}): your change could not be saved: the saved lineup could not be read to lay it on (${e2.message}).`); throw Object.assign(e2, { said: true }); }
+      clashes = applySlotDiff(X.P.workKnown?.get(key)?.slots, diff).clashes;
+    }
+  }
 }
 
 /**
@@ -207,6 +262,7 @@ export function readWork(X, name, own) {
   const at = { ...X.P.workByMode }; // a change made while a re-read is out (after a failed save) wins over the copy it brings back, mode by mode
   const read = X.api(`/api/slate/${encodeURIComponent(name)}/working`)
     .then((out) => {
+      takeWorkKnown(X, name, out);
       if (name !== X.ctx().name) return;
       const fresh = workByModeOf(out);
       const nameOf = (id) => X.ctx().knownName?.(id) ?? `DraftKings id ${id}`;
@@ -217,7 +273,7 @@ export function readWork(X, name, own) {
         // The men the server opened because they left the slate or their slot (store.js readWorking `dropped`), named on that mode's Left line.
         X.P.workLeftByMode[m] = (out[m].dropped ?? []).map(nameOf);
       }
-      Object.assign(X.P, { workReady: true, workFailed: null, workFoot: footFacts(out) });
+      Object.assign(X.P, { workReady: true, workFailed: null, workFoot: workFootOf(X, out) });
       own.render(X); X.onWork();
     })
     .catch((e) => {

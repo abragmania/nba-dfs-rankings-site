@@ -1,7 +1,8 @@
 // The console's moves on his work: history and ripple, saving, pins, roles, who is out, hand-outs. Each takes the console's shared state `c`.
 import { oursUse } from "./console-ours.js";
 import { keyOf, outsOf, usageStart, teamFor } from "./console-engine.js";
-import { calc, canonRecord, chipName, dropCopies, hasPins, label, moveStamps, moveTo, noteOuts, pinsOf, recordOf, rolesText, savedFor, sgn } from "./console-model.js";
+import { calc, canonRecord, chipName, dropCopies, hasPins, label, moveStamps, moveTo, noteOuts, pinsOf, recordOf, rolesText, savedFor, sgn, textSig } from "./console-model.js";
+import { REPLAY_ROUNDS } from "./console-replay.js";
 import { FN, fmtv } from "./console-cmd.js";
 import { COLS } from "./console-render.js";
 import { PIN_MAX } from "./override-limits.js";
@@ -75,12 +76,27 @@ function ripple(c, before) {
 /** How long a save or a send waits while GitHub's data is being brought down (the server answers 409 SYNC_RUNNING) before it is tried again. */
 export const SYNC_WAIT_MS = 4000;
 
+/** The `seen` a save (one team) or a send (`teams`) carries: each team's record as this page last read or wrote it (c.serverSeen, console-model.js recordSig), so the server refuses work made on
+ *  an older copy whatever wrote since (11-13 audit, state 1). {} for a team this page has not read. Pure. */
+export function seenOf(c, teams, one = false) {
+  const sigs = Object.fromEntries(teams.filter((t) => typeof c.serverSeen?.[t] === "string").map((t) => [t, textSig(c.serverSeen[t])]));
+  if (one) return Object.hasOwn(sigs, teams[0]) ? { seen: sigs[teams[0]] } : {};
+  return Object.keys(sigs).length ? { seen: sigs } : {};
+}
+
 /**
  * Saves every team whose work changed, one write at a time and in order. A failed save stays on show until a later one works, and refuses Apply's preview.
  * `auto`: no click of his started this save (a load, a pull, the lineup bar's news; c.autoMove marks those), so the server carries his_at and only a click moves it.
- * Each save names the team's his_at as this page last saw it (`base`): the server refuses with CHANGED_ELSEWHERE when the disk's differs, and the page takes the other work (c.onConflict) instead of writing over it.
+ * Each save names the team's his_at as this page last saw it (`base`) and its record as last seen (`seen`): the server refuses with CHANGED_ELSEWHERE when the disk's differs, and the page takes the other work (c.onConflict) instead of writing over it.
  * A SYNC_RUNNING refusal (GitHub's data is coming down) is tried again after SYNC_WAIT_MS, the change kept.
  */
+/** A save of the team landed: its replay rounds start again; the foot line of a replay stays for the save that replay made, and goes with his next one. */
+function savedAfterReplay(c, code) {
+  if (c.replays) delete c.replays[code];
+  if (c.replaying?.delete(code)) return;
+  if (c.replayNotes?.[code]) { delete c.replayNotes[code]; c.drawBar(); }
+}
+
 export function saveDirty(c, auto = c.autoMove === true) {
   const name = c.slate;
   for (const [code, S] of Object.entries(c.model.ST)) {
@@ -90,16 +106,24 @@ export function saveDirty(c, auto = c.autoMove === true) {
     c.saveGen = (c.saveGen ?? 0) + 1; // a save of his own is under way: a read of the server's records during it is not comparable (console.js refresh)
     c.saveQueue = c.saveQueue.then(async () => {
       try {
-        const out = await c.api(`/api/slate/${encodeURIComponent(name)}/scenarios`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ team: code, record: JSON.parse(text), base: c.serverHisAt?.[code] ?? null, ...(auto ? { auto: true } : {}) }) });
+        const out = await c.api(`/api/slate/${encodeURIComponent(name)}/scenarios`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ team: code, record: JSON.parse(text), base: c.serverHisAt?.[code] ?? null, ...seenOf(c, [code], true), ...(auto ? { auto: true } : {}) }) });
         (c.serverSeen ??= {})[code] = canonRecord(JSON.parse(text)); // what the server holds for the team is now what this page wrote
         if (out && name === c.slate) { (c.serverHisAt ??= {})[code] = out.his_at ?? null; if (out.file_his_at !== undefined) c.serverFileHisAt = out.file_his_at; }
         if (c.saveErrs[code] && name === c.slate) { delete c.saveErrs[code]; c.drawBar(); }
+        if (name === c.slate) savedAfterReplay(c, code);
       } catch (e) {
         if (name !== c.slate) return;
-        if (e.code === "CHANGED_ELSEWHERE") { // the disk holds work this page has not seen: this page takes it (and says so) instead of writing over it
+        if (e.code === "CHANGED_ELSEWHERE") { // the disk holds work this page has not seen: the next read lays his moves on it and saves again (console.js replayOnto), never a box or a toast
           c.lastSaved[code] = text;
           (c.conflicted ??= new Set()).add(code);
-          c.toast(`${code}'s saved work changed elsewhere (the other computer or another page), so your last change on it was not written over it.`, "notice");
+          c.replays ??= {};
+          c.replays[code] = (c.replays[code] ?? 0) + 1;
+          if (c.replays[code] > REPLAY_ROUNDS) { // the record kept changing under him: his change stays on show and goes with his next one, said at the team's foot
+            c.replays[code] = 0; c.replaying?.delete(code);
+            (c.replayNotes ??= {})[code] = [`${code}: your last change is not saved yet, because the saved work kept changing under it (the lineup news or another page); it is kept here and goes with your next change.`];
+            c.drawBar();
+            return;
+          }
           c.onConflict?.(code);
           return;
         }
