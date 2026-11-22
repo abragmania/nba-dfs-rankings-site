@@ -96,7 +96,7 @@ ${m.starter ? "" : `<button class="dc-bp${m.bplus ? " dc-on" : ""}" type="button
 }
 
 /** The whole box. sel: the selected man's id (or null); ro: read-only (the public site). */
-export function chartHtml(code, cm, { sel = null, ro = false, showInj = false } = {}) {
+export function chartHtml(code, cm, { sel = null, ro = false, showInj = false, roWhy = null } = {}) { // roWhy: why it is read-only on the app (the team's game has started, console-tipped.js), said in its heading
   if (!cm) return "";
   const inj = showInj && cm.healthy ? cm.healthy : null, shown = inj ?? cm; // display only: the healthy view adds the absent men; every present man is as in tonight's view
   const head = (c) => `<h3>${c.pos}<small>${f1(c.sum)}</small></h3>`;
@@ -104,7 +104,7 @@ export function chartHtml(code, cm, { sel = null, ro = false, showInj = false } 
   const cols = shown.cols.map((c) => `<div class="dcol" data-dcol="${c.pos}" data-team="${esc(code)}">${head(c)}${c.men.map((m) => chip(code, m, sel, ro || inj !== null)).join("")}</div>`).join("");
   const none = shown.none.length ? `<div class="dc-none" data-dcol="none"><span class="dc-nl">No position</span>${shown.none.map((m) => chip(code, m, sel, ro || inj !== null)).join("")}</div>` : "";
   const order = cm.bench.length ? `<div class="dc-ord"><b>Bench order from this chart:</b> ${cm.bench.map((m, i) => `${i + 1} ${esc(m.name)}`).join(", ")}<span>Bench+ first, then every 2nd, then every 3rd, ties by a blend of last 10 and season minutes a game</span></div>` : "";
-  return `<section class="box dchart"><h2>Depth chart <span class="dc-hr"><small>${ro ? "our chart, as Adam set it" : inj ? "healthy chart: absent men greyed; switch off to drag" : "drag a man within or between columns; starter on top"}</small>${toggle}</span></h2><div class="dcols">${cols}</div>${none}${ro ? "" : selBar(code, cm, sel)}${order}</section>`;
+  return `<section class="box dchart"><h2>Depth chart <span class="dc-hr"><small>${roWhy ? esc(roWhy) : ro ? "our chart, as Adam set it" : inj ? "healthy chart: absent men greyed; switch off to drag" : "drag a man within or between columns; starter on top"}</small>${toggle}</span></h2><div class="dcols">${cols}</div>${none}${ro ? "" : selBar(code, cm, sel)}${order}</section>`;
 }
 
 /** The sources' line for the page's foot notes (G64: stamps at the foot): "Positions: ESPN depth chart 3:40 PM; Lineups.com depth chart not read (403 ...); ...". when: ISO -> short time. */

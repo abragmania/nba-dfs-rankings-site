@@ -9,6 +9,7 @@ import { isNum } from "./figures.js";
 import { basisText, medianFlag, tgMinHtml } from "./console-render.js";
 import { typedText } from "./console-model.js";
 import { clearQueued } from "./instant-pins.js";
+import { pickLineHtml } from "./console-picks.js";
 
 /** The card writes his number straight to the console: the board's own number for him of that kind not yet sent is older and is dropped first,
  *  and one being written now lands before the card's (instant-pins.js clearQueued), so the card's is the last word. */
@@ -23,13 +24,14 @@ export function roleBoxHtml(v, state = {}) {
   if (state.loading) return `${head}<div class="cardmsg">Loading the console…</div>`;
   if (state.error) return `${head}<div class="cardmsg err">The console could not load, so his role and minutes cannot be set here: ${esc(state.error)}</div>`;
   if (!v) return `${head}<div class="cardmsg">He is on no team of this slate's console.</div>`;
-  const r = v.row, p = v.man;
-  const seg = `<span class="seg">${ROLES.map((k) => `<button type="button" class="rs${r.role === k ? ` on ${k}${r.pinned.r || (k === "out" && r.out) ? " set" : ""}` : ""}" data-crole-set="${k}" title="${ROLE_LABEL[k]}">${ROLE_SHORT[k]}</button>`).join("")}</span>`;
+  const r = v.row, p = v.man, off = v.off ?? null; // off: his team's game has started (console-tipped.js): every control disabled, the hover saying why (Adam 11-21: no refusal boxes)
+  const tip = (title) => (off ? ` disabled title="${esc(off)}"` : ` title="${esc(title)}"`);
+  const seg = `<span class="seg">${ROLES.map((k) => `<button type="button" class="rs${r.role === k ? ` on ${k}${r.pinned.r || (k === "out" && r.out) ? " set" : ""}` : ""}" data-crole-set="${k}"${tip(ROLE_LABEL[k])}>${ROLE_SHORT[k]}</button>`).join("")}</span>`;
   const boxOf = (k, val, text) => {
     const pinned = !r.out && r.pinned[k];
-    const input = `<input data-crk="${k}" inputmode="decimal" autocomplete="off" value="${r.out ? (k === "m" ? "OUT" : "") : isNum(val) ? text(val) : ""}" placeholder="${MISS}"${r.out ? " readonly" : ""} title="${k === "m" ? `Minutes, 0 to ${PIN_MAX.m}` : `DK points per minute, 0 to ${PIN_MAX.d}`}: typed numbers are kept as typed. Empty clears it.">`;
-    const aside = k === "m" && !r.out && r.min_aside ? `<button type="button" class="x" data-crrestore="1" title="${esc(`${r.min_aside.words.charAt(0).toUpperCase()}${r.min_aside.words.slice(1)}. Click to use it again`)}">&#8617; ${esc(wholeText(r.min_aside.value) ?? "")}</button>` : ""; // Adam 9:46 AM 11-20 (typed-aside.js)
-    return `<span class="crb${pinned ? " pin" : ""}">${k === "m" ? "Min" : "DK/min"}${k === "m" ? stepHtml(input, v.id, v.team, r.out || !isNum(val)) : input}${pinned ? `<button type="button" class="x" data-crx="${k}" title="Clear what you typed">x</button>` : ""}${aside}</span>`;
+    const input = `<input data-crk="${k}" inputmode="decimal" autocomplete="off" value="${r.out ? (k === "m" ? "OUT" : "") : isNum(val) ? text(val) : ""}" placeholder="${MISS}"${r.out || off ? " readonly" : ""} title="${esc(off ?? `${k === "m" ? `Minutes, 0 to ${PIN_MAX.m}` : `DK points per minute, 0 to ${PIN_MAX.d}`}: typed numbers are kept as typed. Empty clears it.`)}">`;
+    const aside = k === "m" && !r.out && r.min_aside ? `<button type="button" class="x" data-crrestore="1"${tip(`${r.min_aside.words.charAt(0).toUpperCase()}${r.min_aside.words.slice(1)}. Click to use it again`)}>&#8617; ${esc(wholeText(r.min_aside.value) ?? "")}</button>` : ""; // Adam 9:46 AM 11-20 (typed-aside.js)
+    return `<span class="crb${pinned ? " pin" : ""}">${k === "m" ? "Min" : "DK/min"}${k === "m" ? stepHtml(input, v.id, v.team, Boolean(off) || r.out || !isNum(val)) : input}${pinned ? `<button type="button" class="x" data-crx="${k}"${tip("Clear what you typed")}>x</button>` : ""}${aside}</span>`;
   };
   const proj = r.out ? "0.0" : isNum(r.proj) ? f1(r.proj) : MISS;
   const moves = v.moves.length ? `<div class="crm">To keep five starters: ${v.moves.map((m) => `${esc(m.name)} ${esc(ROLE_LABEL[m.from])} to ${esc(ROLE_LABEL[m.to])}`).join(", ")}. Ctrl+Z in the console undoes it.</div>` : "";
@@ -40,7 +42,7 @@ export function roleBoxHtml(v, state = {}) {
   const word = b ? figSourceWord(b, "min") : "";
   const differs = b && isNum(b.minutes) && isNum(r.min) && !r.out && Math.abs(b.minutes - r.min) > 0.05;
   const differ = differs ? `<div class="crs">Console scenario (${esc(basisText(r))} minutes): ${f1(r.min)} min. The board above uses ${word ? `${esc(word)}: ` : ""}${f1(b.minutes)}.</div>` : "";
-  return `${head}<div class="crr">${seg}<span class="crf">TwoGun's own ${tgMinHtml(p)}</span></div>`
+  return `${head}<div class="crr">${seg}<span class="crf">TwoGun's own ${tgMinHtml(p)}</span></div>${pickLineHtml(v.team, v.id, v.pick, { attr: "data-crpick", label: "His Starter mark replaces", off })}`
     + `<div class="crr">${boxOf("m", r.min, wholeText)}${boxOf("d", r.rate, (x) => x.toFixed(2))}<span class="crf">Console proj <b class="${r.pinned.m || r.pinned.d || r.pinned.r ? "pin" : ""}">${proj}</b></span></div>`
     + `<div class="crs" title="${esc(basisText(r))}">${medianFlag(r)}Console minutes from: ${esc(basisText(r))}</div>${differ}${moves}${err}`
     + `<div class="crr"><span class="crsaid">${state.busy ? "Sending to the board…" : esc(state.said ?? "")}</span></div>${refusal}${notes}`;
@@ -99,8 +101,9 @@ export function cardRoles({ api, slate, toast }) {
       return redraw();
     };
     slot.addEventListener("click", async (e) => {
-      if (!view) return;
-      const set = e.target.closest("[data-crole-set]"), clear = e.target.closest("[data-crx]"), step = e.target.closest("[data-mstep]"), back = e.target.closest("[data-crrestore]");
+      if (!view || view.off) return; // his team's game has started: nothing here edits it
+      const set = e.target.closest("[data-crole-set]"), clear = e.target.closest("[data-crx]"), step = e.target.closest("[data-mstep]"), back = e.target.closest("[data-crrestore]"), pick = e.target.closest("[data-crpick]");
+      if (pick && !pick.disabled) { fresh(); last = null; api().setPick(view.team, view.id, pick.dataset.crpick || null); return send(); } // whom his Starter mark replaces (console-picks.js)
       if (back) { fresh(); last = null; api().restoreCard(view.team, view.id); return send(); } // his set-aside typed minutes back in use (Adam 9:46 AM 11-20)
       if (step && !step.disabled) {
         const n = stepMinutes(view.row.min, Number(step.dataset.mstep));

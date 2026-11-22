@@ -19,7 +19,9 @@ import { landingHtml, teamBarOf, withAllChip } from "./console-all.js";
 import { statusLine } from "./lineup-bar.js";
 import { chartClick, chartChange, wireChartDrag, showInjured } from "./console-chart-ui.js";
 import { clearQueued } from "./instant-pins.js";
-import { replayTeam, rebaseHistory } from "./console-replay.js";
+import { replayTeam, rebaseHistory, replayHistory, BESIDE } from "./console-replay.js";
+import { setPick } from "./console-picks.js";
+import { offWhy } from "./console-tipped.js";
 
 /** A console write of his minutes or DK/min on a man: a board number for the same man and kind not yet sent is older and dropped first, and one being
  *  written now lands before this one (instant-pins.js clearQueued), so the console's is the last word (review 11-21 F10, as card-role.js does). */
@@ -32,7 +34,7 @@ export function afterBoard(c, id, k, fn) {
 /** His depth-chart moves as the server holds them, per team (console-moves.js saveDepth compares against it). */
 const depthTexts = (model) => Object.fromEntries(Object.entries(model.TEAMS).map(([code, T]) => [code, JSON.stringify(T.tier?.depth?.moves ?? null)]));
 const roleStamps = (model) => Object.fromEntries(Object.entries(model.TEAMS).filter(([, T]) => T.tier?.role_marks_stamp).map(([code, T]) => [code, T.tier.role_marks_stamp]));
-const roleTexts = (model) => Object.fromEntries(Object.entries(model.TEAMS).filter(([, T]) => T.tier?.role_marks).map(([code, T]) => [code, rolesText(T.tier.role_marks)])); // his standing role marks as the chart holds them (Adam 10:25 AM 11-18)
+const roleTexts = (model) => Object.fromEntries(Object.entries(model.TEAMS).filter(([, T]) => T.tier?.role_marks).map(([code, T]) => [code, rolesText(T.tier.role_marks, T.tier.role_picks)])); // his standing role marks (and whom a Starter mark replaces) as the chart holds them (Adam 10:25 AM 11-18)
 
 const USAGE_RETRY_MS = 20_000;
 const USAGE_RETRIES = 6;
@@ -132,9 +134,9 @@ export const saveNotesFootHtml = (lines) => (lines?.length ? `<div class="cfoot"
 /** The page on show: one team's, or the All teams news list (the team bar is the console's own, with "All teams" first). */
 function pageHtml(c, news) {
   const G = c.G;
-  const team = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr: Object.values(c.saveErrs).join(" ") || null, news, help: G.help, chartSel: G.chartSel ?? null, showInj: showInjured(c), readOnly: c.readOnly, whatifs: c.whatifs?.teams?.[G.cur]?.whatifs ?? [], whatifsErr: c.whatifsErr ?? null });
+  const team = depthHtml(c.model, G.cur, { games: c.inputs.games, colourOf: (t) => teamColour(c, t), when: tipWhen(c.slate), slate: c.slate, sync: c.sync, canUndo: G.hi > 0, canRedo: G.hi < G.hist.length - 1, saveErr: Object.values(c.saveErrs).join(" ") || null, news, help: G.help, chartSel: G.chartSel ?? null, showInj: showInjured(c), readOnly: c.readOnly, whatifs: c.whatifs?.teams?.[G.cur]?.whatifs ?? [], whatifsErr: c.whatifsErr ?? null, off: offWhy(c.inputs, G.cur) }); // off: the team's game has started, its edit controls drawn disabled (console-tipped.js)
   const held = sendFootText(c.sync), foot = `${held ? `<p class="cfoot">${esc(held)}</p>` : ""}${readFootHtml(c.readFail, c.inputsAt)}`; // a send the moving numbers held back, and a failed refresh: at the page's foot, under either view (G64)
-  if (G.view !== "all") return `${withAllChip(team, false)}${roleMarksFootHtml(c.model.TEAMS[G.cur], c.model.ST[G.cur], G.cur, c.readOnly === true)}${saveNotesFootHtml([...(c.saveNotes[G.cur] ?? []), ...(c.replayNotes?.[G.cur] ?? [])])}${foot}`; // his standing role marks, at the foot (G64)
+  if (G.view !== "all") return `${withAllChip(team, false)}${roleMarksFootHtml(c.model.TEAMS[G.cur], c.model.ST[G.cur], G.cur, c.readOnly === true || offWhy(c.inputs, G.cur) !== null)}${saveNotesFootHtml([...(c.saveNotes[G.cur] ?? []), ...(c.replayNotes?.[G.cur] ?? []), ...(c.lockNotes?.[G.cur] ?? [])])}${foot}`; // his standing role marks, at the foot (G64)
   const words = !news ? "No lineup news is wired on this page." : news.state === "loading" ? "Reading the lineup news..." : news.state !== "ok" ? `Lineup news not read: ${news.why}` : null;
   const body = words ? `<section class="ca"><header class="ca-h"><h1>Tonight's lineup news</h1></header><div class="ca-empty">${esc(words)}</div></section>` : landingHtml(news.V, G.newsTeam ?? "", c.inputs.games.flatMap((g) => [g.away, g.home]));
   return `${withAllChip(teamBarOf(team), true)}${body}${foot}`;
@@ -176,7 +178,7 @@ async function load(c, name) {
   clearTimeout(c.retryTimer);
   clearTimeout(c.readTimer);
   if (c.slate !== name) keepDropped(c, c.slate, c.pending); // his changes on the slate left that have not reached its board go when it is opened again (round 2, item 2)
-  Object.assign(c, { slate: name, loadError: null, model: null, newsRead: null, usageTries: 0, saveErrs: {}, saveNotes: {}, replayNotes: {}, replays: {}, sync: { state: "ok", at: null, seq: c.sendSeq ?? 0 }, touched: new Set(), pending: new Set(), readFail: null, inputsAt: null }); // another slate: nothing changed on it yet; the send count goes on (console-auto.js)
+  Object.assign(c, { slate: name, loadError: null, model: null, newsRead: null, usageTries: 0, saveErrs: {}, saveNotes: {}, replayNotes: {}, lockNotes: {}, replays: {}, sync: { state: "ok", at: null, seq: c.sendSeq ?? 0 }, touched: new Set(), pending: new Set(), readFail: null, inputsAt: null }); // another slate: nothing changed on it yet; the send count goes on (console-auto.js)
   c.E("app").innerHTML = `<div class="fatalc dimc">Loading ${esc(name)}...</div>`;
   try {
     const out = await c.api(`/api/slate/${encodeURIComponent(name)}/console`);
@@ -238,7 +240,7 @@ async function refresh(c) {
     }
     for (const [code, text] of Object.entries(roleTexts(c.model))) { // his role marks, the same way: another page's or the other computer's saved list is taken
       const S = c.model.ST[code], mine = c.rolesSaved?.[code];
-      if (S && mine !== undefined && mine !== "unsaved" && text !== mine) { S.role_marks = structuredClone(c.model.TEAMS[code].tier.role_marks); c.rolesSaved[code] = text; }
+      if (S && mine !== undefined && mine !== "unsaved" && text !== mine) { S.role_marks = structuredClone(c.model.TEAMS[code].tier.role_marks); S.role_picks = structuredClone(c.model.TEAMS[code].tier.role_picks ?? {}); c.rolesSaved[code] = text; }
       else if (c.rolesSaved && mine === undefined) c.rolesSaved[code] = text;
       if (c.rolesSaved?.[code] !== "unsaved") (c.rolesBase ??= {})[code] = c.model.TEAMS[code].tier.role_marks_stamp ?? "[]"; // his own saves have landed (saveQueue above): what the server holds is the base
     }
@@ -275,10 +277,10 @@ export const replayWaits = (c, gen) => c.saveGen !== gen && (c.conflicted?.size 
 /** His moves since `seen` laid on the server's newer record for `code` (console-replay.js), the team's work replaced by the result and left unsaved, so the next save writes it on the new seen;
  *  what no longer applies goes to the team's foot (c.replayNotes). False when he had no move to lay on (the caller takes the server's record). */
 function replayOnto(c, code, input, seen, out) {
-  const old = c.model.ST[code], r = replayTeam(input, { seen, mine: recordOf(old), theirs: out.scenarios.teams[code], applied: out.scenarios.applied?.keys?.[code], dflt: defaultSourceOf(c.inputs) });
+  const old = c.model.ST[code], mine = recordOf(old), how = { seen, theirs: out.scenarios.teams[code], applied: out.scenarios.applied?.keys?.[code], dflt: defaultSourceOf(c.inputs) }, r = replayTeam(input, { ...how, mine });
   if (!r.moved) return false;
-  for (const k of ["depth_moves", "role_marks", "mark_at"]) if (old[k] !== undefined) r.S[k] = old[k]; // his chart moves and role marks have their own saves; mark_at: when this page made each mark (round 2, item 8)
-  c.model.TEAMS[code] = r.T; c.model.ST[code] = r.S; rebaseHistory(c.G, code, r.S); // an undo never takes back the newer work (review of 11-21, finding 2)
+  for (const k of BESIDE) if (old[k] !== undefined) r.S[k] = old[k]; // his chart moves, role marks and picks have their own saves; mark_at, pick_at: when this page made each (round 2, item 8)
+  c.model.TEAMS[code] = r.T; c.model.ST[code] = r.S; replayHistory(c.G, code, { ...how, input, current: r.S, news: mine.news }); // his older steps laid on the newer work too, which no undo takes back (review of 11-21, finding 2)
   c.lastSaved[code] = "unsaved"; c.conflicted?.delete(code); (c.replaying ??= new Set()).add(code);
   (c.serverHisAt ??= {})[code] = out.scenarios.teams[code]?.his_at ?? null;
   if (r.notes.length) (c.replayNotes ??= {})[code] = r.notes; else delete c.replayNotes?.[code];
@@ -374,6 +376,7 @@ function onClick(c, e) {
   else if (d.undo) { if (d.undo === "m" || d.undo === "d") afterBoard(c, d.id, d.undo, () => dropMark(c, d.team, d.id, d.undo)); else dropMark(c, d.team, d.id, d.undo); } // a typed number's undo: after a board number of the same kind (F10)
   else if (d.restore) restoreRow(c, d.team, d.restore); // his typed minutes a role change set aside, back in use (Adam 9:46 AM 11-20)
   else if (d.clearMark) clearStanding(c, d.team, d.clearMark); // a standing role mark off, back to the rule (Undo brings it back)
+  else if (d.rpick !== undefined) setPick(c, d.team, d.ri, d.rpick || null); // whom his Starter mark replaces (console-picks.js); "" returns to the rule's choice
   else if (d.s) toggleStarter(c, d.team, d.s);
   else if (d.out) toggleOut(c, d.team, d.out);
   else if (d.source) setSource(c, d.team, d.source);

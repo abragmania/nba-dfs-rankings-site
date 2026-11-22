@@ -1,0 +1,257 @@
+/* The board's stylesheet, part 2 of 4: the optimizer panel (the working lineup band, the lineup rows, settings, saved cards, late swap). Split from board.css (global rule: a file over 600 lines is split); the bodies are board.css's, unchanged. index.html links board.css, optimizer-panel.css,
+   player-card.css and board-cells.css one after another in that order, so the cascade is board.css's. G71: every size in rem off the root (board.css). */
+/* Fixed cells: the player list in column 1, the optimizer in column 2, so the card can share the optimizer's cell and nothing shifts when it opens. */
+.pool{grid-column:1;grid-row:1}
+/* Standard A15: no inner scroll boxes, so the panel runs its own length down the page; it stretches to the table's length so its band can stick that far. */
+.opt{grid-column:2;grid-row:1;align-self:stretch;border:1px solid var(--ln);background:var(--p);box-shadow:inset 0 0.125rem 0 var(--am)}
+.oh{display:flex;align-items:center;justify-content:space-between;padding:0.4375rem 0.875rem;border-bottom:1px solid var(--ln)}
+.oh h3{margin:0;font:700 0.9375rem "Space Grotesk",sans-serif;letter-spacing:0.0313rem}
+.oh h3:before{content:"▶ ";color:var(--am)}
+.seg{display:flex;border:1px solid var(--ln)}
+.seg button{border:0;background:none;padding:0.1875rem 0.875rem;font-weight:800;font-size:0.75rem;color:var(--mu)}
+.seg .on{background:var(--am);color:#000}
+.set{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--ln)}
+.set label{padding:0.3125rem 0.75rem;font-size:0.6875rem;color:var(--mu);border-right:1px solid var(--ln)}
+.set label:last-child{border-right:0}
+.set input{display:block;width:100%;height:1.5rem;margin-top:0.125rem;background:var(--p2);border:1px solid var(--ln);padding:0 0.5rem;font-size:0.875rem;text-align:right}
+.set input:disabled{cursor:not-allowed;opacity:.55;text-align:left}
+.set input::placeholder{color:var(--dim);opacity:.8}
+/* The working lineup is the sticky band (standard A15): one column of slots and its totals (A19), compact, staying at the top of the optimizer's column the whole length of the table. Result cards are not in it and never stick. */
+.lu{padding:0 1rem 0.375rem;position:sticky;top:0;z-index:2;background:var(--p);border-bottom:1px solid var(--ln)}
+.lu .luh{padding:0.25rem 0 0.125rem}
+.lu .crow{min-height:0;padding:0 0.25rem 0 0.5rem}
+.lu .crow .sn small{display:none}
+.lu .crow .logo.sm,.lu .crow .chipx.sm{width:1.125rem;height:1.125rem}
+.lu .cap{margin-top:0.25rem}.lu .capt{margin-top:0.1875rem}
+.lu .lslocks{margin-top:0.25rem}
+/* The working lineup is the main thing in the optimizer panel (Player list only; .wk is not on late swap's band): larger rows in fixed columns, an open slot as a dashed seat, the totals read at a glance. */
+.lu.wk{padding:0 1rem 0.875rem}
+.lu.wk .luh{padding:0.875rem 0 0.625rem;font-size:0.875rem}.lu.wk .luh>span:first-child{font-size:1.1875rem;font-weight:800;letter-spacing:0.0188rem}
+.lu.wk .luh .luhr{font-size:0.8125rem;color:var(--mu)}
+.opt .lu.wk .clr{font-size:0.7813rem;min-height:1.875rem;padding:0.1875rem 0.875rem}
+/* One column template for the header row, every slot row and the totals, so each figure sits under its heading. Proportional widths: no column eats the room. */
+.lu.wk .wkh,.lu.wk .wkr,.lu.wk .cap .capt{--wkc:5.25rem 2.875rem minmax(0,min(19.5rem,34%)) repeat(4,minmax(0,1fr)) 2.125rem;--wkg:0.875rem;--wkp:0.875rem;display:grid;grid-template-columns:var(--wkc);column-gap:var(--wkg);align-items:center;padding-left:var(--wkp);padding-right:var(--wkp)}
+.lu.wk .wkh{height:1.75rem;font-size:0.7188rem;font-weight:700;letter-spacing:0.0688rem;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--ln)}
+.lu.wk .wkh span{text-align:right}.lu.wk .wkh span:first-child{text-align:center}.lu.wk .wkh .wkhp{grid-column:2 / span 2;text-align:left}
+/* A row is the same height empty or filled (the open seat's dashed edge is an outline, which takes no room), so a pick moves nothing below it. */
+.lu.wk .wkr{box-sizing:border-box;height:3.75rem;min-height:0;margin:0;border-bottom:1px solid var(--ln)}
+.lu.wk .wkr .sl{font-size:1.1875rem;font-weight:900;padding:0.6875rem 0;background:var(--am);color:#000;border:0;letter-spacing:0.025rem}
+.lu.wk .wkr.hand .sl{background:var(--am);box-shadow:none}
+.lu.wk .wkr.locked .sl{background:var(--gr)}
+.lu.wk .wkr .logo.sm,.lu.wk .wkr .chipx.sm{width:2.5rem;height:2.5rem}
+.lu.wk .wkr .sn{min-width:0}
+.lu.wk .wkr .sn1{gap:0.5625rem}
+.lu.wk .wkr .pn,.opt .lu.wk .wkr .pn{font:800 1.375rem "Space Grotesk",sans-serif;letter-spacing:-0.0062rem}
+.lu.wk .wkr .sn small{display:block;margin-top:0.125rem;font-size:0.8125rem;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lu.wk .wkr .pos{font-size:0.75rem}
+.lu.wk .wkr .ss,.lu.wk .wkr .sp,.lu.wk .wkr .sv,.lu.wk .wkr .so{font:800 1.5rem "Space Grotesk",sans-serif;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.lu.wk .wkr .ss{color:var(--tx)}.lu.wk .wkr .sv{color:var(--gr)}
+.lu.wk .miss{text-decoration:none}
+.lu.wk .wkr .inj2{display:none}
+.lu.wk .wkr .pn .ns{display:none}
+.lu.wk .wkr .lkb,.lu.wk .wkr .lkd{width:1.875rem;height:1.875rem;justify-self:end}
+.lu.wk .wkr .lkb{color:var(--tx);background:color-mix(in srgb,var(--tx) 8%,transparent);border:1px solid color-mix(in srgb,var(--tx) 45%,transparent)}
+.lu.wk .wkr .lkb:hover{border-color:var(--am);color:var(--am)}
+.lu.wk .wkr.tm{background-image:linear-gradient(90deg,color-mix(in srgb,var(--t1) 24%,transparent) 0,color-mix(in srgb,var(--t1) 10%,transparent) 42%,color-mix(in srgb,var(--t2) 7%,transparent) 100%);box-shadow:inset 0.375rem 0 var(--t1)}
+.lu.wk .wkr.empty{outline:2px dashed color-mix(in srgb,var(--mu) 45%,transparent);outline-offset:-0.3125rem;background:color-mix(in srgb,var(--mu) 5%,transparent)}
+.lu.wk .wkr.empty .sn{grid-column:2 / -1}
+.lu.wk .wkr.empty .sn b{color:var(--mu);font:600 1.25rem "Space Grotesk",sans-serif;overflow:visible;text-overflow:clip}
+.lu.wk .wkr.empty .sl{background:none;border:0;color:var(--mu);font-weight:800}
+/* The totals under the same columns: Salary used under Salary, Proj, Value and Own under theirs; Salary left and Per open slot at the left. */
+.lu.wk .cap{margin-top:0.875rem}.lu.wk .capbar{height:0.5rem}
+/* Every total is label over number at one size on one baseline; "of $50,000" hangs under Salary used without taking height. */
+.lu.wk .cap .capt{margin-top:0;padding-top:0.75rem;padding-bottom:1.25rem;align-items:end;font-size:0.7188rem;font-weight:700;letter-spacing:0.0563rem;text-transform:uppercase;color:var(--mu)}
+.lu.wk .cap .capt span{position:relative;display:flex;flex-direction:column;align-items:flex-end;justify-self:end;width:max-content;grid-row:1;white-space:nowrap;gap:0.125rem}
+.lu.wk .cap .capt b{font:800 1.75rem "Space Grotesk",sans-serif;letter-spacing:0;text-transform:none;color:var(--tx);font-variant-numeric:tabular-nums}
+.lu.wk .cap .capt .of{position:absolute;right:0;top:100%;margin-top:0.1875rem;font:600 0.7188rem "Space Grotesk",sans-serif;letter-spacing:0;text-transform:none;color:var(--dim)}
+.lu.wk .cap .capt span:nth-child(1){grid-column:4}
+.lu.wk .cap .capt span:nth-child(2){grid-column:1 / span 2;align-items:flex-start;justify-self:start}
+.lu.wk .cap .capt span:nth-child(3){grid-column:5}.lu.wk .cap .capt span:nth-child(3) b{color:var(--am)}
+.lu.wk .cap .capt span:nth-child(4){grid-column:7}.lu.wk .cap .capt span:nth-child(4) b{color:var(--bl)}
+.lu.wk .cap .capt .tval{grid-column:6}.lu.wk .cap .capt .tval b{color:var(--gr)}
+.lu.wk .cap .capt .overcap b{color:var(--rd)}
+.lu.wk .cap .capt .perop{grid-column:3;justify-self:start;align-items:flex-start}
+.lu.wk .capt .none,.lu.wk .capt .none b{font-size:0.7813rem;font-weight:400;color:var(--dim)}
+/* At about 1920 six footer figures do not fit on one row of the narrow panel ("$9,900$40,100184.3"): they take two rows of three, money above, scores below, each figure keeping its own room. */
+@media (min-width:901px) and (max-width:2640px){
+  .opt .lu.wk .cap .capt{font-size:0.625rem;letter-spacing:0.0188rem;grid-template-columns:repeat(3,minmax(0,1fr));row-gap:0.75rem;column-gap:0.625rem}
+  .opt .lu.wk .cap .capt b{font-size:1.25rem}
+  .opt .lu.wk .cap .capt span{grid-row:auto;justify-self:start;align-items:flex-start}
+  .opt .lu.wk .cap .capt span:nth-child(2){grid-column:1;grid-row:1}
+  .opt .lu.wk .cap .capt .perop{grid-column:2;grid-row:1;white-space:nowrap;max-width:none;line-height:1.15}
+  .opt .lu.wk .cap .capt span:nth-child(1){grid-column:3;grid-row:1;justify-self:end;align-items:flex-end}
+  .opt .lu.wk .cap .capt span:nth-child(3){grid-column:1;grid-row:2}
+  .opt .lu.wk .cap .capt .tval{grid-column:2;grid-row:2}
+  .opt .lu.wk .cap .capt span:nth-child(4){grid-column:3;grid-row:2;justify-self:end;align-items:flex-end}
+  .opt .lu.wk .cap .capt .of{position:static;margin-top:0}
+}
+/* A narrow optimizer panel (the 1920 laptop, about 530px): tighter columns, no position badge, and a long name (over 20 letters) shows its first name as an initial, so the last name and "Empty" always show. */
+.lu.wk{container-type:inline-size}
+@container (max-width:40rem){
+  .lu.wk .wkh,.lu.wk .wkr,.lu.wk .cap .capt{--wkc:2.125rem 1.375rem minmax(0,1fr) 4rem 2.625rem 2.5rem 3.5rem 1.25rem;--wkg:0.3125rem;--wkp:0.375rem}
+  .lu.wk .wkr .inj1{display:none}.lu.wk .wkr .inj2{display:inline-flex;margin-right:0.3125rem;vertical-align:middle} /* the injury letter moves to the matchup line: the name keeps the room */
+  .lu.wk .wkh{height:1.375rem;font-size:0.625rem;letter-spacing:0.0375rem}
+  .lu.wk .wkr{height:3.125rem}
+  .lu.wk .wkr .sl{font-size:0.875rem;padding:0.5rem 0}
+  .lu.wk .wkr .logo.sm,.lu.wk .wkr .chipx.sm{width:1.375rem;height:1.375rem}
+  .lu.wk .wkr .pos{display:none}
+  .lu.wk .wkr .pn,.opt .lu.wk .wkr .pn{font-size:0.9375rem}
+  .lu.wk .wkr .pn .ns{display:inline}.lu.wk .wkr .pn .nf{display:none} /* a long name shows its first name as an initial here: the last name always stays whole */
+  .lu.wk .wkr .sn small{font-size:0.7188rem}
+  .lu.wk .wkr .ss,.lu.wk .wkr .sp,.lu.wk .wkr .sv,.lu.wk .wkr .so{font-size:1rem}
+  .lu.wk .wkr .lkb,.lu.wk .wkr .lkd{width:1.25rem;height:1.25rem}
+  .lu.wk .wkr .sl{font-size:0.8125rem}
+  .lu.wk .wkr.empty .sn b{font-size:1.0625rem}
+  .lu.wk .cap .capt{font-size:0.625rem;letter-spacing:0.0313rem;padding-bottom:1rem}
+  .lu.wk .wkh .wkhp{text-align:left}
+  .lu.wk .cap .capt b{font-size:0.9375rem;letter-spacing:-0.025rem}
+  .lu.wk .cap .capt .of{font-size:0.625rem}
+  .lu.wk .cap .capt .perop{margin-left:1.625rem}
+}
+/* The optimizer's controls below the sticky band stop under it, not under the table's bar (the page's scroll padding is the bar and header only). */
+.opt .act,.opt .act :is(button,input,select),.opt .act~* :is(button,input,select,a){scroll-margin-top:var(--luh,0rem)}
+.chips{display:flex;gap:0.375rem;margin-left:0.375rem;padding-left:0.75rem;border-left:1px solid var(--ln)}
+.chip{background:none;border:1px solid var(--ln);padding:0.25rem 0.625rem;font-weight:700;font-size:0.75rem;color:var(--mu)}
+.chip b{color:var(--tx);margin-left:0.25rem}
+.chip.zero{opacity:.45}
+.chip.locked.on{background:var(--gr);border-color:var(--gr);color:#000}
+.chip.on b{color:#000}
+/* The In / Out / All switch where the Excluded chip sat (pool-view.js, Adam 11-20): one joined control, the open view lit as the position tabs are. */
+.pview{display:inline-flex;border:1px solid var(--ln);flex-shrink:0}
+.pview .pv{background:none;border:0;border-right:1px solid var(--ln);padding:0.25rem 0.5rem;font-weight:700;font-size:0.75rem;color:var(--mu);white-space:nowrap}
+.pview .pv:last-child{border-right:0}
+.pview .pv b{color:var(--tx);margin-left:0.25rem}
+.pview .pv.on{background:var(--am);color:#000}.pview .pv.on b{color:#000}
+.lkd{background:none;border:1px solid var(--gr);width:1.5rem;height:1.5rem;padding:0;display:inline-grid;place-items:center}
+.lkd:hover{background:#39e58c22}
+.luh{display:flex;justify-content:space-between;font-size:0.6875rem;color:var(--dim);padding:0.375rem 0 0.1875rem}
+/* The one lineup row (card-row.js, optimizer standard A5, A19, A20): the working lineup, every result card and late swap mode. Slot, logo, name with injury letter over position and matchup, the control cell when it has one, then Sal, Proj, Own. A team's row carries the full gradient and stripe. */
+.crow{--ctl:1.5rem;display:grid;grid-template-columns:2.5rem 1.5rem minmax(0,1fr) var(--ctl) 5rem 3.875rem 4.125rem;align-items:center;gap:0.5rem;padding:0.125rem 0.25rem 0.125rem 0.5rem;border-bottom:1px dashed #222227;min-height:2rem}
+.crow.noctl{grid-template-columns:2.5rem 1.5rem minmax(0,1fr) 5rem 3.875rem 4.125rem}
+.crow.tm{background-image:linear-gradient(90deg,color-mix(in srgb,var(--t1) 8%,transparent) 0,color-mix(in srgb,var(--t1) 3.5%,transparent) 32%,color-mix(in srgb,var(--t2) 2.5%,transparent) 100%);box-shadow:inset 0.1875rem 0 var(--t1)}
+.crow i{font-style:normal;font-weight:400;font-size:0.5938rem;color:var(--mu);margin-right:0.25rem}
+.sl{font-weight:800;font-size:0.6875rem;text-align:center;padding:0.125rem 0;border:1px solid #ffb00066;color:var(--am)}
+.logo.sm{width:1.375rem;height:1.375rem}
+.sn b{display:block;font:600 0.8438rem "Space Grotesk",sans-serif}.sn small{color:var(--mu);font-size:0.6563rem}
+.sn1{display:flex;align-items:center;gap:0.375rem;min-width:0}.sn1 .pos{flex-shrink:0}
+.crow.empty .sn b{color:var(--dim);font-weight:500}
+.crow.locked .sl{background:var(--gr);border-color:var(--gr);color:#000}.lkd{color:var(--gr)}
+.so{text-align:right;font-size:0.75rem;color:var(--bl);white-space:nowrap}
+.ss{text-align:right;font-size:0.7813rem;color:var(--mu);white-space:nowrap}.sp{text-align:right;font-weight:800;color:var(--am);white-space:nowrap}
+.cap{margin-top:0.625rem}
+.capbar{height:0.25rem;background:#ffffff0d}.capbar i{display:block;height:100%;background:var(--am);box-shadow:0 0 0.625rem var(--am)}
+.capbar.over i{background:var(--rd);box-shadow:0 0 0.625rem var(--rd)}
+.overcap,.overcap b{color:var(--rd)}
+.dropnote{margin:0 0 0.75rem;padding:0.375rem 0.75rem;border:1px solid #ffb00055;background:#ffb00010;color:var(--am);font-size:0.75rem}
+.capt{display:flex;justify-content:space-between;font-size:0.7188rem;color:var(--mu);margin-top:0.375rem}.capt b{color:var(--tx)}
+.act{margin:0.625rem 1rem 0.375rem}
+.act button{width:100%;padding:0.5rem;font-weight:800;font-size:0.8125rem;display:flex;align-items:center;justify-content:center;gap:0.4375rem}
+.go{border:0;background:var(--am);color:#000}
+.go:disabled{background:#ffffff14;color:var(--dim);cursor:not-allowed}
+.actnote{margin:0 1rem 0.75rem;font-size:0.7188rem;color:var(--dim)}
+.none{color:var(--dim);font-size:0.75rem}
+/* One sans family and one size on every player row and lineup row (standard D11); only the matchup's second line is smaller (A1), and the position and injury marks keep their own small boxes. */
+#tbody td,#tbody .name,#tbody td.proj,#tbody td.ton,#tbody td.fig,#tbody .v,#tbody .bump-fig,#tbody .limb,.crow,.crow .pn,.opt .crow .pn,.sn b,.so,.ss,.sp{font-family:"Space Grotesk",sans-serif;font-size:0.8438rem;font-variant-numeric:tabular-nums}
+#tbody .l2,.sn small{font-family:"Space Grotesk",sans-serif}
+#tbody .st,.crow .pos,.crow .st,.crow .sl,.crow i{font-family:"Space Grotesk",sans-serif}
+/* Optimizer settings, lineup switcher, actions and saved list (panel.js); every rule is scoped to the panel. */
+.opt input,.opt select{color:var(--tx);letter-spacing:0;text-transform:none}
+.opt input:focus,.opt select:focus{outline:none;border-color:var(--am)}
+.opt input.bad{border-color:var(--rd);color:var(--rd)}
+.opt .teams{display:flex;align-items:center;gap:0.5rem;padding:0.25rem 1rem;border-bottom:1px solid var(--ln);font-size:0.6875rem;color:var(--dim);white-space:nowrap}
+.opt .teams input,.opt .ovf input{width:2.75rem;background:var(--p2);border:1px solid var(--ln);padding:0.1875rem 0.375rem;font-size:0.8125rem;text-align:right}
+.opt .teams{color:var(--mu);font-size:0.7188rem}
+.opt .tl{display:flex;align-items:center;gap:0.375rem}
+.opt .ovs{display:flex;flex-wrap:wrap;gap:0.375rem}
+.opt .ovc{display:inline-flex;align-items:center;border:1px solid var(--am);color:var(--am);font-weight:700;font-size:0.6875rem;padding:0.0625rem 0.125rem 0.0625rem 0.4375rem}
+.opt .ovc button{border:0;background:none;color:var(--mu);min-width:1.5rem;min-height:1.5rem;padding:0;font-size:0.75rem}.opt .ovc button:hover{color:var(--rd)}
+.opt .ov{margin-left:auto;border:0;background:none;color:var(--am);font-size:0.6875rem;font-weight:700;padding:0}
+.opt .ov:disabled{color:var(--dim);cursor:default}
+.opt .ovf{display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem;padding:0.4375rem 1rem;border-bottom:1px solid var(--ln);font-size:0.6875rem;color:var(--dim);white-space:nowrap;background:var(--p2)}
+.opt .ovf select{background:var(--p);border:1px solid var(--ln);padding:0.1875rem 0.375rem;font-weight:700}
+.opt .ovf>button{background:none;border:1px solid var(--am);color:var(--am);padding:0.1875rem 0.625rem;font-weight:700;font-size:0.6875rem}
+.opt .ovf>button[data-op="ovcancel"]{border-color:var(--ln);color:var(--mu)}
+.opt .ovf>button:hover{background:#ffb00014}
+.opt .ovf .seg button{padding:0.1875rem 0.625rem;font-size:0.6875rem}
+.opt .ovmsg{color:var(--rd);white-space:normal}
+.opt .setmsg{padding:0.3125rem 1rem;border-bottom:1px solid var(--ln);color:var(--rd);font-size:0.7188rem;white-space:normal}
+.opt .luh{align-items:center;padding-top:0.375rem}.opt .luh>span:first-child{color:var(--tx);font-weight:700}
+.opt .unp{font-style:normal;font-size:0.5938rem;font-weight:800;color:var(--am);border:1px solid #ffb00066;padding:0 0.3125rem;margin-left:0.5rem;letter-spacing:0.0375rem}
+.opt .sw{display:flex;border:1px solid var(--ln)}
+.opt .sw button{border:0;background:none;min-width:1.5rem;padding:0 0.375rem;height:1.5rem;font-size:0.6875rem;font-weight:800;color:var(--mu)}
+.opt .sw button.on{background:var(--am);color:#000}.opt .sw button:disabled{color:var(--dim);cursor:default}
+.opt .sn{min-width:0}.opt .sn b,.opt .sn small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.opt .lkb{background:var(--p2);border:1px solid #2a2a30;color:var(--mu);width:1.5rem;height:1.5rem;padding:0;display:inline-grid;place-items:center}
+.opt .lkb:hover{color:var(--gr);border-color:var(--gr)}
+.opt .crow.stale .sn b{color:var(--rd);font-weight:500}
+.opt .capt{white-space:nowrap}
+.opt .capt .none{white-space:normal}
+.opt .act{margin:0.5rem 1rem 0.375rem}
+/* Build stays in view the whole length of the table (Adam 6:34 PM 11-19): the buttons stick right under the sticky lineup band (--luh, board.js stickyHeights), on the panel's own background. */
+.opt>.act{position:sticky;top:calc(var(--luh,0rem) - 0.25rem);z-index:2;margin:0;padding:0.5rem 1rem 0.5rem;background:var(--p);border-bottom:1px solid var(--ln)}
+.opt .act .gorun{display:flex;flex-wrap:wrap;gap:0.5rem}
+.opt .act .gorun .gomsg{flex:0 0 100%;font-size:0.7188rem;color:var(--am);white-space:normal}.opt .act .gorun .gomsg.err{color:var(--rd)}
+.opt .act .gorun .go{flex:1;width:auto;min-width:0}
+.opt .act .gorun .go:disabled{color:var(--tx)}
+.opt .act .gorun button.stop{flex:none;width:6rem}
+.gorun button{text-transform:none;letter-spacing:0}
+.opt .act .two{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.5rem}
+.opt .act button.ol{background:none;border:1px solid var(--am);color:var(--am);padding:0.375rem;font-size:0.75rem}
+.opt .act button.ol:disabled{border-color:var(--ln);color:var(--dim);cursor:not-allowed}
+.opt .actnote{white-space:normal;margin-bottom:0.375rem;color:var(--am)}
+.opt .actnote.err{color:var(--rd)}
+.opt .actnote.wrap{white-space:normal}
+.opt .sk{border:0;background:none;padding:0;color:var(--mu);font-size:0.7188rem}
+.opt .skl{margin:0 1rem 0.625rem;padding:0.375rem 0.625rem;list-style:none;border:1px solid var(--ln);font-size:0.6875rem;color:var(--mu)}
+.opt .skl li{white-space:normal;padding:0.0625rem 0}
+.opt .sec{padding:0.3125rem 1rem 0.1875rem;border-top:1px solid var(--ln);font-size:0.6875rem;color:var(--dim);font-weight:700}
+.opt .sec.sethd{border-top:0;color:var(--tx)}
+.opt .saved{padding:0 1rem 0.75rem}
+/* The saved cards (saved-panel.js, optimizer standard A5, A12): the result card's box and rows, with a tick for the DK file, the Cash or GPP mark and when it was saved. */
+.opt .sec.svh{display:flex;align-items:center;justify-content:space-between;gap:0.75rem}
+.opt .svh button{background:none;border:1px solid var(--am);color:var(--am);font-size:0.6563rem;font-weight:800;padding:0.125rem 0.625rem;min-height:1.5rem}
+.opt .svh button:disabled{border-color:var(--ln);color:var(--dim);cursor:not-allowed}
+.opt .svt{display:inline-flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:400}
+.opt .svt input{width:0.875rem;height:0.875rem;margin:0;accent-color:var(--am);cursor:pointer}
+.opt .svt .t{font-size:0.7188rem;color:var(--mu)}
+/* A saved card's letter, name and rename (standard D8). */
+.opt .svn{display:flex;align-items:center;gap:0.5rem;padding:0 0 0.3125rem;font-size:0.7813rem;font-weight:700;color:var(--tx);position:relative}
+.opt .svl{font-weight:800;font-size:0.6563rem;min-width:1.25rem;text-align:center;border:1px solid var(--ln);color:var(--mu);padding:0.0625rem 0.25rem}
+.opt .svn button{background:none;border:1px solid var(--ln);color:var(--mu);font-size:0.6563rem;font-weight:700;min-height:1.5rem;padding:0 0.5rem;margin-left:auto}
+.opt .svn button:hover{color:var(--tx);border-color:var(--am)}
+.opt .svn input{flex:1;min-width:0;background:var(--p);border:1px solid var(--am);color:var(--tx);padding:0.125rem 0.375rem;font-size:0.7813rem}
+.opt .svn .ed-hint{position:static;flex:none}
+.opt .md{font-weight:800;font-size:0.6563rem;text-align:center;border:1px solid #ffb00066;color:var(--am);padding:0.0625rem 0.5rem}.opt .md.cash{border-color:#39e58c66;color:var(--gr)}
+.opt .lch .unp{margin-right:auto}
+.opt .lch button.sm.x{border-color:#ff4d5e66;color:var(--rd)}
+/* Late swap mode (lateswap-panel.js, board.js): the header switch, the panel's frozen / pinned / open slots, the slot pickers.
+   Frozen (game started) is blue, pinned by hand is amber; the slot is the one .crow, with a wider control column.
+   Rules below are scoped to mode-only classes, so with the mode off the page is unchanged. */
+.lsw{display:flex;align-items:center;gap:0.375rem;background:none;border:1px solid var(--ln);padding:0.25rem 0.625rem;font-weight:700;font-size:0.7188rem;color:var(--mu)}
+.lsw:hover{color:var(--tx);border-color:var(--mu)}
+.lsw.on{background:var(--bl);border-color:var(--bl);color:#000}
+.lslot{--ctl:3.125rem}
+.lslot.frz .sl{background:var(--bl);border-color:var(--bl);color:#000}.lslot.frz .pn{color:var(--bl)}
+.lslot.pnd .sl{background:var(--am);border-color:var(--am);color:#000}
+.frzm{display:inline-grid;place-items:center;width:1.5rem;height:1.5rem;border:1px solid var(--bl);color:var(--bl)}
+.unpin{display:inline-flex;align-items:center;gap:0.1875rem;height:1.5rem;padding:0 0.3125rem;background:none;border:1px solid var(--am);color:var(--am)}
+.crow .unpin i{font-weight:800;font-size:0.75rem;color:inherit;margin:0}.unpin:hover{background:#ffb00022}
+.psel,.rpin{height:1.5rem;background:var(--p2);border:1px solid var(--ln);font-size:0.6563rem;font-weight:700;padding:0 0.125rem;color:var(--mu);vertical-align:middle}
+.psel{width:3.125rem}
+/* In the mode the row's slot picker takes the lock button's 24px box, so the control cell keeps its width and nothing moves on toggle. */
+.rpin{appearance:none;-webkit-appearance:none;width:1.5rem;padding:0;font-size:0.5313rem;text-align:center;text-align-last:center;cursor:pointer}
+.psel:disabled,.rpin:disabled{opacity:.5;cursor:not-allowed}
+.psel:focus-visible,.rpin:focus-visible{outline:1px solid var(--am);outline-offset:1px}
+td.ctl.ls button{vertical-align:middle}
+tr.started td{opacity:.32}tr.started td.pl{opacity:.55}
+tr.started td.ctl button{visibility:hidden}
+.opt .lslocks{display:flex;flex-wrap:wrap;align-items:center;gap:0.375rem;margin-top:0.5rem;font-size:0.6875rem;color:var(--mu)}
+.opt .lslocks .ovc{border-color:var(--gr);color:var(--gr)}
+.unpin:disabled{opacity:.5;cursor:not-allowed}
+.toast{position:fixed;left:50%;bottom:1.5rem;transform:translateX(-50%);background:var(--p2);border:1px solid var(--am);color:var(--am);font-weight:700;font-size:0.75rem;padding:0.5rem 0.875rem;z-index:16;white-space:normal;max-width:min(26.25rem,90vw);pointer-events:none}
+.toast.err{background:var(--rd);border-color:var(--rd);color:#000}
+.fatal{padding:2.5rem;color:var(--rd)}
+/* One scale for the whole page on a wide screen: header, games strip, table and optimizer grow together; every box keeps its natural width. */
+/* No page zoom: the type is set in real pixels so a very large monitor shows a dense page (the board's JS reads body zoom as 1). */
+/* The page fits a laptop width (standard A15): the panel's column gives way first (.work), then it goes over the table, where its band has no table beside it to stay with. */
+@media (max-width:1830px){.work{grid-template-columns:minmax(0,1fr)}.pool{grid-column:1;grid-row:2}.opt{grid-column:1;grid-row:1;align-self:start}.lu{position:static}}

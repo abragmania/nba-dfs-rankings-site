@@ -1,0 +1,140 @@
+/* The board's stylesheet, part 3 of 4: the player panel (card.js: its game log, seasons, usage chart and one-column card). Split from board.css (global rule: a file over 600 lines is split); the bodies are board.css's, unchanged. index.html links board.css, optimizer-panel.css,
+   player-card.css and board-cells.css one after another in that order, so the cascade is board.css's. G71: every size in rem off the root (board.css). */
+/* Player panel (card.js, Layout A+C): docked on the right edge. The page keeps its own scroll and gives the panel its width (it is fixed at right:0, which is the inside edge of the page's scroll bar).
+   While it is open the working lineup's column gives way (as Full screen does) and the table's cells close up a little, so the table keeps the room beside the panel. */
+:root{--cardw:clamp(37.5rem,30vw,48.75rem)}
+body.card-docked{padding-left:clamp(0.875rem,1.2vw,2.5rem);padding-right:calc(var(--cardw) + clamp(0.875rem,1.2vw,2.5rem))}
+body.card-docked .work{grid-template-columns:minmax(0,1fr)}
+body.card-docked aside.opt{display:none}
+body.card-docked .pool{grid-row:1;min-width:0}
+body.card-docked #thead th,body.card-docked #tbody td{padding-left:0.375rem;padding-right:0.375rem}
+body.card-docked #thead th.num,body.card-docked #tbody td.num,body.card-docked #tbody td.pl{padding-left:0.3125rem;padding-right:0.3125rem}
+body.card-docked #thead th:last-child,body.card-docked #tbody td:last-child{width:auto}
+.optstrip{display:none}
+body.card-docked .optstrip{display:flex;align-items:center;gap:1.125rem;border:1px solid var(--ln);background:var(--p);padding:0.375rem 0.75rem;margin-bottom:0.5rem;font-size:0.75rem;color:var(--mu);white-space:nowrap}
+.optstrip b{color:var(--tx)}.optstrip .osh{color:var(--am);letter-spacing:0.0625rem}
+.optstrip .osgrow{flex:1}
+.optstrip .osseg{display:inline-flex;border:1px solid var(--ln)}
+.optstrip .osseg button{background:none;border:0;border-right:1px solid var(--ln);padding:0.1875rem 0.75rem;font-weight:700;font-size:0.7188rem;color:var(--mu)}
+.optstrip .osseg button:last-child{border-right:0}.optstrip .osseg button.on{background:var(--am);color:#000}
+.optstrip button.oslu,.optstrip button.osgo{background:none;border:1px solid var(--bd,var(--ln));padding:0.1875rem 0.875rem;font-weight:700;font-size:0.75rem;color:var(--mu)}
+.optstrip button.oslu:hover{color:var(--tx);border-color:var(--mu)}
+.optstrip button.osgo{border-color:var(--am);color:var(--am)}.optstrip button.osgo:disabled{opacity:.6;cursor:progress}
+body.light .optstrip .osseg button.on{color:#fff}
+.pbody>*{flex:none}
+.card{--bar:#4a4f5c;position:fixed;top:0;right:0;bottom:0;width:var(--cardw);z-index:15;display:flex;flex-direction:column;background:var(--p);border-left:1px solid var(--ln)}
+.card[hidden]{display:none}
+.pbody{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#3a3a42 transparent;display:flex;flex-direction:column;gap:0.75rem;padding:0.75rem 0 1rem}
+.card .psec,.card .two,.card .psrc{margin:0 1rem}
+.card h3{margin:0 0 0.375rem;font-size:0.6563rem;letter-spacing:0.075rem;color:var(--dim);text-transform:uppercase;font-weight:700}
+/* Every section heading in the panel reads as the h3 above: the sec lines (game log, Seasons, Role and minutes) and the Efficiency heading. */
+.card .sec,.card .ue-hd b{font:700 0.6563rem/1.35 "JetBrains Mono",monospace;letter-spacing:0.075rem;color:var(--dim);text-transform:uppercase}
+.card .tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0.5rem}
+.card .tile{border:1px solid var(--ln);background:var(--bg);padding:0.375rem 0.625rem;min-width:0}
+.card .tile small{display:block;color:var(--mu);font-size:0.6563rem;white-space:nowrap}
+.card .tile b{font-size:1.125rem;font-weight:700;white-space:nowrap}.card .tile b.gr{color:var(--gr)}.card .tile b.rd{color:var(--rd)}
+.card .tile em{font-style:normal;font-size:0.6875rem;color:var(--mu);margin-left:0.25rem;font-weight:500}
+.card .tile span{display:block;color:var(--dim);font-size:0.6563rem;white-space:nowrap}
+.card .tgap{margin-top:0.375rem;color:var(--rd);font-weight:700;font-size:0.7188rem}
+.card .two{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:1rem;align-items:start}
+.card .news{border:1px solid var(--ln);padding:0.5rem 0.75rem;font-size:0.7813rem;background:var(--bg);overflow-wrap:anywhere}
+.card .news .pill{display:inline-block;background:#ffb00022;color:var(--am);font-weight:700;padding:0 0.5rem;border-radius:0.5625rem;margin-right:0.375rem;font-size:0.6875rem}
+.card .news small{color:var(--mu)}.card .news .nbody{margin-top:0.3125rem;white-space:normal}.card .news .mu,.card .news .nbody.mu{color:var(--mu)}
+.card .chart{display:flex;align-items:flex-end;gap:0.3125rem;height:6.5rem;border-bottom:1px solid var(--ln)}
+.card .bar{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:100%}
+.card .bar i{display:block;width:100%;max-height:calc(100% - 1rem);background:var(--bar)}.card .bar i.hi{background:var(--gr)}
+.card .bar span{text-align:center;font-size:0.625rem;color:var(--mu);margin-bottom:0.125rem}
+.card .psrc{color:var(--dim);font-size:0.6875rem}
+@media (min-width:2641px){.card .chart{height:8.125rem}.card .tile{padding:0.5rem 0.75rem}.card .tile b{font-size:1.25rem}.pbody{gap:1rem;padding-top:1rem}}
+.logo.xl{width:2.25rem;height:2.25rem}
+.chipx.xl{width:2.25rem;height:2.25rem}
+.ch{display:flex;flex-wrap:wrap;align-items:center;gap:0.625rem;padding:0.5625rem 1rem;border-bottom:1px solid var(--ln);background:linear-gradient(90deg,color-mix(in srgb,var(--t1) 13%,transparent),color-mix(in srgb,var(--t1) 3%,transparent) 60%,transparent);box-shadow:inset 0.1875rem 0 var(--t1)}
+.ch>.logo,.ch>.chipx{flex-shrink:0}
+.ch .id{flex:1;min-width:0}.ch .l1{gap:0.5625rem;min-width:0}.ch .l1 .st{flex-shrink:0}
+/* A long name ends in an ellipsis inside .id, which stops 12px (the .ch gap) short of LOCK. */
+.nm2{font:700 1.125rem "Space Grotesk",sans-serif;letter-spacing:-0.0125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ch .l2{display:flex;align-items:center;gap:0.625rem;font-size:0.75rem;margin-top:0.25rem;color:var(--mu);white-space:nowrap}
+.ddtd b{color:var(--tx);font-weight:700}
+.acts{display:flex;gap:0.375rem;flex-shrink:0}
+.acts button{display:flex;align-items:center;gap:0.375rem;padding:0.3125rem 0.625rem;font-weight:800;font-size:0.7188rem;background:none;border:1px solid}
+.a-lk{border-color:var(--gr)!important;color:var(--gr)}.a-lk:hover,.a-lk.on{background:#39e58c1f}
+.a-ex{border-color:var(--rd)!important;color:var(--rd)}.a-ex:hover,.a-ex.on{background:#ff4d5e1f}
+.close{flex-shrink:0;height:2rem;padding:0 0.625rem;display:flex;align-items:center;gap:0.5rem;border:1px solid var(--ln);background:none;color:var(--mu);align-self:flex-start}
+.close kbd{font:700 0.5938rem "JetBrains Mono";letter-spacing:0.05rem;color:var(--dim)}
+.close:hover{color:var(--tx);border-color:var(--mu)}
+.sec{padding:0.5rem 1rem 0.1875rem;font-size:0.6875rem;color:var(--dim);font-weight:700}
+.log{margin:0.375rem 1rem 0;width:calc(100% - 2rem)}
+.log th{padding:0.25rem 0.4375rem;cursor:default;font-size:0.6563rem}.log th.l{text-align:left}.log th.s{color:var(--am)}
+.log td{padding:0.125rem 0.4375rem;font-size:0.7813rem;border-bottom:1px solid #18181c}
+.log td.d{text-align:left;color:var(--mu)}.log td.o{text-align:left}.log td.r{text-align:left;font-size:0.7188rem}
+.log td.w{color:var(--gr)}.log td.l{color:var(--rd)}
+.log th.gs,.log td.gs{width:1%;padding:0.125rem 0.25rem;text-align:center}.log td.gs.on{color:var(--am);font-weight:800;font-size:0.6875rem}.log td.gs.no{color:var(--dim)}.gsnote{margin:0.25rem 1rem 0;font-size:0.6563rem;color:var(--dim)}
+.log td.k{color:var(--am);font-weight:800}
+.log tbody tr:nth-child(even) td{background:#ffffff04}
+.cardmsg{margin:0.625rem 1rem 0.375rem;padding:0.875rem;border:1px dashed var(--ln);color:var(--mu);font-size:0.7813rem}
+.cardmsg.err{border-color:#ff4d5e55;color:var(--rd)}
+.src{padding:0.625rem 1rem 0.875rem;font-size:0.6563rem;color:var(--dim)}
+/* Card usage section (card-usage.js, card-chart.js): "Efficiency and role" chart, past-seasons table, USG% log cells.
+   The card scrolls inside itself once the chart makes it taller than the screen, as the optimizer panel does. */
+.log td.u{color:var(--mu)}
+.ue{margin:0.375rem 1rem 0;padding-top:0.75rem;border-top:1px solid var(--ln)}
+.ue-hd{display:flex;align-items:center;gap:0.625rem;margin-bottom:0.5rem}
+.ue-grow{flex:1}
+.ue-seg{display:flex;border:1px solid var(--ln)}
+.ue-seg button{padding:0.25rem 0.75rem;font-weight:700;font-size:0.7188rem;color:var(--mu);background:none;border:0;border-right:1px solid var(--ln)}
+.ue-seg button:last-child{border-right:0}
+.ue-seg button.on{background:var(--am);color:#000}
+.ue-seg.sm button{padding:0.1875rem 0.5625rem;font-size:0.6563rem}
+.ue-tools{display:flex;align-items:center;gap:0.625rem;margin-bottom:0.375rem}
+.ue-note{color:var(--mu);font-size:0.6875rem}
+.ue-lgd{display:flex;gap:1rem;align-items:center;color:var(--mu);font-size:0.6875rem;margin-bottom:0.25rem;white-space:nowrap}
+.ue-lgd span{display:flex;align-items:center}.ue-lgd svg{margin-right:0.3125rem}
+.ue-chart{position:relative}
+.ue-svg{display:block;overflow:visible;outline:none}
+.ue-svg text{font-family:"JetBrains Mono",Consolas,monospace}
+/* G71 exception: text inside the chart SVG is sized in the SVG's own units (viewBox 606 wide, scaled by the box), so these stay px; the box already grows with the root. */
+.ue-pt{fill:var(--tx);font-size:11.5px;font-weight:700}
+.ue-tk{fill:var(--mu);font-size:12px}
+.ue-xl{fill:var(--mu);font-size:12px}
+.ue-none{fill:var(--dim);font-size:11px}
+.ue-grid{stroke:#ffffff10;stroke-width:1}
+.ue-base{stroke:var(--ln);stroke-width:1}
+.ue-up{fill:var(--gr);opacity:.16}.ue-dn{fill:var(--rd);opacity:.2}
+.ue-lg{stroke:var(--mu);stroke-width:1.5;stroke-dasharray:5 4;fill:none}
+.ue-avg{stroke-width:1.25;opacity:.6}
+.ue-ln{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.ue-now{fill:var(--tx);font-size:12px;font-weight:800}
+.ue-rl{fill:var(--mu);font-size:11.5px}
+.ue-lead{fill:none;stroke:var(--dim);stroke-width:1}
+.ue-mv{stroke:var(--mu);opacity:.8;stroke-dasharray:2 3}
+.ue-mvt{fill:var(--tx);font-size:11.5px;font-weight:700}
+.ue-xh{stroke:var(--tx);opacity:.3;stroke-dasharray:2 3}
+.ue-tip{position:absolute;z-index:3;width:15rem;background:var(--p2);border:1px solid #3a3a42;padding:0.4375rem 0.625rem;font-size:0.6875rem;line-height:1.5;box-shadow:0 0.625rem 1.875rem #000c;pointer-events:none}
+.ue-tt{display:flex;justify-content:space-between;gap:0.5rem;font:700 0.75rem "Space Grotesk",sans-serif;margin-bottom:0.125rem}
+.ue-tt em{font:normal 0.6563rem "JetBrains Mono",monospace;color:var(--mu)}
+.ue-tt span,.ue-tt em{white-space:nowrap}
+.ue-tv{display:flex;align-items:center;gap:0.4375rem;font-size:0.8125rem;font-weight:700;margin-top:0.1875rem}
+.ue-tv i{display:inline-block;width:0.875rem;height:0.125rem}
+.ue-tv u{text-decoration:none;font-weight:400;font-size:0.6563rem;color:var(--mu)}
+.ue-tr{display:flex;justify-content:space-between;color:var(--mu);font-size:0.6563rem}
+.ue-tr b{color:var(--tx)}
+.ue-tn{color:var(--mu);font-size:0.6563rem;border-top:1px solid var(--ln);margin-top:0.25rem;padding-top:0.1875rem}
+.ue-warn{color:var(--am);font-size:0.6563rem;margin-top:0.25rem}
+.ue-src{color:var(--mu);font-size:0.6563rem;margin:0.5rem 0 0.125rem}
+.ue-tsrc{margin:0.375rem 1rem 0.75rem}
+.ue-tbl td.ue-l{text-align:left}
+.ue-tbl tr.tot td{color:var(--mu);font-style:italic}
+/* One-column card (card.js): the season's games in their own scroll box (about 8 rows, header row sticky), then the
+   seasons table, then the chart. */
+.card td,.card th{font-variant-numeric:tabular-nums}
+.hint{float:right;text-transform:none;letter-spacing:0;font-weight:500;color:var(--dim);font-size:0.6563rem}
+.logscroll{margin:0.375rem 1rem 0;max-height:15.3125rem;overflow-y:auto;border-bottom:1px solid var(--ln);scrollbar-width:thin;scrollbar-color:#3a3a42 transparent}
+.logscroll .log{margin:0;width:100%}
+.logscroll th{position:sticky;top:0;z-index:2}
+.logscroll .log tbody tr:last-child td{border-bottom:0}
+.logwarn{margin:0.5rem 1rem 0}
+.ue-seasons{padding-top:1.125rem}
+.sst td,.sst th{white-space:nowrap}
+.sst th.tm,.sst td.tm{padding-left:0.875rem}
+.sst tr.now td{background:#ffb0000d!important}
+.sofar{font-style:normal;font-size:0.5938rem;color:var(--am);margin-left:0.4375rem;letter-spacing:0.025rem;text-transform:uppercase}

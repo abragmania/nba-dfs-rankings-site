@@ -1,4 +1,4 @@
-// Adam 11-17 (11:40-11:58 AM): the team's bench-spot figures and the step that brings a team to 240, pure; tests/minutes_tiers.test.mjs. Runs in the browser too (console page), so nothing is imported from tools/.
+// Adam 11-17 (11:40-11:58 AM): the team's bench-spot figures and the step that brings a team to 240, pure; tests/minutes_tiers_*.test.mjs. Runs in the browser too (console page), so nothing is imported from tools/.
 //  Bench spot N: the team's per-game minutes of its Nth man off the bench this season (games before the night, each scaled to 240 with overtime out; a game with fewer than N bench men counts 0 for spot N).
 //  Fill (Adam 3:02 PM 11-18): under 240, the gap goes to the Bench+ men first (in proportion to their figures), then the plain bench (same, none above the team's lowest starter, R15), then the starters (same), each only up to his
 //  own ceiling (ownCeiling, Adam 3:03 PM 11-18: the mean of his top quarter of games this season, at most 36; typed minutes never enter, Adam 1:33 PM 11-17); still short, rounds of +1 to each starter, then +1 to each bench man, first

@@ -21,12 +21,14 @@ const WORD = { starter: "Starter", bench_plus: "Bench+", bench: "Bench" };
 export function badRoleMarks(marks, { stamped = true } = {}) {
   if (!Array.isArray(marks)) return "the role marks must be a list";
   if (marks.length > ROLE_MARKS_MAX) return `at most ${ROLE_MARKS_MAX} role marks`;
-  const seen = new Set(), fields = stamped ? ["key", "role", "at", "slate"] : ["key", "role", "at"];
+  const seen = new Set(), fields = stamped ? ["key", "role", "at", "slate", "replaces", "picked_at"] : ["key", "role", "at", "replaces"]; // picked_at: when the pick was made, stamped by the server as at is
   for (const m of marks) {
     if (!m || typeof m !== "object" || Array.isArray(m)) return "a role mark is not an object";
-    if (Object.keys(m).some((k) => !fields.includes(k))) return `a role mark holds only ${stamped ? "key, role, at and slate" : "key, role and at"}`;
+    if (Object.keys(m).some((k) => !fields.includes(k))) return `a role mark holds only ${stamped ? "key, role, at, slate, replaces and picked_at" : "key, role, at and replaces"}`;
     if (typeof m.key !== "string" || !KEY.test(m.key)) return "a role mark's key is not well formed";
     if (!MARK_ROLES.includes(m.role)) return `${m.key}'s role must be one of ${MARK_ROLES.join(", ")}`;
+    const pw = pickWhy(m);
+    if (pw) return `${m.key}'s ${pw}`; // the one-click pick (PROJECT.md, Starter marks)
     if (stamped ? !ISO.test(m.at ?? "") : m.at !== undefined && !ISO.test(m.at)) return `${m.key}'s mark has no well-formed time`;
     if (m.slate !== undefined && (typeof m.slate !== "string" || !SLATE.test(m.slate))) return `${m.key}'s mark names no well-formed slate`;
     const one = `${m.slate ?? ""}|${m.key}`;
@@ -36,10 +38,26 @@ export function badRoleMarks(marks, { stamped = true } = {}) {
   return null;
 }
 
-/** The marks to save: each kept mark keeps its time, a new or changed one takes `at`; every one is stamped with `slate`, the slate it was made on. prev (this slate's marks), next: [{ key, role, at? }]. Pure. */
+/** Why a mark's pick of whom he replaces is not well formed, or null: `replaces` another man's key on a Starter mark, `picked_at` an ISO time beside it. Pure. */
+export function pickWhy(m) { // the reason in plain words, naming no key: the caller says whose (a note names the man)
+  if (m?.replaces !== undefined && (typeof m.replaces !== "string" || !KEY.test(m.replaces) || m.replaces === m.key || m.role !== "starter")) return "pick of whom he replaces must name another man, on a Starter mark";
+  if (m?.picked_at !== undefined && (m.replaces === undefined || typeof m.picked_at !== "string" || !ISO.test(m.picked_at))) return "pick of whom he replaces has no well-formed time";
+  return null;
+}
+/** The mark without its pick (replaces, picked_at): a pick that cannot be used is left off its mark alone (store.js readStandingChart, minutes/route.js carryDamagedMarks). Pure. */
+export const withoutPick = ({ replaces: _r, picked_at: _p, ...rest }) => rest;
+
+/**
+ * The marks to save: a kept role keeps its time `at`, a new or changed role takes `at`; every one is stamped with `slate`, the slate it was made on. A pick (replaces) carries its own time, picked_at, kept
+ * while the pick stays and new when it changes: a pick never moves the role call's time, which the newest-call rule reads against the news and his flips (the review of 11-21, money).
+ * prev (this slate's marks), next: [{ key, role, at?, replaces? }]. Pure.
+ */
 export function stampMarks(prev, next, at, slate) {
   const was = new Map((prev ?? []).map((m) => [m.key, m]));
-  return next.map((m) => ({ key: m.key, role: m.role, at: was.get(m.key)?.role === m.role ? was.get(m.key).at : at, slate }));
+  return next.map((m) => {
+    const w = was.get(m.key), keep = w?.role === m.role, pick = m.replaces !== undefined ? { replaces: m.replaces, picked_at: w?.replaces === m.replaces && w.picked_at ? w.picked_at : at } : {};
+    return { key: m.key, role: m.role, at: keep ? w.at : at, slate, ...pick };
+  });
 }
 
 /**
@@ -86,7 +104,7 @@ export function staleMarksNote(stale, nameOf) {
 }
 
 /** One text for a team's saved marks, whatever their order: the console sends the one it read as `base`, and the route refuses a save over marks that moved since (409). Pure. */
-export const marksStamp = (marks) => JSON.stringify((marks ?? []).map((m) => [m.key, m.role, m.at ?? null]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
+export const marksStamp = (marks) => JSON.stringify((marks ?? []).map((m) => [m.key, m.role, m.at ?? null, ...(m.replaces !== undefined ? [m.replaces, m.picked_at ?? null] : [])]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
 
 /**
  * His mark on an Out man (the review of 11-18, money): it sets the role his absence takes away, for the pairing and his lost minutes (tiers.js pairReplaced). A Starter mark makes
@@ -108,6 +126,12 @@ export function marksById(marks, men) {
   return Object.fromEntries(men.filter((m) => m.key && byKey.has(m.key)).map((m) => [String(m.id), byKey.get(m.key)]));
 }
 
+/** His picks of whom a Starter mark replaces, by man id: { id: the replaced man's id (his chart key when no man of `men` has it) } for the men of `men` ([{ id, key }]) a Starter mark with `replaces` names. Pure. */
+export function picksById(marks, men) {
+  const idOf = new Map(men.filter((m) => m.key).map((m) => [m.key, String(m.id)]));
+  return Object.fromEntries((marks ?? []).filter((m) => m.role === "starter" && typeof m.replaces === "string" && idOf.has(m.key)).map((m) => [idOf.get(m.key), idOf.get(m.replaces) ?? m.replaces]));
+}
+
 /**
  * Tonight's five with his marks, the one rule the board's engine and the console share: pool (tonight's playing men in order, less those marked Bench+ or Bench), conf (the lineup pages' five over the pool,
  * or null), tops (the chart's top man at each position over the pool, or null), fill (a short pages' five filled position for position), flag(id) (TwoGun's starter flag), want (men marked Starter in the pool).
@@ -115,9 +139,9 @@ export function marksById(marks, men) {
  * (trimToFive: a Starter mark on a full five takes a starter's place, named; equal figures go by `pool`, tonight's order, unless orderOf says otherwise; atOf(id): when his call was made, for two calls in one column).
  * realIds: the five he would have with no mark (realFive); a man who starts only because a starter above him was marked off (his column's next man, the next TwoGun flag) is a fill man, not a real starter,
  * so a man marked Starter takes that place (path sweep 11-20: a swap of one man to Starter and one to Bench always leaves five). Omitted: as before, read on the pool.
- * Returns { base (chooseFive's, with the fill), five: Set of ids, notes }. Pure.
+ * Returns { base (chooseFive's, with the fill), five: Set of ids, notes, claims (trimToFive's) }. Pure.
  */
-export function fiveWithMarks({ pool, conf, tops, fill, flag, want, realIds = null, posOf = () => null, figOf = () => 0, orderOf = null, atOf = () => NaN, nameOf = (id) => id, whoseOf = () => "Your Starter mark" }) { // whoseOf(id): whose Starter call it is, for the note
+export function fiveWithMarks({ pool, conf, tops, fill, flag, want, realIds = null, posOf = () => null, figOf = () => 0, orderOf = null, atOf = () => NaN, nameOf = (id) => id, whoseOf = () => "Your Starter mark", pickOf = () => null, pickAtOf = () => NaN, callAtOf = () => NaN }) { // whoseOf(id): whose Starter call it is, for the note; pickOf, pickAtOf, callAtOf: trimToFive's
   const base0 = chooseFive(pool.map((id) => ({ id, starter_flag: flag(id) })), conf, tops, fill), isReal = (id) => (realIds ? realIds.includes(id) : conf?.ids?.length ? conf.ids.includes(id) : tops?.length ? tops.includes(id) : flag(id)); // chooseFive ignores an empty pages' five
   let base = base0;
   if (want.length) {
@@ -128,8 +152,8 @@ export function fiveWithMarks({ pool, conf, tops, fill, flag, want, realIds = nu
     base = { ...base0, ids: new Set([...five0, ...more]), note: [...cut, fillNote].filter(Boolean).join("; ") || null };
   }
   const at = (id) => { const i = pool.indexOf(id); return i < 0 ? Infinity : i; };
-  const { five, notes } = trimToFive(new Set([...base.ids, ...want]), want, { first: want.filter((y) => !isReal(y)), posOf, figOf, orderOf: orderOf ?? at, atOf, nameOf, whoseOf });
-  return { base, five, notes };
+  const { five, notes, claims } = trimToFive(new Set([...base.ids, ...want]), want, { first: want.filter((y) => !isReal(y)), posOf, figOf, orderOf: orderOf ?? at, atOf, nameOf, whoseOf, pickOf, pickAtOf, callAtOf });
+  return { base, five, notes, claims };
 }
 
 /**
@@ -138,31 +162,53 @@ export function fiveWithMarks({ pool, conf, tops, fill, flag, want, realIds = nu
  * man already in). While more than five start, a Starter call takes the place of the starter at his own column (posOf), else of the starter with the lowest figure (figOf); a man with a Starter call goes
  * only when none without one is left, and then too the one at his own column first, the older call of two there (atOf: ms, NaN unknown), else the lowest figure. Equal figures go by tonight's order
  * (orderOf: the later man first; unknown is latest), then by id, and the note says so. Each call claims once a round, and which claims next never hangs on the order the marks were made: a call with a
- * starter at his own column first, then the call whose man out has the lower figure, then by id. Returns { five: a new Set, benched: [ids], notes: one sentence per man benched, naming him }. Pure.
+ * starter at his own column first, then the call whose man out has the lower figure, then by id. Returns { five: a new Set, benched: [ids], notes: one sentence per man benched, naming him, claims }. Pure.
+ * pickOf(id): the man his Starter mark on `id` was picked to replace (the one-click pick, PROJECT.md Starter marks), or null. A pick is honoured first, while the man is still in the five and holds no
+ * Starter call newer than the pick (callAtOf(id): ms, when the Starter call in force on a man was made; pickAtOf(id): ms, when the pick on id's mark was made; NaN unknown); else the rule's choice stands
+ * and the sentence says the pick no longer applies, and a pick no claim used is said in a sentence of its own (G62). Picked claims go first, the newest pick first (the newest call wins), then by id.
+ * claims: { id: { gone, dflt (the rule's choice with no pick), picked, from: [the five men he could replace: the five with him less him, and the man he benched], more: [men his call benched in a later
+ * round, when more than ten men hold a call] } }: a call's first claim is its claim of record, and its later claims skip the pick (the review of 11-21).
  */
-export function trimToFive(five, want, { first = [], posOf = () => null, figOf = () => 0, orderOf = () => Infinity, atOf = () => NaN, nameOf = (id) => id, whoseOf = () => "Your Starter mark" } = {}) {
-  const out = new Set(five), benched = [], notes = [], claimed = new Set(), lead = new Set(first), look = { posOf, figOf, orderOf, atOf };
+export function trimToFive(five, want, { first = [], posOf = () => null, figOf = () => 0, orderOf = () => Infinity, atOf = () => NaN, nameOf = (id) => id, whoseOf = () => "Your Starter mark", pickOf = () => null, pickAtOf = () => NaN, callAtOf = () => NaN } = {}) {
+  const out = new Set(five), benched = [], notes = [], claimed = new Set(), lead = new Set(first), look = { posOf, figOf, orderOf, atOf, pickOf, pickAtOf, callAtOf }, claims = {};
   while (out.size > 5) {
     let callers = want.filter((id) => out.has(id) && !claimed.has(id)); // a call already benched by another claims nothing
     if (!callers.length) { if (!claimed.size) break; claimed.clear(); continue; } // round the calls again only when more than ten men hold one
     if (callers.some((id) => lead.has(id))) callers = callers.filter((id) => lead.has(id));
-    const c = callers.map((id) => claimOf(id, out, want, look)).sort((a, b) => b.same - a.same || olderFirst(a.at, b.at) || figOf(a.gone) - figOf(b.gone) || idOrder(a.id, b.id))[0];
+    const c = callers.map((id) => claimOf(id, out, want, look, Boolean(claims[id]))).sort((a, b) => b.picked - a.picked || (a.picked && b.picked ? newerFirst(pickAtOf(a.id), pickAtOf(b.id)) : 0) || b.same - a.same || olderFirst(a.at, b.at) || figOf(a.gone) - figOf(b.gone) || idOrder(a.id, b.id))[0]; // his picks first, the newest first, so the rule's choice for another call never takes his picked man before him
     claimed.add(c.id);
     out.delete(c.gone);
     benched.push(c.gone);
-    notes.push(`${whoseOf(c.id)} on ${nameOf(c.id)} takes ${nameOf(c.gone)}'s place in the five (${c.why})`);
+    if (claims[c.id]) claims[c.id].more.push(c.gone); else claims[c.id] = { gone: c.gone, dflt: c.dflt, picked: c.picked, more: [] }; // a later round adds to the claim of record, never replaces it
+    notes.push(`${whoseOf(c.id)} on ${nameOf(c.id)} takes ${nameOf(c.gone)}'s place in the five (${c.why})${c.stale ? `; your pick of ${nameOf(pickOf(c.id))} no longer applies: ${c.stale}` : ""}`);
   }
-  return { five: out, benched, notes };
+  for (const [id, cl] of Object.entries(claims)) cl.from = [...[...out].filter((y) => y !== id), cl.gone];
+  for (const id of want) if (pickOf(id) != null && !claims[id] && out.has(id)) notes.push(`Your pick of ${nameOf(pickOf(id))} for ${nameOf(id)}'s Starter mark is not used: nobody had to give up a place for him`);
+  return { five: out, benched, notes, claims };
 }
 const idOrder = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 const known = (t) => typeof t === "number" && !Number.isNaN(t); // a call's time in ms; Infinity: made on the page just now, the newest
+/** Two picks: the newer first; a known time before an unknown one; 0 when both are unknown or equal. */
+const newerFirst = (a, b) => (known(a) && known(b) ? (a === b ? 0 : a > b ? -1 : 1) : known(a) ? -1 : known(b) ? 1 : 0);
 /** Two claims on men who hold a Starter call: the one whose man's call is older first; 0 when either time is unknown or they are equal. */
 const olderFirst = (a, b) => (known(a) && known(b) && a !== b ? (a < b ? -1 : 1) : 0);
 /**
- * The man one Starter call (id) would bench, and why, in the note's words: { id, same (at his own column), gone, at (gone's call time when he holds a call at that column, else NaN), why }. A man with no
- * call at his column, else any man with none (the lowest figure), else a man with a call at his column (the older call, else the lowest figure), else any man with a call (the lowest figure). trimToFive's.
+ * The man one Starter call (id) benches, and why: his pick (pickOf) while it holds, else the rule's choice (ruleClaim), the pick's failure said in `stale`. { ...ruleClaim's, dflt (the rule's choice), picked,
+ * stale (why his pick no longer applies, or null) }. again: a later round's claim of a call that has claimed once, the rule's alone. trimToFive's.
  */
-function claimOf(id, out, want, { posOf, figOf, orderOf, atOf }) {
+function claimOf(id, out, want, look, again = false) {
+  const d = ruleClaim(id, out, want, look), p = again ? null : look.pickOf(id), rule = { ...d, dflt: d.gone, picked: false, stale: null };
+  if (p == null) return rule;
+  const theirs = look.callAtOf(p), mine = look.pickAtOf(id);
+  if (p === id || !out.has(p)) return { ...rule, stale: "he is not in the five" };
+  if (want.includes(p) && known(theirs) && known(mine) && theirs > mine) return { ...rule, stale: "his own Starter call is newer" }; // the newer call wins (Adam 7:28 PM 11-19): his Starter call against this pick
+  return { id, same: true, gone: p, at: NaN, why: "your pick", dflt: d.gone, picked: true, stale: null };
+}
+/**
+ * The man one Starter call (id) would bench by the rule, and why, in the note's words: { id, same (at his own column), gone, at (gone's call time when he holds a call at that column, else NaN), why }. A man with no
+ * call at his column, else any man with none (the lowest figure), else a man with a call at his column (the older call, else the lowest figure), else any man with a call (the lowest figure).
+ */
+function ruleClaim(id, out, want, { posOf, figOf, orderOf, atOf }) {
   const col = posOf(id), inCol = (ys) => (col ? ys.filter((y) => posOf(y) === col) : []), free = [...out].filter((y) => !want.includes(y)), calls = [...out].filter((y) => y !== id && want.includes(y));
   const sameFree = inCol(free), sameCall = free.length ? [] : inCol(calls), from = sameFree.length ? sameFree : free.length ? free : sameCall.length ? sameCall : calls;
   const where = sameFree.length || sameCall.length ? `the starter at his position, ${col}` : null;

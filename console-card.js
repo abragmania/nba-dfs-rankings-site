@@ -7,6 +7,8 @@ import * as M from "./console-moves.js";
 import { applyDirect } from "./console-applybox.js";
 import { marksOf, newsOwned } from "./console-marks.js";
 import { hashOf } from "./lineup-proposals.js";
+import { pickChoices, setPick } from "./console-picks.js";
+import { offWhy } from "./console-tipped.js";
 
 /** A step with its send held: the moves of a proposal and of the player card are not sent by themselves. */
 const heldBy = (c, fn) => { const was = c.holdSend; c.holdSend = true; try { return fn(); } finally { c.holdSend = was; } };
@@ -101,7 +103,7 @@ export function cardApi(c, ensure) {
   /** A move from the player card: held for its Apply, with where it started kept from the first one, so a refused Apply can take them all back. */
   const cardMove = (fn) => { c.cardStart ??= { base: M.histMark(c), sets: keepSets(c), carried: false }; return held(fn); };
   return {
-    /** { team, id, man, row (the scenario's row for him), moves (the five-starter rule's last moves on his team), saveErr, applied }, or null when he is not on any team of the slate. Throws when the console cannot load. */
+    /** { team, id, man, row (the scenario's row for him), moves (the five-starter rule's last moves on his team), saveErr, applied, pick (console-picks.js pickChoices's for him, or null) }, or null when he is not on any team of the slate. Throws when the console cannot load. */
     async manView(slate, who) {
       await ensure(slate);
       if (!c.model) throw new Error(c.loadError ?? "the console could not load");
@@ -110,7 +112,7 @@ export function cardApi(c, ensure) {
       const S = c.model.ST[hit.code];
       const row = calc(hit.T, S, S.outs).rows.find((r) => r.id === hit.p.id);
       const moves = c.G.roleMoves?.team === hit.code ? c.G.roleMoves.moved.map((m) => ({ ...m, name: hit.T.byId[m.id]?.name ?? m.id })) : [];
-      return { team: hit.code, id: hit.p.id, man: hit.p, row, moves, saveErr: c.saveErrs[hit.code] ?? null, applied: c.applied };
+      return { team: hit.code, id: hit.p.id, man: hit.p, row, moves, saveErr: c.saveErrs[hit.code] ?? null, applied: c.applied, pick: pickChoices(hit.T, S)[hit.p.id] ?? null, off: offWhy(c.inputs, hit.code) }; // pick: whom his Starter mark replaces (console-picks.js); off: his team's game has started, the card's controls disabled (console-tipped.js)
     },
     /** The scenario each team is on (lineupViewOf). Throws when the console cannot load. */
     async lineupView(slate) {
@@ -151,6 +153,7 @@ export function cardApi(c, ensure) {
     /** The player card's moves: held for its Apply (applyNow), never sent by themselves. */
     setRole: (team, id, role) => cardMove(() => M.setRole(c, team, id, role)),
     setPin: (team, id, k, v) => cardMove(() => M.setPin(c, team, id, k, v)),
+    setPick: (team, id, pickId) => cardMove(() => setPick(c, team, id, pickId)), // whom his Starter mark replaces; null: the rule's choice
     clearPin: (team, id, k) => cardMove(() => M.clearPin(c, team, id, k)),
     /** The board's Min and DK/m TON cells (board-marks.js): his typed number, sent at once. False when the man is Out in the console. */
     setMark: (team, id, k, v) => M.setPin(c, team, id, k, v),

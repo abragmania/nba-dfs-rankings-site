@@ -42,9 +42,9 @@ export function starterChip(v, latest, id, pullAt) {
 export const starterChipHtml = (chip) => (chip ? `<span class="schip ${chip.state}" title="${esc(chip.title)}">S</span>` : "");
 
 /** His typed minutes a later role change set aside (typed-aside.js): a small restore button in the undo chip's place; its hover says what happened. Nothing when none is set aside. */
-export const asideChipHtml = (id, mark) => (mark?.aside ? `<button class="cundo" type="button" data-mrestore="${esc(id)}" title="${esc(`${mark.aside.words.charAt(0).toUpperCase()}${mark.aside.words.slice(1)}. Click to use it again`)}">&#8617;</button>` : "");
-/** An undo chip on a Min (m) or DK/m TON (d) cell: one click drops his typed number. */
-export const undoChipHtml = (id, kind, mark) => (mark ? `<button class="cundo" type="button" data-unmark="${kind}" data-id="${esc(id)}" title="${esc(`Your typed ${kind === "m" ? "minutes" : "DK/min"}. ${liveText(kind, mark)}. Click to drop it`)}">&#8634;</button>` : "");
+export const asideChipHtml = (id, mark, off = null) => (mark?.aside ? `<button class="cundo" type="button" data-mrestore="${esc(id)}" title="${esc(off ?? `${mark.aside.words.charAt(0).toUpperCase()}${mark.aside.words.slice(1)}. Click to use it again`)}"${off ? " disabled" : ""}>&#8617;</button>` : "");
+/** An undo chip on a Min (m) or DK/m TON (d) cell: one click drops his typed number. off: his team's game has started (console-tipped.js startedWhy): disabled, the hover saying why. */
+export const undoChipHtml = (id, kind, mark, off = null) => (mark ? `<button class="cundo" type="button" data-unmark="${kind}" data-id="${esc(id)}" title="${esc(off ?? `Your typed ${kind === "m" ? "minutes" : "DK/min"}. ${liveText(kind, mark)}. Click to drop it`)}"${off ? " disabled" : ""}>&#8634;</button>` : "");
 
 /**
  * deps: { api, slate() -> the slate on show, console (boardView, setMark, dropMark, syncState), toast, pullAt() -> the pull's time text, onChange() (redraw rows),
@@ -52,7 +52,7 @@ export const undoChipHtml = (id, kind, mark) => (mark ? `<button class="cundo" t
  * Returns { refresh({ news }), of(id) -> { chip, m, d } or null, setPin(id, kind, v), drop(id, kind), reset(), over(row), flush() }. A typed number shows on his row at once (instant-pins.js).
  */
 export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onChange, noteEl = null, players = () => [], reload = async () => {}, restack = () => {}, timers = globalThis }) {
-  let view = null, latest = null, newsState = null, newsGen = 0, gen = 0, statusCards = new Map(), byId = new Map(), byFor = null;
+  let view = null, latest = null, newsState = null, newsGen = 0, gen = 0, statusCards = new Map(), byId = new Map(), byFor = null, lockLine = "";
   /** The problem with the lineup/news read, in words, or "" (shown with the send state above the list, so it is not only in the console log). */
   const newsProblem = () => (newsState?.failed ? `Lineup news could not be read: ${newsState.why}` : newsState?.stale ? `Lineup news is ${newsState.ageMin ?? "an unknown number of"} min old, so it is not used` : "");
   const note = () => { if (noteEl) { const bad = newsProblem(), html = api2.syncHtml() + (bad ? `<div class="syncnote err"><b>${esc(bad)}</b></div>` : ""); noteEl.innerHTML = html; noteEl.hidden = !html; } };
@@ -150,8 +150,13 @@ export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onC
         if (!a || !team) { toast("Nothing to bring back: he has no typed minutes set aside now.", "err"); return; }
         await api(`/api/minutes/${encodeURIComponent(slate())}/team/${encodeURIComponent(team)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "minutes", id: String(id), value: a.value }) });
         await reload();
-      } catch (e) { toast(`Your number was not brought back: ${e.message}`, "err"); }
+      } catch (e) {
+        if (e?.code === "MINUTES_LOCKED") { lockLine = `${p?.name ?? `DraftKings id ${id}`}'s typed minutes were not brought back: ${e.message}`; onChange(); return; } // the game started before the page knew: one foot line, never a toast (Adam 11-21; console-tipped.js)
+        toast(`Your number was not brought back: ${e.message}`, "err");
+      }
     },
+    /** The foot line for a restore the server refused because the team's game had started (board.js carriedRows), or "". */
+    lockLine: () => lockLine,
     /** His undo chip. A number of his not yet sent goes with it; one being written now lands first, so the undo is the last word (a promise then). */
     drop(id, kind) {
       instant.cancel(id, kind);
@@ -160,7 +165,7 @@ export function createBoardMarks({ api, slate, console: cons, toast, pullAt, onC
       dropNow(id, kind);
     },
     /** A new slate on show (board.js loadSlate, only when the slate's name changes): his numbers still on their way belong to the slate he left (instant-pins.js reset). */
-    reset: () => instant.reset(),
+    reset: () => { lockLine = ""; return instant.reset(); },
     /** A row with his typed numbers on their way laid on, as a copy (board-saves.js overlay asks this for every row). */
     over: (row) => instant.over(row),
     /** His numbers waiting in the line handed off now; resolves once the line is idle (a slate switch and a build wait on it). */

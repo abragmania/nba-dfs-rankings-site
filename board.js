@@ -33,6 +33,7 @@ import { createScenarioTab } from "./scenario-tab.js";
 import { createLogTab } from "./log-tab.js";
 import { createLineupBar } from "./lineup-bar.js";
 import { createBoardMarks } from "./board-marks.js";
+import { offWhy } from "./console-tipped.js";
 import { confirmedByGame } from "./game-borders.js";
 import { mountLateSwap, lateSwapNoChanged } from "./lsw-main.js";
 import { createOptStrip } from "./opt-strip.js";
@@ -54,7 +55,7 @@ const S = { slates: [], name: null, slate: null, players: [], byId: new Map(), p
  *  GPP keep separate locks and excludes), so the Player list, the card, the panel and every click show and change that mode's only. */
 const livePicks = () => picksOnBoard(S.picks[panel.mode()], S.byId);
 /** The foot rows for what is still carried from before Cash and GPP were kept apart: picks and the working lineup (none once each mode has saved its own). */
-const carriedRows = () => [["Picks", [carriedLine(S.picksFoot?.carried), troubleLine({ ...S.picksFoot, clashes: [...(S.picksFoot?.clashes ?? []), ...noPicks.notes()] }, "locks and excludes")]], ["Working lineup", [workCarriedLine(panel.workFoot()?.carried), troubleLine(panel.workFoot(), "working lineup")]], ["Thumbs and stars", marksLines(S.slate?.marks)]].map(([k, v]) => [k, v.filter(Boolean).join(" "), v[1] !== ""]).filter(([, v]) => v); // an unreadable or emptied mode in red (review 11-20)
+const carriedRows = () => [["Picks", [carriedLine(S.picksFoot?.carried), troubleLine({ ...S.picksFoot, clashes: [...(S.picksFoot?.clashes ?? []), ...noPicks.notes()] }, "locks and excludes")]], ["Working lineup", [workCarriedLine(panel.workFoot()?.carried), troubleLine(panel.workFoot(), "working lineup")]], ["Thumbs and stars", marksLines(S.slate?.marks)], ["Typed minutes", [boardMarks.lockLine(), ""]]].map(([k, v]) => [k, v.filter(Boolean).join(" "), v[1] !== ""]).filter(([, v]) => v); // an unreadable or emptied mode in red (review 11-20)
 /** Both modes' saved lists in one, for naming the men a new pull took off the slate (settleRoster). */
 const allSaved = () => ({ locked: [...new Set(PICK_MODES.flatMap((m) => S.picks[m].locked))], excluded: [...new Set(PICK_MODES.flatMap((m) => S.picks[m].excluded))] });
 /** What the Player list shows: his saved picks plus the men not playing tonight, excluded as a derived state (excluded.js, Adam 11-19: nobody leaves the pool). Saves always send livePicks. */
@@ -109,7 +110,7 @@ const scenarioConsole = createConsole({ el: $("console"), api, toast, colourOf: 
   news: { slateData: () => (S.slate ? { ...S.slate, players: S.players } : null), tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; } }, // the lineup news strip and Status column (same inputs as the News tab)
   onWork: () => { boardMarks.refresh({ news: false }); lineupBar.newsOnly(); } });
 // The console's word on each row (board-marks.js): the S chip, and his typed Min and DK/m TON with their undo chips; those cells write through the console.
-const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, reload: () => loadSlate(S.name), pullAt: () => pullOf(S.slate).label, players: () => S.players, restack: () => saves.restack(), onChange: () => { if (!S.slate) return; card.badge(); if (formHasFocus()) { S.rowsLater = true; return; } renderRows(); if (panel.swapOpen()) panel.render(); /* an open swap panel's marks and Use follow a guess starting or ending (round 2, item 3) */ }, noteEl: $("updline").insertAdjacentElement("beforebegin", Object.assign(document.createElement("div"), { hidden: true })) });
+const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenarioConsole, toast, reload: () => loadSlate(S.name), pullAt: () => pullOf(S.slate).label, players: () => S.players, restack: () => saves.restack(), onChange: () => { if (!S.slate) return; card.badge(); if (formHasFocus()) { S.rowsLater = true; return; } renderRows(); if (JSON.stringify(carriedRows()) !== S.carriedShown) renderSources(); if (panel.swapOpen()) panel.render(); /* an open swap panel's marks and Use follow a guess starting or ending (round 2, item 3) */ }, noteEl: $("updline").insertAdjacentElement("beforebegin", Object.assign(document.createElement("div"), { hidden: true })) });
 // The lineup bar above the list (lineup-bar.js): an Out or a confirmed start from the Monster, RotoWire and RotoGrinders pages applies itself through the console, with an undo X; a projected start is words only.
 const lineupBar = createLineupBar({ api, slate: () => S.name, players: () => S.players, slateData: () => S.slate, tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; }, console: scenarioConsole, toast, tryStore, tick: true, onLabel: (l) => { S.news = l; renderTop(); }, onModel: (m) => { const f = confirmedByGame(m); if (JSON.stringify(f) !== JSON.stringify(S.fives)) { S.fives = f; if (S.slate) renderGames(); } }, applyInPage: Boolean(globalThis.nbadfsSitePull) });
 const applyFullScreen = createFullScreen({ panel, tryStore, stickyHeights: () => stickyHeights(), fixTableWidth: () => fixTableWidth() }); // Full screen button (board-fullscreen.js)
@@ -383,7 +384,7 @@ function renderRows() {
   stickyHeights();
   $("cnt").textContent = `${rows.length} player${rows.length === 1 ? "" : "s"}${sortNote(keys, S.sort)}`;
   // A keyboard user keeps his place, and an open box what he typed: the rows redraw on every pick, save and answer from the server, only the rows whose markup changed (row-patch.js).
-  const x = { minSource: minSourceOf(S.slate), dash, when, colourOf, lock, ex, L, inl, blocks, limits: panel.limits(), marks: boardMarks.of, no, picksUnknown: livePicks().unreadable ?? null };
+  const x = { minSource: minSourceOf(S.slate), dash, when, colourOf, lock, ex, L, inl, blocks, limits: panel.limits(), marks: boardMarks.of, no, picksUnknown: livePicks().unreadable ?? null, offOf: (team) => offWhy({ slate: S.name, games: S.slate?.games, lock: S.slate?.lock }, team) }; // offOf: a tipped team's Min and DK/m TON shown, not typeable (console-tipped.js)
   editors.around(() => keepFocus($("tbody"), () => rowPatch.draw(rows.map((p) => ({ id: String(p.dk_id), html: rowHtml(p, keys, x) })), `<tr><td colspan="${keys.length}" class="nores">No players match.</td></tr>`)));
 }
 const rowPatch = createRowPatch($("tbody"));
@@ -510,7 +511,7 @@ $("tbody").addEventListener("change", (e) => rowPatch.forget(e.target.closest?.(
 // Never on a control: the star, lock and exclude cells, the name (it opens his card), the reset, the thumbs cell, an
 // editable figure, or an open editor. Not on a greyed row (A18), and not on the press that closed an editor (it only closes
 // it). In late swap mode a row click does nothing new (the mode's slot pickers pin men).
-const ROW_CONTROLS = "td.ctl, td.bmp, td.lim, button, input, select, a, [data-edit], .ovt, .bump-ctl";
+const ROW_CONTROLS = "td.ctl, td.bmp, td.lim, button, input, select, a, [data-edit], .coff, .ovt, .bump-ctl"; // .coff: a tipped team's Min or DK/m TON, shown not typeable (player-table.js): a click there is no row click
 $("tbody").addEventListener("click", (e) => {
   if (panel.lateSwap() || e.target.closest(ROW_CONTROLS) || editors.closedByPress()) return;
   const tr = e.target.closest("tr[data-row]");

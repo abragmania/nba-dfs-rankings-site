@@ -99,12 +99,12 @@ function createPicksLine({ S, api, toast, modeNow, renderRows, renderPick, rende
   async function sendPicks(name, mode, diff, full) {
     let out;
     const key = `${name}|${mode}`, url = `/api/slate/${encodeURIComponent(name)}/picks`;
-    let clashes = [], capped = null;
+    let clashes = [], capped = null, capOff = [];
     const his = () => Object.keys(diff).map(nameOf).join(", ");
     for (let round = 1; ; round++) {
       const k = known.get(key), laid = k ? capLocks(applyPickDiff(k.lists, diff), diff, k.lists) : { lists: full, dropped: [] }; // taken now, after the saves before it in the line answered
       const lists = laid.lists;
-      capped = laid.dropped.length ? capLine(mode, laid.dropped, k.lists.locked, nameOf) : null;
+      capped = laid.dropped.length ? capLine(mode, laid, k.lists, nameOf) : null; capOff = laid.dropped; // said at the page's foot, Picks row (G62)
       try {
         out = await api(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode, locked: lists.locked, excluded: lists.excluded, ...(k ? { base: k.base } : {}) }) });
         break;
@@ -122,7 +122,7 @@ function createPicksLine({ S, api, toast, modeNow, renderRows, renderPick, rende
       }
     }
     takeKnown(name, out); // this save's answer: what the next one in the line goes on
-    const lines = [clashes.length ? pickClashLine(mode, clashes, nameOf) : "", capped ?? ""].filter(Boolean).join(" ");
+    const stood = clashes.filter((x) => !capOff.includes(x.id)), lines = [stood.length ? pickClashLine(mode, stood, nameOf) : "", capped ?? ""].filter(Boolean).join(" "); // a lock the cap took off did not stand: only the cap line names him
     if (lines) clashLines.set(key, lines); else clashLines.delete(key);
     if (out?.replaced_unreadable) toast(out.replaced_unreadable, "err");
     if (name !== S.name) return;

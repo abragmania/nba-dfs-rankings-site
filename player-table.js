@@ -109,13 +109,14 @@ export function projTitle(p) {
 /** Why a man has no figure tonight, for the dash's hover. */
 export const noTonight = (p) => (typeof p.minutes !== "number" ? "no minutes in this pull, so no DK/min tonight" : p.minutes <= 0 ? "on 0 minutes, so no DK/min tonight" : "no projection in this pull, so no DK/min tonight");
 /** The Tonight cell: the figure, its arrow against the season's and both numbers on hover. */
-function tonightCell(p, col, dash, withWhy, mark) {
+function tonightCell(p, col, dash, withWhy, mark, off = null) { // off: his team's game has started (console-tipped.js): the figure shown, not typeable, the hover saying why
   const v = dkTonight(p);
   if (v === null) return `<td class="${col.cls}"><span class="cu"></span>${dash(noTonight(p))}</td>`;
   const season = p.dk_per_min, d = typeof season === "number" ? Math.round((v - season) * 100) / 100 : null;
   const yours = hisProj(p) || p.ovr?.steps || hisMin(p) ? " · from your projection or minutes set in the console" : "";
   const title = `${d === null ? `Tonight ${v.toFixed(2)}; no season figure to compare` : `Tonight ${v.toFixed(2)}, season ${season.toFixed(2)}, ${d > 0 ? "+" : ""}${d.toFixed(2)}`}${mark ? " · your typed DK/min" : yours}. Click to type his DK/min; Proj = Min × DK/min`;
   const arrow = d !== null && Math.abs(d) > TON_ARROW_BAND ? `<i class="ton-arr ${d > 0 ? "up" : "dn"}">${d > 0 ? "▲" : "▼"}</i>` : "";
+  if (off) return `<td class="${col.cls}" title="${esc(off)}"><span class="cu">${undoChipHtml(p.dk_id, "d", mark, off)}</span>${arrow}<span class="coff${mark ? " ctyped" : ""}">${v.toFixed(2)}</span></td>`;
   return `<td class="${col.cls}" title="${esc(withWhy(title))}"><span class="cu">${undoChipHtml(p.dk_id, "d", mark)}</span>${arrow}<span class="cedit${mark ? " ctyped" : ""}" data-edit="crate" data-id="${esc(p.dk_id)}">${v.toFixed(2)}</span></td>`;
 }
 /** The table's row order for sort { key, dir }: a blank figure goes last either way, ties by name. */
@@ -176,7 +177,7 @@ function figCell(k, p, x) {
   const also = x.why ?? "";
   const withWhy = (t) => (also ? `${t} · ${also}` : t);
   if (k === "projection") return `<td class="${col.cls}${struckOut(p) ? " ostruck" : ""}"${projTitle(p) || struckOut(p) ? ` title="${esc([projTitle(p), struckOut(p) ? "Your number is kept while he is Out; it counts once he is In" : ""].filter(Boolean).join(" · "))}"` : ""}>${bumpFigureHtml(p, struckOut(p) ? p.ovr.projection.toFixed(1) : v == null ? dash(p.proj_note ?? col.title) : v.toFixed(1), also)}</td>`; // struck: his kept number, the projection itself is 0 (round 2 item 4)
-  if (k === "dk_tonight") return tonightCell(p, col, dash, withWhy, x.mark?.d);
+  if (k === "dk_tonight") return tonightCell(p, col, dash, withWhy, x.mark?.d, x.off);
   if (k === "value" || k === "proj_own") {
     const own = k === "proj_own", typed = own && p.ovr?.proj_own != null;
     const edit = own ? ` data-edit="own" data-id="${esc(p.dk_id)}" title="${esc(withWhy(typed ? `Your number. Base ${p.base?.proj_own == null ? "none" : p.base.proj_own.toFixed(1) + "%"}; click to change it, or reset the row` : "Click to type your own projected ownership"))}"` : "";
@@ -211,7 +212,8 @@ function figCell(k, p, x) {
     // until then his number is still what the board and the optimizer use, and the cell says so (the lead's render check of 11-20)
     const aside = asideOnBoard(mk?.aside, v) ? mk.aside : !mk && asideOnBoard(p.ours?.min_aside && { ...p.ours.min_aside, fig: p.ours.minutes }, v) ? p.ours.min_aside : null, used = mk && !aside;
     const hover = used ? `Your typed minutes; ${tgText}. Click to change them` : applied && !aside ? `From the console; ${tgText}. Click to type his minutes` : "Click to type his minutes; Proj = Min × DK/min";
-    const gap = minGapOf(p), warn = gap ? `<i class="gapw" title="${esc(gapTitle(gap))}">⚠</i>` : "";
+    const gap = minGapOf(p), warn = gap ? `<i class="gapw" title="${esc(gapTitle(gap))}">⚠</i>` : "", off = x.off; // off: his team's game has started (console-tipped.js): shown, not typeable or stepped
+    if (off) return `<td class="${col.cls}" title="${esc(off)}"><span class="cu">${aside ? asideChipHtml(p.dk_id, { aside }, off) : mk ? undoChipHtml(p.dk_id, "m", mk, off) : ""}</span>${warn}${stepHtml(`<span class="coff${used ? " ctyped" : ""}" title="${esc(off)}">${v == null ? shown : wholeText(v)}</span>`, p.dk_id, p.team, true)}</td>`;
     return `<td class="${col.cls}"><span class="cu">${aside ? asideChipHtml(p.dk_id, { aside }) : mk ? undoChipHtml(p.dk_id, "m", mk) : ""}</span>${warn}${stepHtml(`<span class="cedit${used ? " ctyped" : applied ? " min-typed" : ""}" data-edit="cmin" data-id="${esc(p.dk_id)}" title="${esc(withWhy(hover))}">${v == null ? shown : wholeText(v)}</span>`, p.dk_id, p.team, v == null)}</td>`;
   }
   return `<td class="${col.cls}">${shown}</td>`;
@@ -226,13 +228,13 @@ const unknownPick = (id, kind, why) => `<button class="${kind === "lock" ? "lk" 
  * L (lateSwap view or null), inl (Set of the lineup on show, or null), blocks (Map of dk_id to why he cannot go into the
  * working lineup, or null: a greyed row, its figures and controls still there, standard A18), limits (dk_id to
  * his { min, max }, standard B10), marks(dk_id) (board-marks.js: his S chip and typed minutes and DK/min, or null), no (Set of the
- * open mode's NO men, no-picks.js, or null) }.
+ * open mode's NO men, no-picks.js, or null), offOf(team) (why his team's Min and DK/m TON can no longer be typed or stepped, its game started (console-tipped.js), or null) }.
  */
 export function rowHtml(p, keys, x) {
   const c = x.colourOf(p.team), id = esc(p.dk_id), L = x.L, dash = x.dash;
   const why = L ? null : x.blocks?.get(p.dk_id) ?? null;
   const lk = x.lock.has(p.dk_id), ex = x.ex.has(p.dk_id), no = Boolean(x.no?.has(p.dk_id)); // NO (no-picks.js): x.no is the open list, the late swap list in late swap mode
-  x = { ...x, mark: x.marks?.(p.dk_id) ?? null }; // the console's word on him (board-marks.js): S chip, typed minutes and DK/min
+  x = { ...x, mark: x.marks?.(p.dk_id) ?? null, off: x.offOf?.(p.team) ?? null }; // the console's word on him (board-marks.js): S chip, typed minutes and DK/min; off: his team's game has started (console-tipped.js), why
   const gone = L && L.started.has(p.dk_id) && !L.inLineup.has(p.dk_id);
   // Any started man's lock and exclude are off in the mode: excluding a frozen man would only make the build fail.
   const btn = (title) => (L && L.started.has(p.dk_id) ? ` disabled title="Game started"` : ` title="${title}"`);

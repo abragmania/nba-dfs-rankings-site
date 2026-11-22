@@ -5,6 +5,10 @@
 .msb:disabled{opacity:.35;cursor:default}
 /* the player list: the figure is a centred whole number between the buttons; it still opens to type on a click */
 #tbody .mstep>.cedit.cedit{min-width:2ch;padding:0 0.125rem;margin-right:0;text-align:center}
+/* a team whose game has started (console-tipped.js, player-table.js): its Min and DK/m TON shown as plain figures, not typeable, the buttons disabled */
+#tbody .coff{display:inline-block;min-width:2ch;padding:0 0.125rem;text-align:center;cursor:default}
+#tbody .coff.ctyped{color:var(--am);font-weight:700}
+#tbody .cundo:disabled{opacity:.45;cursor:default}
 /* the console: the Min column holds the two buttons and a narrower box (4rem before, 8rem with an undo chip) */
 #console input.fin.mfin{width:2.25rem;padding:0 0.125rem;text-align:center}
 #console .mstep .msb{height:1.875rem;width:1.25rem}

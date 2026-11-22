@@ -16,6 +16,7 @@ import { syncWords } from "./console-auto.js";
 import { nameChip, outNote, stripHtml } from "./console-news.js";
 import { absenceRow } from "./absence-view.js";
 import { chartModel, chartHtml, sourcesNote } from "./console-chart.js";
+import { pickChoices, pickLineHtml } from "./console-picks.js";
 
 export const TEAM_NAMES = {
   ATL: "Atlanta Hawks", BKN: "Brooklyn Nets", BOS: "Boston Celtics", CHA: "Charlotte Hornets", CHI: "Chicago Bulls", CLE: "Cleveland Cavaliers",
@@ -41,7 +42,9 @@ export function outUsage(p) {
   const v = isNum(p.usg_usual) ? p.usg_usual : isNum(p.usg) ? p.usg : null;
   return v === null ? `<span class="ousg cmiss" title="${esc(`no usage figure: ${p.missing?.usg ?? "missing"}`)}">—</span>` : `<span class="ousg" title="His usage %">${v.toFixed(1)}%</span>`;
 }
-const chip = (team, id, kind, mark, text) => `<button class="rv" type="button" data-undo="${kind}" data-id="${esc(id)}" data-team="${esc(team)}" title="${esc(`${mark.news ? `From the lineup news (${mark.news}). ` : ""}${liveText(kind, mark)}. Click to drop ${mark.news ? "it" : "your mark"}`)}">&#8634; ${esc(text)}</button>`;
+const chip = (team, id, kind, mark, text, off = null) => `<button class="rv" type="button" data-undo="${kind}" data-id="${esc(id)}" data-team="${esc(team)}"${hover(off, `${mark.news ? `From the lineup news (${mark.news}). ` : ""}${liveText(kind, mark)}. Click to drop ${mark.news ? "it" : "your mark"}`)}>&#8634; ${esc(text)}</button>`;
+/** A control's hover, or, once the team's game has started (off: console-tipped.js startedWhy), disabled with that hover instead (Adam 11-21: no refusal boxes). */
+const hover = (off, title) => (off ? ` disabled title="${esc(off)}"` : ` title="${esc(title)}"`);
 
 const SUFFIX = /^(?:jr\.?|sr\.?|ii|iii|iv|v)$/i;
 const lastName = (n) => { const w = String(n ?? "").trim().split(/\s+/); while (w.length > 1 && SUFFIX.test(w.at(-1))) w.pop(); return w.at(-1) ?? ""; };
@@ -110,12 +113,12 @@ export function usageText(r) {
 }
 
 /** A typed number box (minutes or DK/min) with its undo chip slot. */
-function numBox(team, r, k, mark) {
+function numBox(team, r, k, mark, off = null) { // off: the team's game has started (console-tipped.js): the box is read-only and its buttons disabled, the hover saying why
   const v = k === "m" ? r.min : r.rate, shown = k === "m" ? wholeText(v) : f2(v); // minutes show as the nearest whole minute, with the - and + buttons (min-step.js)
   const label = k === "m" ? "minutes" : "DK points per minute", usage = k === "d" ? `\n${usageText(r)}` : "";
-  const box = `<input class="fin${k === "m" ? " mfin" : ""}${mark && !(k === "m" && r.min_aside) ? " pin" : ""}" data-k="${k}" data-id="${esc(r.id)}" data-team="${esc(team)}" value="${shown ?? ""}"${k === "m" && isNum(v) ? ` data-exact="${Math.round(v * 1000) / 1000}"` : ""} inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="${esc(r.p.name)} ${label}" title="${esc(`${mark ? "Your number. " : ""}Type his ${label}; Enter keeps it. Projection = minutes x DK/min${usage}`)}"${shown === null ? ` placeholder="—"` : ""}>`;
-  const aside = k === "m" && r.min_aside ? `<button class="rv" type="button" data-restore="${esc(r.id)}" data-team="${esc(team)}" title="${esc(`${r.min_aside.words.charAt(0).toUpperCase()}${r.min_aside.words.slice(1)}. Click to use it again`)}">&#8617; ${esc(wholeText(r.min_aside.value) ?? "")}</button>` : ""; // Adam 9:46 AM 11-20 (typed-aside.js)
-  return `<span class="nb nb-${k}">${k === "m" ? stepHtml(box, r.id, team, r.out || shown === null) : box}<span class="cs">${aside || (mark ? chip(team, r.id, k, mark, k === "m" ? wholeText(mark.live) ?? "—" : f2(mark.live) ?? "—") : "")}</span></span>`;
+  const box = `<input class="fin${k === "m" ? " mfin" : ""}${mark && !(k === "m" && r.min_aside) ? " pin" : ""}" data-k="${k}" data-id="${esc(r.id)}" data-team="${esc(team)}" value="${shown ?? ""}"${k === "m" && isNum(v) ? ` data-exact="${Math.round(v * 1000) / 1000}"` : ""} inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="${esc(r.p.name)} ${label}" title="${esc(off ?? `${mark ? "Your number. " : ""}Type his ${label}; Enter keeps it. Projection = minutes x DK/min${usage}`)}"${shown === null ? ` placeholder="—"` : ""}${off ? " readonly" : ""}>`;
+  const aside = k === "m" && r.min_aside ? `<button class="rv" type="button" data-restore="${esc(r.id)}" data-team="${esc(team)}"${hover(off, `${r.min_aside.words.charAt(0).toUpperCase()}${r.min_aside.words.slice(1)}. Click to use it again`)}>&#8617; ${esc(wholeText(r.min_aside.value) ?? "")}</button>` : ""; // Adam 9:46 AM 11-20 (typed-aside.js)
+  return `<span class="nb nb-${k}">${k === "m" ? stepHtml(box, r.id, team, Boolean(off) || r.out || shown === null) : box}<span class="cs">${aside || (mark ? chip(team, r.id, k, mark, k === "m" ? wholeText(mark.live) ?? "—" : f2(mark.live) ?? "—", off) : "")}</span></span>`;
 }
 
 /** Salary and Value: read-only plain text (Adam 10:17 AM 11-18, never a box). A missing salary or projection is a dash with the reason, never 0. */
@@ -150,32 +153,32 @@ const STATUS = (s) => String(s ?? "").trim();
  * One man in the Starters or the Bench (Adam 2:02-2:04 PM 11-17): Pos/#, Player with his status chip, Min and DK/min boxes, Proj, TwoGun's own minutes and projection as plain text, the Basis in short
  * words (the full why on hover), S and Out. N: the team's news (console-news.js teamNews) or null.
  */
-function manRow(team, r, T, S, mk, rank, N, vr) {
+function manRow(team, r, T, S, mk, rank, N, vr, off = null) { // off: the team's game has started (console-tipped.js): every edit control disabled, the hover saying why
   const p = r.p, b = basisOf(r, T, S), starter = r.role === "starter", av = avgFigures(T, p);
-  const rmark = mk?.r ? chip(team, r.id, "r", mk.r, flipText(mk.r, mk.r.live === "starter" ? "S" : mk.r.live === "oor" ? "DNP" : "bench")) : "";
-  const omark = mk?.out ? chip(team, r.id, "out", mk.out, "out") : "";
+  const rmark = mk?.r ? chip(team, r.id, "r", mk.r, flipText(mk.r, mk.r.live === "starter" ? "S" : mk.r.live === "oor" ? "DNP" : "bench"), off) : "";
+  const omark = mk?.out ? chip(team, r.id, "out", mk.out, "out", off) : "";
   const proj = isNum(r.proj) ? `<b class="pj${r.pinned.m || r.pinned.d ? " pin" : ""}">${f1(r.proj)}</b>` : miss(r.missing.join(", ") || "no projection");
   return `<div class="row${mk ? " marked" : ""}" data-row="${esc(r.id)}">
 <span class="ps">${esc(starter ? rank || pos0(p) || "—" : rank)}</span>
 <span class="who">${consoleNameOpen(p, p.name, "span", "nm")}<span class="pp">${esc(p.pos ?? "")}</span>${nameChip(N, p)}${mrChip(T.tier?.men?.[r.id]?.mr, "nwc nchip mrc")}</span>
-${salCell(p)}${numBox(team, r, "m", mk?.m)}${numBox(team, r, "d", mk?.d)}
+${salCell(p)}${numBox(team, r, "m", mk?.m, off)}${numBox(team, r, "d", mk?.d, off)}
 <span class="r">${proj}</span>${tgCell(p.tg_proj, "projection", "tgp")}${valCell(r, vr)}${tgCell(p.tg_min, "minutes", "tgm")}${avgCell(av.season, av.whySeason, av.nSeason, "avs")}${avgCell(av.last10, av.whyLast, av.nLast, "avl")}
 <span class="why" title="${esc(b.title)}"><span class="bw k-${b.tag}">${esc(b.text)}</span>${b.delta ? `<span class="bd">${esc(b.delta)}</span>` : ""}${b.chips.map((c) => `<span class="fc ${c.cls}" title="${esc(c.title)}">${esc(c.word)}</span>`).join("")}</span>
-<span class="tgl"><button class="tg s${starter ? " on" : ""}" type="button" data-s="${esc(r.id)}" data-team="${esc(team)}" title="${starter ? "Starting. Click to send him to the bench" : "Click to mark him a starter (S)"}">S</button><span class="cs">${rmark}</span></span>
-<span class="tgl"><button class="tg bp${r.role === "bench_plus" ? " on" : ""}" type="button" data-dbp="1" data-id="${esc(r.id)}" data-team="${esc(team)}"${starter ? ' disabled title="A starter is not Bench+"' : ` title="${r.role === "bench_plus" ? "Bench+ tonight. Click to make him plain Bench" : "Click to make him Bench+ tonight: he goes to the head of the bench order"}"`}>B+</button></span>
-<span class="tgl"><button class="tg o" type="button" data-out="${esc(r.id)}" data-team="${esc(team)}" title="Click to mark him Out">Out</button><span class="cs">${omark}</span></span>
+<span class="tgl"><button class="tg s${starter ? " on" : ""}" type="button" data-s="${esc(r.id)}" data-team="${esc(team)}"${hover(off, starter ? "Starting. Click to send him to the bench" : "Click to mark him a starter (S)")}>S</button><span class="cs">${rmark}</span></span>
+<span class="tgl"><button class="tg bp${r.role === "bench_plus" ? " on" : ""}" type="button" data-dbp="1" data-id="${esc(r.id)}" data-team="${esc(team)}"${off ? hover(off) : starter ? ' disabled title="A starter is not Bench+"' : ` title="${r.role === "bench_plus" ? "Bench+ tonight. Click to make him plain Bench" : "Click to make him Bench+ tonight: he goes to the head of the bench order"}"`}>B+</button></span>
+<span class="tgl"><button class="tg o" type="button" data-out="${esc(r.id)}" data-team="${esc(team)}"${hover(off, "Click to mark him Out")}>Out</button><span class="cs">${omark}</span></span>
 </div>`;
 }
 
 /** One man in the Out list: his status and where it comes from; the Out toggle brings him back. */
-function outRow(team, r, T, mk, N, pos = null) {
+function outRow(team, r, T, mk, N, pos = null, off = null) { // off: manRow's
   const p = r.p, theirs = T.tonight.includes(r.id), st = STATUS(p.status);
   const page = theirs && (T.tier?.minutes_page?.out ?? []).includes(r.id); // his Minutes-page Out (console-inputs.js withMinutesPage), not a feed's
   void st; // TwoGun's status word is not a source of Tonight's Outs (Adam 11-19)
   const src = page ? `<span class="stag k-you">Yours</span>you marked him Out on the Minutes page` : theirs ? `<span class="stag k-ch">News</span>out on our own injury feeds` : mk?.out?.news ? `<span class="stag k-ch">News</span>${esc(mk.out.news)}` : `<span class="stag k-you">Yours</span>you marked him Out`; // an Out the lineup news made is the news's, not his
-  const omark = mk?.out ? chip(team, r.id, "out", mk.out, "in") : "";
+  const omark = mk?.out ? chip(team, r.id, "out", mk.out, "in", off) : "";
   return `<div class="oline" data-row="${esc(r.id)}"><span class="ps">${esc(pos ?? (pos0(p) || "—"))}</span>${consoleNameOpen(p, p.name, "span", "onm")}${outUsage(p)}
-<span class="tgl"><button class="tg o on" type="button" data-out="${esc(r.id)}" data-team="${esc(team)}" title="Out. Click to bring him back in">Out</button><span class="cs">${omark}</span></span>
+<span class="tgl"><button class="tg o on" type="button" data-out="${esc(r.id)}" data-team="${esc(team)}"${hover(off, "Out. Click to bring him back in")}>Out</button><span class="cs">${omark}</span></span>
 ${outNote(N, p)}<div class="why">${src}${isNum(p.healthy) && p.healthy > 0 ? ` &middot; usual ${f1(p.healthy)} min` : ""}${absenceRow(p.absence)}</div></div>`;
 }
 
@@ -214,7 +217,7 @@ export function benchPlusHtml(bp) {
 
 /** The team's sections and side column. */
 function teamBody(model, code, news, view = {}) {
-  const T = model.TEAMS[code], S = model.ST[code], res = calc(T, S, S.outs), marks = marksOf(T, S), N = news?.N ?? null;
+  const T = model.TEAMS[code], S = model.ST[code], res = calc(T, S, S.outs), marks = marksOf(T, S), N = news?.N ?? null, off = view.off ?? null; // off: the team's game has started (console-tipped.js startedWhy)
   const rows = res.rows, playing = rows.filter((r) => !r.out), cm = chartModel(T, S, rows); // our depth chart (Adam 11-17); null on inputs without one
   const cpos = (r) => (cm ? cm.posOf(r.id) ?? "—" : ""), cRank = (r) => { const i = POS_ORDER.indexOf(cm?.posOf(r.id) ?? ""); return i < 0 ? 99 : i; };
   const starters = playing.filter((r) => r.role === "starter").sort((a, b) => (cm ? cRank(a) - cRank(b) : posRank(a.p) - posRank(b.p)) || (b.min ?? 0) - (a.min ?? 0));
@@ -240,14 +243,14 @@ function teamBody(model, code, news, view = {}) {
   if (outPins) notes.push(outPins);
   if (res.injured_note) notes.push(res.injured_note); // one note per team, added whole (G68)
   if (cm) { for (const n of cm.notes) notes.push(n); const sn = sourcesNote(cm, view.when ?? (() => null)); if (sn) notes.push(sn); } // the chart's sources and what they could not place, at the foot (G64)
-  const auto = calc(T, { ...S, pins: {} }, T.tonight).totals;
+  const auto = calc(T, { ...S, pins: {} }, T.tonight).totals, picks = pickChoices(T, S); // whom each Starter mark of his replaces, one line under his row (console-picks.js)
   const typedAdd = (res.totals.min ?? 0) - (auto.min ?? 0);
-  const main = `<section class="box"><h2>Starters <small>${starters.length} &middot; ${f1(sumMin(starters))} min</small></h2>${HEAD("Pos")}${starters.map((r) => manRow(code, r, T, S, marks[r.id], cpos(r), N, vr)).join("") || `<div class="none">Nobody is starting. Mark five men S.</div>`}</section>
-<section class="box"><h2>Bench <small>bench order &middot; ${f1(sumMin(bench))} min</small></h2>${HEAD("#")}${bench.map((r, i) => manRow(code, r, T, S, marks[r.id], String(6 + i), N, vr)).join("") || `<div class="none">Nobody is on the bench.</div>`}<div class="row tot"><span></span><span class="who">Team total</span><span></span><span class="mt">${f1(res.totals.min) ?? "—"}</span></div>${benchPlusHtml(T.bench_plus)}</section>`;
+  const main = `<section class="box"><h2>Starters <small>${starters.length} &middot; ${f1(sumMin(starters))} min</small></h2>${HEAD("Pos")}${starters.map((r) => manRow(code, r, T, S, marks[r.id], cpos(r), N, vr, off) + pickLineHtml(code, r.id, picks[r.id], { off })).join("") || `<div class="none">Nobody is starting. Mark five men S.</div>`}</section>
+<section class="box"><h2>Bench <small>bench order &middot; ${f1(sumMin(bench))} min</small></h2>${HEAD("#")}${bench.map((r, i) => manRow(code, r, T, S, marks[r.id], String(6 + i), N, vr, off)).join("") || `<div class="none">Nobody is on the bench.</div>`}<div class="row tot"><span></span><span class="who">Team total</span><span></span><span class="mt">${f1(res.totals.min) ?? "—"}</span></div>${benchPlusHtml(T.bench_plus)}</section>`;
   const src = S.source ?? defaultSourceOf(T);
   const srcBox = oursUse(T).ok ? `<section class="box"><h2>Minutes for the optimizer</h2><div class="srcs">${MINUTE_SOURCES.map((k) => `<button class="sv${k === src ? " on" : ""}" type="button" data-source="${k}" data-team="${esc(code)}">${SOURCE_LABEL[k]}</button>`).join("")}<button class="sv all" type="button" data-source-all="${src}" data-team="${esc(code)}" title="Use ${esc(SOURCE_LABEL[src])} on every team with the minutes engine">All teams</button></div></section>` : "";
-  const outBox = `<section class="box"><h2>Out / injured <small>${outs.length} ${outs.length === 1 ? "man" : "men"}</small></h2>${outs.map((r) => outRow(code, r, T, marks[r.id], N, cm ? cm.posOf(r.id) ?? "—" : null)).join("") || `<div class="none">Nobody is out.</div>`}</section>`;
-  const side = `${chartHtml(code, cm, { sel: view.sel ?? null, ro: view.ro === true, showInj: view.showInj === true })}${cm ? outBox : ""}<section class="box"><h2>Team total</h2><div class="tot">
+  const outBox = `<section class="box"><h2>Out / injured <small>${outs.length} ${outs.length === 1 ? "man" : "men"}</small></h2>${outs.map((r) => outRow(code, r, T, marks[r.id], N, cm ? cm.posOf(r.id) ?? "—" : null, off)).join("") || `<div class="none">Nobody is out.</div>`}</section>`;
+  const side = `${chartHtml(code, cm, { sel: view.sel ?? null, ro: view.ro === true || Boolean(off), showInj: view.showInj === true, roWhy: off ? "game started: read only" : null })}${cm ? outBox : ""}<section class="box"><h2>Team total</h2><div class="tot">
 <div class="big"><span>Minutes tonight</span><b class="${Math.abs(typedAdd) >= 0.05 ? "warn" : ""}">${f1(res.totals.min) ?? "—"} min</b></div>
 <div><span>Without your marks</span><b>${f1(auto.min) ?? "—"} min</b></div>
 ${Math.abs(typedAdd) >= 0.05 ? `<div class="warn"><span>Your marks add</span><b>${typedAdd > 0 ? "+" : ""}${f1(typedAdd)}</b></div>` : ""}
@@ -277,7 +280,7 @@ const HELP = "Every change goes to the board and the optimizer at once. Type a m
  */
 export function depthHtml(model, code, opts) {
   const T = model.TEAMS[code], g = opts.games.find((x) => x.away === code || x.home === code), opp = T.opp;
-  const { main, side, starterIds, chipCols } = teamBody(model, code, opts.news, { sel: opts.chartSel ?? null, showInj: opts.showInj === true, ro: opts.readOnly === true, when: opts.when });
+  const { main, side, starterIds, chipCols } = teamBody(model, code, opts.news, { sel: opts.chartSel ?? null, showInj: opts.showInj === true, ro: opts.readOnly === true, when: opts.when, off: opts.off ?? null });
   const words = syncWords(opts.sync), syncText = `<span class="sync ${words.cls}" title="${esc([words.text, ...words.lines].join(" · "))}"><i></i>${esc(words.text)}</span>`;
   const held = words.lines.length ? `<ul class="heldline">${words.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : "";
   const head = `<header class="thead" style="--tc:${opts.colourOf(code)}">${logo(code, "xl")}<div class="tn"><h1>${esc(TEAM_NAMES[code] ?? code)}</h1><div class="vs">${T.home ? "vs" : "@"} ${logo(opp, "xs")}<b>${esc(TEAM_NAMES[opp] ?? opp)}</b>${g?.tip ? ` &middot; ${esc(opts.when(g.tip) ?? g.tip)}` : ""}</div></div>

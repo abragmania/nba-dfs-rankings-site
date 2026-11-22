@@ -1,4 +1,4 @@
-// Our minutes engine's team plan (Adam 11-12 tiers; Adam 11-17 11:40-11:58 AM: role minutes, a 36-minute cap, every team to 240), pure; tests/minutes_tiers.test.mjs on frozen fixtures.
+// Our minutes engine's team plan (Adam 11-12 tiers; Adam 11-17 11:40-11:58 AM: role minutes, a 36-minute cap, every team to 240), pure; tests/minutes_tiers_*.test.mjs on frozen fixtures.
 //  1. Five: tonight's five (the lineup pages' confirmed or agreed five, else TwoGun's starter flags on the board, said "expected"; a short five is filled from tonight's order).
 //     Tiers: Starter (the five); Bench+ (Adam 10:25 AM 11-18: a mean of BENCH_PLUS_MEAN or more, overtime-scaled, over at least BENCH_PLUS_MIN_GAMES games off the bench this season, starts never counted,
 //     benchPlusBy; a starting point Adam may change with his marks, m.tier_force); Bench (everyone else).

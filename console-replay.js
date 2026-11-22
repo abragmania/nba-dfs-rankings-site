@@ -40,16 +40,16 @@ export function fromLeaves(map) {
 
 /**
  * His moves (base -> mine) laid on theirs: { record, moves: [path], clashes: [path] (a leaf theirs also changed, to something else: his stands) }. A man his move puts back in leaves the
- * out list, and the other way round, so the two lists never both hold him. Pure.
+ * out list, and the other way round, so the two lists never both hold him. theirsWins: a leaf theirs changed stays theirs (an older undo step of his, replayHistory: an undo never takes back newer work). Pure.
  */
-export function mergeRecords(base, mine, theirs, tonightKey = "") {
+export function mergeRecords(base, mine, theirs, tonightKey = "", { theirsWins = false } = {}) {
   const B = leaves(base), Mi = leaves(mine), Th = leaves(theirs), out = new Map(Th), moves = [], clashes = [];
   // The scenario on show: his Outs and back-ins since `base` laid on theirs' (a news Out that moved theirs off his scenario keeps both). A record with no `on` is on Tonight (round 2, item 7).
   const onOf = (r) => r?.on ?? r?.tonight ?? tonightKey, bOn = onOf(base), mOn = onOf(mine), tOn = onOf(theirs), finalOn = onDelta(bOn, mOn, tOn);
   const onShow = mOn !== bOn || finalOn !== mOn; // his scenario moved (his Out, or the news's): its pins and stamps are laid by hand below
   /** The scenario a pins or stamps leaf sits on, else null. Handouts (keyed by the sitter) and combos (measured for exactly their set of Outs) are never re-keyed (round 2, items 1 and 2). */
   const keyAt = (k) => (k[0] === "pins" ? 1 : k[0] === "stamps" ? 2 : -1);
-  const lay = (p, b, m, t) => { moves.push(p); if (t !== b && t !== m) clashes.push(p); if (m === undefined) out.delete(p); else out.set(p, m); };
+  const lay = (p, b, m, t) => { if (theirsWins && t !== b && t !== m) return; moves.push(p); if (t !== b && t !== m) clashes.push(p); if (m === undefined) out.delete(p); else out.set(p, m); };
   for (const p of new Set([...B.keys(), ...Mi.keys()])) {
     if (p === "on") continue;
     const k = p.split(SEP), b = B.get(p), m = Mi.get(p);
@@ -106,6 +106,29 @@ export function rebaseHistory(G, code, S) {
   }
 }
 
+/** The parts of his work on a team kept beside the record (their own saves, console.js replayOnto): each undo step keeps its own. */
+export const BESIDE = ["depth_moves", "role_marks", "role_picks", "mark_at", "pick_at"];
+/**
+ * After a replay (the review of 11-21's side list: undo after a replay keeps his own older steps): each undo step of his on team `code` is his own work at that step laid on the newer record `theirs` as the
+ * replay lays his current work (replayTeam from `seen`), so Ctrl+Z still walks back through his steps in order; where the newer record changed a thing it stands in every older step (theirsWins), so an undo
+ * never takes back a news Out or another page's numbers. The step on show (G.hi) becomes `current`, the replay's own team. news: his news record now (history never holds it, console-moves.js snap), so no
+ * step reads as a change to the news. Each step keeps its own chart moves, role marks and picks. Changes G in place.
+ */
+export function replayHistory(G, code, { input, seen, theirs, applied, dflt, current, news }) {
+  for (const [i, h] of (G?.hist ?? []).entries()) {
+    const o = JSON.parse(h.s);
+    if (!o.ST || !Object.hasOwn(o.ST, code)) continue;
+    const st = o.ST[code];
+    let S = current;
+    if (i !== G.hi) {
+      S = replayTeam(input, { seen, mine: { ...recordOf(st), ...(news ? { news } : {}) }, theirs, applied, dflt, theirsWins: true }).S;
+      for (const k of BESIDE) if (st[k] !== undefined) S[k] = st[k];
+    }
+    o.ST[code] = JSON.parse(JSON.stringify({ ...S, news: undefined })); // as snap keeps a team: the news record is not part of history
+    h.s = JSON.stringify(o);
+  }
+}
+
 /** The man a path names (its id part), or null. */
 const idOf = (p) => { const k = p.split(SEP); return k[0] === "mine" ? k[2] : ["pins", "handouts", "combos", "stamps"].includes(k[0]) ? k[3] : null; };
 
@@ -125,9 +148,9 @@ function trimStarters(rec, moves, nameOf) {
  * One team's work after a refused save: his moves since `seen` (the record text he last saw, console-model.js canonRecord) laid on `theirs` (the disk's record now), all three rebased onto
  * `input`'s Tonight first. { T, S, moved (he had moves to lay on), notes: [one line] or [] }. dflt: the minutes source default (buildTeam). Pure.
  */
-export function replayTeam(input, { seen, mine, theirs, applied, dflt }) {
+export function replayTeam(input, { seen, mine, theirs, applied, dflt, theirsWins = false }) { // theirsWins: mergeRecords's
   const on = (rec) => recordOf(buildTeam(input, rec, applied, dflt).S);
-  const base = JSON.parse(seen), m = mergeRecords(on(base), on(mine), on(theirs), keyOf(input.tonight ?? []));
+  const base = JSON.parse(seen), m = mergeRecords(on(base), on(mine), on(theirs), keyOf(input.tonight ?? []), { theirsWins });
   const { T } = buildTeam(input, theirs, applied, dflt), nameOf = (id) => T.byId[id]?.name ?? `DraftKings id ${id}`;
   const Bl = leaves(base), gone = [...new Set([...leaves(mine)].filter(([p, v]) => Bl.get(p) !== v).map(([p]) => idOf(p)).filter((id) => id && !T.byId[id]))]; // what he set on a man no longer on the team (his removals are moot): a rebase drops it, so it is said (finding 10)
   const off = trimStarters(m.record, m.moves, nameOf);

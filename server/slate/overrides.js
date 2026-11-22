@@ -402,7 +402,7 @@ export function mergeOverrides(players, overrides, { held = null, mode = "GPP" }
       }
     }
     if (typedProj == null && typedOwn == null && !steps) return out;
-    // Adam 5:33 PM (tests/resend_follows_engine.test.mjs): a man the board shows Out has no projection. A typed number on a man not playing (figures.js projAside: his In first, then his Out, then our
+    // Adam 5:33 PM (tests/resend_follows_engine_*.test.mjs): a man the board shows Out has no projection. A typed number on a man not playing (figures.js projAside: his In first, then his Out, then our
     // engine's Out, on either projection source, as minutes/board.js applyOurs puts him at 0) is set aside, kept in ovr, and counts again when he plays; said in proj_note (G62). Before 11-20 only a
     // send's 0 did this, for held teams; a feed's Out now reaches the Console's Tonight with no send (console-inputs.js consoleTonight).
     const aside = projAside(p, typedProj);

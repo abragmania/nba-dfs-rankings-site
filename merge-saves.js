@@ -27,15 +27,27 @@ export function applyPickDiff(lists, diff) {
 /** The most men a mode may lock: DraftKings classic has eight roster slots (the server's check, store.js checkPicks, reads this one). */
 export const MAX_LOCKED = 8;
 
-/** Merged lists over MAX_LOCKED: his new locks (the last of them first) come off until it fits, back to unlocked; the saved locks stay. { lists, dropped: [ids] }. Pure. */
+/** Merged lists over MAX_LOCKED: his new locks (the last of them first) come off until it fits, each man back as the saved lists hold him (excluded there stays excluded, G62: the other page's exclude is never
+ *  lost with his lock); the saved locks stay. { lists, dropped: [ids], kept: [his new locks that stayed] }. Pure. */
 export function capLocks(lists, diff, saved) {
-  const locked = [...lists.locked], dropped = [], kept = new Set(saved?.locked ?? []);
-  const his = Object.entries(diff).filter(([id, d]) => d.to === "locked" && !kept.has(id)).map(([id]) => id).reverse();
-  while (locked.length > MAX_LOCKED && his.length) { const id = his.shift(); locked.splice(locked.indexOf(id), 1); dropped.push(id); }
-  return { lists: { ...lists, locked }, dropped };
+  const locked = [...lists.locked], excluded = [...(lists.excluded ?? [])], dropped = [], had = new Set(saved?.locked ?? []);
+  const his = Object.entries(diff).filter(([id, d]) => d.to === "locked" && !had.has(id)).map(([id]) => id).reverse();
+  while (locked.length > MAX_LOCKED && his.length) {
+    const id = his.shift();
+    locked.splice(locked.indexOf(id), 1); dropped.push(id);
+    if (saved?.excluded?.includes(id) && !excluded.includes(id)) excluded.push(id);
+  }
+  return { lists: { ...lists, locked, excluded }, dropped, kept: his.reverse() };
 }
-/** The foot words for locks capLocks left out: him, and the saved locks that fill the eight. Pure. */
-export const capLine = (mode, dropped, saved, nameOf) => `Picks (${mode}): your lock on ${dropped.map(nameOf).join(", ")} was not saved: another page's save already locks ${saved.length} (${saved.map(nameOf).join(", ")}), and ${MAX_LOCKED} is the most.`;
+/**
+ * The foot words for locks capLocks left out (G62): him, and what fills the eight: the saved locks still locked and his new locks that were kept (the review of 11-21: "the saved 7 and your lock on X fill
+ * the 8"); a man the saved lists exclude is said to stay excluded. cap: capLocks's answer; saved: the saved lists. Pure.
+ */
+export function capLine(mode, cap, saved, nameOf) {
+  const kept = cap.kept ?? [], stay = cap.lists.locked.filter((id) => !kept.includes(id)), ex = cap.dropped.filter((id) => saved?.excluded?.includes(id)), list = (ids) => ids.map(nameOf).join(", ");
+  const fill = `the saved ${stay.length}${stay.length ? ` (${list(stay)})` : ""}${kept.length ? ` and your lock${kept.length === 1 ? "" : "s"} on ${list(kept)}` : ""}`;
+  return `Picks (${mode}): your lock on ${list(cap.dropped)} was not saved: ${fill} fill the ${MAX_LOCKED}, the most; unlock one and lock ${cap.dropped.length === 1 ? "him" : "them"} again.${ex.length ? ` ${list(ex)} ${ex.length === 1 ? "stays" : "stay"} excluded, as the saved picks have ${ex.length === 1 ? "him" : "them"}.` : ""}`;
+}
 
 /** The men the other page changed too, to something else: [{ id, theirs, to }] (his stands). Pure. */
 export const pickClashes = (lists, diff) => Object.entries(diff).map(([id, d]) => ({ id, theirs: stateIn(lists, id), ...d })).filter((x) => x.theirs !== x.from && x.theirs !== x.to).map(({ id, theirs, to }) => ({ id, theirs, to }));

@@ -13,6 +13,7 @@ import { alignNews, endNewsOuts, manAsLeft, marksOf, stillAsLeft } from "./conso
 import { addMove } from "./depth-cols.js";
 import { MARK_ROLES } from "./role-marks.js";
 import { STAMP_ROLES } from "./typed-aside.js";
+import { lockedSay } from "./console-tipped.js";
 
 const THR = { m: 0.05, u: 0.05, d: 0.004, p: 0.05 };
 const STEP = { m: [0.5, 2], u: [0.5, 2], d: [0.01, 0.05], p: [0.1, 1] };
@@ -21,7 +22,7 @@ const EMPTY_RECORD_TEXT = JSON.stringify(EMPTY_RECORD());
 /** A history snapshot: his work without the lineup-news record, which no undo or redo ever changes (it would let news apply twice). */
 export const snap = (c) => JSON.stringify({ ST: Object.fromEntries(Object.entries(c.model.ST).map(([code, S]) => [code, { ...S, news: undefined }])), cur: c.G.cur });
 /** One team's work as the send compares it: who is out and every pin. */
-const teamState = (S) => JSON.stringify([keyOf(S.outs), S.pins, S.source ?? null, S.depth_moves ?? null, rolesText(S.role_marks), S.stamps ?? null]); // a depth-chart move or a role mark is a change to send like any other
+const teamState = (S) => JSON.stringify([keyOf(S.outs), S.pins, S.source ?? null, S.depth_moves ?? null, rolesText(S.role_marks, S.role_picks), S.stamps ?? null]); // a depth-chart move, a role mark or its pick of whom he replaces is a change to send like any other
 /** The teams a step changed join c.touched: only those (and teams the board already holds an Apply for) are sent (console-auto.js). */
 function touch(c, before, { track = false } = {}) {
   c.touched ??= new Set();
@@ -178,7 +179,7 @@ export function saveDepth(c) {
         await c.api(`/api/minutes/${encodeURIComponent(name)}/team/${encodeURIComponent(code)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "depth", moves: JSON.parse(text) }) });
         if (c.saveErrs[`chart ${code}`] && name === c.slate) { delete c.saveErrs[`chart ${code}`]; c.drawBar(); }
       } catch (e) {
-        if (name !== c.slate) return;
+        if (name !== c.slate || lockedSay(c, code, "depth chart", e)) return; // the game has started: one foot line, no banner or toast (console-tipped.js)
         c.depthSaved[code] = "unsaved";
         c.saveErrs[`chart ${code}`] = `${code}'s depth chart not saved: ${e.message}`; c.drawBar();
         c.toast(`Could not save ${code}'s depth chart: ${e.message}`, "err");
@@ -197,11 +198,12 @@ export function saveRoles(c) {
   c.rolesSaved ??= {};
   for (const [code, S] of Object.entries(c.model.ST)) {
     if (!S.role_marks) continue;
-    const text = rolesText(S.role_marks), T = c.model.TEAMS[code];
-    if (c.rolesSaved[code] === undefined) { c.rolesSaved[code] = rolesText(T?.tier?.role_marks); if (text === c.rolesSaved[code]) continue; } // first sight: the inputs' list is what the server holds
+    const text = rolesText(S.role_marks, S.role_picks), T = c.model.TEAMS[code];
+    if (c.rolesSaved[code] === undefined) { c.rolesSaved[code] = rolesText(T?.tier?.role_marks, T?.tier?.role_picks); if (text === c.rolesSaved[code]) continue; } // first sight: the inputs' list is what the server holds
     if (text === c.rolesSaved[code]) continue;
     c.rolesSaved[code] = text;
-    const marks = Object.entries(S.role_marks).map(([id, role]) => ({ key: T?.tier?.men?.[id]?.key ?? null, role })).filter((m) => m.key);
+    const keyOf2 = (id) => T?.tier?.men?.[id]?.key ?? (/^(?=.*[a-z])[a-z0-9-]{1,80}$/.test(String(id)) ? String(id) : null), pick = (id, key) => { const k = S.role_picks?.[id] != null ? keyOf2(S.role_picks[id]) : null; return k && k !== key ? { replaces: k } : {}; }; // a pick on a man with no engine inputs is his chart key (role-marks.js picksById)
+    const marks = Object.entries(S.role_marks).map(([id, role]) => { const key = T?.tier?.men?.[id]?.key ?? null; return { key, role, ...(role === "starter" && key ? pick(id, key) : {}) }; }).filter((m) => m.key);
     c.saveQueue = c.saveQueue.then(async () => {
       c.rolesBase ??= {};
       const base = c.rolesBase[code] ?? T?.tier?.role_marks_stamp ?? "[]"; // the marks as this page last read or saved them, read at send time (a quick second click follows the first save)
@@ -210,7 +212,7 @@ export function saveRoles(c) {
         if (typeof r?.stamp === "string") c.rolesBase[code] = r.stamp;
         if (c.saveErrs[`roles ${code}`] && name === c.slate) { delete c.saveErrs[`roles ${code}`]; c.drawBar(); }
       } catch (e) {
-        if (name !== c.slate) return;
+        if (name !== c.slate || lockedSay(c, code, "role mark", e)) return; // the game has started: one foot line, no banner or toast (console-tipped.js)
         if (e.code === "MINUTES_ROLES_MOVED") { // another page or the other computer saved this team's marks since this page read them: the next refresh takes theirs, said
           c.rolesSaved[code] = "conflict";
           c.toast(`${code}'s role marks changed elsewhere (another page or the other computer), so your last mark on it was not written over them.`, "notice");
@@ -301,8 +303,8 @@ function stampFlips(c, S, wasText) {
   const [k, pins, , , marksText] = JSON.parse(wasText), key = keyOf(S.outs), before = pins?.[k]?.r ?? {}, after = S.pins?.[key]?.r ?? {};
   for (const [id, role] of Object.entries(after)) if (before[id] !== role && (k === key || S.stamps?.r?.[key]?.[id] === undefined)) stampsAt(S, "r", key)[id] = stampNow(c);
   // a standing mark set or cleared on this page carries the step's time too, so a flip made after it on this page still wins (console-tier.js callTimes; the money review of 11-20, finding 5)
-  const was = Object.fromEntries(JSON.parse(marksText ?? "[]")), now = S.role_marks ?? {};
-  for (const id of new Set([...Object.keys(was), ...Object.keys(now)])) if (was[id] !== now[id]) (S.mark_at ??= {})[id] = stampNow(c);
+  const byId = (text) => new Map(JSON.parse(text ?? "[]").map(([id, role, pick]) => [id, [role, pick ?? null]])), was = byId(marksText), now = byId(rolesText(S.role_marks, S.role_picks)); // a pick has its own stamp: it never moves the role call's (the review of 11-21, money)
+  for (const id of new Set([...was.keys(), ...now.keys()])) { const w = was.get(id) ?? [], n = now.get(id) ?? []; if (w[0] !== n[0]) (S.mark_at ??= {})[id] = stampNow(c); if (n[1] !== null && w[1] !== n[1]) (S.pick_at ??= {})[id] = stampNow(c); }
 }
 export function clearPin(c, t, id, k) {
   const S = c.model.ST[t], pn = pinsOf(S, keyOf(S.outs));
@@ -434,7 +436,7 @@ export function setRole(c, t, id, role, { perNight = false } = {}) { // perNight
   const standing = !perNight && S.role_marks !== undefined && MARK_ROLES.includes(role) && Boolean(T.tier?.men?.[id]?.key);
   if (mine.role === role) { // the review of 11-18: a click on the role he already has writes the mark, so he can freeze it (Bench on a man who may cross 20)
     if (!standing || S.role_marks[id] === role) return null;
-    mutate(c, `${t} ${nameOf(c, t, id)} ${ROLE_LABEL[role]} (kept as your mark)`, () => { S.role_marks = { ...S.role_marks, [id]: role }; dropFlipsOf(S, id); });
+    mutate(c, `${t} ${nameOf(c, t, id)} ${ROLE_LABEL[role]} (kept as your mark)`, () => standMark(S, id, role));
     return [];
   }
   const res = roleMove(moveTeam(T, S), S.outs, pinsOf(S, key).r, id, role, Object.fromEntries(rows.map((r) => [r.id, r.min])));
@@ -447,7 +449,7 @@ export function setRole(c, t, id, role, { perNight = false } = {}) { // perNight
     if (next === key) pinsOf(S, next).r = flips;
     else if (opened) carryPins(S, T, key, next, changes);
     else { carryPins(S, T, key, next, changes); pinsOf(S, next).r = flips; }
-    if (standing) { S.role_marks = { ...S.role_marks, [id]: role }; dropFlipsOf(S, id); } // the standing mark, in place of tonight's flips on him in every scenario
+    if (standing) standMark(S, id, role); // the standing mark, in place of tonight's flips on him in every scenario
     c.G.roleMoves = { team: t, moved: res.moved };
   });
   return res.moved;
@@ -462,11 +464,17 @@ const moveTeam = (T, S) => ({ ...T, ...teamFor(T, S), source: S.source, scenario
 function dropFlipsOf(S, id) {
   for (const p of Object.values(S.pins ?? {})) if (p?.r && Object.hasOwn(p.r, id) && p.r[id] !== "oor") delete p.r[id];
 }
+/** His standing mark on a man, in place of tonight's flips on him (dropFlipsOf); any mark but Starter, or none (role null), takes his pick of whom he replaces off: the pick lives with a Starter mark. */
+function standMark(S, id, role) {
+  const r = { ...S.role_marks }; if (role) r[id] = role; else delete r[id]; S.role_marks = r;
+  if (role !== "starter" && S.role_picks?.[id] != null) { const p = { ...S.role_picks }; delete p[id]; S.role_picks = p; }
+  if (role) dropFlipsOf(S, id);
+}
 /** His standing role mark on a man comes off (Adam 10:25 AM 11-18): the man goes back to the role the app gives him. False when he had none. */
 export function clearStanding(c, t, id) {
   const S = c.model.ST[t];
   if (!S.role_marks || !Object.hasOwn(S.role_marks, id)) return false;
-  mutate(c, `${t} ${nameOf(c, t, id)} role mark cleared`, () => { const r = { ...S.role_marks }; delete r[id]; S.role_marks = r; });
+  mutate(c, `${t} ${nameOf(c, t, id)} role mark cleared`, () => standMark(S, id, null));
   return true;
 }
 /** Which minutes feed the optimizer (depth-chart.js MINUTE_SOURCES): one team, or every team that has a chart. It is saved with his work and takes Ctrl+Z like any move. */

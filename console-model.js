@@ -132,8 +132,9 @@ export const depthOf = (T) => (Array.isArray(T.tier?.depth?.moves) ? { depth_mov
 /** His standing role marks as the page starts them (Adam 10:25 AM 11-18): { id: role } from the inputs, kept in his work so Undo and Redo carry them, never in the scenarios file (recordOf leaves them out):
  *  the chart file is their one store (console-moves.js saveRoles). Nothing when the inputs carry no engine inputs. */
 /** One text for a team's role marks ({ id: role }), whatever order they were set in: what the page saved and what the server holds are compared by it. */
-export const rolesText = (marks) => JSON.stringify(Object.entries(marks ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
-export const rolesOf = (T) => (T.tier?.role_marks && typeof T.tier.role_marks === "object" ? { role_marks: structuredClone(T.tier.role_marks) } : {});
+/** picks ({ id: whom his Starter mark replaces }) join a Starter mark's entry, so a new pick is a change to save; with none the text is as before. */
+export const rolesText = (marks, picks = null) => JSON.stringify(Object.entries(marks ?? {}).map(([id, r]) => (r === "starter" && picks?.[id] != null ? [id, r, picks[id]] : [id, r])).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+export const rolesOf = (T) => (T.tier?.role_marks && typeof T.tier.role_marks === "object" ? { role_marks: structuredClone(T.tier.role_marks), role_picks: structuredClone(T.tier.role_picks ?? {}) } : {});
 
 /** New inputs on the same work (a pull landed): his pins stay and everything he did not pin moves. Every team is rebased on the new Tonight
  *  (moveTo): a team with nothing of his stays on Tonight, his own Outs and back-ins stay his through any number of pulls, and his pins go with the scenario; a man who left is dropped. */

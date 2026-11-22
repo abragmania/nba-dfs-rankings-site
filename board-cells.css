@@ -1,0 +1,259 @@
+/* The board's stylesheet, part 4 of 4: the table's cells and boxes (overrides, typed boxes, the confirm, filters, columns, row states, built lineups, narrow screens, the console's marks). Split from board.css (global rule: a file over 600 lines is split); the bodies are board.css's, unchanged. index.html links board.css, optimizer-panel.css,
+   player-card.css and board-cells.css one after another in that order, so the cascade is board.css's. G71: every size in rem off the root (board.css). */
+/* Adam's overrides (5:20 PM ET 2026-10-29). The thumbs pair in its own column (optimizer standard A1), ported from NFLDFSRankings
+   public/style.css at 7e49266 (.bump-ctl, .bump-btn, .bump-fig, .bump-up, .bump-down) onto this board's tokens: a thumbs-down
+   and a thumbs-up button, 24px tall and at least 24px wide (C1) with 13px thumbs, one filled thumb per step (green up, red down),
+   one grey outline thumb when a side is off, several fanned so a button never passes 29px; the pair sits right-aligned in a
+   fixed 59px slot and the figure in a fixed 5-character slot, so a press never shifts the column. A bumped figure is tinted; a
+   typed number (Proj or Own) wears the amber outline marker with its base on hover. */
+.ctl .fav{font-size:0.8125rem;line-height:1}
+.ctl .fav.on{border-color:var(--am);color:var(--am);background:#ffb00018}
+.bump-ctl{display:inline-flex;justify-content:flex-end;width:3.6875rem;align-items:center;gap:0.0625rem;vertical-align:middle}
+.bump-btn{display:inline-flex;align-items:center;justify-content:center;height:1.5rem;min-width:1.5rem;padding:0 0.0625rem;border:1px solid #2a2a30;background:var(--p2);color:var(--mu);line-height:1;cursor:pointer}
+.bump-btn:hover:not(:disabled){color:var(--tx);border-color:var(--am)}
+.bump-btn:disabled{opacity:.4;cursor:default}
+.bump-btn.is-on:disabled{opacity:1}
+.bump-btn .thumb{width:0.8125rem;height:0.8125rem;flex:none;fill:none;stroke:currentColor;stroke-width:2;pointer-events:none}
+.bump-btn[data-action="bump-down"] .thumb{transform:rotate(180deg)}
+.bump-btn .thumb+.thumb{margin-left:calc(var(--fan,0rem) - 0.8125rem)}
+.bump-btn.is-on .thumb{stroke:var(--p2);stroke-width:6.5;paint-order:stroke}
+.bump-btn.is-on[data-action="bump-up"] .thumb{fill:var(--gr)}
+.bump-btn.is-on[data-action="bump-down"] .thumb{fill:var(--rd)}
+/* Proj is a plain figure, not an input (Adam 2:29 PM 11-18): no box, no text cursor. A bump tints it and a number typed earlier keeps its amber colour and tint, without the input outline. */
+.bump-fig{display:inline-block;min-width:5ch;padding:0 0.125rem;text-align:right;font-variant-numeric:tabular-nums;vertical-align:middle;cursor:default}
+.bump-fig.bump-up{background:#39e58c1f;color:var(--gr)}
+.bump-fig.bump-down{background:#ff4d5e1f;color:var(--rd)}
+td.own .v.ov-typed,.min-typed{outline:1px solid var(--am);outline-offset:-0.0625rem;background:#ffb00014;color:var(--am)}
+/* A typed number's box: room on the right inside it, pulled out by the same amount so its digits stay in line with the column. */
+.min-typed{display:inline-block;min-width:5ch;padding:0 0.25rem;margin-right:-0.25rem;text-align:right}
+.bump-fig.bump-typed{background:#ffb00014;color:var(--am)}
+td.own .v.ov-typed{padding-right:0.25rem;margin-right:-0.25rem}
+td.own .v.ov-own{cursor:text}
+/* Typed and bumped: the marker outline keeps the bump's colour, so the direction still reads. */
+td.ostruck .bump-fig{text-decoration:line-through}
+.bump-fig.bump-typed.bump-up{color:var(--gr)}.bump-fig.bump-typed.bump-down{color:var(--rd)}
+/* The editor is laid over the figure (cell-editor.js sets right and top), so opening it never moves a column. */
+td.proj,td.own{position:relative}
+.ov-in{position:absolute;z-index:3;transform:translateY(-50%);width:3.875rem;background:var(--p2);border:1px solid var(--am);color:var(--tx);padding:0.0625rem 0.25rem;font-size:0.8125rem;text-align:right}
+.ov-in:focus{outline:none}
+.ov-in.bad{border-color:var(--rd);color:var(--rd)}
+.who{position:relative}
+.ovt{display:inline-flex;gap:0.1875rem;margin-left:auto;padding-left:0.5rem}
+.ovt button{width:1.5rem;height:1.5rem;border:1px solid #2a2a30;background:var(--p2);color:var(--mu);display:inline-grid;place-items:center;padding:0;font-size:0.75rem;line-height:1}
+.ovt button:hover:not(:disabled){color:var(--tx);border-color:var(--am)}
+.ovt .rs{color:var(--am);border-color:#ffb00066}
+.ovt .rs.off{visibility:hidden}
+/* The line under an open box (cell-editor.js, standard A3), which sets where a number box's sits. It never takes a click. */
+.ed-hint{position:absolute;z-index:4;padding:0.0625rem 0.375rem;background:var(--p2);border:1px solid var(--ln);color:var(--mu);font:500 0.6563rem "JetBrains Mono",monospace;white-space:nowrap;pointer-events:none}
+.ed-hint.bad{border-color:var(--rd);color:var(--rd)}
+/* A greyed or excluded cell's opacity makes a stacking context, which would dim an open box and let the next row cover it. */
+#tbody td:has(.ov-in){opacity:1;position:relative;z-index:5}
+/* The one confirm (confirm.js), over everything; centred by the box itself. */
+.cfm{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:#000a}
+.cfm-box{width:min(27.5rem,90vw);background:var(--p2);border:1px solid var(--am);padding:1rem 1.125rem;box-shadow:0 0.75rem 2.5rem #000c}
+.cfm-box p{margin:0 0 0.875rem;font-size:0.8438rem;color:var(--tx);white-space:normal}
+.cfm-btns{display:flex;justify-content:flex-end;gap:0.5rem}
+.cfm-btns button{min-height:1.75rem;padding:0 0.875rem;font-weight:700;font-size:0.75rem;background:none;border:1px solid var(--ln);color:var(--mu)}
+.cfm-btns .cfm-yes{border-color:var(--am);color:var(--am)}
+.cfm-btns button:hover,.cfm-btns button:focus-visible{outline:1px solid var(--am);outline-offset:1px;color:var(--tx)}
+.chip.starred.on{background:var(--am);border-color:var(--am);color:#000}
+.chip.ovr{margin-left:0.375rem}
+.chip.ovr:disabled{cursor:default}
+/* The second filter row (filters.js, standard B4, B5): it wraps inside the table's width and never sets that width, as the Out list does. */
+.fil{display:flex;flex-wrap:wrap;align-items:center;gap:0.25rem 0.625rem;margin-bottom:0.3125rem;width:0;min-width:100%}
+.fil label{display:flex;align-items:center;gap:0.375rem;font-size:0.7188rem;color:var(--mu);white-space:nowrap}
+.salb{width:4.75rem;padding:0.125rem 0.5rem;text-align:right}
+.salb.bad{border-color:var(--rd);color:var(--rd)}
+#clearF:disabled{opacity:.45;cursor:default}
+.tchips{display:flex;flex-wrap:wrap;gap:0.125rem;flex:1 1 100%}
+.tchip{display:inline-flex;align-items:center;gap:0.1875rem;padding:0.0625rem 0.25rem 0.0625rem 0.125rem;font-size:0.6875rem;min-height:1.375rem}
+.tchip.on{background:var(--am);border-color:var(--am);color:#000}
+/* The filter bar and, under it, the table header stay on screen (standard A15, B7; board.js measures the bar). Collapsed borders scroll away with the rows, so the header's line is a shadow. An open typed box (z-index 3 and up) stays over both, and the Columns list inside the bar over the header. */
+.fbar{position:sticky;top:0;z-index:2;background:var(--bg);padding-top:0.25rem}
+/* The bar's measured height rounds, so the header tucks 1px under the bar and no row shows through between them. */
+#thead th{position:sticky;top:calc(var(--fbarh,0rem) - 0.0625rem);z-index:1;box-shadow:inset 0 -0.0625rem var(--ln)}
+/* A row's Min % and Max % boxes (row-limits.js, standard B10): a figure's box that opens the one typed box over itself. */
+td.lim,th.lim{padding:0 0.1875rem;width:3.125rem;min-width:4.125rem;text-align:left}
+td.lim{position:relative}
+th.lim{cursor:default}
+.limb{width:2.75rem;height:1.5rem;background:var(--p);border:1px solid #2a2a30;color:var(--tx);padding:0 0.25rem;font-size:0.75rem;text-align:right;vertical-align:middle;cursor:text}
+.limb:hover:not(:disabled),.limb:focus-visible{border-color:var(--am);outline:none}
+.limb.on{border-color:#ffb00066;color:var(--am)}
+.limb:disabled{opacity:.4;cursor:not-allowed}
+.ov-in.lim{width:3rem}
+.opt .limcount{margin-top:0.375rem;font-size:0.7188rem;color:var(--mu)}
+tr.blk td.lim{opacity:.75}
+/* The Clear lineup button, on the working lineup's heading (standard B6). */
+.opt .luhr{display:inline-flex;align-items:center;gap:0.625rem}
+.opt .clr{background:none;border:1px solid var(--ln);color:var(--mu);font-size:0.6563rem;font-weight:700;padding:0.125rem 0.625rem;min-height:1.5rem}
+.opt .clr:hover:not(:disabled){color:var(--tx);border-color:var(--am)}
+.opt .clr:disabled{opacity:.45;cursor:default}
+/* The Columns button and its list (columns.js): a tick box and a drag handle per column, remembered per Cash and GPP. */
+.colsw{position:relative;margin-left:auto}
+#colsBtn[aria-expanded="true"]{border-color:var(--am);color:var(--am)}
+.colpop{position:absolute;right:0;top:calc(100% + 0.25rem);z-index:12;width:13.75rem;background:var(--p2);border:1px solid var(--am);padding:0.375rem;box-shadow:0 0.75rem 2.5rem #000c}
+.colpop[hidden]{display:none}
+.collist{list-style:none;margin:0 0 0.375rem;padding:0}
+.colrow{display:flex;align-items:center;gap:0.375rem;border:solid transparent;border-width:2px 0;font-size:0.75rem}
+.colrow.over{border-top-color:var(--am)}.colrow.over.down{border-top-color:transparent;border-bottom-color:var(--am)}
+.colrow label{display:flex;align-items:center;gap:0.375rem;flex:1;min-height:1.625rem;cursor:pointer}
+.colrow input{width:0.875rem;height:0.875rem;margin:0;accent-color:var(--am)}
+.colrow input:disabled+*,.colrow input:disabled{cursor:not-allowed}
+.hnd{display:inline-grid;place-items:center;width:1.5rem;height:1.5rem;color:var(--mu);border:1px solid #2a2a30;background:var(--p);cursor:grab;user-select:none;font-size:0.75rem}
+.hnd:hover,.hnd:focus-visible{color:var(--tx);border-color:var(--am);outline:none}
+.colreset{width:100%;min-height:1.625rem;background:none;border:1px solid var(--ln);color:var(--mu);font-weight:700;font-size:0.7188rem}
+.colreset:hover{color:var(--tx);border-color:var(--mu)}
+/* The working lineup (work-panel.js, board.js): a row click puts the man in or out, so the row reads as clickable; a man in
+   the lineup on show wears a thin amber bar at his player cell and a faint amber wash, quieter than the lock's green. A
+   filled panel slot empties on a click; a hand-picked one (Build keeps him) has a tinted slot label. */
+tr.pk{cursor:pointer}
+tr.inl td{background-color:#ffb0000a}tr.inl td.pl{box-shadow:inset 0.125rem 0 var(--am)}
+tr.inl:hover td{background-color:#ffb00014}
+/* A man who cannot go in now (row-block.js, standard A18): greyed, no pick on a click, the reason on hover; his figures still read, and his name and row controls still work. */
+tr.blk{cursor:not-allowed}
+tr.blk td{opacity:.42}tr.blk td.ctl,tr.blk td.bmp{opacity:.75}
+tr.blk .logo{filter:grayscale(1)}
+tr.team.blk:hover td{background-color:transparent}
+/* A locked man is a pick, not a disabled row: no dimming (an excluded man stays at 30%). */
+tr.blk.locked:not(.excl) td,tr.blk.locked:not(.excl) td.ctl,tr.blk.locked:not(.excl) td.bmp,tr.blk.locked:not(.excl) td.lim{opacity:1}
+tr.excl.blk td{opacity:.3}
+.opt .slot.pick{cursor:pointer}
+.opt .slot.pick:hover{background-color:#ffffff0f}
+.opt .slot.pick:hover .sl{outline:1px solid var(--am);outline-offset:1px}
+.opt .slot.hand .sl{background:#ffb00033;box-shadow:inset 0.1875rem 0 var(--am)}
+/* The built lineups as cards and their exposure table (lineups-list.js); scoped to the panel. */
+.opt .pn{font:600 0.8125rem "Space Grotesk",sans-serif;background:none;border:0;padding:0;color:var(--tx);text-align:left;cursor:pointer;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opt .pn:hover{color:var(--am);text-decoration:underline}
+.opt .pn.il{display:inline;font:inherit;font-weight:700;color:inherit;text-decoration:underline dotted;text-underline-offset:0.1875rem;white-space:normal}
+.opt .crow.locked .pn{color:var(--gr)}
+.opt .lcs{padding:0.25rem 1rem 0.625rem;display:flex;flex-direction:column;gap:0.5rem}
+.opt .lc{border:1px solid var(--ln);background:var(--p2);padding:0.25rem 0.625rem 0.375rem}
+.opt .lc.savedc{border-color:#39e58c99}
+.opt .lch{display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:0.7813rem;padding-bottom:0.25rem}
+.opt .lcb{display:inline-flex;gap:0.375rem}
+.opt .lch button.sm{background:none;border:1px solid var(--am);color:var(--am);font-size:0.6563rem;font-weight:800;padding:0.125rem 0.625rem;min-height:1.5rem}
+.opt .lch button.sm.on{border-color:var(--gr);color:var(--gr);cursor:default}
+.opt .exl{padding:0 1rem 0.5rem}
+.opt .ext{border-collapse:collapse;font-size:0.75rem;white-space:nowrap;width:100%}
+.opt .ext th{background:var(--p);color:var(--mu);font-weight:600;text-align:left;padding:0.125rem 0.375rem 0.25rem 0}
+.opt .ext th.sortable{cursor:pointer;color:var(--tx);user-select:none}
+.opt .ext .ex-none{color:var(--dim);font-size:0.7188rem;padding:0.375rem 0}
+.opt .expos{display:flex;align-items:center;gap:0.25rem;margin-bottom:0.375rem;font-size:0.6875rem;color:var(--mu)}
+.opt .expos>span{margin-right:0.25rem}
+.opt .ext td{padding:0.125rem 0.375rem 0.125rem 0;color:var(--mu);text-align:left}.opt .ext th:nth-child(2){width:99%}
+.opt .ext .ex-pct,.opt .ext .ex-own{text-align:right}
+.opt .ext td.ex-pct{color:var(--am);font-weight:700;font-variant-numeric:tabular-nums}
+.opt .ext .ex-n{color:var(--dim);font-weight:400}
+.opt .ext td.ex-own{color:var(--bl)}
+.opt .ext td.ex-f{padding-right:0}
+.opt .xf{min-height:1.5rem;padding:0 0.5rem;background:var(--p2);border:1px solid #2a2a30;color:var(--mu);font-size:0.6563rem;font-weight:700}
+.opt .xf:hover{color:var(--tx);border-color:var(--am)}
+.opt .xf.on{background:var(--am);border-color:var(--am);color:#000}
+/* Full screen on the Player list (board.js): the optimizer panel is hidden and the table takes the whole width. Buttons are 32 px tall to tap. */
+#fsBtn{min-height:2rem;white-space:nowrap}#fsBtn[hidden]{display:none}#colsBtn{min-height:2rem}
+body.fs-list .work{grid-template-columns:minmax(0,1fr)}
+body.fs-list aside.opt{display:none}
+body.fs-list .pool{grid-row:1}
+/* Narrow screens: the table scrolls sideways in its own box, which also scrolls up and down so the header stays on top (sticky cannot cross a scrolling box). */
+.cnt{flex:none;margin-right:0.25rem}
+.tools{flex-wrap:wrap;row-gap:0.375rem} /* the toolbar wraps at any width, so Columns never runs under the Optimizer panel */
+body.fs-list .colsw{margin-left:0}
+body.fs-list #thead th:last-child,body.fs-list #tbody td:last-child{width:auto} /* the spare width spreads over the columns instead of stranding the last one */
+@media (max-width:1300px){
+  .work,.pool{min-width:0;max-width:100%}
+  .tbl{position:sticky;top:var(--fbarh,0rem);overflow:auto;max-height:calc(100dvh - var(--fbarh,0rem) - 0.75rem)}
+  #thead th{top:0}
+  #thead tr.bandrow~tr th{top:calc(var(--bandh) - 0.0625rem)}
+  .tools,.chips,.top .stamps,.top{flex-wrap:wrap}
+  .colsw{margin-left:0}
+  .cnt{min-width:0;margin-left:0}
+  /* Sideways scroll keeps the star and the name in view (--plleft is the star column's width, set by board.js). */
+  #tbody td.pl,#thead th.pl{position:sticky;left:var(--plleft,0rem);z-index:1}
+  #tbody td.pl{background-color:var(--p)}#thead th.pl{background-color:var(--p2);z-index:3}
+  #tbody td.ctl:first-child,#thead th.ctl:first-child{position:sticky;left:0;z-index:1;background-color:var(--p)}
+  #thead th.ctl:first-child{background-color:var(--p2);z-index:3}
+  /* A dimmed row dims what is in the sticky star and name cells, not the cells: a see-through cell would show the figures sliding under it. */
+  #tbody tr.blk td.pl,#tbody tr.blk td.ctl:first-child,#tbody tr.excl td.pl,#tbody tr.excl td.ctl:first-child,#tbody tr.started td.pl,#tbody tr.started td.ctl:first-child{opacity:1}
+  #tbody tr.blk td.pl>*{opacity:.42}#tbody tr.blk td.ctl:first-child>*{opacity:.75}
+  #tbody tr.started td.pl>*{opacity:.55}#tbody tr.started td.ctl:first-child>*{opacity:.32}
+  #tbody tr.excl td.pl>*,#tbody tr.excl td.ctl:first-child>*{opacity:.3}
+  #tbody tr.blk.locked:not(.excl) td.pl>*,#tbody tr.blk.locked:not(.excl) td.ctl:first-child>*{opacity:1}
+}
+@media (max-width:900px){
+  .tabs button,.tchip,.top .themes button,.top .vtabs button,.pview .pv{min-height:2rem}
+  .search,.search.salb,#clearF{min-height:2rem}
+}
+/* On a phone the bar is too tall to stay on screen: it scrolls away and the table's own box takes the screen. */
+@media (max-width:599px){
+  .top .lsw,.top .vtabs button,.top .themes button,.tabs button{min-height:2.25rem}
+  .games{grid-template-columns:repeat(auto-fill,minmax(10.5rem,1fr))!important;justify-content:stretch} /* Adam 11-21: games-fit.js sets an inline column width that outranks a plain rule, so !important; fixed 14.75rem cards ran off an iPhone */
+  .top .vtabs{flex-wrap:wrap}.top .vtabs button{flex:1 1 auto}
+  .fbar{position:static}
+  .tbl{top:0;max-height:calc(100dvh - 0.75rem)}
+  /* The sticky Player column was 348px in a 333px box and covered every figure. On a phone it holds only the logo and a shortened name (the star column beside it is sticky too), about 130px; the position tag and game line are left off here. */
+  #tbody td.pl,#thead th.pl{width:8rem;min-width:0;max-width:8rem;padding-right:0.25rem}
+  #tbody .who{gap:0.375rem}
+  #tbody .who .nm{min-width:0;flex:1;overflow:hidden}
+  #tbody .l1{overflow:hidden}
+  #tbody .l1 .name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #tbody .l2{display:none}
+  /* The row's note and reset buttons drop to a second line under the name, inside the same 128px sticky cell, so no figure column is pushed. */
+  #tbody .who{flex-wrap:wrap;row-gap:0.125rem}
+  #tbody .ovt{flex-basis:100%;margin-left:1.75rem;padding-left:0}
+  #tbody .ovt button{width:2.25rem;height:2.25rem}
+  #tbody .ovt:has(.rs.off){display:none} /* a row with nothing to reset keeps its short height; the reset takes its own line only when it has work */
+  /* Touch targets: 36px square on every row control, like the rest of the phone view. */
+  #tbody .ctl button,#tbody .bump-btn{width:2.25rem;height:2.25rem;min-width:2.25rem}
+  #tbody .bump-ctl{width:auto;gap:0.125rem}
+  #tbody .limb{width:2.3125rem;height:2.25rem}
+  #tbody td.ctl:first-child,#thead th.ctl:first-child{padding-left:0.375rem}
+}
+
+/* The console's word on a row (board-marks.js, Adam 11-07). Min and DK/m TON are typeable: the box lays over the figure as Proj's does; his typed
+   number wears the typed marker, and a fixed slot after it holds its undo chip so no column moves when one appears. */
+td:has(> .cedit){position:relative}
+.cedit{display:inline-block;min-width:4ch;padding:0 0.1875rem;margin-right:-0.1875rem;text-align:right;cursor:text}
+.cedit.ctyped{outline:1px solid var(--am);outline-offset:-0.0625rem;background:#ffb00014;color:var(--am);font-weight:700}
+/* "You can type here": Proj, Own, Min and DK/m TON (the cells he can edit) rest in one faint box that read-only figures do not have, stronger on hover; his typed numbers keep their amber box (above). Box padding is pulled out by margin so digits stay in line with the column. */
+#tbody .cedit:not(.ctyped):not(.min-typed),#tbody td.own .v.ov-own:not(.ov-typed){display:inline-block;min-width:4ch;padding:0 0.25rem;margin-right:-0.25rem;border-radius:0.125rem;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--mu) 38%,transparent)}
+#tbody .cedit:not(.ctyped):not(.min-typed),#tbody td.own .v.ov-own:not(.ov-typed){background:color-mix(in srgb,var(--tx) 6%,transparent)}
+#tbody .cedit:not(.ctyped):not(.min-typed):hover,#tbody td.own .v.ov-own:not(.ov-typed):hover{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--mu) 75%,transparent);background:color-mix(in srgb,var(--tx) 8%,transparent)}
+/* His undo chip hangs in the gap left of the number and takes no width, so Min and DK/m TON sit at the same spacing as every other figure column. */
+.cu{display:inline-block;position:relative;width:0;height:1rem;vertical-align:middle}
+.cu>.cundo{position:absolute;right:0.25rem;top:0}
+.cundo{width:1rem;height:1rem;padding:0;border:1px solid #ffb00088;background:transparent;color:var(--am);font-size:0.6875rem;line-height:1;display:inline-grid;place-items:center;border-radius:0.125rem}
+.cundo:hover{background:var(--am);color:#000}
+/* The S chip: green when a lineup source confirmed him or he is Adam's own pick, orange when only expected. */
+.schip{display:inline-flex;align-items:center;justify-content:center;width:1rem;height:1rem;flex-shrink:0;font-size:0.6563rem;font-weight:800;line-height:1;border-radius:0.125rem;cursor:default}
+.schip.confirmed{background:#1fae5b;color:#fff}
+.schip.expected{background:transparent;color:#ff8a1f;box-shadow:inset 0 0 0 0.0938rem #ff8a1f}
+body.light .schip.expected{color:#c25e00;box-shadow:inset 0 0 0 0.0938rem #c25e00}
+body.light .cedit.ctyped{background:#9a5b0018}
+/* The console's send, when anything is held back, waiting or unsent (board-marks.js syncHtml): one line above the list. */
+.syncnote{margin:0 0 0.625rem;padding:0.375rem 0.625rem;border:1px solid color-mix(in srgb,var(--am) 45%,transparent);color:var(--am);font-size:0.75rem;display:flex;flex-wrap:wrap;gap:0.25rem 0.875rem}
+.syncnote.err{border-color:color-mix(in srgb,var(--rd) 60%,transparent);color:var(--rd)}
+.syncnote.busy{border-color:var(--ln);color:var(--mu)}
+.syncnote span{color:var(--mu)}
+body.console-on .syncnote{display:none}
+.pbadge{padding:0.25rem 0.625rem;color:var(--am);font-size:0.7188rem;border-right:1px solid var(--ln)}
+.pbadge:last-child{border-right:0}
+.bcheck{margin:1rem 0.75rem 0;color:var(--mu);font-size:0.75rem;display:grid;gap:0.1875rem}
+.bcheck[hidden],body.lineups-on .bcheck,body.news-on .bcheck,body.console-on .bcheck{display:none}
+.bcheck .bc-head{color:var(--tx)}
+.bcheck .bc-bad,.bcheck .bc-conflict{color:var(--am)}
+.bcheck+.sources{margin-top:0.5rem}
+.sources{margin:1rem 0.75rem 1.5rem;color:var(--mu);font-size:0.75rem}
+.sources summary{cursor:pointer;padding:0.25rem 0;user-select:none}
+.sources ul{list-style:none;margin:0.375rem 0 0;padding:0;display:grid;grid-template-columns:max-content 1fr;gap:0.1875rem 1.125rem}
+.sources li{display:contents}
+.sources li b{color:var(--tx);font-weight:500}
+.sources li b.miss{color:var(--am)}
+/* Min cell: ours and TwoGun 10+ minutes apart (Adam 11-12); --rd reads on both themes */
+.gapw{font-style:normal;font-weight:800;font-size:0.8125rem;color:var(--rd);margin-right:0.25rem;cursor:help}
+.chip.gapchip{margin-right:0.375rem;border-color:var(--rd);color:var(--rd)}.chip.gapchip b{color:var(--rd);margin-left:0.125rem}
+.chip.gapchip.on{background:var(--rd);color:#000}.chip.gapchip.on b{color:#000}
+
+/* A man's name that opens his card (board.js reads data-dk-id from any click): the Out list names' look. */
+.nml{cursor:pointer}.nml:hover{color:var(--am);text-decoration:underline}
+/* The table fills its box: the spare width goes to the last column (the Max % box, which sits at its left), so it collects at the table's right end instead of stretching Player and the figure columns. Placed after the media rules that give the limit cells a width. */
+#thead th:last-child,#tbody td:last-child{width:100%}

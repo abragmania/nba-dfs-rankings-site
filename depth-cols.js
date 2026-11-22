@@ -1,6 +1,6 @@
 // Our depth chart by position (Adam 11-17, 2:07-2:58 PM): one position per man, five columns PG, SG, SF, PF and C, the starter on top; never DraftKings' positions. Pure ES module shared by the
 // server's minutes engine (server/minutes/engine.js, personal-view.js) and the console page (console-tier.js, console-chart.js), so the board and the page place every man the same way
-// (tests/depth_chart_minutes.test.mjs holds the two equal).
+// (tests/depth_chart_minutes_*.test.mjs holds the two equal).
 // The chart is a SEED (the position sources' consensus, server/minutes/pos-consensus.js: { PG: [keys], ..., none: [keys with no position] }) with Adam's MOVES replayed on it in time order. A move
 // { key, pos, after, before, at } puts the man in column `pos` directly below `after` (null: at the top) or, when `after` is not in that column, directly above `before` (null: at the bottom). His
 // moves are standing (they carry to later nights) and win over every source; only his newest move per man is kept (addMove), so the list never grows past the team's men.

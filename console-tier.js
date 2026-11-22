@@ -44,7 +44,7 @@ export function tierUse(team) {
 const mean = (rows) => (rows.length ? rows.reduce((s, r) => s + r[0], 0) / rows.length : null);
 
 /**
- * Tonight's five on a scenario, with no plan run: { gone, order, five: Set of ids, base (chooseFive's), conf, notes, fixed }. The pages' five without the men gone, else TwoGun's flags; a man he marked off the five leaves it,
+ * Tonight's five on a scenario, with no plan run: { gone, order, five: Set of ids, base (chooseFive's), conf, notes, fixed, claims (role-marks.js trimToFive's: whom each Starter call on a full five benched) }. The pages' five without the men gone, else TwoGun's flags; a man he marked off the five leaves it,
  * a man marked S joins it and takes a fill place first (so a swap or bench-then-S never gives six: six comes only from S marks on top of a real five).
  */
 export function tierFive(team, outSet, markIn = {}) {
@@ -62,10 +62,19 @@ export function tierFive(team, outSet, markIn = {}) {
   const standing = team.role_marks ?? T.role_marks ?? {}, news = newsFlips(team.news, mark), his = Object.fromEntries(Object.entries(mark).filter(([id, r]) => !(news[id] === r && standing[id] !== r))); // the note names his own marks only, never the news's calls
   const flag = (id) => T.men[id].starter_flag === true, fv = fiveWithMarks({ pool, conf, tops, fill, flag, want, realIds: realFive({ order, conf: T.confirmed, tops: allTops, flag }),
     posOf: (id) => (ch ? ch.posOf.get(keyOfId(T, id)) ?? null : null), figOf: (id) => starterFig(T.men[id].rows.map(([min, s]) => ({ min, started: s === 1 ? true : s === 0 ? false : null }))), nameOf: (id) => T.men[id]?.name ?? id,
-    whoseOf: (id) => (his[id] === "starter" ? "Your Starter mark" : "The lineup news's Starter call") }); // role-marks.js: the one rule the board's engine runs too (personal-view.js markedFive); the five before any mark
+    whoseOf: (id) => (his[id] === "starter" ? "Your Starter mark" : "The lineup news's Starter call"), ...pickLook(team, mark, standing, his) }); // role-marks.js: the one rule the board's engine runs too (personal-view.js markedFive); the five before any mark
   const real = T.confirmed?.ids?.length ? T.confirmed.ids : allTops ?? order.filter(flag), mnote = marksNote(his, real, fv.five, (id) => T.men[id]?.name ?? id);
   const base = mnote ? { ...fv.base, note: [fv.base.note, mnote].filter(Boolean).join("; ") } : fv.base;
-  return { gone, order, five: fv.five, base, conf, notes: fv.notes, fixed };
+  return { gone, order, five: fv.five, base, conf, notes: fv.notes, fixed, claims: fv.claims };
+}
+/** His picks of whom a Starter mark replaces (the page's live list team.role_picks beside the page's marks, else the inputs'; role-marks.js picksById) for fiveWithMarks: pickOf on his own standing Starter marks only,
+ *  pickAtOf (ms: when his pick was made, its own time, never the mark's (the review of 11-21, money): a pick that differs from the inputs' was made on this page, its page stamp (team.pick_at, console-moves.js
+ *  stampFlips), else Infinity; else the inputs' role_picks_at), callAtOf (ms: when the Starter call in force on a man was made, his standing mark's where it stands, else the flip's; callTimes), nameOf for a
+ *  picked man with no engine inputs (the chart's names). mark: the calls in force. */
+function pickLook(team, mark, standing, his) {
+  const T = team.tier, picks = (team.role_marks ? team.role_picks : T.role_picks) ?? {}, saved = T.role_picks ?? {}, t = callTimes(team, mark), ms = (iso) => Date.parse(iso ?? "");
+  const pickAtOf = (id) => ((picks[id] ?? null) !== (saved[id] ?? null) ? (Number.isFinite(ms(team.pick_at?.[id])) ? ms(team.pick_at[id]) : Infinity) : later(ms(team.pick_at?.[id]), ms(T.role_picks_at?.[id]))); // equal to the inputs': the later of the page's stamp and the saved time (changed away and back before a read, the server stamped it again)
+  return { pickOf: (id) => (standing[id] === "starter" && his[id] === "starter" ? picks[id] ?? null : null), pickAtOf, callAtOf: (id) => (Object.hasOwn(standing, id) && standing[id] === mark[id] ? t.markAt(id) : t.flipAt(id)), nameOf: (id) => T.men[id]?.name ?? T.depth?.names?.[id] ?? id };
 }
 /**
  * His Minutes-page typed numbers (T.minutes_page, stamped by their log) judged against the plan's roles (typed-aside.js), the men with a Console number (kept or set aside, consoleIds) left out, so setting a
@@ -83,11 +92,13 @@ function pageVerdicts(team, plan, consoleIds, flips, order) {
  * markAt(id) (ms: his standing mark's time; for a mark made on this page since its inputs were read, the page's own stamp of it (team.mark_at, console-moves.js stampFlips), else Infinity; NaN unknown), byNews(id).
  * flips: { id: role }.
  */
+/** The later of two times in ms, either NaN (unknown): the known one; NaN when neither is. */
+const later = (a, b) => (Number.isFinite(a) ? (Number.isFinite(b) ? Math.max(a, b) : a) : b);
 export function callTimes(team, flips = {}) {
   const T = team.tier ?? {}, newsAt = newsFlipTimes(team.news, flips), page = team.role_marks, saved = T.role_marks ?? {};
   return {
     flipAt: (id) => Date.parse(newsAt[id] ?? team.stamps?.r?.[team.scenario_key ?? ""]?.[id] ?? ""),
-    markAt: (id) => (page && Object.hasOwn(page, id) && page[id] !== saved[id] ? (Number.isFinite(Date.parse(team.mark_at?.[id] ?? "")) ? Date.parse(team.mark_at[id]) : Infinity) : Date.parse(T.role_marks_at?.[id] ?? "")),
+    markAt: (id) => (page && Object.hasOwn(page, id) && page[id] !== saved[id] ? (Number.isFinite(Date.parse(team.mark_at?.[id] ?? "")) ? Date.parse(team.mark_at[id]) : Infinity) : later(Date.parse(team.mark_at?.[id] ?? ""), Date.parse(T.role_marks_at?.[id] ?? ""))), // equal to the inputs': the later of the page's stamp and the saved time (the review of 11-21)
     byNews: (id) => Object.hasOwn(newsAt, id),
   };
 }
