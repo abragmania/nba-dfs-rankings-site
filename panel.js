@@ -278,7 +278,7 @@ async function build(X) {
     if (P.build !== watch) return; // an abandoned build's answer, even if the panel is back on its slate
     const prev = P.results[mode];
     if (!out.lineups.length && prev?.lineups.length) P.results[mode] = { ...prev, note: out.note ?? null, partial: out.partial ?? null, error: null, kept: true }; // nothing built (a stop, or a note saying why): the lineups on show stay, the note at the foot of the tab
-    else P.results[mode] = { idx: 0, lineups: out.lineups.map((l) => ({ ...l, ids: l.slots.map((p) => p.dk_id), men: frozenMen(l.slots, X.ctx().byId) })), skipped: out.skipped ?? [], note: out.note ?? null, partial: out.partial ?? null, error: null, picksAt, noAt, ovAt, limAt, workKey: wk, pullAt, builtAt: Date.now(), no: out.no?.names ?? null }; // no: the NO men this build left out (lineup/no-list.js), each lineup's heading line
+    else P.results[mode] = { idx: 0, lineups: out.lineups.map((l) => ({ ...l, ids: l.slots.map((p) => p.dk_id), men: frozenMen(l.slots, X.ctx().byId) })), skipped: out.skipped ?? [], note: out.note ?? null, partial: out.partial ?? null, error: null, picksAt, noAt, ovAt, limAt, workKey: wk, pullAt, builtAt: Date.now(), no: out.no?.names ?? null, rerun: out.rerun ?? null }; // no: the NO men this build left out (lineup/no-list.js), each lineup's heading line; rerun: what remakes it (build-route.js)
     // The lineups are kept as this mode's build on the Lineups tab, replacing only the last build of this mode (Adam 11-07, 11-12, 11-14,
     // 11-20); the other mode's result, notes and build stay. The panel says "N lineups built: open Lineups" and Build never moves Adam
     // to another tab by itself. Nothing here writes a saved lineup: only Save does.

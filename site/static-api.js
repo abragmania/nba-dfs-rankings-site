@@ -185,6 +185,15 @@ async function freshLineups(slate) {
   return text;
 }
 
+/** The Log tab's lines (baked change-log.jsonl), read again on every ask so the tab sees a newer publish; none baked: none here either. */
+async function freshChangeLog(slate) {
+  const text = await readBaked(`slates/${slate}/change-log.jsonl`);
+  const file = `${DATA}/${slate}/change-log.jsonl`;
+  if (text !== null) seed(file, text);
+  else dropKept(file);
+  return text;
+}
+
 /** The published files a path needs, in memory before the app's handler reads them. */
 async function loadFor(pathname) {
   if (pathname === "/api/slates") return freshSlates();
@@ -199,6 +208,7 @@ async function loadFor(pathname) {
   if (!/^[a-z0-9-]+$/.test(slate)) return null;
   if (m[2] === "/pull-stamp") return freshStamp(slate);
   if (m[2] === "/news-lineups") return freshLineups(slate);
+  if (m[2] === "/change-log") return Promise.all([seedBaked(`slates/${slate}/slate.json`, `${DATA}/${slate}/slate.json`), freshChangeLog(slate)]); // the route answers only for a slate on the site
   const jobs = [seedBaked(`slates/${slate}/slate.json`, `${DATA}/${slate}/slate.json`).then((t) => { rosterOf(slate, t); return rowMenOf(slate, t).then(() => t); }), seedBaked(`slates/${slate}/pull-moves.json`, `${DATA}/${slate}/pull-moves.json`), figuresOf(slate), siteOf(slate), editsOf(slate)];
   if (m[2] === undefined || m[0].startsWith("/api/board-check/")) jobs.push(freshLineups(slate)); // the board and its self-check read the lineup read (board-check.js), so it is in memory before the first board read, not only after the bar's own ask
   if (/^\/console/.test(m[2] ?? "")) jobs.push(seedBaked(`slates/${slate}/console-inputs.json`, `${DATA}/${slate}/console-inputs.json`));

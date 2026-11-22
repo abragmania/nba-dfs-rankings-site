@@ -1,0 +1,39 @@
+/* The Log tab (log-tab.js, log-view.js). G71: every size in rem off the root, which grows with the width (board.css); the 1920 page is the design.
+   Every colour is a theme variable or mixed from one, so Dark, Navy and Light all read (R9). Everything sits under #log. */
+body.log-on .games,body.log-on main.work,body.log-on #dropnote,body.log-on #lineups,body.log-on #console,body.log-on #scenario,body.log-on .bcheck,body.log-on #updline,body.log-on #sources{display:none}
+#log{margin:1rem 0 0}
+#log .lg-panel{background:var(--p);border:1px solid var(--ln)}
+#log .lg-bar{display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.9rem;border-bottom:1px solid var(--ln);white-space:nowrap}
+#log .lg-search{width:17rem;flex:none;background:var(--p2);border:1px solid var(--ln);color:var(--tx);padding:0.3rem 0.55rem;font-size:0.8125rem}
+#log .lg-search:focus{outline:0;border-color:var(--am)}
+#log .lg-teams{display:flex;flex-wrap:nowrap;gap:0.125rem;min-width:0;overflow-x:auto;flex:1 1 auto;scrollbar-width:thin}
+#log .lg-teams .tchip{flex:none}
+#log .lg-all{padding:0.0625rem 0.45rem}
+#log .lg-k{color:var(--mu);font-size:0.75rem;letter-spacing:0.03em}
+#log .lg-bys{display:inline-flex;border:1px solid var(--ln);flex:none}
+#log .lg-by{background:none;border:0;border-right:1px solid var(--ln);color:var(--mu);padding:0.25rem 0.6rem;font-size:0.75rem;font-weight:600}
+#log .lg-by:last-child{border-right:0}
+#log .lg-by.on{background:var(--am);color:#000}
+#log .lg-t{border-collapse:collapse;width:100%;table-layout:fixed;font-variant-numeric:tabular-nums}
+#log .lg-t .c-at{width:6.5rem}#log .lg-t .c-tm{width:5rem}#log .lg-t .c-nm{width:12.5rem}#log .lg-t .c-wh{width:9.5rem}#log .lg-t .c-ft{width:10rem}#log .lg-t .c-bw{width:7.25rem}
+#log .lg-t th{color:var(--mu);font-weight:400;text-align:left;padding:0.4rem 0.6rem;border-bottom:1px solid var(--ln);font-size:0.6875rem;letter-spacing:0.03em;white-space:nowrap;position:sticky;top:0;background:var(--p)}
+#log .lg-t td{text-align:left;padding:0.3rem 0.6rem;border-bottom:1px solid color-mix(in srgb,var(--ln) 60%,transparent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:0.8125rem}
+#log .lg-t tbody tr:hover td{background:var(--p2)}
+#log .lg-at{color:var(--mu)}
+#log .lg-tm .logo{display:inline-block;vertical-align:-0.2rem;margin-right:0.35rem}
+#log .lg-tm b{font-weight:600}
+#log .lg-nm .nm{cursor:pointer;font-weight:600}
+#log .lg-nm .nm:hover{color:var(--am);text-decoration:underline}
+#log .lg-f{color:var(--mu)}
+#log .lg-ar{margin:0 0.4rem;color:var(--dim)}
+#log .up{color:var(--gr)}
+#log .dn{color:var(--rd)}
+#log .lg-tag{display:inline-block;padding:0.05rem 0.45rem;border:1px solid var(--ln);font-size:0.6875rem;font-weight:600;letter-spacing:0.02em}
+#log .b-you{color:var(--am);border-color:color-mix(in srgb,var(--am) 55%,transparent)}
+#log .b-news,#log .b-lineup-check{color:var(--bl);border-color:color-mix(in srgb,var(--bl) 55%,transparent)}
+#log .b-console{color:var(--mrc);border-color:color-mix(in srgb,var(--mrc) 55%,transparent)}
+#log .b-pull{color:var(--gr);border-color:color-mix(in srgb,var(--gr) 55%,transparent)}
+#log .b-engine{color:var(--mu)}
+#log .lg-why{color:var(--mu)}
+#log .lg-foot{color:var(--mu);font-size:0.6875rem;padding:0.5rem 0.9rem;line-height:1.55;border-top:1px solid var(--ln)}
+#log .lg-empty{padding:1.25rem 0.9rem;color:var(--mu)}

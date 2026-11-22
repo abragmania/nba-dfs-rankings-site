@@ -95,7 +95,8 @@ body.console-on .games,body.console-on main.work,body.console-on #dropnote{displ
   .tg.bp:disabled{opacity:.35;cursor:default}
   .tg.o.on{background:var(--rd);border-color:var(--rd);color:var(--p)}
   /* out / injured */
-  .oline{display:grid;grid-template-columns:2.125rem minmax(0,1fr) auto;column-gap:0.625rem;row-gap:0.125rem;align-items:center;padding:0.5rem 0.75rem;border-bottom:1px solid var(--ln2)}
+  .oline{display:grid;grid-template-columns:2.125rem minmax(0,1fr) 3.5rem auto;column-gap:0.625rem;row-gap:0.125rem;align-items:center;padding:0.5rem 0.75rem;border-bottom:1px solid var(--ln2)}
+  .oline .ousg{text-align:right;font-variant-numeric:tabular-nums;font-size:0.8125rem;color:var(--mu);white-space:nowrap}
   .oline:last-child{border-bottom:0}
   .oline .ps{color:var(--mu);font-size:0.7813rem}
   .oline .onm{font-weight:600;color:var(--mu);text-decoration:line-through}

@@ -1,6 +1,7 @@
 // The optimizer's routes: a build, its progress and its stop. Moved out of server/server.js unchanged (file split, 11-17); the route
 // order stays in server.js route(); handleOptimize's origin and JSON guards come from openSlate and readJson in slate/http-helpers.js,
 // while handleBuildStop and handleBuildProgress check origin themselves.
+import crypto from "../../site/shim/crypto.js"; // default only: the public site's shim (site-src/shim/crypto.js) gives createHash (sha256, hex) alone
 import { info, error } from "../../site/shim/log.js";
 import { refuseNonJsonPost, refuseCrossSiteRead } from "../lib/origin.js";
 import { optimizeErrorKind } from "../server-util.js";
@@ -10,13 +11,13 @@ import { send, fail, readJson, openSlate } from "../slate/http-helpers.js";
 import { effectivePlayers } from "../slate/effective-players.js";
 import { slateRefMs, startedSplit, leftOut } from "../board/lateswap.js";
 import { DEFAULT_COUNT } from "../board/slots.js";
-import { ONE_GAME_NOTE } from "./optimize.js";
+import { ONE_GAME_NOTE, MAX_SEED, isSeed } from "./optimize.js";
 import { APP_MAX_STEPS, newJob, runOptimize, keepAnswerOpen, partialResult } from "./build-run.js";
 import { noForBuild } from "./no-list.js";
 
 export const LATE_ONE_GAME_NOTE = "Only one game left unstarted; DraftKings needs players from at least two games, so pin or keep a started man.";
 
-/** POST { mode, settings, handPicks? }: lineups for the slate's players; locked and excluded come from the mode's saved picks, never the body.
+/** POST { mode, settings, handPicks?, seed? }: lineups for the slate's players; locked and excluded come from the mode's saved picks, never the body.
  *  One search at a time per server (409 while one runs), so builds cannot pile up workers. A Stop or the ceiling answers 200
  *  with the finished lineups, a sentence in note and a partial field (lineup/build-run.js). */
 export async function handleOptimize(req, res, slate, opts) {
@@ -46,6 +47,7 @@ export async function handleOptimize(req, res, slate, opts) {
   if (!hand.ok) return fail(res, 400, "BAD_SETTINGS", hand.message);
   const handIdList = hand.slots.filter((id) => id != null);
   if (lateSwap && handIdList.length) return fail(res, 400, "BAD_SETTINGS", "Hand-picked men are not used in late swap mode; pin them instead.");
+  if (body.seed != null && !isSeed(body.seed)) return fail(res, 400, "BAD_SETTINGS", `"seed" must be a whole number from 0 to ${MAX_SEED}.`);
   // A build reads its own mode's locks and excludes only (Adam 11-14, 11-19, 11-20): a GPP lock never reaches a Cash build, nor the reverse.
   // Late swap in the optimizer panel is a build of one mode too, so it reads that mode's.
   if (!PICK_MODES.includes(body.mode)) return fail(res, 400, "BAD_SETTINGS", 'Mode must be "Cash" or "GPP".');
@@ -79,7 +81,12 @@ export async function handleOptimize(req, res, slate, opts) {
   excluded = nb.excluded;
   if (lateOut) lateOut.no = nb.late;
   const settings = { ...body.settings, ...(nb.exposure !== (body.settings?.exposure ?? null) ? { exposure: nb.exposure } : {}), maxSteps: body.settings?.maxSteps ?? APP_MAX_STEPS };
-  const args = { players, mode: body.mode, settings, locked, excluded, handPicked: handIdList };
+  // A rerun names the seed it was given back; a new variance build (GPP, variancePct above 0: the only draw optimize makes) draws one, any other build needs none (null),
+  // so a build without variance answers the same record every time (the site's build matches the app's digit for digit). No secret: Math.random, which the site has too.
+  const varied = body.mode === "GPP" && typeof settings.variancePct === "number" && settings.variancePct > 0;
+  const seed = body.seed ?? (varied ? Math.floor(Math.random() * (MAX_SEED + 1)) : null);
+  const args = { players, mode: body.mode, settings, locked, excluded, handPicked: handIdList, seed }, rerun = rerunOf(args, lateSwap);
+  info("build rerun record", { slate, ...rerun }); // once per build, so a build is reproducible from the server log until the saved build carries it
   const noOut = nb.noOut;
   const gone = new AbortController();
   res.on("close", () => { if (!res.writableFinished) gone.abort(); });
@@ -92,12 +99,23 @@ export async function handleOptimize(req, res, slate, opts) {
   } catch (e) {
     error("optimizer failed", { slate, message: e.message, finished_lineups: job.lineups.length });
     // Lineups finished before the failure are whole and stay; only when there are none is the build a failure.
-    if (job.lineups.length) return answerBuild(res, slate, { result: partialResult("failed", job, settings.count ?? DEFAULT_COUNT, undefined, args) }, lateOut, noOut);
+    if (job.lineups.length) return answerBuild(res, slate, { result: partialResult("failed", job, settings.count ?? DEFAULT_COUNT, undefined, args) }, lateOut, noOut, rerun);
     return answerBuildFail(res, 500, "OPTIMIZER_FAILED", "The optimizer failed on this slate and built nothing. The server log has the details.");
   } finally {
     endKeepalive();
   }
-  return answerBuild(res, slate, out, lateOut, noOut);
+  return answerBuild(res, slate, out, lateOut, noOut, rerun);
+}
+
+/** What a build needs to be made again (the 11-13 audit: a variance build could not be reproduced): its seed (null for a build with no variance, which draws
+ *  nothing), mode and full settings as the search read them, the locks, excludes and hand-picked men it ran with, and the sha256 of the players it scored.
+ *  A POST of this mode, settings and seed gives the same lineups only while the effective players, the saved picks, the NO list and late swap's started set
+ *  are unchanged (optimize.js seed): players_sha256 confirms the players were the same, it cannot restore them. */
+export function rerunOf(args, lateSwap) {
+  return {
+    seed: args.seed, mode: args.mode, settings: args.settings, locked: args.locked, excluded: args.excluded, hand_picked: args.handPicked, late_swap: lateSwap,
+    players: args.players.length, players_sha256: crypto.createHash("sha256").update(JSON.stringify(args.players)).digest("hex"),
+  };
 }
 
 /** The mode's saved picks, or null after a named 500: an unreadable file means who is locked or excluded is unknown, so nothing is built
@@ -117,8 +135,9 @@ export function answerBuildFail(res, status, code, message) {
 }
 
 /** A build's answer from runOptimize's outcome. `noOut` ({ applied: { ids, names } | null, note }) is the NO list this build left
- *  out: the answer carries it as `no` (each lineup's heading line, stored with the build), and its note joins the build's note. */
-export function answerBuild(res, slate, out, lateOut, noOut = null) {
+ *  out: the answer carries it as `no` (each lineup's heading line, stored with the build), and its note joins the build's note. `rerun` (rerunOf) goes on the
+ *  answer as it is, so the build can be made again. */
+export function answerBuild(res, slate, out, lateOut, noOut = null, rerun = null) {
   if (out.cancelled) return res.destroy(); // nobody is waiting for this answer
   const err = out.result.error;
   if (err && optimizeErrorKind(err) === "slate") {
@@ -129,7 +148,8 @@ export function answerBuild(res, slate, out, lateOut, noOut = null) {
   if (out.result.partial) info("build ended early", { slate, ...out.result.partial });
   // In late swap the one-game case means the started games took the rest out: say so in those words.
   const result = !noOut?.applied && !noOut?.note ? out.result : { ...out.result, ...(noOut.applied ? { no: noOut.applied } : {}), note: [out.result.note, noOut.note].filter(Boolean).join(" ") || null };
-  const body = !lateOut ? result : { ...result, note: result.note === ONE_GAME_NOTE ? LATE_ONE_GAME_NOTE : result.note, late_swap: lateOut };
+  const answered = !lateOut ? result : { ...result, note: result.note === ONE_GAME_NOTE ? LATE_ONE_GAME_NOTE : result.note, late_swap: lateOut };
+  const body = rerun ? { ...answered, rerun } : answered;
   if (res.headersSent) return res.end(JSON.stringify(body)); // a long build's 200 has started (build-run.js)
   return send(res, 200, body);
 }

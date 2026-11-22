@@ -30,6 +30,9 @@ const FAST_FIND_TOTAL = 10_000_000;
 const FAST_FINDS = 32; // such looks per build: each can make a bound table
 const FAST_BOUNDS = 6; // bound tables a build under Min % and Max % may make to polish its lineups; it can have many sets of held men
 const FAST_SEED = 20261104;
+/** The largest variance seed (seededRandom reads 32 bits). */
+export const MAX_SEED = 2 ** 32 - 1;
+export const isSeed = (v) => Number.isInteger(v) && v >= 0 && v <= MAX_SEED;
 
 const SETTING_KEYS = ["count", "minUnique", "minSalary", "teamMax", "teamMin", "teamOverrides", "gameOverrides", "maxTotalOwn", "lowOwned", "maxSteps", "pinned", "exposure", "variancePct"];
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
@@ -590,14 +593,18 @@ function preparePool(players, mode, s, lockSet, exSet) {
  * Naming settings.maxSteps below the app's no-limit value asks for the exact search; Cash always has it.
  * settings.variancePct (GPP only): each lineup is searched on every man's projection varied by a uniform plus or minus that percent,
  * drawn from `random`; the lineups keep the real figures and come back best real projection first.
+ * seed (the 11-13 audit: a variance build must be reproducible): a whole number 0 to MAX_SEED; when given, `random` is seededRandom(seed), so the same
+ * seed, settings and players give the same lineups. Anything else given as a seed is refused.
  * handPicked (the working lineup, Adam 5:34 PM ET 2026-10-29): [dk_id]; each is in every lineup as if locked for this run
  * only, in Cash and GPP, under every other setting. He holds no slot: he may sit in any slot his positions allow (Adam,
  * 2:58 PM ET 2026-10-29: "that doesn't mean he HAS to be locked in at SG ... He can play either position").
  * onProgress (the server's worker, lineup/build-run.js): called with { done: 0, of, skipped } once the search starts, then with
  * { done, of, lineup } as each lineup finishes. It changes nothing about the search or its result.
  */
-export function optimize({ players, mode, settings, locked = [], excluded = [], handPicked = [], refMs = Date.now(), onProgress = null, random = Math.random }) {
+export function optimize({ players, mode, settings, locked = [], excluded = [], handPicked = [], refMs = Date.now(), onProgress = null, random = Math.random, seed = null }) {
   if (mode !== "Cash" && mode !== "GPP") return fail([], 'Mode must be "Cash" or "GPP".');
+  if (seed !== null && !isSeed(seed)) return fail([], `The seed must be a whole number from 0 to ${MAX_SEED}.`);
+  if (seed !== null) random = seededRandom(seed);
   if (!isNum(refMs)) return fail([], "The reference time for reading tip times must be a number of milliseconds.");
   if (!Array.isArray(players)) return fail([], "Players must be a list.");
   if (!players.every(isPlain)) return fail([], "Each player must be an object.");

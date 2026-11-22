@@ -3,7 +3,9 @@
 // the last GPP build, a new build replacing only its own mode's, so a reload or a restart still shows them. Per slate, in
 // data/cache/builds/<slate>.json (beside the saved lineups and the spots; it stays on this machine, never on GitHub):
 //   { slate, builds: [ { id, mode, built_at, lineups: [{ ids: [8 dk ids in slot order] }], rows: { dk_id: row }, skipped, note,
-//                        partial, stamps, minutes_file } ] }   (one build per mode at most; an older file may hold more, and only the newest of each mode is read)
+//                        partial, stamps, minutes_file, rerun } ] }   (one build per mode at most; an older file may hold more, and only the newest of each mode is read)
+// `rerun` (null on a build made before 11-21) is the build answer's seed, mode, full settings, picks and players' hash (checkRerun), so the build can be made again;
+// a record that fails its check is dropped and the build keeps `rerun_dropped` with why (logged), never refused over it.
 // `stamps.pullAt` is the pull the build used and `minutes_file` the newest minutes snapshot (data/slates/<slate>/minutes-history/<stamp>-<reason>.json)
 // at or before the time the server first kept the build, set by the server only (null when there is none); with those two, "what did that build see"
 // is answerable, except minutes typed after the last snapshot, which are in no file.
@@ -69,9 +71,36 @@ export function checkBuild(b, fromDisk = false) {
   if (b.partial != null && (!plain(b.partial) || Object.values(b.partial).some((v) => !scalar(v)))) return bad('"partial" must be a short record.');
   if (b.stamps != null && (!plain(b.stamps) || JSON.stringify(b.stamps).length > 8000)) return bad('"stamps" must be a short record.');
   if (!noNamesOk(b.no)) return bad(NO_NAMES_RULE); // the NO line of each lineup's heading (lineup/no-list.js, Adam 11-19)
+  // G62, a mismatch degrades before refusing: a rerun record that fails its check never costs him the build; it is dropped (null) and the build says why in
+  // rerun_dropped, which writeBuilds logs. A note from our own file on disk is kept as it was; a request body's is never read.
+  const rerun = checkRerun(b.rerun, b.mode);
+  const keptNote = fromDisk && typeof b.rerun_dropped === "string" ? b.rerun_dropped.slice(0, 300) : null;
   // minutes_file is the server's own stamp: only our file on disk carries it (fromDisk); a request body's is dropped, never read.
   if (fromDisk && b.minutes_file != null && (typeof b.minutes_file !== "string" || b.minutes_file.length > 200)) return bad('"minutes_file" must be a file name.');
-  return { ok: true, build: { id: b.id, mode: b.mode, built_at: b.built_at, lineups, rows, skipped, note, partial: b.partial ?? null, stamps: b.stamps ?? null, no: noOf(b.no), minutes_file: fromDisk ? b.minutes_file ?? null : null } };
+  return { ok: true, build: { id: b.id, mode: b.mode, built_at: b.built_at, lineups, rows, skipped, note, partial: b.partial ?? null, stamps: b.stamps ?? null, no: noOf(b.no), minutes_file: fromDisk ? b.minutes_file ?? null : null,
+    rerun: rerun.message ? null : rerun.value, ...(rerun.message || keptNote ? { rerun_dropped: rerun.message ?? keptNote } : {}) } };
+}
+
+/** The most of a build's rerun record the server keeps, as JSON characters (its settings hold the Min % and Max % map, so it is not in the 8000-character stamps). */
+export const RERUN_MAX = 60_000;
+const isIdList = (v) => Array.isArray(v) && v.length <= 1000 && v.every(idOk);
+/** A build's rerun record (lineup/build-route.js rerunOf; the 11-13 audit), checked: { value } (null when the build has none: an older build still loads) or
+ *  { message } naming what is wrong; checkBuild then keeps the build without it and names the message in rerun_dropped, never a refusal. */
+export function checkRerun(r, mode) {
+  if (r == null) return { value: null };
+  const no = (why) => ({ message: `"rerun" ${why}.` });
+  if (!plain(r)) return no("must be an object");
+  if (JSON.stringify(r).length > RERUN_MAX) return no(`must be at most ${RERUN_MAX} characters`);
+  if (r.seed !== null && !(Number.isInteger(r.seed) && r.seed >= 0 && r.seed <= 2 ** 32 - 1)) return no("seed must be null or a whole number from 0 to 4294967295");
+  if (r.mode !== mode) return no("mode must be the build's mode");
+  if (!plain(r.settings)) return no("settings must be an object");
+  if (typeof r.players_sha256 !== "string" || !/^[0-9a-f]{64}$/.test(r.players_sha256)) return no("players_sha256 must be a sha256 in hex");
+  for (const k of ["locked", "excluded", "hand_picked"]) if (r[k] !== undefined && !isIdList(r[k])) return no(`${k} must be a list of player ids`);
+  if (r.late_swap !== undefined && typeof r.late_swap !== "boolean") return no("late_swap must be true or false");
+  if (r.players !== undefined && !(Number.isInteger(r.players) && r.players >= 0)) return no("players must be a count");
+  const value = { seed: r.seed, mode: r.mode, settings: r.settings, players_sha256: r.players_sha256 };
+  for (const k of ["locked", "excluded", "hand_picked", "late_swap", "players"]) if (r[k] !== undefined) value[k] = Array.isArray(r[k]) ? [...r[k]] : r[k];
+  return { value };
 }
 
 /** The slate's latest build of each mode (a list of at most two, newest first), or none when there is no file. An older file may hold
@@ -160,6 +189,7 @@ export function writeBuilds(slate, builds, nowMs = Date.now()) {
     if (m.file == null) log.warn(`build ${slate} no minutes file stamped: ${m.why}`, extra);
     else if (m.why) log.warn(`build ${slate} minutes file ${m.file}: ${m.why}`, extra);
     else if (m.pull != null && key != null && m.pull !== key) log.warn(`build ${slate} minutes file ${m.file} is from pull ${JSON.stringify(m.pull).slice(0, 60)}, the build used another`, extra);
+    if (b.rerun_dropped) log.warn(`build ${slate} kept without its rerun record: ${b.rerun_dropped}`, extra);
     log.info(`build ${slate} mode=${b.mode} lineups=${b.lineups.length} minutes=${m.file ?? "none"}`, extra);
   }
   return { slate, builds: out };

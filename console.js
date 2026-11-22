@@ -361,12 +361,22 @@ function onClick(c, e) {
   else if (d.hist) (d.hist === "-1" ? undo : redo)(c);
 }
 
+/** Whether a Ctrl+Z / Ctrl+Y typed at `target` is the Console's (item 1, 11-21): only while the Console is shown, and never from a text box, textarea or editable element outside it. Pure. */
+export function undoKeyApplies(el, target, on = true) {
+  if (!on || !el || el.hidden) return false;
+  if (target && el.contains?.(target)) return true;
+  const t = target?.tagName?.toLowerCase?.();
+  const textual = t === "textarea" || (t === "input" && !["button", "checkbox", "radio", "range", "submit", "reset", "file", "color", "image"].includes(String(target.type ?? "text").toLowerCase())) || t === "select" || target?.isContentEditable === true || target?.contentEditable === "true";
+  return !textual;
+}
+
 function onKey(c, e) {
   if (!c.on || !c.model) return;
   const inBox = e.target.matches?.("input.fin");
   if (inBox && e.key === "Escape") { e.preventDefault(); e.target.value = e.target.defaultValue; e.target.blur(); return; }
   if (inBox && e.key === "Enter") { e.preventDefault(); commitBox(c, e.target); return; }
   if (inBox || !(e.ctrlKey || e.metaKey)) return;
+  if (!undoKeyApplies(c.el, e.target, c.on)) return; // an undo typed in another tab's input is that input's own
   const k = e.key.toLowerCase();
   if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(c); } else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); redo(c); }
 }

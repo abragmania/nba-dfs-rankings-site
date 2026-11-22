@@ -48,6 +48,7 @@ export function newBuild(res, mode, now = Date.now(), id = newBuildId(now)) {
     lineups: res.lineups.map((l) => ({ ids: [...l.ids], men: l.men ?? [] })),
     skipped: res.skipped ?? [], note: res.note ?? null, partial: res.partial ?? null, no: noOf(res.no),
     stamps: { picksAt: res.picksAt ?? null, ovAt: res.ovAt ?? null, limAt: res.limAt ?? null, workKey: res.workKey ?? null, pullAt: res.pullAt ?? null },
+    rerun: res.rerun ?? null, // the build answer's seed, mode, settings and players' hash (lineup/build-route.js rerunOf; the 11-13 audit): kept with the build, never in stamps
   };
 }
 
@@ -70,7 +71,7 @@ export function cutNote(note) {
 export function toRecord(b) {
   const rows = {};
   for (const l of b.lineups) for (const m of l.men ?? []) if (m?.dk_id != null) rows[m.dk_id] = compactRow(m);
-  return { id: b.id, mode: b.mode, built_at: b.built_at, lineups: b.lineups.map((l) => ({ ids: [...l.ids] })), rows, skipped: (b.skipped ?? []).slice(0, 300).map((x) => (typeof x === "string" ? x.slice(0, 80) : x)), note: b.note == null ? null : cutNote(b.note), partial: b.partial ?? null, no: noOf(b.no), stamps: b.stamps?.pullAt ? { pullAt: { key: b.stamps.pullAt.key ?? null, label: b.stamps.pullAt.label ?? null } } : null };
+  return { id: b.id, mode: b.mode, built_at: b.built_at, lineups: b.lineups.map((l) => ({ ids: [...l.ids] })), rows, skipped: (b.skipped ?? []).slice(0, 300).map((x) => (typeof x === "string" ? x.slice(0, 80) : x)), note: b.note == null ? null : cutNote(b.note), partial: b.partial ?? null, no: noOf(b.no), stamps: b.stamps?.pullAt ? { pullAt: { key: b.stamps.pullAt.key ?? null, label: b.stamps.pullAt.label ?? null } } : null, ...(b.rerun ? { rerun: b.rerun } : {}) };
 }
 
 /** A stored record as the page draws it: each lineup's men from the stored rows (a man with no row is left out of `men`; the
@@ -79,7 +80,7 @@ export function fromRecord(r) {
   return {
     id: r.id, mode: r.mode, built_at: r.built_at,
     lineups: r.lineups.map((l) => ({ ids: [...l.ids], men: l.ids.map((id) => r.rows?.[id]).filter(Boolean) })),
-    skipped: r.skipped ?? [], note: r.note ?? null, partial: r.partial ?? null, no: noOf(r.no), stamps: r.stamps ?? null,
+    skipped: r.skipped ?? [], note: r.note ?? null, partial: r.partial ?? null, no: noOf(r.no), stamps: r.stamps ?? null, rerun: r.rerun ?? null, // an older record has none
   };
 }
 

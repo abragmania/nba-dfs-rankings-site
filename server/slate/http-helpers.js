@@ -67,7 +67,9 @@ export async function readJson(req, res, max = MAX_BODY) {
     return null;
   }
   try {
-    return { body: JSON.parse(text) };
+    const body = JSON.parse(text);
+    req.jsonBody = body; // kept for the change log's door (change-log-hook.js), which names the change after the answer
+    return { body };
   } catch {
     fail(res, 400, "BAD_JSON", "Body is not valid JSON.");
     return null;

@@ -30,6 +30,7 @@ import { loadView, saveView, DEFAULT_SORT } from "./view-memory.js";
 import { loadTheme, saveTheme, themeClasses } from "./theme.js";
 import { createConsole } from "./console.js";
 import { createScenarioTab } from "./scenario-tab.js";
+import { createLogTab } from "./log-tab.js";
 import { createLineupBar } from "./lineup-bar.js";
 import { createBoardMarks } from "./board-marks.js";
 import { confirmedByGame } from "./game-borders.js";
@@ -113,8 +114,9 @@ const boardMarks = createBoardMarks({ api, slate: () => S.name, console: scenari
 const lineupBar = createLineupBar({ api, slate: () => S.name, players: () => S.players, slateData: () => S.slate, tips: () => { const ref = slateRefMs(S.name) ?? Date.now(); return { tip: (t) => shortTime(t, ref), tipAt: (t) => tipMs(t, ref) }; }, console: scenarioConsole, toast, tryStore, tick: true, onLabel: (l) => { S.news = l; renderTop(); }, onModel: (m) => { const f = confirmedByGame(m); if (JSON.stringify(f) !== JSON.stringify(S.fives)) { S.fives = f; if (S.slate) renderGames(); } }, applyInPage: Boolean(globalThis.nbadfsSitePull) });
 const applyFullScreen = createFullScreen({ panel, tryStore, stickyHeights: () => stickyHeights(), fixTableWidth: () => fixTableWidth() }); // Full screen button (board-fullscreen.js)
 const scenarioTab = createScenarioTab({ el: $("scenario"), api, toast });
+const logTab = createLogTab({ el: $("log"), api, teams: () => [...new Set(S.players.map((p) => p.team).filter(Boolean))], onToggle: (open) => { if (open) { card.close(); if (scenarioConsole.isOn()) setConsole(false); if (scenarioTab.isOn()) setScenario(false); } else fixTableWidth(); renderTop(); } }); // the Log tab (log-tab.js, Adam 6:05 PM 11-21)
 function setScenario(open) {
-  if (open && scenarioConsole.isOn()) setConsole(false);
+  if (open) { logTab.close(); if (scenarioConsole.isOn()) setConsole(false); }
   document.body.classList.toggle("scenario-on", open);
   const q = new URLSearchParams(location.search);
   if (open) q.set("view", "scenario"); else if (q.get("view") === "scenario") q.delete("view");
@@ -124,7 +126,7 @@ function setScenario(open) {
 }
 /** Shows the console or the board. The board's table holds a measured width, so it is measured again on the way back. */
 function setConsole(open) {
-  document.body.classList.toggle("console-on", open);
+  if (open) logTab.close(); document.body.classList.toggle("console-on", open);
   const q = new URLSearchParams(location.search);
   if (open) q.set("view", "console"); else q.delete("view");
   history.replaceState(null, "", `?${q}`);
@@ -202,7 +204,7 @@ async function loadSlateNow(name, slates, gen) {
   history.replaceState(null, "", slateQuery(name, S.slates, scenarioConsole.isOn(), location.pathname));
   panel.setSlate(name, view);
   scenarioConsole.setSlate(name);
-  scenarioTab.setSlate(name);
+  scenarioTab.setSlate(name); logTab.setSlate(name);
   renderAll();
   renderUpdLine();
   fixTableWidth();
@@ -280,7 +282,7 @@ function applyFresh(slate) {
   if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
   boardMarks.refresh(); // a new pull: TwoGun's flags may have moved; the lineup bar follows the console's new inputs below, so it never reads the old model
   scenarioConsole.onPull(S.name).then((ok) => { if (ok && S.slate) { S.consolePull = pullOf(S.slate).key; renderUpdLine(); } }).catch((e) => toast(`The console could not check the new pull: ${e.message}`, "err")).then(() => lineupBar.refresh()); // the console has the new pull, so its line stops asking to reopen it; his marks are sent over the new pull with no click (console.js onPull)
-  scenarioTab.refresh();
+  scenarioTab.refresh(); logTab.refresh();
 }
 /** He has left the box: the row that waited takes its new figures, and whatever named a man it dropped follows. */
 function flushHeld() {
@@ -339,7 +341,7 @@ function renderBoxNote() {
 }
 function renderTop() {
   const s = S.slate; if (!s) return;
-  $("top").innerHTML = topHtml({ s, slates: S.slates, name: S.name, view: S.view, news: S.news, consoleOn: scenarioConsole.isOn(), scenarioOn: scenarioTab.isOn(), panel, pullNow, theme, when });
+  $("top").innerHTML = topHtml({ s, slates: S.slates, name: S.name, view: S.view, news: S.news, consoleOn: scenarioConsole.isOn(), scenarioOn: scenarioTab.isOn(), logOn: logTab.isOn(), panel, pullNow, theme, when });
 }
 function renderDropNote() {
   const el = $("dropnote");
@@ -517,15 +519,15 @@ $("tbody").addEventListener("click", (e) => {
 
 // ---------- events ----------
 document.addEventListener("click", (e) => {
-  const t = e.target.closest("[data-sort],[data-tab],[data-game],[data-dk-id],[data-out-i],[data-out-name],[data-lock],[data-excl],[data-unpick],[data-chip],[data-view],[data-theme],[data-star],[data-reset],[data-edit],[data-unmark],[data-mrestore],[data-mstep],[data-fteam],[data-shade],[data-no],[data-nox],[data-noclear],[data-noretry],[data-pview],#ovReset,#clearF,#notesBtn,#lsBtn,#csBtn,#snBtn,#outTog");
+  const t = e.target.closest("[data-sort],[data-tab],[data-game],[data-dk-id],[data-out-i],[data-out-name],[data-lock],[data-excl],[data-unpick],[data-chip],[data-view],[data-theme],[data-star],[data-reset],[data-edit],[data-unmark],[data-mrestore],[data-mstep],[data-fteam],[data-shade],[data-no],[data-nox],[data-noclear],[data-noretry],[data-pview],#ovReset,#clearF,#notesBtn,#lsBtn,#csBtn,#snBtn,#lgBtn,#outTog");
   if (!t) { const l = $("notesList"); if (l && !e.target.closest(".notes")) l.hidden = true; return; }
   const d = t.dataset;
   if (actsOnMan(d)) dropSearch(); // lock, NO, exclude, star: the search box empties (Adam 11-14)
   if (t.id === "notesBtn") { const l = $("notesList"); l.hidden = !l.hidden; }
-  else if (d.view) { card.close(); if (scenarioConsole.isOn()) setConsole(false); if (scenarioTab.isOn()) setScenario(false); setView(d.view); } // a tab leaves the console, so the bar shows where you are
-  else if (t.id === "lsBtn") { if (scenarioTab.isOn()) setScenario(false); setView("list"); panel.toggleLateSwap().then(fixTableWidth); }
+  else if (d.view) { card.close(); logTab.close(); if (scenarioConsole.isOn()) setConsole(false); if (scenarioTab.isOn()) setScenario(false); setView(d.view); } // a tab leaves the console, so the bar shows where you are
+  else if (t.id === "lsBtn") { logTab.close(); if (scenarioTab.isOn()) setScenario(false); setView("list"); panel.toggleLateSwap().then(fixTableWidth); }
   else if (t.id === "csBtn") { if (scenarioTab.isOn()) setScenario(false); setConsole(!scenarioConsole.isOn()); }
-  else if (t.id === "snBtn") { card.close(); setScenario(!scenarioTab.isOn()); }
+  else if (t.id === "snBtn") { card.close(); setScenario(!scenarioTab.isOn()); } else if (t.id === "lgBtn") logTab.toggle(); // the Log tab (log-tab.js) leaves the console and the Scenario tab itself
   else if (d.pview) { if (POOL_VIEWS.includes(d.pview) && S.poolView !== d.pview) { S.poolView = d.pview; renderRows(); } } // In / Out / All (pool-view.js)
   else if (t.id === "outTog") { S.outOpen = !S.outOpen; renderOuts(); $("outTog")?.focus({ preventScroll: true }); }
   else if (d.shade) setTheme({ light: d.shade === "light" });
@@ -590,7 +592,7 @@ const fail = (e) => { document.querySelector(".work").innerHTML = `<div class="f
     const query = new URLSearchParams(location.search), want = query.get("slate"), openConsole = query.get("view") === "console";
     await loadSlate(pickSlate(S.slates, want));
     if (openConsole) setConsole(true);
-    else if (query.get("view") === "scenario") setScenario(true);
+    else if (query.get("view") === "scenario") setScenario(true); else if (query.get("view") === "log") logTab.toggle(true);
     setInterval(() => checkAll(), CHECK_MS);
   } catch (e) { fail(e); }
 })();

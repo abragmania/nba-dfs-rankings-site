@@ -3,7 +3,7 @@
 // to what the app has live; `live` is that figure, for the chip's hover. Pure, no page: the console and the board both read it.
 import { keyOf, outsOf } from "./console-engine.js";
 import { calc } from "./console-model.js";
-import { newsFlips } from "./role-marks.js";
+import { newsFlips, newsFlipTimes } from "./role-marks.js";
 
 /** The work with one pin taken off the scenario on show. */
 function without(S, k, id) {
@@ -29,6 +29,9 @@ export function marksOf(T, S) {
   // A change the lineup news made by itself (lineup-bar.js) and that still stands as it left it is not his: it says so, with the news it came from.
   const owned = newsOwned(S);
   for (const e of Object.values(S.news ?? {})) if (e.state === "applied") for (const m of e.men) if (owned[m.kind]?.has(m.id) && out[m.id]?.[m.kind]) out[m.id][m.kind].news = e.text;
+  // When the news made each role flip (its entry's own time; absent when the entry has none): the chip shows it in ET.
+  const flipAt = newsFlipTimes(S.news, pins.r ?? {});
+  for (const [id, at] of Object.entries(flipAt)) if (out[id]?.r?.news && at && Number.isFinite(Date.parse(at))) out[id].r.at = at;
   // Who made each mark: "news" (grey, no undo chip) or "you" (orange, with undo). A screen draws an undo chip only for by === "you".
   for (const marks of Object.values(out)) for (const mark of Object.values(marks)) mark.by = mark.news ? "news" : "you";
   return out;

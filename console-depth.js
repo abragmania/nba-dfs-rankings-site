@@ -33,6 +33,14 @@ const pos0 = (p) => (typeof p.pos === "string" ? p.pos.split("/")[0] : "");
 const posRank = (p) => { const i = POS_ORDER.indexOf(pos0(p)); return i < 0 ? 99 : i; };
 
 /** An undo chip: drops one mark; its text is the live figure, its hover says so. */
+const ET_FLIP = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
+/** The role chip's words: the role, and for a flip the news made, " · 5:22 PM" (ET) from its entry's time; nothing added when there is none (item 3, 11-21). Pure. */
+export const flipText = (mark, base) => (mark?.news && mark.at && Number.isFinite(Date.parse(mark.at)) ? `${base} · ${ET_FLIP.format(new Date(mark.at))}` : base);
+/** One usage cell of the Out list: "23.4%", or a dash with the reason when unknown, never 0 (item 2, 11-21). Pure. */
+export function outUsage(p) {
+  const v = isNum(p.usg_usual) ? p.usg_usual : isNum(p.usg) ? p.usg : null;
+  return v === null ? `<span class="ousg cmiss" title="${esc(`no usage figure: ${p.missing?.usg ?? "missing"}`)}">—</span>` : `<span class="ousg" title="His usage %">${v.toFixed(1)}%</span>`;
+}
 const chip = (team, id, kind, mark, text) => `<button class="rv" type="button" data-undo="${kind}" data-id="${esc(id)}" data-team="${esc(team)}" title="${esc(`${mark.news ? `From the lineup news (${mark.news}). ` : ""}${liveText(kind, mark)}. Click to drop ${mark.news ? "it" : "your mark"}`)}">&#8634; ${esc(text)}</button>`;
 
 const SUFFIX = /^(?:jr\.?|sr\.?|ii|iii|iv|v)$/i;
@@ -144,7 +152,7 @@ const STATUS = (s) => String(s ?? "").trim();
  */
 function manRow(team, r, T, S, mk, rank, N, vr) {
   const p = r.p, b = basisOf(r, T, S), starter = r.role === "starter", av = avgFigures(T, p);
-  const rmark = mk?.r ? chip(team, r.id, "r", mk.r, mk.r.live === "starter" ? "S" : mk.r.live === "oor" ? "DNP" : "bench") : "";
+  const rmark = mk?.r ? chip(team, r.id, "r", mk.r, flipText(mk.r, mk.r.live === "starter" ? "S" : mk.r.live === "oor" ? "DNP" : "bench")) : "";
   const omark = mk?.out ? chip(team, r.id, "out", mk.out, "out") : "";
   const proj = isNum(r.proj) ? `<b class="pj${r.pinned.m || r.pinned.d ? " pin" : ""}">${f1(r.proj)}</b>` : miss(r.missing.join(", ") || "no projection");
   return `<div class="row${mk ? " marked" : ""}" data-row="${esc(r.id)}">
@@ -166,7 +174,7 @@ function outRow(team, r, T, mk, N, pos = null) {
   void st; // TwoGun's status word is not a source of Tonight's Outs (Adam 11-19)
   const src = page ? `<span class="stag k-you">Yours</span>you marked him Out on the Minutes page` : theirs ? `<span class="stag k-ch">News</span>out on our own injury feeds` : mk?.out?.news ? `<span class="stag k-ch">News</span>${esc(mk.out.news)}` : `<span class="stag k-you">Yours</span>you marked him Out`; // an Out the lineup news made is the news's, not his
   const omark = mk?.out ? chip(team, r.id, "out", mk.out, "in") : "";
-  return `<div class="oline" data-row="${esc(r.id)}"><span class="ps">${esc(pos ?? (pos0(p) || "—"))}</span>${consoleNameOpen(p, p.name, "span", "onm")}
+  return `<div class="oline" data-row="${esc(r.id)}"><span class="ps">${esc(pos ?? (pos0(p) || "—"))}</span>${consoleNameOpen(p, p.name, "span", "onm")}${outUsage(p)}
 <span class="tgl"><button class="tg o on" type="button" data-out="${esc(r.id)}" data-team="${esc(team)}" title="Out. Click to bring him back in">Out</button><span class="cs">${omark}</span></span>
 ${outNote(N, p)}<div class="why">${src}${isNum(p.healthy) && p.healthy > 0 ? ` &middot; usual ${f1(p.healthy)} min` : ""}${absenceRow(p.absence)}</div></div>`;
 }

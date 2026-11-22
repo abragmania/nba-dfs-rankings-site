@@ -50,6 +50,8 @@ import { withAbsence } from "../site/shim/absence.js";
 import { withBoxFreshness, readBoxFreshness } from "../site/shim/site-data.js";
 import { lateswapHandler } from "./slate/lateswap-route.js";
 import { runAndLogOnChange, handleBoardCheck } from "../site/shim/site-data.js";
+import { handleChangeLog } from "./slate/change-log.js";
+import { watchWrite, boardDoor } from "./slate/change-log-hook.js";
 
 const BOARD_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "board");
 // A kept build of 150 lineups measured about 36 KB on the 2026-11-07 slate; a bigger slate's skipped list can pass 64 KB, so the
@@ -327,6 +329,7 @@ function safeDecode(s) {
 async function route(req, res, opts) {
   const url = new URL(req.url, "http://127.0.0.1");
   const p = url.pathname;
+  if (opts.changeLog) watchWrite(req, res, p, boardDoor({ ourPlayers: (s, d) => (opts.ourProjection ? opts.ourProjection(s, d, { nowMs: opts.now(), readOnly: true }) : d), now: opts.now })); // the change log (slate/change-log.js): a writer's change is logged after its answer, the engine read only
   if (p === "/api/slates") {
     if (req.method !== "GET") return fail(res, 405, "METHOD", "GET only.");
     return send(res, 200, { slates: listSlates() });
@@ -362,6 +365,8 @@ async function route(req, res, opts) {
   if (lsw) return lsw.handler(req, res, safeDecode(lsw.encodedSlate), { send, fail, readJson, openSlate, effectivePlayers: (res, slate, slateData) => effectivePlayers(res, slate, slateData, opts), now: opts.now, injected: opts.injected });
   let m = p.match(/^\/api\/slate\/([^/]+)\/resend$/);
   if (m) return handleResend(req, res, safeDecode(m[1]), { send, fail, readJson, openSlate, usageTable: opts.usageTable, ourPlayers: (slate, slateData) => withOurs(slate, slateData, opts), now: opts.now }); // held teams' numbers re-sent on the new Tonight, inside the app (update_cycle.mjs)
+  m = p.match(/^\/api\/slate\/([^/]+)\/change-log$/);
+  if (m) return handleChangeLog(req, res, safeDecode(m[1]), { send, fail }); // the Log tab (slate/change-log.js)
   m = p.match(/^\/api\/slate\/([^/]+)\/picks$/);
   if (m) return handlePicks(req, res, safeDecode(m[1]));
   m = p.match(/^\/api\/slate\/([^/]+)\/no$/);
@@ -439,9 +444,10 @@ async function route(req, res, opts) {
  *  pullNowState: the object Pull now keeps its lock and last run in, shared with the light check (the app below passes one).
  *  ourProjection: (slate, slateData, { nowMs }) -> slateData with our minutes engine's figures (minutes/board.js withOurProjection, which reads the projection setting); off unless given,
  *  so the tests and the public site keep the slate's own (TwoGun's) figures. The app below turns it on.
- *  primeTotals: (slate, { nowMs }) -> fetches missing league totals for the engine once (minutes/inputs.js); off unless given, so the tests never reach Basketball-Reference. */
-export function makeServer({ optimizeTimeoutMs = OPTIMIZE_CEILING_MS, optimizeUrl = OPTIMIZE_URL, seasonFigures = null, nowMs = null, answerStartMs = ANSWER_START_MS, answerKeepaliveMs = ANSWER_KEEPALIVE_MS, setTimer = setTimeout, usageTable = null, pullNowDeps = null, pullNowState = { running: null }, ourProjection = null, primeTotals: prime = null, syncBusy = null } = {}) {
-  const opts = { optimizeTimeoutMs, optimizeUrl, answerStartMs, answerKeepaliveMs, setTimer, build: null, seasonFigures, usageTable, ourProjection, primeTotals: prime, syncBusy, now: () => nowMs ?? Date.now(), injected: nowMs != null, pullNow: pullNowState, pullNowDeps };
+ *  primeTotals: (slate, { nowMs }) -> fetches missing league totals for the engine once (minutes/inputs.js); off unless given, so the tests never reach Basketball-Reference.
+ *  changeLog: true logs each projection change a write makes (slate/change-log.js); off unless given, so the site and the tests that do not ask write no log. */
+export function makeServer({ optimizeTimeoutMs = OPTIMIZE_CEILING_MS, optimizeUrl = OPTIMIZE_URL, seasonFigures = null, nowMs = null, answerStartMs = ANSWER_START_MS, answerKeepaliveMs = ANSWER_KEEPALIVE_MS, setTimer = setTimeout, usageTable = null, pullNowDeps = null, pullNowState = { running: null }, ourProjection = null, primeTotals: prime = null, syncBusy = null, changeLog = false } = {}) {
+  const opts = { optimizeTimeoutMs, optimizeUrl, answerStartMs, answerKeepaliveMs, setTimer, build: null, seasonFigures, usageTable, ourProjection, primeTotals: prime, syncBusy, changeLog, now: () => nowMs ?? Date.now(), injected: nowMs != null, pullNow: pullNowState, pullNowDeps };
   return http.createServer((req, res) => {
     route(req, res, opts).catch((e) => {
       error("request failed", { url: req.url, message: e.message });
@@ -465,7 +471,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (now.ms != null && (!process.env.NBADFS_DATA_DIR || port === 8693)) { error("NBADFS_NOW needs NBADFS_DATA_DIR set and a port other than 8693; not starting."); process.exit(1); }
   if (now.ms != null) info(`Late swap test clock: now is ${new Date(now.ms).toISOString()} (NBADFS_NOW)`);
   const pullNowState = { running: null };
-  makeServer({ seasonFigures: withSeasonFigures, usageTable: seasonUsageTable, nowMs: now.ms, pullNowState, ourProjection: withOurProjection, primeTotals, syncBusy: async () => (await routeModule("pullnow")).syncBusy(dataDir()) }).listen(port, "127.0.0.1", () => {
+  makeServer({ seasonFigures: withSeasonFigures, usageTable: seasonUsageTable, nowMs: now.ms, pullNowState, ourProjection: withOurProjection, primeTotals, changeLog: true, syncBusy: async () => (await routeModule("pullnow")).syncBusy(dataDir()) }).listen(port, "127.0.0.1", () => {
     info(`NBA board on http://127.0.0.1:${port}`);
     startSnapshotRefresh({ now: () => now.ms ?? Date.now() }); // keeps each team's figures saved for its tip (minutes/refresh.js)
     routeModule("pullnow").then(({ startLightCheckIfAllowed }) => startLightCheckIfAllowed({ state: pullNowState, port })).catch((e) => error("the light check could not start", { error: e.message })); // only in the real app: port 8693, on the default data folder or the live copy's NBADFS_DATA_DIR (route.js startLightCheckIfAllowed decides)
