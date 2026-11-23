@@ -1,6 +1,6 @@
 {
-  "publishedAt": "2026-11-23T00:00:24.014Z",
-  "sourceCommit": "49f935a4245dc6e441820ece7d256f9b91926bbd",
+  "publishedAt": "2026-11-23T00:05:22.529Z",
+  "sourceCommit": "9314f993615c8c662f664be1cfce416560f42474",
   "latest": {
     "slate": "2026-11-22-main",
     "players": 175,
@@ -66,7 +66,7 @@
   },
   "pull_facts": {
     "slate": "2026-11-22-main",
-    "bbm_checked_at": "2026-11-23T00:00:01.000Z",
+    "bbm_checked_at": "2026-11-23T00:05:01.000Z",
     "nba_edition": {
       "label": "6:45 PM",
       "published_at": "2026-11-22T23:45:04.000Z",
