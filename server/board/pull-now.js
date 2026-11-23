@@ -324,6 +324,7 @@ function panelHtml(s) {
     if (st.light.note) out.push(`<div class="pnread">${esc(st.light.note)}</div>`);
   }
   if (st.autoPull) out.push(...autoPullRows(st.autoPull, kv));
+  if (st.activeRefusal) out.push(`<div class="pnread pnmiss">${esc(`Automatic pulls, the light check and the lineup check are off: ${st.activeRefusal}`)}</div>`); // this computer is not the active machine (data/config/active-machine.json; server/pullnow/route.js activeGate); the site has no such block: it runs no checks of its own
   if (s.line) out.push(`<h5>This page's last press</h5><div class="pnlast">${esc(s.line)}</div>`);
   out.push(`<div class="pnread">Status read ${esc(etClock(st.readAtMs) ?? "at an unknown time")}${s.statusErr ? esc(`; the latest read failed (${s.statusErr}), so this is the earlier one`) : ""}</div>`);
   return `<div class="pnpanel" role="region" aria-label="Pull status">${out.join("")}</div>`;
