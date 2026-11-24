@@ -208,6 +208,16 @@ td.gp.val{font-weight:400;color:color-mix(in srgb,var(--tx) 72%,var(--mu))}
 /* With the player panel open the header has less than the panel's width to work with, so it takes the 1920 forms at every width above the phone layout: tighter gaps and segments, the Pull now group stacked, a shorter slate box. */
 @media (min-width:901px){body.card-docked .top{gap:0.375rem}body.card-docked .top .stamps span{padding:0.25rem 0.3125rem}body.card-docked .top .themes button{padding:0.25rem 0.25rem}body.card-docked .top .vtabs button{padding:0.25rem 0.3125rem}body.card-docked .top .lsw,body.card-docked .top .notes>button{padding:0.25rem 0.4375rem}body.card-docked .top .brand small{display:none}body.card-docked .top select.slate{max-width:8.125rem}body.card-docked .top .pngroup{flex-direction:column;align-items:flex-start;gap:0.0625rem}body.card-docked .top .pnbox{max-width:10rem}body.card-docked .top .pnstat[class*=" f"],body.card-docked .top .pnbox:has(.pnstat[class*=" f"]){max-width:12.5rem}body.card-docked .search{width:6rem;padding:0.25rem 0.375rem}body.card-docked .tools{gap:0.375rem}body.card-docked .cnt{margin-left:0;min-width:0}body.card-docked #chips .chip{white-space:nowrap;padding:0.25rem 0.375rem}body.card-docked .tabs button{padding:0.25rem 0.375rem}}
 @media (min-width:2641px){body.card-docked .search{width:9.375rem}}
+/* A failed or unknown pull line (.pnline.bad) and a red freshness summary (.pnstat.fred) are read whole at every desktop width: they wrap, never ellipsis, in a box that grows into the empty header space (34rem, 44rem on a wide screen). Normal lines keep the compact form. */
+@media (min-width:901px){
+  body .top.top .pnbox.pnbox:has(.pnline.bad,.pnstat.fred){max-width:34rem}
+  body .top.top .pnbox.pnbox:has(.pnline.bad,.pnstat.fred) .pnstat.fred{max-width:none}
+  .top .pnline.bad{white-space:normal;align-items:flex-start}
+  .top .pnline.bad .pntext{overflow:visible;text-overflow:clip}
+  .top .pnstat.fred .pnsum{white-space:normal;max-width:100%}
+  .top .pnstat.fred .pnsumtext{overflow:visible;text-overflow:clip}
+}
+@media (min-width:2641px){body .top.top .pnbox.pnbox:has(.pnline.bad,.pnstat.fred){max-width:44rem}}
 @media (max-width:900px){
   .top .pngroup{display:contents}
   .top .pullnow{order:0}
