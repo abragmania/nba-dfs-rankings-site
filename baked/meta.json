@@ -1,6 +1,6 @@
 {
-  "publishedAt": "2026-11-24T15:06:55.839Z",
-  "sourceCommit": "61ce1521747620ca86fead1095956229043fcf54",
+  "publishedAt": "2026-11-24T21:59:30.128Z",
+  "sourceCommit": "db4961d112dadcd06bf03629cbe3f7ad9a8775a8",
   "latest": {
     "slate": "2026-11-23-main",
     "players": 281,
@@ -61,8 +61,8 @@
   ],
   "cards": {
     "log": 0,
-    "usage": 311,
-    "kept": 633,
+    "usage": 310,
+    "kept": 634,
     "none": 124
   },
   "pull_facts": {
