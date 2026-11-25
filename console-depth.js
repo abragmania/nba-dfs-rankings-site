@@ -197,6 +197,8 @@ export function disagreeNote(five, confirmed) {
 }
 /** The team's notes at the foot of its block (global rule: explanations go at the bottom). The last word is held to the line before it with a no-break space, so a lone "0" never wraps. */
 export const noteList = (notes) => (notes.length ? `<section class="box"><ul class="notes">${notes.map((n) => `<li${WARN_NOTE.test(n) ? "" : ' class="info"'}>${esc(n).replace(/ (\S+)$/, "&nbsp;$1")}</li>`).join("")}</ul></section>` : "");
+/** Whether a foot note repeats one already listed: the first 12 characters, except the minutes blend's notes, which all open "Minutes blend:" and differ only after it, so each is kept unless repeated whole (G62). */
+export const sameNote = (x, n) => (/^Minutes blend:/.test(n) ? x === n : x.slice(0, 12) === n.slice(0, 12));
 const shortNote =(n) => (/^Starters by TwoGun's flag and Tonight's minutes: no depth chart for (?:[A-Z]{2,4}|this team)\.$/.test(n) ? "No depth chart: starters by TwoGun's flag and minutes." : n);
 
 /**
@@ -229,7 +231,7 @@ function teamBody(model, code, news, view = {}) {
   if (starters.length > 5) notes.push(`${starters.length} starters marked: unmark one.`);
   else if (starters.length < 5) notes.push(`Only ${starters.length} starters: mark a man S.`);
   const disagree = disagreeNote(N?.team?.five, T.tier?.confirmed); // the foot says what was really used when the header says the sources disagree
-  for (const n of String(res.roles_note ?? "").split(/\n+|(?<=\.)\s+/).filter(Boolean).map(shortNote).map((x) => (disagree && /^Starters: the lineup pages' (?:agreed|confirmed) five/.test(x) ? disagree : x))) if (!notes.some((x) => x.slice(0, 12) === n.slice(0, 12)) && !/starters marked|Only \d starters/.test(n)) notes.push(n);
+  for (const n of String(res.roles_note ?? "").split(/\n+|(?<=\.)\s+/).filter(Boolean).map(shortNote).map((x) => (disagree && /^Starters: the lineup pages' (?:agreed|confirmed) five/.test(x) ? disagree : x))) if (!notes.some((x) => sameNote(x, n)) && !/starters marked|Only \d starters/.test(n)) notes.push(n);
   const vals = playing.map((r) => valuePer1k(r.proj, r.p.salary)).filter((v) => v !== null), vr = vals.length ? { lo: Math.min(...vals), hi: Math.max(...vals) } : null;
   const noSal = playing.filter((r) => !salaryText(r.p));
   if (noSal.length) notes.push(`${noSal.length} ${noSal.length === 1 ? "man has" : "men have"} no salary on this slate, so ${noSal.length === 1 ? "his Value shows" : "their Value shows"} a dash: ${noSal.map((r) => r.p.name).join(", ")}`);

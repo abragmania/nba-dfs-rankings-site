@@ -10,7 +10,9 @@ import path from "../../site/shim/path.js";
 import { dataDir, warn } from "../../site/shim/log.js";
 import { isNum } from "../board/figures.js";
 
-export const OWN_MINUTES_FORMAT = "nba-own-minutes/3";
+export const OWN_MINUTES_FORMAT = "nba-own-minutes/4"; // 4 (11-25): each man's figure is the minutes blend, with each model's figure (models, blend_used); a format-3 record (the engine alone) still reads
+export const READ_FORMATS = ["nba-own-minutes/3", OWN_MINUTES_FORMAT]; // the one list of formats read (tools/own_minutes.mjs, tools/scorecard_expected.mjs)
+const BLEND_WORD = { engine: "our engine", twogun: "TwoGun", predictor: "the predictor" };
 export const MIN_SOURCE_IN_FORCE = "twogun";
 const NOT_RECORDED = "our own minutes were not recorded for this slate";
 const RETIRED = "our record for this slate was made by the retired slot model, so its figures are not shown";
@@ -32,7 +34,8 @@ export function ourFigure(man, doc, team = null) {
   if (failed) return { min_ours: null, min_ours_note: `our record of the ${at} pull has no figures for ${team}: the minutes engine failed for it (${failed.why})` };
   if (!man) return { min_ours: null, min_ours_note: `not in our record of the ${at} pull (he was not on that board)` };
   if (!isNum(man.minutes)) return { min_ours: null, min_ours_note: `our record of the ${at} pull has no minutes for him (${man.basis ?? "no reason given"})` };
-  return { min_ours: man.minutes, min_ours_note: `Ours: ${man.role ?? "no role"}; ${man.basis ?? "no basis recorded"}. Recorded from the ${at} pull (${doc.mode ?? "mode not recorded"}) by our minutes engine's three-tier model, from box scores, the lineup pages' or TwoGun's five and the depth chart${man.flag ? `. Flag: ${man.flag}` : ""}${doc.machine === "cloud" || /^committed files only/.test(doc.inputs?.engine_inputs ?? "") ? ". Recorded on the cloud runner from committed files only: a man not on the standing chart is placed without season minutes a game" : ""}` };
+  const by = Array.isArray(man.blend_used) && man.blend_used.length ? `the minutes blend of ${man.blend_used.map((m) => BLEND_WORD[m] ?? m).join(", ")} (our engine: the three-tier model,` : "our minutes engine's three-tier model,"; // format 4: which models made his figure
+  return { min_ours: man.minutes, min_ours_note: `Ours: ${man.role ?? "no role"}; ${man.basis ?? "no basis recorded"}. Recorded from the ${at} pull (${doc.mode ?? "mode not recorded"}) by ${by} from box scores, the lineup pages' or TwoGun's five and the depth chart${man.blend_used?.length ? ")" : ""}${man.flag ? `. Flag: ${man.flag}` : ""}${doc.machine === "cloud" || /^committed files only/.test(doc.inputs?.engine_inputs ?? "") ? ". Recorded on the cloud runner from committed files only: a man not on the standing chart is placed without season minutes a game" : ""}` };
 }
 
 /** The slate with min_ours and min_ours_note on every player and min_source on the slate. */
@@ -44,7 +47,7 @@ export function withOurMinutes(slate, slateData) {
   try {
     const doc = JSON.parse(fs.readFileSync(file, "utf8"));
     if (doc?.format === "nba-own-minutes/1" || doc?.format === "nba-own-minutes/2") return { ...blank(RETIRED), min_ours_problem: retiredLine(slate) };
-    if (doc?.format !== OWN_MINUTES_FORMAT || !Array.isArray(doc.men)) throw new Error(`not a known own-minutes record (format ${String(doc?.format).slice(0, 30)})`);
+    if (!READ_FORMATS.includes(doc?.format) || !Array.isArray(doc.men)) throw new Error(`not a known own-minutes record (format ${String(doc?.format).slice(0, 30)})`);
     const by = new Map(doc.men.map((m) => [String(m.dk_id), m]));
     const gaps = recordGaps(doc);
     return { ...base, ...(gaps ? { min_ours_problem: gaps } : {}), players: (slateData.players ?? []).map((p) => ({ ...p, ...ourFigure(by.get(String(p.dk_id)), doc, p.team) })) };

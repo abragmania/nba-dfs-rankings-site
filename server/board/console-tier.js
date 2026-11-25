@@ -8,6 +8,7 @@ import { roleFigure, tierPlan, ovMinutesIn, typedTotalNote, ROLE_OF_TIER } from 
 import { fiveWithMarks, realFive, starterFig, marksNote, markOut, newsFlips, newsFlipTimes } from "./role-marks.js";
 import { typedVerdicts, unstampedNote, heldNote } from "./typed-aside.js";
 import { isNum } from "./figures.js";
+import { blendPlan } from "./minutes-blend.js";
 import { chartCols, tonightCols, columnTops, depthPlaces, healthyPlaces, fillEmpty, balanceFive, shortFiveFill } from "./depth-cols.js";
 
 /** The team's depth chart on the page (Adam 11-17): the payload's seed with his moves (the page's own live list, team.depth_moves, else the saved one), as the engine builds it (depth-cols.js); null without one. five (ids): balanced for display (balanceFive). */
@@ -158,8 +159,9 @@ export function tierScenario(team, outSet, flips = {}, typed = {}, edits = false
   // Adam 1:33 PM 11-17: typed minutes and standing minutes overrides never enter the plan; the plan is worked as if nothing were typed and his figure is replaced by his number (the board does the same).
   const typedOf = new Map(typedIn), noRow = typedIn.filter(([t]) => !order.includes(t)).map(([t]) => t), listed = (ids, f) => ids.map((id) => f(id)).join(", ");
   if (noRow.length) notes.push(`${listed(noRow, (id) => team.men.find((p) => p.id === id).name)} typed, but has no minutes engine inputs: ${noRow.length === 1 ? "his" : "their"} typed minutes stand and nobody else's minutes move for them`);
-  const plan = tierPlan({ men: mkMen(order), rowsOf: (id) => T.men[id].rows.map(([min, s, date]) => ({ min, started: s === 1 ? true : s === 0 ? false : null, date })), games: null, since: T.since, teamGames: T.team_games, benchSpots: T.bench_spots ?? null, benchPlusStd: T.bench_plus_std ?? null, outs, boxNote: T.box_note,
-    five: { ...base, ids: five, why }, typed: typedOf });
+  const planMen = mkMen(order);
+  const plan = blendPlan(tierPlan({ men: planMen, rowsOf: (id) => T.men[id].rows.map(([min, s, date]) => ({ min, started: s === 1 ? true : s === 0 ? false : null, date })), games: null, since: T.since, teamGames: T.team_games, benchSpots: T.bench_spots ?? null, benchPlusStd: T.bench_plus_std ?? null, outs, boxNote: T.box_note,
+    five: { ...base, ids: five, why }, typed: typedOf }), planMen, T.blend); // Adam 9:49 AM 11-25: the minutes blend, the same code and input the board's engine runs (minutes-blend.js)
   const pv = pageVerdicts(team, plan, [...block], flips, order), unst = unstampedNote(pv.unstamped), held = heldNote(pv.held); // Adam 9:46 AM 11-20: his Minutes-page numbers a later role change set aside, as the board's engine judges them
   for (const id of Object.keys(pv.aside)) typedOf.delete(id);
   if (unst) notes.push(unst);
