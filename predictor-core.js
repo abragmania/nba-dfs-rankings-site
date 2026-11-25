@@ -41,6 +41,34 @@ export const CHART_PRIOR = Object.freeze({ k: 3, backup: 1 });
 export const CHART_PRIOR_DEFAULT_ON = true; // the predictor's and the three-way blend's average miss and 10+ misses all went down (replay, 11-25)
 const DEFAULT_CHART_PRIOR = CHART_PRIOR_DEFAULT_ON ? CHART_PRIOR : null; // minutes-predictor.js chartSetting reads NBADFS_PREDICTOR_CHART
 
+// Availability prior (the lead's brief 11-25 for Adam's "as good as possible as quickly as possible"): a man's base is his mean over the games he PLAYED here, but a bench man often sits (did not play
+// or inactive), so every healthy man counted at his full base put each team about 284 minutes before the fit to 240 (replay of the 23 scored nights, 11-25), and the fit took the excess from everyone in
+// proportion: the top six by projection came out 1.7 to 2.9 minutes low each while their own bases were within 0.6 of what they played. A bench man (not in tonight's five) with games here now counts
+// at base x (games + k) / (games + missed + k), times run when he missed the team's last game (missed: games he was listed did-not-play or inactive after his first game played; minutes-predictor.js
+// profileFromGames). A man in the five plays, so his base stands. The learner's own replay of past games (learnTeam) knows who played, so it runs without it.
+// Set on the first 12 of the 23 scored nights 10-29 to 11-24 (tools/minutes_backtest.mjs, chart on, lock five on, spot off; 11-25): k 0, 2, 5 and run 0.3 to 1 tried, k 0 run 0.4 picked (predictor
+// 5.197 / 276 to 4.645 / 232 there, three-way 4.649 / 213 to 4.508 / 203). All 23 nights (average miss / 10+ misses): predictor 5.224 / 496 to 4.718 / 424, three-way 4.690 / 369 to 4.551 / 367,
+// board 4.651 / 379 to 4.578 / 377; actual top six predictor 5.99 (bias -4.83) to 4.99 (-2.59). Later 11 nights: predictor 5.258 / 220 to 4.810 / 192, three-way 4.743 / 156 to 4.606 but 10+ misses
+// 156 to 164, so it fails the keep rule's later half and is off by default (NBADFS_PREDICTOR_AVAIL=on, or its values, turns it on). No k or run tried kept the later three-way 10+ misses at 156.
+export const AVAIL_PRIOR = Object.freeze({ k: 0, run: 0.4 });
+export const AVAIL_PRIOR_DEFAULT_ON = false; // the three-way blend's 10+ misses went up in the later half (replay, 11-25)
+const DEFAULT_AVAIL_PRIOR = AVAIL_PRIOR_DEFAULT_ON ? AVAIL_PRIOR : null; // minutes-predictor.js availSetting reads NBADFS_PREDICTOR_AVAIL; the profile carries it (teamProfile) as it does the role prior
+
+/** A man's share for the availability prior: 1 for a man in tonight's five, with no games here, or the prior off (cfg null); else (games + k) / (games + missed + k), times cfg.run after a missed last game. Pure. */
+export function availShare(profile, id, inFive, cfg) {
+  const m = profile.byId.get(id);
+  if (!cfg || inFive || !m) return 1;
+  const p = (m.games + cfg.k) / (m.games + (m.missed ?? 0) + cfg.k);
+  return (m.missRun ?? 0) >= 1 ? p * cfg.run : p;
+}
+
+// His why-line words for the availability prior (G62), "" when it moved nothing.
+function availWords(profile, id, share) {
+  if (!(share < 0.995)) return "";
+  const m = profile.byId.get(id);
+  return `played ${m.games} of the ${m.games + (m.missed ?? 0)} games he was on the roster for here${(m.missRun ?? 0) >= 1 ? ` and missed the last ${m.missRun}` : ""}, so his base counts x${share.toFixed(2)}`;
+}
+
 /** The profile with the chart prior folded in (pure; the profile given is not changed): each man the chart has out of the rotation, with games here, has his all-games mean times games / (games + k). */
 export function withChart(profile, chart, cfg) {
   if (!chart || !cfg || !(cfg.k > 0)) return profile;
@@ -243,7 +271,9 @@ function fitTeam(items, capOf) {
 // adjust: Map id -> minutes the learner adds to a man's base (minutes-misses.js); the profile's own when not given.
 // rolePrior: the role-change setting (roleTargets, roleCeiling), or null for none; the profile's own, else the default setting, when not given.
 // chart: the depth-chart prior's chart (withChart), or null; chartPrior: its setting, or null for off (DEFAULT_CHART_PRIOR when not given).
-export function projectTeam(profile0, { starters = [], out = new Set(), roster = [], pos = new Map(), adjust = profile0.adjust ?? null, rolePrior = profile0.rolePrior === undefined ? DEFAULT_ROLE_PRIOR : profile0.rolePrior, chart = null, chartPrior = DEFAULT_CHART_PRIOR } = {}) {
+// availPrior: the availability prior's setting (availShare), or null for off; the profile's own, else the default setting, when not given.
+export function projectTeam(profile0, { starters = [], out = new Set(), roster = [], pos = new Map(), adjust = profile0.adjust ?? null, rolePrior = profile0.rolePrior === undefined ? DEFAULT_ROLE_PRIOR : profile0.rolePrior, chart = null, chartPrior = DEFAULT_CHART_PRIOR,
+  availPrior = profile0.availPrior === undefined ? DEFAULT_AVAIL_PRIOR : profile0.availPrior } = {}) {
   const useChart = Boolean(chart && chartPrior), profile = useChart ? withChart(profile0, chart, chartPrior) : profile0;
   const backupOf = (u) => (useChart ? chart.backup?.get(u) ?? null : null), lean = useChart ? chartPrior.backup ?? 0 : 0;
   const five = new Set(starters);
@@ -251,7 +281,8 @@ export function projectTeam(profile0, { starters = [], out = new Set(), roster =
   const oorIds = new Set(useChart && chartPrior.k > 0 ? healthy.filter((id) => chart.oor.has(id) && profile.byId.has(id)) : []); // the men the chart prior moved: in their why lines and the notes (ids); the blend names them in the team's notes (minutes-blend-words.js)
   const adj = (id) => (adjust && profile.byId.has(id) ? adjust.get(id) ?? 0 : 0);
   const targets = roleTargets(profile, { five, healthy, team: new Set([...roster, ...out]), pos }, rolePrior);
-  const base = new Map(healthy.map((id) => [id, Math.max(0, baseMinutes(profile, id, five.has(id) ? "s" : "b", targets.get(id) ?? null) + adj(id))]));
+  const share = new Map(healthy.map((id) => [id, availShare(profile, id, five.has(id), availPrior)])); // the availability prior: a bench man's chance to play tonight
+  const base = new Map(healthy.map((id) => [id, Math.max(0, baseMinutes(profile, id, five.has(id) ? "s" : "b", targets.get(id) ?? null) + adj(id)) * share.get(id)]));
   const extra = new Map(healthy.map((id) => [id, 0]));
   const outKnown = roster.filter((id) => out.has(id) && profile.byId.has(id));
   const took = spotTook(profile, targets, out); // the spot-start prior: a line-set spot starter's raise comes out of the Out starter whose start he took, and he takes no share of that man's minutes
@@ -272,12 +303,12 @@ export function projectTeam(profile0, { starters = [], out = new Set(), roster =
     min: out.has(id) ? 0 : Math.round((fit.get(id) || 0) * 1000) / 1000,
     slot: out.has(id) ? "out" : five.has(id) ? "starter" : "bench",
     why: whyOf(profile, id, out, base, extra, short, adj(id), [targets.words.get(id) ?? spotNamed(profile, id, five),
-      oorIds.has(id) ? "out of the rotation on the depth chart, leans lower" : ""].filter(Boolean).join(", ")),
+      oorIds.has(id) ? "out of the rotation on the depth chart, leans lower" : "", share.has(id) ? availWords(profile, id, share.get(id)) : ""].filter(Boolean).join(", ")),
   }));
   const diff = Math.round((TEAM_MIN - rows.reduce((s, r) => s + r.min, 0)) * 1000) / 1000;
   const top = rows.filter((r) => r.min > 0).sort((a, b) => b.min - a.min).find((r) => r.min + diff <= MAX_MIN);
   if (top && diff) top.min = Math.round((top.min + diff) * 1000) / 1000;
-  rows.notes = { posMissing, ceilingsShort: short !== null, capUsed: short, roleTargeted: targets.size, chartOor: oorIds.size, chartOorIds: [...oorIds] };
+  rows.notes = { posMissing, ceilingsShort: short !== null, capUsed: short, roleTargeted: targets.size, chartOor: oorIds.size, chartOorIds: [...oorIds], availLowered: [...share.values()].filter((s) => s < 0.995).length };
   return rows;
 }
 
@@ -314,12 +345,12 @@ export const chartFromJson = (j) => (j ? { oor: new Set(j.oor), backup: new Map(
 export function profileToJson(p) {
   return { games: p.games, starterCurve: p.starterCurve, benchCurve: p.benchCurve, depth: p.depth, order: p.order, usual: [...p.usual],
     replacements: [...p.replacements], absorb: [...p.absorb].map(([u, a]) => [u, a.m, [...a.gains]]), adjust: p.adjust ? [...p.adjust] : null, ...(p.rolePrior !== undefined ? { rolePrior: p.rolePrior } : {}),
-    ...(p.spot ? { spot: p.spot } : {}) }; // the league's spot-start lines (roleTargets), plain numbers
+    ...(p.availPrior !== undefined ? { availPrior: p.availPrior } : {}), ...(p.spot ? { spot: p.spot } : {}) }; // the league's spot-start lines (roleTargets), plain numbers
 }
 
 /** The profile back from profileToJson's form, as projectTeam reads it. Pure. */
 export function profileFromJson(j) {
   return { games: j.games, starterCurve: j.starterCurve, benchCurve: j.benchCurve, depth: j.depth, order: j.order, byId: new Map(j.order.map((m) => [m.id, m])), usual: new Set(j.usual),
     replacements: new Map(j.replacements), absorb: new Map(j.absorb.map(([u, m, g]) => [u, { m, gains: new Map(g) }])), adjust: j.adjust ? new Map(j.adjust) : null, ...(j.rolePrior !== undefined ? { rolePrior: j.rolePrior } : {}),
-    ...(j.spot ? { spot: j.spot } : {}) };
+    ...(j.availPrior !== undefined ? { availPrior: j.availPrior } : {}), ...(j.spot ? { spot: j.spot } : {}) };
 }

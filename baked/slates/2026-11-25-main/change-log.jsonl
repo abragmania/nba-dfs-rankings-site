@@ -178,3 +178,13 @@
 {"at":"2026-11-25T22:52:27.641Z","team":"CHA","dk_id":"45085114","name":"Moussa Diabate","kind":"projection","from":30.64,"to":30.53,"by":"pull","why":"TwoGun board pull 2026-11-25T175200-0500 (board Wed, Nov 25, 4:50 PM CT)"}
 {"at":"2026-11-25T22:52:27.641Z","team":"CHA","dk_id":"45085119","name":"Coby White","kind":"projection","from":26.77,"to":26.58,"by":"pull","why":"TwoGun board pull 2026-11-25T175200-0500 (board Wed, Nov 25, 4:50 PM CT)"}
 {"at":"2026-11-25T22:52:27.641Z","team":"CHA","dk_id":"45085343","name":"Christian Anderson","kind":"projection","from":18.69,"to":18.56,"by":"pull","why":"TwoGun board pull 2026-11-25T175200-0500 (board Wed, Nov 25, 4:50 PM CT)"}
+{"at":"2026-11-25T23:02:39.242Z","team":"CHA","dk_id":"45085114","name":"Moussa Diabate","kind":"minutes","from":31.74,"to":33,"by":"console","why":"your Console send"}
+{"at":"2026-11-25T23:02:39.242Z","team":"CHA","dk_id":"45085114","name":"Moussa Diabate","kind":"projection","from":30.53,"to":31.74,"by":"console","why":"your Console send"}
+{"at":"2026-11-25T23:03:18.083Z","team":"CHA","dk_id":"45084997","name":"Naz Reid","kind":"projection","from":37.31,"to":37.46,"by":"pull","why":"TwoGun board pull 2026-11-25T180249-0500 (board Wed, Nov 25, 4:58 PM CT)"}
+{"at":"2026-11-25T23:03:18.083Z","team":"CHI","dk_id":"45085008","name":"Josh Giddey","kind":"projection","from":33.6,"to":33.74,"by":"pull","why":"TwoGun board pull 2026-11-25T180249-0500 (board Wed, Nov 25, 4:58 PM CT)"}
+{"at":"2026-11-25T23:03:18.083Z","team":"CHA","dk_id":"45085029","name":"Brandon Miller","kind":"projection","from":34.39,"to":34.52,"by":"pull","why":"TwoGun board pull 2026-11-25T180249-0500 (board Wed, Nov 25, 4:58 PM CT)"}
+{"at":"2026-11-25T23:03:18.083Z","team":"CHI","dk_id":"45085093","name":"Matas Buzelis","kind":"projection","from":29.68,"to":29.79,"by":"pull","why":"TwoGun board pull 2026-11-25T180249-0500 (board Wed, Nov 25, 4:58 PM CT)"}
+{"at":"2026-11-25T23:03:18.083Z","team":"CHA","dk_id":"45085119","name":"Coby White","kind":"projection","from":26.58,"to":26.68,"by":"pull","why":"TwoGun board pull 2026-11-25T180249-0500 (board Wed, Nov 25, 4:58 PM CT)"}
+{"at":"2026-11-25T23:03:25.212Z","team":"CHA","dk_id":"45085114","name":"Moussa Diabate","kind":"projection","from":31.74,"to":31.85,"by":"console","why":"Console send (automatic: a load, a pull or the lineup bar's news)"}
+{"at":"2026-11-25T23:04:40.508Z","team":"MIL","dk_id":"45085166","name":"Ryan Rollins","kind":"minutes","from":25.79,"to":25,"by":"console","why":"your Console send"}
+{"at":"2026-11-25T23:04:40.508Z","team":"MIL","dk_id":"45085166","name":"Ryan Rollins","kind":"projection","from":27.98,"to":27.12,"by":"console","why":"your Console send"}
