@@ -89,7 +89,8 @@ export function applyOursDoc(slateData, site) {
     const problem = `Our projections are not on the public site for this slate (${why}), so whether any man plays is not known: every projection is blank and nobody is built with, as in the app when our engine cannot run.`;
     return { ...slateData, proj_source: "twogun", proj_problem: problem, players: (slateData.players ?? []).map((p) => missingMan(p, "twogun", why)) };
   }
-  return { ...slateData, proj_source: ours.proj_source, ...(ours.proj_problem ? { proj_problem: ours.proj_problem } : {}), ...(Array.isArray(ours.blind_teams) ? { blind_teams: ours.blind_teams } : {}), players: layOurs(slateData, ours).players };
+  // G74: the site's slate answer matches the app's, so the baked minutes blend rides along when present (Adam 9:49 AM 11-25 minutes blend).
+  return { ...slateData, proj_source: ours.proj_source, ...(ours.minutes_blend ? { minutes_blend: ours.minutes_blend } : {}), ...(ours.proj_problem ? { proj_problem: ours.proj_problem } : {}), ...(Array.isArray(ours.blind_teams) ? { blind_teams: ours.blind_teams } : {}), players: layOurs(slateData, ours).players };
 }
 
 /** The files a visitor's browser starts from, as [{ file, text }] under the app's data folder (dataDir "/data"): Adam's overrides and scenarios, then his saved work. */

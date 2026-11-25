@@ -16,7 +16,7 @@
 // The input (server/minutes/predictor-inputs.js blendInput) is plain JSON, so the server and the page read the same numbers. Pure; tests/minutes_blend.test.mjs. Words: minutes-blend-words.js.
 import { isNum } from "./figures.js";
 import { MINUTES_CAP } from "./team-fill.js";
-import { predictTeamMinutes, profileFromJson } from "./predictor-core.js";
+import { predictTeamMinutes, profileFromJson, chartFromJson } from "./predictor-core.js";
 import { blendNotes, manWords } from "./minutes-blend-words.js";
 
 export { blendSummary, blendFootText } from "./minutes-blend-words.js";
@@ -103,10 +103,13 @@ export function predictorFigures(pred, playing, starters) {
   if (!pred || pred.missing) return { missing: pred?.missing ?? "no predictor input was made" };
   const profile = profileFromJson(pred.profile), on = new Set(playing);
   const out = new Set([...pred.men.filter((m) => !String(m.key).startsWith("out:") && !on.has(m.key)).map((m) => m.key), ...(pred.off_out ?? [])]);
-  const res = predictTeamMinutes(profile, { men: pred.men.map((m) => ({ key: m.key, id: m.id })), five: starters, out, pos: new Map(pred.pos ?? []) });
+  // the depth-chart prior (Adam 10:06 AM 11-25): the input's chart and setting as the server read them (predictor-inputs.js chartPart); an input made before it carries neither, so it is off
+  const res = predictTeamMinutes(profile, { men: pred.men.map((m) => ({ key: m.key, id: m.id })), five: starters, out, pos: new Map(pred.pos ?? []), chart: chartFromJson(pred.chart ?? null), chartPrior: pred.chart_prior ?? null });
   const byId = new Map(), known = new Set();
   for (const m of pred.men) if (on.has(m.key)) { byId.set(m.key, res.byKey.get(m.key).minutes); if (profile.byId.has(m.id)) known.add(m.key); }
-  return { byId, known, notes: { posMissing: res.notes.posMissing ?? 0, capUsed: res.notes.capUsed ?? null } };
+  // the lock five (Adam 10:06 AM 11-25): the predictor runs on tonight's starters, which are the pages' confirmed five whenever one is applied; which it was is said (G62)
+  const conf = pred.confirmed_five ?? null, five = !conf ? "guess" : conf.length === starters.length && conf.every((id) => starters.includes(id)) ? "confirmed" : "not the confirmed five";
+  return { byId, known, notes: { posMissing: res.notes.posMissing ?? 0, capUsed: res.notes.capUsed ?? null, chartOor: res.notes.chartOor ?? 0, chartMoved: (res.notes.chartMoved ?? []).filter((k) => on.has(k)), five } };
 }
 
 /**
@@ -181,7 +184,8 @@ export function blendPlan(plan, men, input) {
   }
   const engineHad = rows.filter((r) => !isNum(r.e.auto) && isNum(r.v)).map((r) => r.m.name); // our engine had no figure, another model has one (review item 6)
   const keptNotes = engineHad.length && !none.length ? plan.notes.filter((n) => !/nothing is handed out while .* no figure|has no figure of ours \(your typed/.test(n)) : plan.notes;
-  const gaps = { ...(input.predictor?.gaps ?? {}), pos_missing: pred.notes?.posMissing ?? 0, cap_raised: pred.notes?.capUsed ?? null };
+  const gaps = { ...(input.predictor?.gaps ?? {}), pos_missing: pred.notes?.posMissing ?? 0, cap_raised: pred.notes?.capUsed ?? null, five: pred.notes?.five ?? null,
+    chart_moved: (pred.notes?.chartMoved ?? []).map((k) => men.find((m) => m.id === k)?.name ?? k) }; // the men the depth-chart prior lowered, by name (code review 11-25, item 3)
   const notes = blendNotes({ members, lacking, missing: pred.missing ?? null, gaps, rows, fit, res, floors, none, engineHad, total });
   const nameOf = (id) => rows.find((r) => r.id === id).m.name;
   return { ...plan, byId, total: none.length ? null : total, notes: [...keptNotes, ...notes],

@@ -18,6 +18,27 @@ export const ROLE_PRIOR = Object.freeze({ s: Object.freeze({ trust: 2, by: "pair
 export const ROLE_PRIOR_DEFAULT_ON = true; // the average miss, the 10+ misses and both role-change subsets went down (replay, 11-20)
 const DEFAULT_ROLE_PRIOR = ROLE_PRIOR_DEFAULT_ON ? ROLE_PRIOR : null; // the setting with no environment to read (minutes-predictor.js roleSetting reads NBADFS_MINUTES_ROLE)
 
+// Depth-chart prior (Adam 10:06 AM 11-25, "fully inform the thing"): the team's saved depth chart as of lock (server/minutes/predictor-chart.js) gives the usual healthy order. chart:
+// { oor: Set of box-score ids the chart has out of the rotation, backup: Map starter id -> his chart backup id }. k: games' weight of the chart's out-of-rotation call, pulling the man's
+// all-games mean (taken over games he played only) toward 0; backup: how much more of an Out starter's position-prior share his chart backup gets (splitOut).
+// Set on the replay of the 22 scored nights (tools/minutes_backtest.mjs, 11-25; 14 nights have a chart saved before lock): k 3 with backup 1 lowered the predictor 5.338 to 5.246 (10+ misses 493 to 488)
+// and the three-way average 4.728 to 4.711 (367 to 366). Tried and dropped: pulling rotation men toward the chart's usual minutes (k 1 to 10: worse on both, e.g. k 3 5.57 / 541) and an
+// entry at his chart minutes for a chart man with no games here (5.38 / 513: it takes minutes from the starters, and some such men never play).
+export const CHART_PRIOR = Object.freeze({ k: 3, backup: 1 });
+export const CHART_PRIOR_DEFAULT_ON = true; // the predictor's and the three-way blend's average miss and 10+ misses all went down (replay, 11-25)
+const DEFAULT_CHART_PRIOR = CHART_PRIOR_DEFAULT_ON ? CHART_PRIOR : null; // minutes-predictor.js chartSetting reads NBADFS_PREDICTOR_CHART
+
+/** The profile with the chart prior folded in (pure; the profile given is not changed): each man the chart has out of the rotation, with games here, has his all-games mean times games / (games + k). */
+export function withChart(profile, chart, cfg) {
+  if (!chart || !cfg || !(cfg.k > 0)) return profile;
+  const byId = new Map(profile.byId);
+  for (const id of chart.oor) {
+    const m = byId.get(id);
+    if (m) byId.set(id, { ...m, pref: (m.games * m.pref) / (m.games + cfg.k) });
+  }
+  return { ...profile, byId, order: [...byId.values()].sort((a, b) => b.pref - a.pref || (a.id < b.id ? -1 : 1)) };
+}
+
 const prefOf = (profile, id) => (profile.byId.has(id) ? profile.byId.get(id).pref : -1);
 const rankByPref = (profile, ids) => [...ids].sort((a, b) => prefOf(profile, b) - prefOf(profile, a) || (a < b ? -1 : 1));
 
@@ -131,10 +152,10 @@ export function roleTargets(profile, { five, healthy, team = null, pos = new Map
   return targets;
 }
 
-// One Out man's base minutes split across the healthy men by weight (never to one man).
-function splitOut(profile, u, healthy, base, pos) {
+// One Out man's base minutes split across the healthy men by weight (never to one man). lean: his chart backup's position-prior weight times (1 + lean), 0 for none (the depth-chart prior).
+function splitOut(profile, u, healthy, base, pos, backup = null, lean = 0) {
   const uBase = baseMinutes(profile, u, profile.usual.has(u) ? "s" : "b");
-  const ov = healthy.map((j) => base.get(j) * posOverlap(pos.get(u), pos.get(j)));
+  const ov = healthy.map((j) => base.get(j) * posOverlap(pos.get(u), pos.get(j)) * (backup !== null && j === backup ? 1 + lean : 1));
   const ovSum = ov.reduce((s, x) => s + x, 0);
   const ab = profile.absorb.get(u) || { m: 0, gains: new Map() };
   const w = healthy.map((j, i) => {
@@ -163,16 +184,20 @@ function fitTeam(items, capOf) {
 // Per-player minutes for tonight: the given five are starters, everyone else healthy is bench; Out men's minutes are split.
 // adjust: Map id -> minutes the learner adds to a man's base (minutes-misses.js); the profile's own when not given.
 // rolePrior: the role-change setting (roleTargets, roleCeiling), or null for none; the profile's own, else the default setting, when not given.
-export function projectTeam(profile, { starters = [], out = new Set(), roster = [], pos = new Map(), adjust = profile.adjust ?? null, rolePrior = profile.rolePrior === undefined ? DEFAULT_ROLE_PRIOR : profile.rolePrior } = {}) {
+// chart: the depth-chart prior's chart (withChart), or null; chartPrior: its setting, or null for off (DEFAULT_CHART_PRIOR when not given).
+export function projectTeam(profile0, { starters = [], out = new Set(), roster = [], pos = new Map(), adjust = profile0.adjust ?? null, rolePrior = profile0.rolePrior === undefined ? DEFAULT_ROLE_PRIOR : profile0.rolePrior, chart = null, chartPrior = DEFAULT_CHART_PRIOR } = {}) {
+  const useChart = Boolean(chart && chartPrior), profile = useChart ? withChart(profile0, chart, chartPrior) : profile0;
+  const backupOf = (u) => (useChart ? chart.backup?.get(u) ?? null : null), lean = useChart ? chartPrior.backup ?? 0 : 0;
   const five = new Set(starters);
   const healthy = roster.filter((id) => !out.has(id));
+  const oorIds = new Set(useChart && chartPrior.k > 0 ? healthy.filter((id) => chart.oor.has(id) && profile.byId.has(id)) : []); // the men the chart prior moved: in their why lines and the notes (ids); the blend names them in the team's notes (minutes-blend-words.js)
   const adj = (id) => (adjust && profile.byId.has(id) ? adjust.get(id) ?? 0 : 0);
   const targets = roleTargets(profile, { five, healthy, team: new Set([...roster, ...out]), pos }, rolePrior);
   const base = new Map(healthy.map((id) => [id, Math.max(0, baseMinutes(profile, id, five.has(id) ? "s" : "b", targets.get(id) ?? null) + adj(id))]));
   const extra = new Map(healthy.map((id) => [id, 0]));
   const outKnown = roster.filter((id) => out.has(id) && profile.byId.has(id));
   for (const u of outKnown) {
-    const share = splitOut(profile, u, healthy, base, pos);
+    const share = splitOut(profile, u, healthy, base, pos, backupOf(u), lean);
     healthy.forEach((j, i) => extra.set(j, extra.get(j) + share[i]));
   }
   const posMissing = pos.size ? [...healthy, ...outKnown].filter((id) => !pos.has(id)) : [];
@@ -186,12 +211,13 @@ export function projectTeam(profile, { starters = [], out = new Set(), roster = 
     bbr_id: id,
     min: out.has(id) ? 0 : Math.round((fit.get(id) || 0) * 1000) / 1000,
     slot: out.has(id) ? "out" : five.has(id) ? "starter" : "bench",
-    why: whyOf(profile, id, out, base, extra, short, adj(id), targets.has(id) ? (five.has(id) ? "new in the five, leans to starter level" : "usual starter on the bench, leans to bench level") : ""),
+    why: whyOf(profile, id, out, base, extra, short, adj(id), [targets.has(id) ? (five.has(id) ? "new in the five, leans to starter level" : "usual starter on the bench, leans to bench level") : "",
+      oorIds.has(id) ? "out of the rotation on the depth chart, leans lower" : ""].filter(Boolean).join(", ")),
   }));
   const diff = Math.round((TEAM_MIN - rows.reduce((s, r) => s + r.min, 0)) * 1000) / 1000;
   const top = rows.filter((r) => r.min > 0).sort((a, b) => b.min - a.min).find((r) => r.min + diff <= MAX_MIN);
   if (top && diff) top.min = Math.round((top.min + diff) * 1000) / 1000;
-  rows.notes = { posMissing, ceilingsShort: short !== null, capUsed: short, roleTargeted: targets.size };
+  rows.notes = { posMissing, ceilingsShort: short !== null, capUsed: short, roleTargeted: targets.size, chartOor: oorIds.size, chartOorIds: [...oorIds] };
   return rows;
 }
 
@@ -207,15 +233,22 @@ function whyOf(profile, id, out, base, extra, short, adj = 0, role = "") {
 /**
  * One team's predictor minutes: projectTeam (the five given, Adam 3:20 PM 11-18) with the men's ids from predictorIds (tools/minutes_backtest_core.mjs). profile: the team's profile of its games before the night;
  * men: [{ key, id }]; five: keys of the five; out: Set of keys not playing (board men Out and the Out list's men off the board); pos: Map id -> position. project: projectTeam (minutes-predictor.js passes its
- * environment-aware one). Returns { byKey: Map key -> { minutes, why }, notes: { posMissing, ceilingsShort, capUsed } }. Pure.
+ * environment-aware one). Returns { byKey: Map key -> { minutes, why }, notes: { posMissing, ceilingsShort, capUsed, chartOor (how many men the depth-chart prior moved), chartMoved (their keys) } }. Pure.
  */
-export function predictTeamMinutes(profile, { men, five, out, pos = new Map(), project = projectTeam }) {
+export function predictTeamMinutes(profile, { men, five, out, pos = new Map(), project = projectTeam, chart = null, chartPrior }) {
   const idOf = new Map(men.map((m) => [m.key, m.id])), outIds = new Set([...out].map((k) => idOf.get(k)).filter(Boolean));
   const starters = [...five].filter((k) => !out.has(k)).map((k) => idOf.get(k)).filter(Boolean);
-  const rows = project(profile, { starters, out: outIds, roster: men.map((m) => m.id), pos });
+  // chart, chartPrior: the depth-chart prior (projectTeam); chartPrior left out takes the project's own default
+  const rows = project(profile, { starters, out: outIds, roster: men.map((m) => m.id), pos, chart, ...(chartPrior !== undefined ? { chartPrior } : {}) });
   const byId = new Map(rows.map((r) => [r.bbr_id, r]));
-  return { byKey: new Map(men.map((m) => [m.key, { minutes: byId.get(m.id).min, why: byId.get(m.id).why }])), notes: { posMissing: rows.notes.posMissing.length, ceilingsShort: rows.notes.ceilingsShort, capUsed: rows.notes.capUsed ?? null } };
+  return { byKey: new Map(men.map((m) => [m.key, { minutes: byId.get(m.id).min, why: byId.get(m.id).why }])),
+    notes: { posMissing: rows.notes.posMissing.length, ceilingsShort: rows.notes.ceilingsShort, capUsed: rows.notes.capUsed ?? null, chartOor: rows.notes.chartOor ?? 0,
+      chartMoved: men.filter((m) => (rows.notes.chartOorIds ?? []).includes(m.id)).map((m) => m.key) } };
 }
+
+/** A depth-chart prior's chart (withChart) as plain JSON for the page, and back. Pure. */
+export const chartToJson = (c) => (c ? { oor: [...c.oor], backup: [...c.backup] } : null);
+export const chartFromJson = (j) => (j ? { oor: new Set(j.oor), backup: new Map(j.backup) } : null);
 
 /** A team profile (minutes-predictor.js teamProfile) as plain JSON for the page: its Maps and Set as lists; the learner's summary is left out (the server keeps it). Pure. */
 export function profileToJson(p) {
