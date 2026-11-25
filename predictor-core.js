@@ -16,7 +16,20 @@ export const BENCH_SLOTS = 8;
 // lowest average on that side's role-change men. Shrink weight SHRINK_K on both sides (the bench side's 2 was one 10+ miss better).
 export const ROLE_PRIOR = Object.freeze({ s: Object.freeze({ trust: 2, by: "pair", w: 0.5 }), b: Object.freeze({ trust: 3, by: "gap", w: 0.5 }) });
 export const ROLE_PRIOR_DEFAULT_ON = true; // the average miss, the 10+ misses and both role-change subsets went down (replay, 11-20)
-const DEFAULT_ROLE_PRIOR = ROLE_PRIOR_DEFAULT_ON ? ROLE_PRIOR : null; // the setting with no environment to read (minutes-predictor.js roleSetting reads NBADFS_MINUTES_ROLE)
+
+// Spot-start prior, the role prior's `spot` part (Adam 4:50 PM 11-25, "the confirmed five is the five": a man who rarely starts, put in the five, plays what such men play; and "fully inform the thing").
+// share: a man in the five with fewer than this share of his games here started is a spot starter. His target is his all-games mean moved weight w up to the league's spot-start line (profile.spot.s,
+// learned over every team's boxes before the night by minutes-predictor.js spotPattern: a + b x his all-games mean + c x the usual starters not in tonight's five) plus his team's own misses off that
+// line over (its spot starts + teamK); his own starts pull his starter base toward it as before (baseMinutes). The raise comes out of the Out starter whose start he took (that man's minutes to split
+// are that much less, none of them to him). bench: the weight for a usual starter on the bench, down to the league's benched line the same way. No line learned yet (under SPOT_MIN_GAMES such games
+// league-wide): the rules above, said in his why line. Replay of the 23 scored nights 10-29 to 11-24 with the lock five on (tools/minutes_backtest.mjs, 11-25; average miss / 10+ misses): the
+// predictor 5.224 / 496 to 5.214 / 489 (first 12 nights 5.197 / 276 to 5.194 / 273, later 11 5.258 / 220 to 5.239 / 216; spot starters 6.79 / 33 to 6.54 / 31), but the three-way blend
+// 4.690 / 369 to 4.688 / 371 and its first half 4.649 / 213 to 4.651 / 215, so off by default (NBADFS_MINUTES_ROLE=spot=on, or its values, turns it on). Tried: no share of any Out man's minutes
+// (5.211 / 488, three-way 4.693 / 373, spot starters left further under), the share cut to 1/3 (5.213 / 490), the bench side alone (5.212 / 494, three-way 4.686 / 370), w 0.5 to 0.75: none lowered all four.
+export const SPOT_PRIOR = Object.freeze({ share: 0.15, w: 1, bench: 1, teamK: 3 });
+export const SPOT_PRIOR_DEFAULT_ON = false; // the predictor went down on both halves, the three-way blend's and the board's 10+ misses went up (replay, 11-25)
+export const SPOT_SHARE_WORDS = 1 / 3; // a man in the five who started under this share of his games here is named a spot starter in his why line, with the prior on or off (G62)
+const DEFAULT_ROLE_PRIOR = ROLE_PRIOR_DEFAULT_ON ? (SPOT_PRIOR_DEFAULT_ON ? Object.freeze({ ...ROLE_PRIOR, spot: SPOT_PRIOR }) : ROLE_PRIOR) : null; // the setting with no environment to read (minutes-predictor.js roleSetting reads NBADFS_MINUTES_ROLE)
 
 // Depth-chart prior (Adam 10:06 AM 11-25, "fully inform the thing"): the team's saved depth chart as of lock (server/minutes/predictor-chart.js) gives the usual healthy order. chart:
 // { oor: Set of box-score ids the chart has out of the rotation, backup: Map starter id -> his chart backup id }. k: games' weight of the chart's out-of-rotation call, pulling the man's
@@ -118,18 +131,24 @@ function pairVacated(profile, up, vacated, pos) {
  * Priors (by): "curve", the team's starter or bench curve at his rank tonight; "pair", the base of the usual starter he replaces, or for a
  * benched man the bench base of the man who took his start, the curve when unpaired; "gap", his mean plus or minus the team's starter-minus-bench
  * gap for the share of his games in the other role. team: tonight's roster and Out list (only its usual starters are vacated starts).
- * Map id -> target. Pure.
+ * With cfg.spot (the spot-start prior, SPOT_PRIOR) and the profile's league lines learned (profile.spot): a spot starter in the five, whatever his starts, and every usual starter on the bench lean to
+ * the league's line instead (spotLines). Map id -> target, with .words (id -> why line words), .spot (the spot starters the line set) and .pairOf (up id -> the usual starter whose start he took). Pure.
  */
 export function roleTargets(profile, { five, healthy, team = null, pos = new Map() }, cfg) {
   const targets = new Map();
+  targets.words = new Map(); // id -> why his figure leans, for his why line (G62)
+  targets.spot = new Set(); // the spot starters set by the league's line (projectTeam: their raise comes out of the Out man whose start they took, spotTook)
+  targets.pairOf = new Map(); // up id -> the usual starter whose start he took
   if (!cfg) return targets;
   const known = healthy.filter((id) => profile.byId.has(id));
-  const up = known.filter((id) => five.has(id) && profile.byId.get(id).roleN.s < cfg.s.trust);
-  const down = known.filter((id) => !five.has(id) && profile.usual.has(id) && profile.byId.get(id).roleN.b < cfg.b.trust);
+  const line = spotLines(profile, cfg), isSpot = (id) => Boolean(cfg.spot) && five.has(id) && profile.byId.get(id).startShare < cfg.spot.share;
+  const up = known.filter((id) => five.has(id) && (profile.byId.get(id).roleN.s < cfg.s.trust || (isSpot(id) && Boolean(line.s))));
+  const down = known.filter((id) => !five.has(id) && profile.usual.has(id) && (profile.byId.get(id).roleN.b < cfg.b.trust || Boolean(line.b)));
   if (!up.length && !down.length) return targets;
   // a vacated start is a usual starter on tonight's team (roster or Out list; healthy when no team is given) outside the five, never a man gone
-  const onTeam = team ?? new Set(healthy);
-  const pairs = pairVacated(profile, up, [...profile.usual].filter((u) => !five.has(u) && onTeam.has(u)), pos);
+  const onTeam = team ?? new Set(healthy), vacated = [...profile.usual].filter((u) => !five.has(u) && onTeam.has(u));
+  const pairs = pairVacated(profile, up, vacated, pos);
+  targets.pairOf = pairs;
   const tookStart = new Map([...pairs].map(([id, u]) => [u, id]));
   const fiveRank = rankByPref(profile, known.filter((id) => five.has(id))), benchRank = rankByPref(profile, known.filter((id) => !five.has(id)));
   const gap = roleGap(profile);
@@ -145,22 +164,61 @@ export function roleTargets(profile, { five, healthy, team = null, pos = new Map
   for (const [ids, role] of [[up, "s"], [down, "b"]]) {
     const c = role === "s" ? cfg.s : cfg.b;
     for (const id of ids) {
-      const pref = profile.byId.get(id).pref, move = prior(id, role) - pref;
-      targets.set(id, pref + c.w * (role === "s" ? Math.max(0, move) : Math.min(0, move)));
+      const m = profile.byId.get(id), pref = m.pref;
+      // a spot starter, or a usual starter benched, leans to the league's line for such men when one is learned (the spot-start prior, Adam 4:50 PM 11-25); else the role prior above
+      const spot = role === "s" ? (isSpot(id) && line.s ? line.s(pref, vacated.length) : null) : line.b ? line.b(pref) : null;
+      const move = (spot ?? prior(id, role)) - pref, w = spot === null ? c.w : role === "s" ? cfg.spot.w : cfg.spot.bench;
+      targets.set(id, pref + w * (role === "s" ? Math.max(0, move) : Math.min(0, move)));
+      targets.words.set(id, roleWords(m, role, spot, isSpot(id) && !line.s));
+      if (role === "s" && spot !== null) targets.spot.add(id);
     }
   }
   return targets;
 }
 
+// The league's spot-start and benched lines from profile.spot (minutes-predictor.js spotPattern) as functions of his all-games mean (and, for a spot start, the usual starters not in the five),
+// each plus the team's own misses off it over (its such games + teamK); null when not learned or the prior is off.
+function spotLines(profile, cfg) {
+  const fit = cfg.spot ? profile.spot : null, k = cfg.spot?.teamK ?? 0;
+  const own = (side) => (fit?.here?.[side] ? fit.here[side][1] / (fit.here[side][0] + k) : 0);
+  return { s: fit?.s ? (pref, vac) => fit.s.a + fit.s.b * pref + (fit.s.c ?? 0) * vac + own("s") : null, b: fit?.b && cfg.spot.bench > 0 ? (pref) => fit.b.a + fit.b.b * pref + own("b") : null };
+}
+
+// Why a role-change man's figure leans (his why line, G62; the spot-start prior, Adam 4:50 PM 11-25). noLine: a spot starter while no league line is learned yet. Keeps "leans to starter / bench level" (the scoreboard counts it).
+function roleWords(m, role, line, noLine) {
+  const at = line === null ? "" : ` (the league's ${role === "s" ? "spot-start" : "benched"} line, ${line.toFixed(1)})`;
+  if (role === "b") return `usual starter on the bench, leans to bench level${at}`;
+  if (line !== null) return `${spotStarterWords(m)}, leans to starter level${at}`;
+  return `new in the five, leans to starter level${noLine ? " (no league spot-start line learned yet)" : ""}`;
+}
+const spotStarterWords = (m) => `spot starter (${m.starts} of ${m.games} games started here)`;
+/** A man in the five who started under SPOT_SHARE_WORDS of his games here and has no role target, named in his why line (G62; Adam 4:50 PM 11-25): his starter base is his own starts' mean shrunk to his all-games mean. */
+function spotNamed(profile, id, five) {
+  const m = profile.byId.get(id);
+  if (!m || !five.has(id) || !(m.startShare < SPOT_SHARE_WORDS)) return "";
+  return `${spotStarterWords(m)}, starter base ${m.roleN.s ? "from his own starts, pulled to his all-games mean" : "his all-games mean"}`;
+}
+
+// The minutes each Out man gives up to the spot starters set by the league's line who took his start (the spot-start prior): their raise over their own starter base. Map Out id -> minutes.
+function spotTook(profile, targets, out) {
+  const took = new Map();
+  for (const id of targets.spot) {
+    const u = targets.pairOf.get(id);
+    if (u && out.has(u)) took.set(u, (took.get(u) ?? 0) + Math.max(0, baseMinutes(profile, id, "s", targets.get(id)) - baseMinutes(profile, id, "s")));
+  }
+  return took;
+}
+
 // One Out man's base minutes split across the healthy men by weight (never to one man). lean: his chart backup's position-prior weight times (1 + lean), 0 for none (the depth-chart prior).
-function splitOut(profile, u, healthy, base, pos, backup = null, lean = 0) {
-  const uBase = baseMinutes(profile, u, profile.usual.has(u) ? "s" : "b");
-  const ov = healthy.map((j) => base.get(j) * posOverlap(pos.get(u), pos.get(j)) * (backup !== null && j === backup ? 1 + lean : 1));
+// skip: men who take no share (the spot-start prior's line-set spot starters who took his start); less: minutes taken off his base first (spotTook).
+function splitOut(profile, u, healthy, base, pos, backup = null, lean = 0, skip = new Set(), less = 0) {
+  const uBase = Math.max(0, baseMinutes(profile, u, profile.usual.has(u) ? "s" : "b") - less), keep = (j) => (skip.has(j) ? 0 : 1);
+  const ov = healthy.map((j) => base.get(j) * posOverlap(pos.get(u), pos.get(j)) * (backup !== null && j === backup ? 1 + lean : 1) * keep(j));
   const ovSum = ov.reduce((s, x) => s + x, 0);
   const ab = profile.absorb.get(u) || { m: 0, gains: new Map() };
   const w = healthy.map((j, i) => {
     const prior = ovSum ? uBase * (ov[i] / ovSum) : 0;
-    return (ab.m * (ab.gains.get(j) || 0) + ABSORB_K * prior) / (ab.m + ABSORB_K);
+    return (ab.m * (ab.gains.get(j) || 0) * keep(j) + ABSORB_K * prior) / (ab.m + ABSORB_K);
   });
   const wSum = w.reduce((s, x) => s + x, 0);
   return healthy.map((j, i) => (wSum ? uBase * (w[i] / wSum) : 0));
@@ -196,8 +254,10 @@ export function projectTeam(profile0, { starters = [], out = new Set(), roster =
   const base = new Map(healthy.map((id) => [id, Math.max(0, baseMinutes(profile, id, five.has(id) ? "s" : "b", targets.get(id) ?? null) + adj(id))]));
   const extra = new Map(healthy.map((id) => [id, 0]));
   const outKnown = roster.filter((id) => out.has(id) && profile.byId.has(id));
+  const took = spotTook(profile, targets, out); // the spot-start prior: a line-set spot starter's raise comes out of the Out starter whose start he took, and he takes no share of that man's minutes
   for (const u of outKnown) {
-    const share = splitOut(profile, u, healthy, base, pos, backupOf(u), lean);
+    const skip = new Set([...targets.spot].filter((j) => targets.pairOf.get(j) === u));
+    const share = splitOut(profile, u, healthy, base, pos, backupOf(u), lean, skip, took.get(u) ?? 0);
     healthy.forEach((j, i) => extra.set(j, extra.get(j) + share[i]));
   }
   const posMissing = pos.size ? [...healthy, ...outKnown].filter((id) => !pos.has(id)) : [];
@@ -211,7 +271,7 @@ export function projectTeam(profile0, { starters = [], out = new Set(), roster =
     bbr_id: id,
     min: out.has(id) ? 0 : Math.round((fit.get(id) || 0) * 1000) / 1000,
     slot: out.has(id) ? "out" : five.has(id) ? "starter" : "bench",
-    why: whyOf(profile, id, out, base, extra, short, adj(id), [targets.has(id) ? (five.has(id) ? "new in the five, leans to starter level" : "usual starter on the bench, leans to bench level") : "",
+    why: whyOf(profile, id, out, base, extra, short, adj(id), [targets.words.get(id) ?? spotNamed(profile, id, five),
       oorIds.has(id) ? "out of the rotation on the depth chart, leans lower" : ""].filter(Boolean).join(", ")),
   }));
   const diff = Math.round((TEAM_MIN - rows.reduce((s, r) => s + r.min, 0)) * 1000) / 1000;
@@ -253,11 +313,13 @@ export const chartFromJson = (j) => (j ? { oor: new Set(j.oor), backup: new Map(
 /** A team profile (minutes-predictor.js teamProfile) as plain JSON for the page: its Maps and Set as lists; the learner's summary is left out (the server keeps it). Pure. */
 export function profileToJson(p) {
   return { games: p.games, starterCurve: p.starterCurve, benchCurve: p.benchCurve, depth: p.depth, order: p.order, usual: [...p.usual],
-    replacements: [...p.replacements], absorb: [...p.absorb].map(([u, a]) => [u, a.m, [...a.gains]]), adjust: p.adjust ? [...p.adjust] : null, ...(p.rolePrior !== undefined ? { rolePrior: p.rolePrior } : {}) };
+    replacements: [...p.replacements], absorb: [...p.absorb].map(([u, a]) => [u, a.m, [...a.gains]]), adjust: p.adjust ? [...p.adjust] : null, ...(p.rolePrior !== undefined ? { rolePrior: p.rolePrior } : {}),
+    ...(p.spot ? { spot: p.spot } : {}) }; // the league's spot-start lines (roleTargets), plain numbers
 }
 
 /** The profile back from profileToJson's form, as projectTeam reads it. Pure. */
 export function profileFromJson(j) {
   return { games: j.games, starterCurve: j.starterCurve, benchCurve: j.benchCurve, depth: j.depth, order: j.order, byId: new Map(j.order.map((m) => [m.id, m])), usual: new Set(j.usual),
-    replacements: new Map(j.replacements), absorb: new Map(j.absorb.map(([u, m, g]) => [u, { m, gains: new Map(g) }])), adjust: j.adjust ? new Map(j.adjust) : null, ...(j.rolePrior !== undefined ? { rolePrior: j.rolePrior } : {}) };
+    replacements: new Map(j.replacements), absorb: new Map(j.absorb.map(([u, m, g]) => [u, { m, gains: new Map(g) }])), adjust: j.adjust ? new Map(j.adjust) : null, ...(j.rolePrior !== undefined ? { rolePrior: j.rolePrior } : {}),
+    ...(j.spot ? { spot: j.spot } : {}) };
 }
