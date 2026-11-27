@@ -43,7 +43,10 @@ function gapNotes(gaps) {
   if (g.pos_problem) out.push(`for the predictor, ${g.pos_problem}`);
   if (g.pos_missing > 0) out.push(`the predictor has no listed position for ${menWord(g.pos_missing)}, so an Out man's minutes reach them by role only`);
   if (isNum(g.cap_raised)) out.push(`the predictor's own ceilings could not hold ${TEAM} for this team, so its caps were raised to ${g.cap_raised}`);
-  if (g.off_healthy?.length) out.push(`${menWord(g.off_healthy.length)} off TwoGun's board whom no feed of ours has Out ${g.off_healthy.length === 1 ? "is" : "are"} counted as playing by the predictor: ${g.off_healthy.join(", ")}`);
+  if (g.off_healthy?.length) out.push(`${menWord(g.off_healthy.length)} off TwoGun's board whom no feed of ours has Out ${g.off_healthy.length === 1 ? "is" : "are"} counted as playing by the predictor${g.off_rule ? " (a lineup page of ours has him in its five, or he played lately in our box scores)" : ""}: ${g.off_healthy.join(", ")}`);
+  // the rule from our box scores (server/minutes/off-board.js, the lead's brief 11-25): the men it counts as not playing, each with why (G62)
+  if (g.off_sitting?.length) out.push(`${menWord(g.off_sitting.length)} off TwoGun's board whom no feed of ours has Out ${g.off_sitting.length === 1 ? "is" : "are"} counted as not playing by the predictor, from our box scores (a man plays when he played ${g.off_rule ?? "in the team's recent games"}): ${g.off_sitting.join(", ")}`);
+  if (g.off_rule_problem) out.push(`the predictor's rule for the men off TwoGun's board is off (${g.off_rule_problem}), so they count as playing`);
   if (g.off_list_problem) out.push(`the men off TwoGun's board could not be read (${g.off_list_problem}), so the predictor counts none of them`);
   // the depth-chart prior and the lock five (Adam 10:06 AM 11-25)
   if (g.chart_problem) out.push(`the predictor has no depth chart for this team (${g.chart_problem}), so its lean from the chart is off`);
@@ -86,6 +89,7 @@ export function blendSummary(teamBlends) {
   const predictor_gaps = { set_aside: Math.max(0, ...g("set_aside").map(([, v]) => v?.count ?? 0)), pos_problem: g("pos_problem").find(([, v]) => v)?.[1] ?? null,
     pos_missing: g("pos_missing").reduce((s, [, v]) => s + (v ?? 0), 0), cap_raised: g("cap_raised").filter(([, v]) => isNum(v)).map(([t]) => t),
     off_healthy: g("off_healthy").reduce((s, [, v]) => s + (v?.length ?? 0), 0), off_list_problem: g("off_list_problem").find(([, v]) => v)?.[1] ?? null,
+    off_sitting: g("off_sitting").reduce((s, [, v]) => s + (v?.length ?? 0), 0), off_rule_problem: g("off_rule_problem").find(([, v]) => v)?.[1] ?? null, // the rule from our box scores (off-board.js)
     // the lock five and the depth-chart prior (11-25): how many teams ran on a confirmed five (of those whose input says), and the teams with no chart
     five_said: g("five").filter(([, v]) => v).length, five_confirmed: g("five").filter(([, v]) => v === "confirmed").length, chart_missing: g("chart_problem").filter(([, v]) => v).map(([t]) => t),
     chart_moved: g("chart_moved").reduce((s, [, v]) => s + (v?.length ?? 0), 0), chart_no_id: g("chart_no_id").reduce((s, [, v]) => s + (v?.length ?? 0), 0) }; // code review 11-25, item 3
@@ -106,6 +110,8 @@ export function blendFootText(s) {
     ...(pg.cap_raised?.length ? [`the predictor raised its caps for ${pg.cap_raised.join(", ")}`] : []),
     ...(pg.off_healthy > 0 ? [`${menWord(pg.off_healthy)} off TwoGun's board ${pg.off_healthy === 1 ? "is" : "are"} counted as playing by the predictor`] : []),
     ...(pg.off_list_problem ? [`the men off TwoGun's board could not be read for the predictor`] : []),
+    ...(pg.off_sitting > 0 ? [`${menWord(pg.off_sitting)} off TwoGun's board ${pg.off_sitting === 1 ? "is" : "are"} counted as not playing by the predictor: too few recent games in our box scores (each team's notes name them)`] : []),
+    ...(pg.off_rule_problem ? [`the predictor's rule for the men off TwoGun's board is off (${pg.off_rule_problem})`] : []),
     ...(pg.five_said > 0 ? [`the predictor ran on the lineup pages' confirmed five for ${pg.five_confirmed} of ${pg.five_said} teams, the rest on our engine's five`] : []),
     ...(pg.chart_missing?.length ? [`the predictor has no depth chart for ${pg.chart_missing.join(", ")}`] : []),
     ...(pg.chart_moved > 0 ? [`the depth chart lowered the predictor's figure for ${menWord(pg.chart_moved)} out of the rotation (each team's notes name them)`] : []),

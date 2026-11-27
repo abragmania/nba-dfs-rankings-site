@@ -1,9 +1,13 @@
 // The minutes predictor's pure projection (Adam 3:17-3:21 PM 11-18; moved here 11-25 so the Console can run it in the browser for the minutes blend, Adam 9:49 AM 11-25 "let's do it"):
 // projectTeam is always GIVEN the five; predictFive is only the fallback when the five is not posted. Minutes are predicted per PLAYER, never by slot: own role base, an Out man's minutes split by
 // learned absorption blended with a position prior, a per-man ceiling, then the team fitted to 240. A man new to tonight's role leans to that role's level (roleTargets; Adam 9:33 AM 11-20).
+// With the allocation on (predictor-alloc.js, Adam 12:14 PM 11-27), 240 is allocated top down instead: the rotation in context, the deep bench what such men play here.
 // No file or environment reads here (the page loads this file): the learner and the box reads stay in server/minutes/minutes-predictor.js, which re-exports these and fills the role-prior
 // setting from the environment. profileToJson / profileFromJson carry a learned team profile to the page (server/minutes/predictor-inputs.js). Pure.
 
+import { ALLOC_PRIOR, benchBase, nextUp, allocate, allocWords, fitTo, contextShift } from "./predictor-alloc.js";
+
+export { ALLOC_PRIOR, benchBase, nextUp, allocate, aheadShare, contextShift, fitTo } from "./predictor-alloc.js";
 export const TEAM_MIN = 240;
 export const MAX_MIN = 48;
 const FALLBACK_MIN = 36; // the first cap tried when the men's ceilings cannot hold 240
@@ -53,6 +57,14 @@ const DEFAULT_CHART_PRIOR = CHART_PRIOR_DEFAULT_ON ? CHART_PRIOR : null; // minu
 export const AVAIL_PRIOR = Object.freeze({ k: 0, run: 0.4 });
 export const AVAIL_PRIOR_DEFAULT_ON = false; // the three-way blend's 10+ misses went up in the later half (replay, 11-25)
 const DEFAULT_AVAIL_PRIOR = AVAIL_PRIOR_DEFAULT_ON ? AVAIL_PRIOR : null; // minutes-predictor.js availSetting reads NBADFS_PREDICTOR_AVAIL; the profile carries it (teamProfile) as it does the role prior
+
+// Top-down allocation of 240 (predictor-alloc.js; Adam 12:14 PM 11-27); minutes-predictor.js allocSetting reads NBADFS_PREDICTOR_ALLOC. Graded with the off-board rule on (off-board.js) over the 24
+// nights with boxes 10-29 to 11-25 (tools/minutes_backtest.mjs, 11-27, chart on, lock five on, spot off; average miss / 10+ misses), values set on the first 12: predictor 5.207 / 511 to 4.577 / 383,
+// three-way blend 4.667 / 380 to 4.515 / 374, board 4.628 / 390 to 4.560 / 389; actual top six predictor 5.95 (bias -4.82) to 4.72 (-2.74), deep bench (actual rank 9 on) 4.75 (+3.00) to 4.40 (+2.10).
+// Later 12 nights: predictor 5.218 / 235 to 4.654 / 180, three-way 4.689 / 167 to 4.543 but 10+ misses 167 to 171, so it fails the keep rule's later half; it is on by default by Adam's ruling
+// of 12:14 PM 11-27 (NBADFS_PREDICTOR_ALLOC=off turns it off; its values set it). The allocation alone, the off-board rule off: predictor 4.794 / 442, three-way 4.561 / 386 (worse on its 10+ misses).
+export const ALLOC_DEFAULT_ON = true; // Adam 12:14 PM 11-27: minutes are allocated top-down, never from a man's own past alone; on by his ruling though the later-half three-way 10+ misses went 167 to 171 (replay, 11-27)
+const DEFAULT_ALLOC_PRIOR = ALLOC_DEFAULT_ON ? ALLOC_PRIOR : null;
 
 /** A man's share for the availability prior: 1 for a man in tonight's five, with no games here, or the prior off (cfg null); else (games + k) / (games + missed + k), times cfg.run after a missed last game. Pure. */
 export function availShare(profile, id, inFive, cfg) {
@@ -239,8 +251,9 @@ function spotTook(profile, targets, out) {
 
 // One Out man's base minutes split across the healthy men by weight (never to one man). lean: his chart backup's position-prior weight times (1 + lean), 0 for none (the depth-chart prior).
 // skip: men who take no share (the spot-start prior's line-set spot starters who took his start); less: minutes taken off his base first (spotTook).
-function splitOut(profile, u, healthy, base, pos, backup = null, lean = 0, skip = new Set(), less = 0) {
-  const uBase = Math.max(0, baseMinutes(profile, u, profile.usual.has(u) ? "s" : "b") - less), keep = (j) => (skip.has(j) ? 0 : 1);
+// full: his base before `less` (the allocation's bench base for a man not a usual starter, predictor-alloc.js benchBase); his own role base when not given.
+function splitOut(profile, u, healthy, base, pos, backup = null, lean = 0, skip = new Set(), less = 0, full = null) {
+  const uBase = Math.max(0, (full ?? baseMinutes(profile, u, profile.usual.has(u) ? "s" : "b")) - less), keep = (j) => (skip.has(j) ? 0 : 1);
   const ov = healthy.map((j) => base.get(j) * posOverlap(pos.get(u), pos.get(j)) * (backup !== null && j === backup ? 1 + lean : 1) * keep(j));
   const ovSum = ov.reduce((s, x) => s + x, 0);
   const ab = profile.absorb.get(u) || { m: 0, gains: new Map() };
@@ -252,64 +265,83 @@ function splitOut(profile, u, healthy, base, pos, backup = null, lean = 0, skip 
   return healthy.map((j, i) => (wSum ? uBase * (w[i] / wSum) : 0));
 }
 
-// Fit to 240: scale the free men proportionally; a man who would pass his cap stays at it and the rest take the remainder.
-function fitTeam(items, capOf) {
-  const fixed = new Map();
-  let free = items.filter((x) => x.min > 0);
-  for (let guard = 0; guard < 20 && free.length; guard++) {
-    const left = TEAM_MIN - [...fixed.values()].reduce((s, x) => s + x, 0);
-    const tot = free.reduce((s, x) => s + x.min, 0);
-    const over = free.filter((x) => (x.min / tot) * left > capOf(x));
-    if (!over.length) { for (const x of free) fixed.set(x.id, (x.min / tot) * left); break; }
-    for (const x of over) fixed.set(x.id, capOf(x));
-    free = free.filter((x) => !over.includes(x));
-  }
-  return fixed;
-}
+// Fit to 240 (the allocation off): scale the free men proportionally; a man who would pass his cap stays at it and the rest take the remainder (predictor-alloc.js fitTo, one copy).
+const fitTeam = (items, capOf) => fitTo(items, capOf, TEAM_MIN);
+
+// The fit: the top-down allocation when its setting is on (predictor-alloc.js allocate, Adam 12:14 PM 11-27), else the plain fit to 240 with no deep bench.
+const fitWith = (items, profile, cfg, five, capOf, ctx) => (cfg ? allocate(items, profile, cfg, five, capOf, cfg.rise ? ctx : null) : { fit: fitTeam(items, capOf), deep: new Set(), size: items.length, pot: 0, rose: new Map() });
 
 // Per-player minutes for tonight: the given five are starters, everyone else healthy is bench; Out men's minutes are split.
 // adjust: Map id -> minutes the learner adds to a man's base (minutes-misses.js); the profile's own when not given.
 // rolePrior: the role-change setting (roleTargets, roleCeiling), or null for none; the profile's own, else the default setting, when not given.
 // chart: the depth-chart prior's chart (withChart), or null; chartPrior: its setting, or null for off (DEFAULT_CHART_PRIOR when not given).
 // availPrior: the availability prior's setting (availShare), or null for off; the profile's own, else the default setting, when not given.
+// allocPrior: the top-down allocation's setting (predictor-alloc.js, Adam 12:14 PM 11-27), or null for the plain fit; the profile's own, else the default setting, when not given. On, it supersedes
+// the availability prior (a bench man's figure already counts the games the coach sat him).
 export function projectTeam(profile0, { starters = [], out = new Set(), roster = [], pos = new Map(), adjust = profile0.adjust ?? null, rolePrior = profile0.rolePrior === undefined ? DEFAULT_ROLE_PRIOR : profile0.rolePrior, chart = null, chartPrior = DEFAULT_CHART_PRIOR,
-  availPrior = profile0.availPrior === undefined ? DEFAULT_AVAIL_PRIOR : profile0.availPrior } = {}) {
-  const useChart = Boolean(chart && chartPrior), profile = useChart ? withChart(profile0, chart, chartPrior) : profile0;
-  const backupOf = (u) => (useChart ? chart.backup?.get(u) ?? null : null), lean = useChart ? chartPrior.backup ?? 0 : 0;
+  availPrior = profile0.availPrior === undefined ? DEFAULT_AVAIL_PRIOR : profile0.availPrior, allocPrior = profile0.allocPrior === undefined ? DEFAULT_ALLOC_PRIOR : profile0.allocPrior } = {}) {
+  const useChart = Boolean(chart && chartPrior), profile = useChart ? withChart(profile0, chart, chartPrior) : profile0, alloc = allocPrior ?? null;
   const five = new Set(starters);
   const healthy = roster.filter((id) => !out.has(id));
   const oorIds = new Set(useChart && chartPrior.k > 0 ? healthy.filter((id) => chart.oor.has(id) && profile.byId.has(id)) : []); // the men the chart prior moved: in their why lines and the notes (ids); the blend names them in the team's notes (minutes-blend-words.js)
   const adj = (id) => (adjust && profile.byId.has(id) ? adjust.get(id) ?? 0 : 0);
   const targets = roleTargets(profile, { five, healthy, team: new Set([...roster, ...out]), pos }, rolePrior);
-  const share = new Map(healthy.map((id) => [id, availShare(profile, id, five.has(id), availPrior)])); // the availability prior: a bench man's chance to play tonight
-  const base = new Map(healthy.map((id) => [id, Math.max(0, baseMinutes(profile, id, five.has(id) ? "s" : "b", targets.get(id) ?? null) + adj(id)) * share.get(id)]));
-  const extra = new Map(healthy.map((id) => [id, 0]));
-  const outKnown = roster.filter((id) => out.has(id) && profile.byId.has(id));
-  const took = spotTook(profile, targets, out); // the spot-start prior: a line-set spot starter's raise comes out of the Out starter whose start he took, and he takes no share of that man's minutes
-  for (const u of outKnown) {
-    const skip = new Set([...targets.spot].filter((j) => targets.pairOf.get(j) === u));
-    const share = splitOut(profile, u, healthy, base, pos, backupOf(u), lean, skip, took.get(u) ?? 0);
-    healthy.forEach((j, i) => extra.set(j, extra.get(j) + share[i]));
-  }
-  const posMissing = pos.size ? [...healthy, ...outKnown].filter((id) => !pos.has(id)) : [];
-  const items = healthy.map((id) => ({ id, min: base.get(id) + extra.get(id), cap: roleCeiling(profile, id, targets.get(id) ?? null) }));
+  const share = new Map(healthy.map((id) => [id, alloc ? 1 : availShare(profile, id, five.has(id), availPrior)])); // the availability prior: a bench man's chance to play tonight
+  // a bench man's own figure: his bench base, or with the allocation on his minutes when available here (the games the coach sat him count 0; benchBase)
+  const own = (id, inFive, t = null) => (alloc && !inFive ? benchBase(profile, id, t, alloc) : baseMinutes(profile, id, inFive ? "s" : "b", t));
+  // with the allocation on, his figure moves to his minutes with tonight's team playing (contextShift: the men on the team tonight, Out men included, whose absences his mean holds)
+  const teamTonight = roster, ctxOf = (id) => (alloc ? contextShift(profile, id, teamTonight, { pos, overlap: posOverlap }, alloc) : 0);
+  const base = new Map(healthy.map((id) => [id, Math.max(0, own(id, five.has(id), targets.get(id) ?? null) + adj(id) + ctxOf(id)) * share.get(id)]));
+  const { extra, nextOf } = outShares(profile, { healthy, out, roster, base, pos, targets, five, useChart, chart, chartPrior, alloc, own });
+  const posMissing = pos.size ? [...healthy, ...roster.filter((id) => out.has(id) && profile.byId.has(id))].filter((id) => !pos.has(id)) : [];
+  const items = healthy.map((id) => ({ id, min: base.get(id) + extra.get(id), own: base.get(id), cap: roleCeiling(profile, id, targets.get(id) ?? null) }));
+  // the allocation's usual rotation counts the Out men at their own figures (a usual starter's starter base, anyone else's bench base), so a deep man rises only into an Out man's place at his position
+  const ctx = { outs: roster.filter((id) => out.has(id) && profile.byId.has(id)).map((id) => ({ id, own: own(id, profile.usual.has(id)) })), pos, overlap: posOverlap };
   const holds = (f) => [...f.values()].reduce((s, x) => s + x, 0) >= TEAM_MIN - 1e-6;
-  let fit = fitTeam(items, (x) => x.cap), short = null;
+  let a = fitWith(items, profile, alloc, five, (x) => x.cap, ctx), short = null;
   // ceilings cannot hold 240: each man's cap rises to 36 (his own ceiling when higher) first, and only if that cannot hold 240 either to 48 (review 11-18: IND's 11-02 man projected 48)
-  if (!holds(fit)) { short = FALLBACK_MIN; fit = fitTeam(items, (x) => Math.max(x.cap, FALLBACK_MIN)); }
-  if (!holds(fit)) { short = MAX_MIN; fit = fitTeam(items, () => MAX_MIN); }
+  if (!holds(a.fit)) { short = FALLBACK_MIN; a = fitWith(items, profile, alloc, five, (x) => Math.max(x.cap, FALLBACK_MIN), ctx); }
+  if (!holds(a.fit)) { short = MAX_MIN; a = fitWith(items, profile, alloc, five, () => MAX_MIN, ctx); }
+  const fit = a.fit;
   const rows = roster.map((id) => ({
     bbr_id: id,
     min: out.has(id) ? 0 : Math.round((fit.get(id) || 0) * 1000) / 1000,
     slot: out.has(id) ? "out" : five.has(id) ? "starter" : "bench",
     why: whyOf(profile, id, out, base, extra, short, adj(id), [targets.words.get(id) ?? spotNamed(profile, id, five),
-      oorIds.has(id) ? "out of the rotation on the depth chart, leans lower" : "", share.has(id) ? availWords(profile, id, share.get(id)) : ""].filter(Boolean).join(", ")),
+      oorIds.has(id) ? "out of the rotation on the depth chart, leans lower" : "", share.has(id) ? availWords(profile, id, share.get(id)) : "", allocManWords(profile, id, a, nextOf, alloc, five)].filter(Boolean).join(", ")),
   }));
   const diff = Math.round((TEAM_MIN - rows.reduce((s, r) => s + r.min, 0)) * 1000) / 1000;
   const top = rows.filter((r) => r.min > 0).sort((a, b) => b.min - a.min).find((r) => r.min + diff <= MAX_MIN);
   if (top && diff) top.min = Math.round((top.min + diff) * 1000) / 1000;
-  rows.notes = { posMissing, ceilingsShort: short !== null, capUsed: short, roleTargeted: targets.size, chartOor: oorIds.size, chartOorIds: [...oorIds], availLowered: [...share.values()].filter((s) => s < 0.995).length };
+  rows.notes = { posMissing, ceilingsShort: short !== null, capUsed: short, roleTargeted: targets.size, chartOor: oorIds.size, chartOorIds: [...oorIds], availLowered: [...share.values()].filter((s) => s < 0.995).length,
+    ...(alloc ? { rotation: a.size, deepBench: a.deep.size, deepPot: Math.round(a.pot * 10) / 10 } : {}) };
   return rows;
+}
+
+// The Out men's minutes split across the healthy men (splitOut): { extra: Map id -> minutes, nextOf: Map id -> [Out ids he is next up for] }. The lean goes to the depth chart's backup when the chart
+// prior names one, else with the allocation on to the man next up at the Out man's position by the learned pecking order (predictor-alloc.js nextUp).
+function outShares(profile, { healthy, out, roster, base, pos, targets, five, useChart, chart, chartPrior, alloc, own }) {
+  const extra = new Map(healthy.map((id) => [id, 0])), nextOf = new Map();
+  const outKnown = roster.filter((id) => out.has(id) && profile.byId.has(id));
+  const took = spotTook(profile, targets, out); // the spot-start prior: a line-set spot starter's raise comes out of the Out starter whose start he took, and he takes no share of that man's minutes
+  for (const u of outKnown) {
+    const skip = new Set([...targets.spot].filter((j) => targets.pairOf.get(j) === u));
+    const chartUp = useChart ? chart.backup?.get(u) ?? null : null, peckUp = alloc && chartUp === null ? nextUp(profile, u, healthy, { pos, five, overlap: posOverlap }) : null;
+    if (peckUp !== null) nextOf.set(peckUp, [...(nextOf.get(peckUp) ?? []), u]);
+    const lean = chartUp !== null ? chartPrior.backup ?? 0 : peckUp !== null ? alloc.lean : 0;
+    const full = alloc && !profile.usual.has(u) ? own(u, false) : null;
+    const share = splitOut(profile, u, healthy, base, pos, chartUp ?? peckUp, lean, skip, took.get(u) ?? 0, full);
+    healthy.forEach((j, i) => extra.set(j, extra.get(j) + share[i]));
+  }
+  return { extra, nextOf };
+}
+
+// The allocation's words for his why line (G62): deep bench and its pot, next up at an Out man's position, a bench man's games sat counted; "" with the allocation off.
+function allocManWords(profile, id, a, nextOf, alloc, five) {
+  if (!alloc || !profile.byId.has(id)) return "";
+  const m = profile.byId.get(id), n = nextOf.get(id)?.length ?? 0;
+  return [!five.has(id) && (m.benched ?? 0) > 0 ? `sat ${m.benched} of ${m.games + m.benched} games he was available for here, counted as 0` : "",
+    n ? `next up at his position for ${n} man${n === 1 ? "" : "s"} out, by who played ahead of whom here` : "", allocWords(id, a)].filter(Boolean).join(", ");
 }
 
 function whyOf(profile, id, out, base, extra, short, adj = 0, role = "") {
@@ -345,12 +377,17 @@ export const chartFromJson = (j) => (j ? { oor: new Set(j.oor), backup: new Map(
 export function profileToJson(p) {
   return { games: p.games, starterCurve: p.starterCurve, benchCurve: p.benchCurve, depth: p.depth, order: p.order, usual: [...p.usual],
     replacements: [...p.replacements], absorb: [...p.absorb].map(([u, a]) => [u, a.m, [...a.gains]]), adjust: p.adjust ? [...p.adjust] : null, ...(p.rolePrior !== undefined ? { rolePrior: p.rolePrior } : {}),
-    ...(p.availPrior !== undefined ? { availPrior: p.availPrior } : {}), ...(p.spot ? { spot: p.spot } : {}) }; // the league's spot-start lines (roleTargets), plain numbers
+    ...(p.availPrior !== undefined ? { availPrior: p.availPrior } : {}), ...(p.spot ? { spot: p.spot } : {}), // the league's spot-start lines (roleTargets), plain numbers
+    // the allocation's inputs (predictor-alloc.js): its setting, the team curve and the pecking table
+    ...(p.allocPrior !== undefined ? { allocPrior: p.allocPrior } : {}), ...(p.curve ? { curve: p.curve } : {}), ...(p.peck ? { peck: [...p.peck].map(([a, row]) => [a, [...row]]) } : {}),
+    ...(p.with ? { with: [...p.with].map(([a, row]) => [a, [...row]]) } : {}) };
 }
 
 /** The profile back from profileToJson's form, as projectTeam reads it. Pure. */
 export function profileFromJson(j) {
   return { games: j.games, starterCurve: j.starterCurve, benchCurve: j.benchCurve, depth: j.depth, order: j.order, byId: new Map(j.order.map((m) => [m.id, m])), usual: new Set(j.usual),
     replacements: new Map(j.replacements), absorb: new Map(j.absorb.map(([u, m, g]) => [u, { m, gains: new Map(g) }])), adjust: j.adjust ? new Map(j.adjust) : null, ...(j.rolePrior !== undefined ? { rolePrior: j.rolePrior } : {}),
-    ...(j.availPrior !== undefined ? { availPrior: j.availPrior } : {}), ...(j.spot ? { spot: j.spot } : {}) };
+    ...(j.availPrior !== undefined ? { availPrior: j.availPrior } : {}), ...(j.spot ? { spot: j.spot } : {}),
+    ...(j.allocPrior !== undefined ? { allocPrior: j.allocPrior } : {}), ...(j.curve ? { curve: j.curve } : {}), ...(j.peck ? { peck: new Map(j.peck.map(([a, row]) => [a, new Map(row)])) } : {}),
+    ...(j.with ? { with: new Map(j.with.map(([a, row]) => [a, new Map(row)])) } : {}) };
 }
