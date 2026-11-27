@@ -78,7 +78,7 @@ export function availShare(profile, id, inFive, cfg) {
 function availWords(profile, id, share) {
   if (!(share < 0.995)) return "";
   const m = profile.byId.get(id);
-  return `played ${m.games} of the ${m.games + (m.missed ?? 0)} games he was on the roster for here${(m.missRun ?? 0) >= 1 ? ` and missed the last ${m.missRun}` : ""}, so his base counts x${share.toFixed(2)}`;
+  return `played ${m.games} of the ${m.games + (m.missed ?? 0)} games he was on the roster for ${where(m)}${(m.missRun ?? 0) >= 1 ? ` and missed the last ${m.missRun}` : ""}, so his base counts x${share.toFixed(2)}`;
 }
 
 /** The profile with the chart prior folded in (pure; the profile given is not changed): each man the chart has out of the rotation, with games here, has his all-games mean times games / (games + k). */
@@ -231,7 +231,8 @@ function roleWords(m, role, line, noLine) {
   if (line !== null) return `${spotStarterWords(m)}, leans to starter level${at}`;
   return `new in the five, leans to starter level${noLine ? " (no league spot-start line learned yet)" : ""}`;
 }
-const spotStarterWords = (m) => `spot starter (${m.starts} of ${m.games} games started here)`;
+const where = (m) => (m.carried ? `for ${m.carried}` : "here"); // a carried man's counts are his other team's (minutes-predictor.js carryTraded; code review 11-27, item 5)
+const spotStarterWords = (m) => `spot starter (${m.starts} of ${m.games} games started ${where(m)})`;
 /** A man in the five who started under SPOT_SHARE_WORDS of his games here and has no role target, named in his why line (G62; Adam 4:50 PM 11-25): his starter base is his own starts' mean shrunk to his all-games mean. */
 function spotNamed(profile, id, five) {
   const m = profile.byId.get(id);
@@ -296,7 +297,8 @@ export function projectTeam(profile0, { starters = [], out = new Set(), roster =
   const posMissing = pos.size ? [...healthy, ...roster.filter((id) => out.has(id) && profile.byId.has(id))].filter((id) => !pos.has(id)) : [];
   const items = healthy.map((id) => ({ id, min: base.get(id) + extra.get(id), own: base.get(id), cap: roleCeiling(profile, id, targets.get(id) ?? null) }));
   // the allocation's usual rotation counts the Out men at their own figures (a usual starter's starter base, anyone else's bench base), so a deep man rises only into an Out man's place at his position
-  const ctx = { outs: roster.filter((id) => out.has(id) && profile.byId.has(id)).map((id) => ({ id, own: own(id, profile.usual.has(id)) })), pos, overlap: posOverlap };
+  // a carried man (traded or signed, minutes-predictor.js carryTraded) Out is no absence his new teammates' games hold: never in the usual rotation here (code review 11-27, item 1)
+  const ctx = { outs: roster.filter((id) => out.has(id) && profile.byId.has(id) && !profile.byId.get(id).carried).map((id) => ({ id, own: own(id, profile.usual.has(id)) })), pos, overlap: posOverlap };
   const holds = (f) => [...f.values()].reduce((s, x) => s + x, 0) >= TEAM_MIN - 1e-6;
   let a = fitWith(items, profile, alloc, five, (x) => x.cap, ctx), short = null;
   // ceilings cannot hold 240: each man's cap rises to 36 (his own ceiling when higher) first, and only if that cannot hold 240 either to 48 (review 11-18: IND's 11-02 man projected 48)
@@ -322,7 +324,7 @@ export function projectTeam(profile0, { starters = [], out = new Set(), roster =
 // prior names one, else with the allocation on to the man next up at the Out man's position by the learned pecking order (predictor-alloc.js nextUp).
 function outShares(profile, { healthy, out, roster, base, pos, targets, five, useChart, chart, chartPrior, alloc, own }) {
   const extra = new Map(healthy.map((id) => [id, 0])), nextOf = new Map();
-  const outKnown = roster.filter((id) => out.has(id) && profile.byId.has(id));
+  const outKnown = roster.filter((id) => out.has(id) && profile.byId.has(id) && !profile.byId.get(id).carried); // a carried man's old-team minutes are none of this team's to split (code review 11-27, item 1)
   const took = spotTook(profile, targets, out); // the spot-start prior: a line-set spot starter's raise comes out of the Out starter whose start he took, and he takes no share of that man's minutes
   for (const u of outKnown) {
     const skip = new Set([...targets.spot].filter((j) => targets.pairOf.get(j) === u));
@@ -340,7 +342,7 @@ function outShares(profile, { healthy, out, roster, base, pos, targets, five, us
 function allocManWords(profile, id, a, nextOf, alloc, five) {
   if (!alloc || !profile.byId.has(id)) return "";
   const m = profile.byId.get(id), n = nextOf.get(id)?.length ?? 0;
-  return [!five.has(id) && (m.benched ?? 0) > 0 ? `sat ${m.benched} of ${m.games + m.benched} games he was available for here, counted as 0` : "",
+  return [!five.has(id) && (m.benched ?? 0) > 0 ? `sat ${m.benched} of ${m.games + m.benched} games he was available for ${m.carried ? `with ${m.carried}${m.satHere ? ` and here (${m.satHere} here)` : ""}` : "here"}, counted as 0` : "",
     n ? `next up at his position for ${n} man${n === 1 ? "" : "s"} out, by who played ahead of whom here` : "", allocWords(id, a)].filter(Boolean).join(", ");
 }
 
@@ -350,7 +352,8 @@ function whyOf(profile, id, out, base, extra, short, adj = 0, role = "") {
   if (!m) return "no games for this team: base 0";
   const gain = extra.get(id);
   const learned = Math.abs(adj) >= 0.05 ? `, ${adj > 0 ? "+" : ""}${adj.toFixed(1)} learned from misses` : "";
-  return `base ${base.get(id).toFixed(1)} min (${m.games} games here${role ? `, ${role}` : ""}${learned})${gain > 0.05 ? `, +${gain.toFixed(1)} from teammates out` : ""}${short ? `, ${short} cap used` : ""}`;
+  const games = m.carried ? `${m.games} games for ${m.carried}, none here yet` : `${m.games} games here`; // carried: a man traded or signed, his games for his other team (minutes-predictor.js carryTraded)
+  return `base ${base.get(id).toFixed(1)} min (${games}${role ? `, ${role}` : ""}${learned})${gain > 0.05 ? `, +${gain.toFixed(1)} from teammates out` : ""}${short ? `, ${short} cap used` : ""}`;
 }
 
 /**

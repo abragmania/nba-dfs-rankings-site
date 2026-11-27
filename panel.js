@@ -298,7 +298,7 @@ async function build(X) {
     const current = P.build === watch;
     if (current) P.swap = null; // the lineups on show are new; an open swap belonged to the old ones
     endWatch(X, watch);
-    if (current) { P.running = false; render(X); X.onWork(); endNotice(X); } // the rows' in-lineup marks follow the built lineup
+    if (current) { P.running = false; render(X); X.onWork(); X.onBuilt(); endNotice(X); } // onBuilt: the player list's view filters clear (Adam 11-27) // the rows' in-lineup marks follow the built lineup
   }
 }
 
@@ -331,7 +331,7 @@ async function buildLateSwap(X, settings, watch) {
   } finally {
     const current = X.P.build === watch;
     endWatch(X, watch);
-    if (current) { X.P.running = false; render(X); X.onLateSwap(); endNotice(X); }
+    if (current) { X.P.running = false; render(X); X.onLateSwap(); X.onBuilt(); endNotice(X); }
   }
 }
 
@@ -533,12 +533,12 @@ async function toggleLateSwap(X, idx = null, from = null) {
  * (Clear lineup; the locks are the board's). limits() is each man's Min % and Max %, limitOutcome and setLimit their boxes' answers.
  * memory() is what the panel adds to the page's remembered view, and onMemory() says it has changed (view-memory.js).
  */
-export function createPanel({ el, lineupsEl = null, onView = () => {}, onTabs = () => {}, isLineupsView = () => false, api, toast, tryStore, dash, ctx, onLateSwap = () => {}, onWork = () => {}, onMode = () => {}, onClearLocks = () => {}, onMemory = () => {}, confirm = askConfirm }) {
+export function createPanel({ el, lineupsEl = null, onView = () => {}, onTabs = () => {}, isLineupsView = () => false, api, toast, tryStore, dash, ctx, onLateSwap = () => {}, onWork = () => {}, onMode = () => {}, onClearLocks = () => {}, onMemory = () => {}, onBuilt = () => {}, confirm = askConfirm }) {
   const P = { mode: "GPP", raw: Object.fromEntries(MODES.map((m) => [m, loadRaw(tryStore, m)])), results: {}, swap: null, lt: freshLt(), spots: {}, spotsReady: false, spotsError: null, spotsReading: null, spotQueue: null, spotPending: 0, spotGen: 0, spotMenu: null, spotWarn: null, spotMove: null, builds: [], buildsReady: false, buildsError: null, buildsReading: null, buildQueue: null, buildGen: 0, setOpen: false, loaded: null, saved: [], savedPick: new Set(), savedError: null, savedReady: false, savedReading: null, running: false, showSkipped: false, ovOpen: false, ovMsg: null, lrOpen: false, lrMsg: null, ls: null, expSort: { ...DEFAULT_EXPOSURE_SORT }, expPos: "All", svNames: {}, svEdit: null, ...freshWork() };
   perModeOverrides(P); // P.overrides: the team and game limits of the mode in force; Cash and GPP each keep their own
   perModeLimits(P); // P.limits: the Min % and Max % of the mode in force (row-limits.js)
   perModeWork(P); // P.work and P.loaded: the working lineup of the mode in force; Cash and GPP each keep their own (work-panel.js)
-  const X = { P, el, lel: lineupsEl, onView, onTabs, isLineupsView, onMode, api, toast, tryStore, dash, ctx, onLateSwap, onWork, onClearLocks, onMemory, confirm, settle: pressSettle() };
+  const X = { P, el, lel: lineupsEl, onView, onTabs, isLineupsView, onMode, api, toast, tryStore, dash, ctx, onLateSwap, onWork, onClearLocks, onMemory, onBuilt, confirm, settle: pressSettle() };
   X.redraw = () => render(X);
   el.addEventListener("click", (e) => { const was = P.mode; onClick(X, e); if (P.mode !== was) { onMode(P.mode); onMemory(); } });
   el.addEventListener("input", (e) => onInput(X, e));

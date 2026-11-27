@@ -24,7 +24,7 @@ import { boxNote, absenceNote, freshBoxes } from "./box-note.js";
 import { CHECK_MS, takeAnswer, applyHeld, createRefresher, followNewest, mergeFresh, outNamesOf, pickSlate, slateQuery, overrideKey, picksOnBoard, pullOf, rememberRows, rosterCleanup, statusLine } from "./slate-refresh.js";
 import { pressSettle } from "./press-settle.js";
 import { createPullNow, firstTipOf } from "./pull-now.js";
-import { noFilters, filtersOn, filterPlayers, salaryRange, teamsOf, actsOnMan, clearSearch } from "./filters.js";
+import { noFilters, filtersOn, filterPlayers, salaryRange, teamsOf, actsOnMan, clearSearch, clearSearchOnClick, clearViewFilters } from "./filters.js";
 import { limitPatch } from "./row-limits.js";
 import { loadView, saveView, DEFAULT_SORT } from "./view-memory.js";
 import { loadTheme, saveTheme, themeClasses } from "./theme.js";
@@ -101,7 +101,7 @@ createOptStrip({ el: $("optstrip"), opt: $("opt"), onWorking: () => card.close()
 // The optimizer panel (panel.js).
 // Late swap mode lives in the panel; onLateSwap redraws the header switch and the table's slot pickers when it changes.
 // onWork redraws the rows when the lineup on show changes (their in-lineup mark); onMode swaps in that mode's columns.
-const panel = createPanel({ el: $("opt"), lineupsEl: $("lineups"), onView: (v) => setView(v), onTabs: () => renderTop(), isLineupsView: () => S.view === "lineups", api, toast, tryStore, dash, ctx: () => ({ name: S.name, byId: S.byId, outList: [], outNames: S.outNames, knownName: (id) => S.known.get(id)?.name ?? null, knownRow: (id) => S.known.get(id) ?? null, pull: pullOf(S.slate), refreshGen: S.refreshGen, players: S.players, picks: livePicks(), settled, unsettled: waitParts.open, sendHold: sendHoldNow, ovKey: ovKeyOf(), colourOf, no: noPicks.ids(panel.mode()) /* the open build mode's list, never the late swap list */, noMode: panel.mode(), picksOf: (m) => picksOnBoard(S.picks[m], S.byId), noOf: (m) => noPicks.ids(m) /* one mode's own: a build and an other-mode card read these (review 11-20) */ }), onLateSwap: () => { drawTop(); applyFullScreen(); renderHead(); renderRows(); }, onWork: () => { renderRows(); if (JSON.stringify(carriedRows()) !== S.carriedShown) renderSources(); }, onMode: (m) => { columns.setMode(m); if (S.slate) { saves.restack(); renderRows(); renderPick(); renderSources(); panel.render(); card.refresh(); } } /* the mode's own locks and excludes show (livePicks), and its own thumbs and stars (board-saves.js overlay; Adam 1:24 PM 11-20): the rows, the chips' Starred count and the Lineups tab's star strip */, onClearLocks: () => savePicks({ locked: [], excluded: livePicks().excluded }), onMemory: () => rememberView() });
+const panel = createPanel({ el: $("opt"), lineupsEl: $("lineups"), onView: (v) => setView(v), onTabs: () => renderTop(), isLineupsView: () => S.view === "lineups", api, toast, tryStore, dash, ctx: () => ({ name: S.name, byId: S.byId, outList: [], outNames: S.outNames, knownName: (id) => S.known.get(id)?.name ?? null, knownRow: (id) => S.known.get(id) ?? null, pull: pullOf(S.slate), refreshGen: S.refreshGen, players: S.players, picks: livePicks(), settled, unsettled: waitParts.open, sendHold: sendHoldNow, ovKey: ovKeyOf(), colourOf, no: noPicks.ids(panel.mode()) /* the open build mode's list, never the late swap list */, noMode: panel.mode(), picksOf: (m) => picksOnBoard(S.picks[m], S.byId), noOf: (m) => noPicks.ids(m) /* one mode's own: a build and an other-mode card read these (review 11-20) */ }), onLateSwap: () => { drawTop(); applyFullScreen(); renderHead(); renderRows(); }, onWork: () => { renderRows(); if (JSON.stringify(carriedRows()) !== S.carriedShown) renderSources(); }, onMode: (m) => { columns.setMode(m); if (S.slate) { saves.restack(); renderRows(); renderPick(); renderSources(); panel.render(); card.refresh(); } } /* the mode's own locks and excludes show (livePicks), and its own thumbs and stars (board-saves.js overlay; Adam 1:24 PM 11-20): the rows, the chips' Starred count and the Lineups tab's star strip */, onClearLocks: () => savePicks({ locked: [], excluded: livePicks().excluded }), onMemory: () => rememberView(), onBuilt: () => { if (S.slate) { clearViews(true); rememberView(); } } /* a finished build clears the view filters (Adam 11-27) */ });
 // The table's own columns, ticked and ordered by Adam per mode (columns.js); the list's and the table's redraws keep each other.
 const columns = columnsControl({ btn: $("colsBtn"), pop: $("colPop"), mode: panel.mode, tryStore, onChange: () => { if (S.slate) { renderHead(); fixTableWidth(); } } });
 const shownCols = () => columns.keys({ lateSwap: Boolean(panel.lateSwap()) });
@@ -532,7 +532,7 @@ document.addEventListener("click", (e) => {
   else if (d.pview) { if (POOL_VIEWS.includes(d.pview) && S.poolView !== d.pview) { S.poolView = d.pview; renderRows(); } } // In / Out / All (pool-view.js)
   else if (t.id === "outTog") { S.outOpen = !S.outOpen; renderOuts(); $("outTog")?.focus({ preventScroll: true }); }
   else if (d.shade) setTheme({ light: d.shade === "light" });
-  else if (t.id === "clearF") { setFilters(noFilters()); renderGames(); renderTabs(); renderTeamChips(); renderRows(); }
+  else if (t.id === "clearF") clearViews(false);
   else if (d.fteam) { S.teams = S.teams.includes(d.fteam) ? S.teams.filter((x) => x !== d.fteam) : [...S.teams, d.fteam]; renderTeamChips(); renderRows(); }
   else if (d.sort) { S.sort = S.sort.key === d.sort ? { key: d.sort, dir: -S.sort.dir } : { key: d.sort, dir: d.sort === "name" ? 1 : -1 }; renderHead(); renderRows(); }
   else if (d.tab) { S.tab = d.tab; renderTabs(); renderRows(); }
@@ -572,11 +572,12 @@ document.addEventListener("change", (e) => {
   // A slot picker (table row or panel slot) in late swap mode: pin that man to the chosen slot.
   else if (e.target.dataset?.lspin) { const { lspin } = e.target.dataset, to = e.target.value === "" ? null : +e.target.value; e.target.blur(); panel.pin(lspin, to); } // "—" unpins; the choice made, the picker lets go, so it cannot hold off new numbers
 });
-/** An act on a man empties the search box and shows the full list (Adam 11-14; filters.js clearSearch). */
-function dropSearch() { clearSearch(S, $("search"), renderRows); }
+function dropSearch() { clearSearch(S, $("search"), renderRows); } // an act on a man empties the search box (Adam 11-14; filters.js clearSearch)
+clearSearchOnClick(document, S, $("search"), renderRows); // and so does his next click outside it (Adam 11-27)
+/** After a build (Adam 11-27, asked again): every view filter off, the full list shown (filters.js clearViewFilters); the Clear filters button keeps the In / Out / All view. */
+function clearViews(pool) { if (pool) clearViewFilters(S, DEFAULT_POOL_VIEW); else Object.assign(S, noFilters()); setFilters(S); renderGames(); renderTabs(); renderTeamChips(); renderRows(); }
 $("search").addEventListener("input", (e) => { S.q = e.target.value; renderRows(); });
-$("minSal").addEventListener("input", (e) => { S.minSal = e.target.value; renderRows(); });
-$("maxSal").addEventListener("input", (e) => { S.maxSal = e.target.value; renderRows(); });
+for (const [id, k] of [["minSal", "minSal"], ["maxSal", "maxSal"]]) $(id).addEventListener("input", (e) => { S[k] = e.target.value; renderRows(); });
 if (typeof ResizeObserver === "function") new ResizeObserver(stickyHeights).observe($("fbar"));
 if (typeof ResizeObserver === "function") new ResizeObserver(() => fitGameStrip($("games"))).observe($("games")); // the strip narrows when the player panel docks (R11), with no window resize to go on
 if (typeof MutationObserver === "function") new MutationObserver(stickyHeights).observe($("opt"), { childList: true }); // the panel redraws its band: --luh follows it

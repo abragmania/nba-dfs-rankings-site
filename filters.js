@@ -21,6 +21,18 @@ export function clearSearch(state, input, redraw) {
   return true;
 }
 
+/** Adam 11-27 (2:08 PM): after he has typed in the search box, his next click anywhere outside it empties the box and shows the full list; the click still does its own work (this listener sits on the document, so it runs after the click's own handlers). Typing alone never clears. */
+export function clearSearchOnClick(doc, state, input, redraw) {
+  doc.addEventListener("click", (e) => { if (e.target !== input && !input.contains?.(e.target)) clearSearch(state, input, redraw); });
+}
+
+/** Adam 11-27 (2:08 PM, asked again): a finished build (Build or Make N, either mode, late swap too) takes every view filter off so the full list shows: position tab, game tile, Locked / Excluded / Starred / Min gap, team chips, salary boxes, the search, and the In / Out / All switch back to its default. His locks, stars, NOs, excludes, overrides and lineups are not filters and are never touched here. Returns whether anything was on. */
+export function clearViewFilters(state, defaultPoolView) {
+  const on = filtersOn(state) || state.poolView !== defaultPoolView;
+  Object.assign(state, noFilters(), { poolView: defaultPoolView });
+  return on;
+}
+
 /** True when any filter narrows the table. */
 export const filtersOn = (f) => f.tab !== "ALL" || f.q !== "" || f.game != null || f.pickFilter != null || f.teams.length > 0 || f.minSal !== "" || f.maxSal !== "";
 

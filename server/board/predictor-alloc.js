@@ -22,8 +22,14 @@ const TEAM = 240;
 // k 2 or 8, lean 0 or 2 and ctx 0.3 moved neither by more than 0.01 or two misses; ctx 1 was worse (4.616 / 223); rise 0 (no position rule for a deep man) 4.508 / 204 and 4.491 / 203, kept on as
 // Adam asked. See ALLOC_DEFAULT_ON in predictor-core.js for the grade on all 24 nights.
 // k: games' weight pulling a bench man's availability mean to his all-games mean times his share of games played; rot: men added to the usual rotation size; pot: the deep bench's pot scale;
-// lean: how much more of an Out man's position-prior share the man next up at his position gets; rise: 1 for the position rule (rotationOf), 0 for the bench by figure; ctx, ck: contextShift.
-export const ALLOC_PRIOR = Object.freeze({ k: 4, rot: 1, pot: 2.5, lean: 1, rise: 1, ctx: 0.5, ck: 6 });
+// lean: how much more of an Out man's position-prior share the man next up at his position gets; rise: 1 for the position rule (rotationOf), 0 for the bench by figure; ctx, ck: contextShift;
+// zr: 1 weighs a bench man's bench games and the games he sat by recency in benchBase (minutes-predictor.js recencySetting), 0 counts them.
+// Refit on all 24 nights with recency on (Adam 2:09 PM 11-27, "let it learn from all the nights"; tools/minutes_backtest.mjs, 11-27; predictor, three-way blend, board): lean 1 to 0.5 took
+// 4.588 / 380, 4.503 / 373, 4.539 / 385 to 4.584 / 377, 4.502 / 372, 4.538 / 385 (later 12 nights predictor 4.671 / 181 to 4.665 / 177, blend 4.526 / 167 to 4.524 / 166). Tried and left: lean 0
+// (4.580 / 376, 4.500 / 373: it drops the pecking order's lean Adam asked for, 3:00 PM 11-25; the lead's call), lean 2 (4.594 / 384), pot 2 (4.561 / 378 but the blend 374) and pot 2.25 with lean
+// 0.5 (4.573 / 376 but the blend 373), zr 1 (4.584 / 382), ctx 0.7 (4.589 / 380); before recency, k 2 or 8, rot 0 or 2, ctx 0.3 or 0.7 and pot 3: none lowered the predictor's and the blend's
+// average and 10+ misses together.
+export const ALLOC_PRIOR = Object.freeze({ k: 4, rot: 1, pot: 2.5, lean: 0.5, rise: 1, ctx: 0.5, ck: 6, zr: 0 });
 
 /**
  * A bench man's own figure, the games the coach sat him counted as 0 (step 1): his bench mean over his bench games plus the games he was listed did-not-play after his first game here, shrunk by
@@ -33,7 +39,9 @@ export function benchBase(profile, id, target, cfg) {
   const m = profile.byId.get(id);
   if (!m) return 0;
   const n = m.roleN.b, z = m.benched ?? 0, share = m.games / (m.games + z), prior = (target ?? m.pref) * share;
-  const own = n + z > 0 ? (n * m.roleMean.b) / (n + z) : prior, w = n + z + cfg.k;
+  // cfg.zr 1: his bench games and the games he sat weigh by recency (minutes-predictor.js recencySetting), so a man the coach has sat lately counts nearer 0 (Adam 2:08 PM 11-27, refine)
+  const rz = cfg.zr && Number.isFinite(m.benchR) && Number.isFinite(m.benchedR) && m.benchR + m.benchedR > 0, nr = rz ? m.benchR : n, zr = rz ? m.benchedR : z;
+  const own = n + z > 0 ? (nr * m.roleMean.b) / (nr + zr) : prior, w = n + z + cfg.k;
   return w > 0 ? ((n + z) * own + cfg.k * prior) / w : prior; // w is 0 only with no games and k 0, which allocSetting refuses (code review 11-27, item 5): never 0 / 0
 }
 
