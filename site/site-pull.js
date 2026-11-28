@@ -59,6 +59,26 @@ export function runVerdict(run, jobs) {
   return { done: true, ok: false, why };
 }
 
+/** The prefix of the cloud job's step that carries why the site was not updated in its name (.github/workflows/cloud-pull.yml, after "publish the site"). */
+export const NOT_PUBLISHED = "Site not published — ";
+/**
+ * Why a finished run did not update the site, from its jobs' step names (G62: the refusal reaches the pull line, not only the run log): the NOT_PUBLISHED step's reason, the missing site key,
+ * or null when the run names none (or GitHub showed the step name unexpanded). Pure.
+ */
+export function notPublishedWhy(jobs) {
+  const steps = (jobs ?? []).flatMap((j) => j?.steps ?? []).filter((s) => s?.conclusion !== "skipped");
+  const named = steps.find((s) => typeof s?.name === "string" && s.name.startsWith(NOT_PUBLISHED));
+  const why = named ? named.name.slice(NOT_PUBLISHED.length).trim() : "";
+  if (why && !why.includes("${{")) return why.replace(/^The public site was not published:\s*/, "").replace(/\s*Nothing was published\.?$/, "").replace(/\.+$/, ""); // publish.mjs's own frame, said once by the line
+  if (steps.some((s) => s?.name === "no site key")) return "the SITE_PUSH_TOKEN secret is not set, so the cloud job cannot publish the site";
+  return null;
+}
+
+/** The pull line when the run finished and saved but the site was not seen to publish: the reason when the run named one. Pure. */
+export function savedLine(at, why) {
+  return why ? `Cloud pull done at ${at}: the new pull is saved, but the site was not updated: ${why}.` : `Cloud pull done at ${at}: saved; whether the site published is unknown (no new board, no site key and a publish that did not go through all look the same from here).`;
+}
+
 /**
  * Whether this run published the site, from the site repo's baked/meta.json before the press and after the run: published only when the new
  * meta was published after the run started and from another commit. "unknown" when the meta could not be read. Pure.
@@ -175,14 +195,24 @@ export function createSitePull({ fetchImpl = (...a) => fetch(...a), store = keyS
     }
     if (!verdict.done) return unknown(`the cloud pull had not finished after ${MAX_MS / 60_000} minutes; it may still finish, and the site then updates by itself`);
     if (!verdict.ok) return { state: "failed", line: pullLine({ state: "failed", at: etNow(now()), why: `cloud pull: ${verdict.why}` }) };
-    // ---- the run succeeded: did it publish? judged by the site repo's meta, never a step's conclusion ----
+    return afterSuccess(key, before, theRun, runId);
+  }
+
+  /** The run succeeded: did it publish? Judged by the site repo's meta, never a step's conclusion; then the published slate is taken in place, or the run's step names say why the site was not updated. */
+  async function afterSuccess(key, before, theRun, runId) {
     let after = null;
     try { after = await siteMeta(key); } catch { after = null; }
     const site = siteVerdict({ before, after, runStartedAt: theRun?.run_started_at ?? theRun?.created_at });
-    if (site !== "published") {
-      return { state: "saved", line: `Cloud pull done at ${etNow(now())}: saved; whether the site published is unknown (no new board, no site key and a publish that did not go through all look the same from here).` };
+    if (site !== "published") { // the run's own step names say why the site was not updated (notPublishedWhy); a jobs read that fails leaves it unknown
+      let jobs = null;
+      try { jobs = (await (await gh(key, `${API}/repos/${DATA_REPO}/actions/runs/${runId}/jobs`)).json())?.jobs ?? null; } catch { jobs = null; }
+      return { state: "saved", line: savedLine(etNow(now()), notPublishedWhy(jobs)) };
     }
-    // The slate to take: the one on show, or the publish's newest when that is a later day (the board then switches to it, so it needs its files).
+    return takePublished(key, after);
+  }
+
+  /** The slate to take: the one on show, or the publish's newest when that is a later day (the board then switches to it, so it needs its files). */
+  async function takePublished(key, after) {
     const shown = slateOnShow?.() || null, latest = typeof after?.latest?.slate === "string" ? after.latest.slate : null;
     const slate = latest && (!shown || latest > shown) ? latest : shown;
     const rels = slate ? [...slateFiles(slate), "slates.json"] : [];
